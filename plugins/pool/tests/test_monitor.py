@@ -802,3 +802,46 @@ class TestValidateConfig:
             {"current_window": "24h", "sensor_id": "a b"}
         )
         assert len(msgs) == 2
+
+    def test_unknown_layout_value_rejected(self):
+        msgs = PoolMonitor.validate_config({"layout": "scoreboard"})
+        assert msgs, "expected a validation error"
+        assert any("layout" in m for m in msgs)
+
+    def test_layout_ticker_passes(self):
+        assert PoolMonitor.validate_config({"layout": "ticker"}) == []
+
+    def test_layout_two_row_passes(self):
+        assert PoolMonitor.validate_config({"layout": "two_row"}) == []
+
+    def test_top_font_with_ticker_layout_rejected(self):
+        msgs = PoolMonitor.validate_config(
+            {"layout": "ticker", "top_font_size": 19}
+        )
+        assert msgs, "expected a validation error"
+        assert any("top_font_size" in m for m in msgs)
+
+    def test_top_font_with_default_layout_rejected(self):
+        msgs = PoolMonitor.validate_config({"top_font_size": 19})
+        assert msgs, "expected a validation error"
+        assert any("top_font_size" in m for m in msgs)
+
+    def test_top_font_with_two_row_layout_passes(self):
+        assert (
+            PoolMonitor.validate_config(
+                {"layout": "two_row", "top_font_size": 19}
+            )
+            == []
+        )
+
+    def test_combined_valid_two_row_config_passes(self):
+        assert (
+            PoolMonitor.validate_config(
+                {
+                    "layout": "two_row",
+                    "current_window": "-24h",
+                    "top_font_size": 19,
+                }
+            )
+            == []
+        )

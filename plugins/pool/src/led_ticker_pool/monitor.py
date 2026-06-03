@@ -1,6 +1,7 @@
 """Pool water-temperature widget backed by the pool_monitor InfluxDB v2 server."""
 
 import csv
+import difflib
 import io
 import logging
 import os
@@ -29,6 +30,18 @@ from led_ticker.plugin import (
 _TREND_DEADBAND: float = 0.5
 
 _SENSOR_ID_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Supported layouts and the per-row font knobs that only apply to "two_row".
+_VALID_LAYOUTS: tuple[str, ...] = ("ticker", "two_row")
+_TWO_ROW_ONLY: tuple[str, ...] = (
+    "top_font",
+    "top_font_size",
+    "top_font_threshold",
+    "bottom_font",
+    "bottom_font_size",
+    "bottom_font_threshold",
+    "top_row_height",
+)
 
 # Color palette.
 #
@@ -261,6 +274,22 @@ class PoolMonitor:
         sid = cfg.get("sensor_id")
         if sid is not None and not _SENSOR_ID_RE.match(str(sid)):
             msgs.append(f"sensor_id must match [A-Za-z0-9_-]+; got {sid!r}")
+        layout = cfg.get("layout")
+        if layout is not None and layout not in _VALID_LAYOUTS:
+            hint = ""
+            close = difflib.get_close_matches(str(layout), _VALID_LAYOUTS, n=1)
+            if close:
+                hint = f' (did you mean {close[0]!r}?)'
+            msgs.append(
+                f"layout must be one of {_VALID_LAYOUTS}; got {layout!r}{hint}"
+            )
+        if cfg.get("layout", "ticker") != "two_row":
+            present = [k for k in _TWO_ROW_ONLY if k in cfg]
+            if present:
+                msgs.append(
+                    f'{", ".join(present)} only valid with layout = "two_row" '
+                    f'(current layout: {cfg.get("layout", "ticker")!r})'
+                )
         return msgs
 
     @classmethod
