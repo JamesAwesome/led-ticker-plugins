@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout led-ticker-pool
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: led-ticker-pool
 
@@ -20,14 +20,14 @@ jobs:
       # is private, so this uses a read-only deploy key (LED_TICKER_DEPLOY_KEY)
       # scoped to that one repo rather than an account-wide token.
       - name: Checkout led-ticker (sibling dependency)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: JamesAwesome/led-ticker
           path: led-ticker
           ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.14"
 
