@@ -16,14 +16,15 @@ jobs:
 
       # led-ticker is not published to PyPI; check it out as a sibling so
       # [tool.uv.sources] led-ticker = { path = "../led-ticker" } resolves, and
-      # so its tests/stubs (rgbmatrix stub) are on the pytest path. Uses a token
-      # because the led-ticker repo is private.
+      # so its tests/stubs (rgbmatrix stub) are on the pytest path. led-ticker
+      # is private, so this uses a read-only deploy key (LED_TICKER_DEPLOY_KEY)
+      # scoped to that one repo rather than an account-wide token.
       - name: Checkout led-ticker (sibling dependency)
         uses: actions/checkout@v4
         with:
           repository: JamesAwesome/led-ticker
           path: led-ticker
-          token: ${{ secrets.LED_TICKER_RO_TOKEN }}
+          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
