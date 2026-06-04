@@ -14,9 +14,13 @@ It cycles four screens — a title card, today's current temperature with a tren
 
 ![Pool widget in two_row layout — stacked label-on-top, big-number-on-bottom](docs/widget-pool-two-row.gif)
 
-## Install
+## Prerequisites
 
-> **Prerequisite:** a running InfluxDB v2 server holding pool temperature data (e.g. [pool_monitor](https://github.com/JamesAwesome/pool_monitor)). The widget raises `ValueError` at startup if `INFLUXDB_TOKEN` is unset — see [InfluxDB setup](#influxdb-setup).
+- **A running led-ticker** (the sign + its config). This widget plugs into it.
+- **A running InfluxDB v2 server** holding pool temperature data. The reference stack is [pool_monitor](https://github.com/JamesAwesome/pool_monitor), which provides the bucket and sensor schema this widget expects.
+- **An InfluxDB auth token** — set `INFLUXDB_TOKEN` in your led-ticker `.env` (or as a per-widget config key). The widget raises `ValueError` at startup if it's missing. See [InfluxDB setup](#influxdb-setup) for all four connection variables.
+
+## Install
 
 The widget auto-registers via the `led_ticker.plugins` entry point — once the package is installed, no `[plugins]` config change is needed.
 
