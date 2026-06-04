@@ -2,7 +2,7 @@
 
 A pool water-temperature monitor **widget** for [led-ticker](https://github.com/JamesAwesome/led-ticker), backed by an InfluxDB v2 server (e.g. [pool_monitor](https://github.com/JamesAwesome/pool_monitor)). It's a led-ticker **plugin** — installing this package contributes a `pool.monitor` widget you reference in your led-ticker config.
 
-It cycles four screens — a title card, today's current temperature with a trend arrow (▲/▼/–) and hi/lo, a 7-day mean with hi/lo, and a season (current-year) hi/lo. Temperature is zone-colored — blue below 70°F, green 70–79°F, orange 80–89°F, red 90°F+ — so the comfort level is readable at a glance. Data is fetched in the background via async polling, so the display keeps running even if the server is briefly unreachable.
+It cycles four screens — a title card, today's current temperature with a trend arrow (`^`/`v`/`-`) and hi/lo, a 7-day mean with hi/lo, and a season (current-year) hi/lo. Temperature is zone-colored — blue below 70°F, green 70–79°F, orange 80–89°F, red 90°F+ — so the comfort level is readable at a glance. Data is fetched in the background via async polling, so the display keeps running even if the server is briefly unreachable.
 
 ## Screenshots
 
@@ -15,6 +15,8 @@ It cycles four screens — a title card, today's current temperature with a tren
 ![Pool widget in two_row layout — stacked label-on-top, big-number-on-bottom](docs/widget-pool-two-row.gif)
 
 ## Install
+
+> **Prerequisite:** a running InfluxDB v2 server holding pool temperature data (e.g. [pool_monitor](https://github.com/JamesAwesome/pool_monitor)). The widget raises `ValueError` at startup if `INFLUXDB_TOKEN` is unset — see [InfluxDB setup](#influxdb-setup).
 
 The widget auto-registers via the `led_ticker.plugins` entry point — once the package is installed, no `[plugins]` config change is needed.
 
@@ -32,7 +34,7 @@ docker compose up -d --build
 pip install "git+https://github.com/JamesAwesome/led-ticker-pool.git@main"
 ```
 
-(led-ticker isn't on PyPI; in the image it's already installed, so the plugin resolves without it. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install.)
+(led-ticker isn't on PyPI, so `pip` can't fetch it — this path works only where led-ticker is already installed, e.g. inside the led-ticker Docker image or a venv set up as in [Development](#development) below. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the image uses.)
 
 ## Configuration
 
@@ -61,7 +63,8 @@ units = "imperial"
 | `influxdb_token` | string | `$INFLUXDB_TOKEN` | InfluxDB v2 token. **Required** — the widget raises `ValueError` at startup if it's missing. |
 | `layout` | `"ticker"` \| `"two_row"` | `"ticker"` | Render mode (see below). |
 | `label_color` | `[r,g,b]` | white | Color for prefix labels / separators. |
-| `top_font` / `top_font_size` / `top_font_threshold` | font / int / int | inherit | **two_row only:** top (label) row font knobs. |
+| `font` / `font_size` / `font_threshold` | font name / int / int | `"6x12"` | Main text font. A BDF alias (`6x12`, `5x8`) or a hires font name (`Inter-Regular`) with `font_size` in real pixels. In `two_row`, the per-row knobs below override this. |
+| `top_font` / `top_font_size` / `top_font_threshold` | font / int / int | inherit `font` | **two_row only:** top (label) row font knobs. |
 | `bottom_font` / `bottom_font_size` / `bottom_font_threshold` | font / int / int | inherit | **two_row only:** bottom (value) row font knobs. |
 | `top_row_height` | int (logical rows) | `None` | **two_row only:** top band height. `None` = symmetric 8/8 split. |
 
@@ -70,7 +73,7 @@ The per-row knobs apply ONLY when `layout = "two_row"`; setting them under `tick
 ### Layouts
 
 - **`ticker`** (default) — single-row segmented screens; the today screen shows current temp + trend arrow and hi/lo, the 7-day screen the mean + hi/lo, the season screen HI/LO together. Best for small panels (smallsign 160×16).
-- **`two_row`** — stacked label-on-top / big-number-on-bottom. Cycles four screens with top-row labels `POOL` (title), `POOL 24H` (current temp, zone-colored), `POOL 7D` (7-day HI/LO), and `POOL SEASON` (season HI/LO) — HI in orange, LO in blue, shown together on one screen (e.g. `84/72°F`). The trend arrow is dropped (bottom is the value only). Best for bigsign / longboi (256×64 / 512×64).
+- **`two_row`** — stacked label-on-top / big-number-on-bottom. Cycles four screens with top-row labels `POOL` (title), `POOL 24H` (current temp, zone-colored), `POOL 7D` (7-day HI/LO), and `POOL SEASON` (season HI/LO) — HI in orange, LO in blue, shown together on one screen (e.g. `84/72F`). The trend arrow is dropped (bottom is the value only). Best for bigsign / longboi (256×64 / 512×64).
 
 A `two_row` example:
 
@@ -96,7 +99,7 @@ The widget reads connection details from your led-ticker `.env` (or per-widget o
 | `INFLUXDB_ORG` | no | `pool` | Organization. |
 | `INFLUXDB_BUCKET` | no | `pool_temps` | Bucket. |
 
-The widget queries water-temperature readings with Flux over HTTP and computes today / 7-day / season aggregates. Stale data (older than `stale_after`) renders dim gray; the trend arrow compares the latest reading to a 30-minute trailing average (sub-0.5°F shows `–`).
+The widget queries water-temperature readings with Flux over HTTP and computes today / 7-day / season aggregates. Stale data (older than `stale_after`) renders dim gray; the trend arrow compares the latest reading to a ~45-minute trailing average (sub-0.5°F shows `-`).
 
 ## Development
 
