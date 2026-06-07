@@ -55,6 +55,8 @@ class TestDrawBaseballFrame:
     def test_at_zero_ball_offscreen_left(self):
         canvas = _StubCanvas(width=40, height=16)
         draw_baseball_frame(canvas, 0.0, width=40, height=16)
+        # At t=0 the ball is fully offscreen to the left → nothing lit.
+        assert canvas.count_nonzero() == 0
 
     def test_at_midpoint_draws_pixels(self):
         canvas = _StubCanvas(width=40, height=16)
@@ -96,6 +98,8 @@ class TestDrawBaseballFrameRTL:
     def test_at_zero_ball_offscreen_right(self):
         canvas = _StubCanvas(width=40, height=16)
         draw_baseball_frame_rtl(canvas, 0.0, width=40, height=16)
+        # At t=0 the ball is fully offscreen to the right → nothing lit.
+        assert canvas.count_nonzero() == 0
 
     def test_at_midpoint_draws_pixels(self):
         canvas = _StubCanvas(width=40, height=16)

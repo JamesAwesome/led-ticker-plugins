@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import difflib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -41,6 +42,18 @@ _MLB_LIVE_API: str = "https://statsapi.mlb.com/api/v1.1"
 _INTERVAL_LIVE: int = 45  # ~half-inning cadence
 _INTERVAL_IDLE: int = 300  # 5 minutes
 _INTERVAL_OFFSEASON: int = 86400  # daily
+
+# Supported layouts and the per-row knobs that only apply to "two_row".
+# Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY (formerly checked in
+# led_ticker.app.factories for type == "mlb"); restored here as a
+# validate_config classmethod now that baseball.scores owns the widget.
+_MLB_VALID_LAYOUTS: tuple[str, ...] = ("ticker", "scoreboard", "two_row")
+_TWO_ROW_ONLY: tuple[str, ...] = (
+    "top_font",
+    "top_font_size",
+    "top_font_threshold",
+    "top_row_height",
+)
 
 _team_palette = colors.lazy_palette(
     {
@@ -1181,6 +1194,44 @@ class MLBScoreMonitor:
     _has_live_game: bool = attrs.field(init=False, default=False)
     feed_title: _MLBStoryT | None = attrs.field(init=False, default=None)
     feed_stories: list[_MLBStoryT] = attrs.field(init=False, factory=list)
+
+    @classmethod
+    def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
+        """Pre-coercion config check, run by the engine via validate_widget_cfg.
+
+        Reproduces the two guardrails core formerly applied to ``type =
+        "mlb"`` in ``led_ticker.app.factories`` (now dead under the
+        ``baseball.scores`` plugin): a valid ``layout`` value, and the
+        per-row ``top_*`` knobs only being meaningful with
+        ``layout = "two_row"``. Returns message strings (does NOT raise);
+        the engine turns any returned messages into a pre-flight ValueError.
+        """
+        msgs: list[str] = []
+
+        layout = cfg.get("layout", "ticker")
+        if layout not in _MLB_VALID_LAYOUTS:
+            close = difflib.get_close_matches(
+                str(layout), _MLB_VALID_LAYOUTS, n=1, cutoff=0.5
+            )
+            suggestion = f" Did you mean {close[0]!r}?" if close else ""
+            valid = ", ".join(repr(v) for v in _MLB_VALID_LAYOUTS)
+            msgs.append(
+                f"mlb layout={layout!r} is not valid. "
+                f"Choose one of: {valid}.{suggestion}"
+            )
+
+        # Per-row knobs only apply under two_row. Naming the offending
+        # field(s) instead of silently ignoring them catches stale configs.
+        if layout != "two_row":
+            dead = [k for k in _TWO_ROW_ONLY if k in cfg]
+            if dead:
+                fields = ", ".join(repr(k) for k in dead)
+                msgs.append(
+                    f"{fields} only applies when layout='two_row'; "
+                    f"remove the field(s) or set layout='two_row'."
+                )
+
+        return msgs
 
     @classmethod
     async def start(
