@@ -7,7 +7,21 @@ The entry-point name ``baseball`` is the plugin namespace, so widgets are
 and the emoji is ``:baseball.ball:``.
 """
 
+from led_ticker_baseball.emoji import BALL, BALL_HIRES
+from led_ticker_baseball.scores import MLBScoreMonitor
+from led_ticker_baseball.standings import MLBStandingsMonitor
+from led_ticker_baseball.transition import (
+    Baseball,
+    BaseballAlternating,
+    BaseballReverse,
+)
+
 
 def register(api):
-    # Real registrations (widgets, emoji, transitions) are wired in Phase 2.
-    pass
+    api.widget("scores")(MLBScoreMonitor)
+    api.widget("standings")(MLBStandingsMonitor)
+    api.transition("roll")(Baseball)
+    api.transition("roll_reverse")(BaseballReverse)
+    api.transition("roll_alternating")(BaseballAlternating)
+    api.emoji("ball", BALL)
+    api.hires_emoji("ball", BALL_HIRES)
