@@ -19,3 +19,23 @@ def canvas():
     c.width = 160
     c.height = 16
     return c
+
+
+@pytest.fixture
+def make_widget():
+    """Factory for mock widgets with configurable draw width.
+
+    Mirrors core's ``tests/conftest.py`` fixture; the ported baseball
+    transition tests came from core and depend on it.
+    """
+
+    def _factory(content_width=40):
+        widget = mock.Mock()
+        widget.hold_time = 0.0
+        widget.draw.side_effect = lambda c, cursor_pos=0, **kw: (
+            c,
+            cursor_pos + content_width,
+        )
+        return widget
+
+    return _factory

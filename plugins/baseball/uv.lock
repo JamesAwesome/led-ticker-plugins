@@ -208,6 +208,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "led-ticker" },
+    { name = "pillow" },
 ]
 
 [package.optional-dependencies]
@@ -221,6 +222,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "led-ticker", editable = "../led-ticker" },
+    { name = "pillow" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },

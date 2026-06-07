@@ -8,6 +8,7 @@ authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
 dependencies = [
     "led-ticker",
     "aiohttp",
+    "pillow",
 ]
 
 # The plugin is contributed to led-ticker via this entry point. The entry-point
