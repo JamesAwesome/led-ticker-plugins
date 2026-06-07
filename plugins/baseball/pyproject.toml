@@ -1,0 +1,38 @@
+[project]
+name = "led-ticker-baseball"
+version = "0.1.0"
+description = "MLB scores/standings widgets, baseball emoji, and baseball transitions for led-ticker."
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
+dependencies = [
+    "led-ticker",
+    "aiohttp",
+]
+
+# The plugin is contributed to led-ticker via this entry point. The entry-point
+# NAME ("baseball") becomes the plugin namespace, so widgets are referenced in
+# TOML as `type = "baseball.scores"` / `"baseball.standings"`, transitions as
+# `baseball.roll*`, and the emoji as `:baseball.ball:`.
+[project.entry-points."led_ticker.plugins"]
+baseball = "led_ticker_baseball:register"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/led_ticker_baseball"]
+
+# led-ticker is not published to PyPI yet. For local development, install it
+# editable from a checkout alongside this plugin (see README "Development").
+# Drop this source pin once led-ticker is published.
+[tool.uv.sources]
+led-ticker = { path = "../led-ticker", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["../led-ticker/tests/stubs"]
