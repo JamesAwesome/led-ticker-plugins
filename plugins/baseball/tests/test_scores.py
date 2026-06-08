@@ -1564,7 +1564,6 @@ class TestScoresUpdate:
         texts = [getattr(s, "text", None) for s in widget.feed_stories]
         assert "Season Over" in texts
         assert widget.feed_title is not None
-        assert widget._has_live_game is False
 
     async def test_update_next_vs_for_future_preview_game(self):
         # A single future preview game with no current series → the widget
@@ -1597,7 +1596,6 @@ class TestScoresUpdate:
         # Either way the opponent (Phillies) must surface somewhere in the feed.
         assert widget.feed_title is not None
         assert len(widget.feed_stories) >= 2
-        assert widget._has_live_game is False
 
     async def test_update_no_data_when_team_unresolved(self):
         # team_id never resolved (0) → "No Data" without hitting /schedule.

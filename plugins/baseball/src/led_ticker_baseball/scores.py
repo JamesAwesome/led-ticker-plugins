@@ -38,11 +38,6 @@ logger: logging.Logger = logging.getLogger(__name__)
 MLB_API: str = "https://statsapi.mlb.com/api/v1"
 _MLB_LIVE_API: str = "https://statsapi.mlb.com/api/v1.1"
 
-# Update intervals (seconds)
-_INTERVAL_LIVE: int = 45  # ~half-inning cadence
-_INTERVAL_IDLE: int = 300  # 5 minutes
-_INTERVAL_OFFSEASON: int = 86400  # daily
-
 # Supported layouts and the per-row knobs that only apply to "two_row".
 # Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY (formerly checked in
 # led_ticker.app.factories for type == "mlb"); restored here as a
@@ -1191,7 +1186,6 @@ class MLBScoreMonitor:
     top_row_height: int | None = attrs.field(default=None, kw_only=True)
     _team_id: int = attrs.field(init=False, default=0)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
-    _has_live_game: bool = attrs.field(init=False, default=False)
     feed_title: _MLBStoryT | None = attrs.field(init=False, default=None)
     feed_stories: list[_MLBStoryT] = attrs.field(init=False, factory=list)
 
@@ -1376,7 +1370,6 @@ class MLBScoreMonitor:
                     "Season Over", font_color=body_color, bg_color=self.bg_color
                 ),
             ]
-            self._has_live_game = False
             logger.info(
                 "MLB %s updated: %d stories (season over)",
                 self.team,
@@ -1424,7 +1417,6 @@ class MLBScoreMonitor:
                         "Season Over", font_color=body_color, bg_color=self.bg_color
                     ),
                 ]
-            self._has_live_game = False
             logger.info(
                 "MLB %s updated: %d stories (next: %s)",
                 self.team,
@@ -1511,7 +1503,6 @@ class MLBScoreMonitor:
                 for g in current.games
             )
         self.feed_stories = stories
-        self._has_live_game = any(g.state == "live" for g in current.games)
         n_live = sum(1 for g in current.games if g.state == "live")
         logger.info(
             "MLB %s updated: %d stories (live: %d)",
