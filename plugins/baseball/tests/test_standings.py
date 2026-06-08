@@ -168,7 +168,7 @@ class TestStandingsParsing:
         )
         standings = widget._parse_standings(data)
 
-        from led_ticker_baseball.scores import MLB_NAME_TO_ABBR
+        from led_ticker_baseball.teams import MLB_NAME_TO_ABBR
 
         # Simulate update logic (title not in stories, only in feed_title)
         stories: list = []
@@ -215,7 +215,7 @@ class TestStandingsParsing:
         )
         standings = widget._parse_standings(data)
 
-        from led_ticker_baseball.scores import MLB_NAME_TO_ABBR
+        from led_ticker_baseball.teams import MLB_NAME_TO_ABBR
 
         stories: list = []
         top_names = set()

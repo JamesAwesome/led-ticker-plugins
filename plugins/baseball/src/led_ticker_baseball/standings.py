@@ -21,7 +21,7 @@ from led_ticker.plugin import (
     run_monitor_loop,
     spawn_tracked,
 )
-from led_ticker_baseball.scores import (
+from led_ticker_baseball.teams import (
     MLB_API,
     MLB_NAME_TO_ABBR,
     _team_color_by_name,

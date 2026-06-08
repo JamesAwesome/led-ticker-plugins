@@ -1,9 +1,9 @@
-"""Tripwire: scores.py uses lazy_palette() like colors.py does."""
+"""Tripwire: teams.py uses lazy_palette() like colors.py does."""
 
 import ast
 import inspect
 
-from led_ticker_baseball import scores as mlb_mod
+from led_ticker_baseball import teams as mlb_mod
 
 
 def test_mlb_has_no_eager_color_construction():
@@ -28,7 +28,7 @@ def test_mlb_has_no_eager_color_construction():
                     offenders.append(ast.unparse(node))
 
     assert not offenders, (
-        "scores.py has eager module-level color construction; "
+        "teams.py has eager module-level color construction; "
         "convert to lazy_palette() and access via _team_palette(...) "
         "inside functions:\n" + "\n".join(offenders)
     )
@@ -36,7 +36,7 @@ def test_mlb_has_no_eager_color_construction():
 
 def test_mlb_palette_still_resolves():
     """The colors must still be importable with their existing names."""
-    from led_ticker_baseball.scores import LIVE_COLOR, LOSS_COLOR, WIN_COLOR
+    from led_ticker_baseball.teams import LIVE_COLOR, LOSS_COLOR, WIN_COLOR
 
     assert (WIN_COLOR.red, WIN_COLOR.green, WIN_COLOR.blue) == (46, 200, 46)
     assert (LOSS_COLOR.red, LOSS_COLOR.green, LOSS_COLOR.blue) == (220, 30, 30)

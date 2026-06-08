@@ -6,8 +6,6 @@ from zoneinfo import ZoneInfo
 
 from led_ticker.widgets.message import SegmentMessage
 from led_ticker_baseball.scores import (
-    MLB_TEAM_COLORS,
-    MLB_TEAM_NAMES,
     GameInfo,
     MLBScoreMonitor,
     SeriesInfo,
@@ -17,6 +15,10 @@ from led_ticker_baseball.scores import (
     _format_game_time,
     _format_inning,
     _ordinal,
+)
+from led_ticker_baseball.teams import (
+    MLB_TEAM_COLORS,
+    MLB_TEAM_NAMES,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -428,7 +430,7 @@ class TestBuildGameMessage:
         assert texts[3] == "PHI"
         assert "Final" in full
         # Away lost (3 < 5): away score red, home score green
-        from led_ticker_baseball.scores import LOSS_COLOR, WIN_COLOR
+        from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         colors = [c for _, c in msg.segments]
         assert colors[1] is LOSS_COLOR  # NYM score (3) = red
@@ -444,7 +446,7 @@ class TestBuildGameMessage:
             state="final",
         )
         msg = _build_game_message(game, "PHI", ET)
-        from led_ticker_baseball.scores import LOSS_COLOR, WIN_COLOR
+        from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         texts = [t for t, _ in msg.segments]
         colors = [c for _, c in msg.segments]
@@ -712,7 +714,8 @@ class TestMLBTwoRowLayout:
         """Top segments contain AWAY, '@', HOME with team colors."""
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import _build_two_row_message, _team_color
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import _team_color
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI", state="preview",
@@ -759,7 +762,8 @@ class TestMLBTwoRowLayout:
         from led_ticker.colors import RGB_WHITE
         from led_ticker.fonts import FONT_SMALL
         from led_ticker.scaled_canvas import ScaledCanvas
-        from led_ticker_baseball.scores import _expand_matchup_if_fits, _team_color
+        from led_ticker_baseball.scores import _expand_matchup_if_fits
+        from led_ticker_baseball.teams import _team_color
 
         opts = RGBMatrixOptions()
         opts.rows = 64
@@ -787,7 +791,8 @@ class TestMLBTwoRowLayout:
 
         from led_ticker.colors import RGB_WHITE
         from led_ticker.fonts import FONT_SMALL
-        from led_ticker_baseball.scores import _expand_matchup_if_fits, _team_color
+        from led_ticker_baseball.scores import _expand_matchup_if_fits
+        from led_ticker_baseball.teams import _team_color
 
         narrow = mock.Mock()
         narrow.width = 12  # too narrow for "Marlins @ Mets"
@@ -856,7 +861,8 @@ class TestMLBTwoRowLayout:
         """Away win: away score = WIN_COLOR, home score = LOSS_COLOR."""
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import LOSS_COLOR, WIN_COLOR, _build_two_row_message
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI",
@@ -874,7 +880,8 @@ class TestMLBTwoRowLayout:
     def test_final_top_home_wins_colors_flipped(self):
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import LOSS_COLOR, WIN_COLOR, _build_two_row_message
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI",
@@ -1010,7 +1017,8 @@ class TestMLBTwoRowLayout:
     def test_postponed_top_has_matchup(self):
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import _build_two_row_message, _team_color
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import _team_color
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI", state="postponed",
@@ -1070,11 +1078,8 @@ class TestMLBTwoRowLayout:
         """Away has 1 challenge remaining: 1 orange + 1 grey. Home has 2: 2 orange."""
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import (
-            CHALLENGE_COLOR,
-            CHALLENGE_USED,
-            _build_two_row_message,
-        )
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import CHALLENGE_COLOR, CHALLENGE_USED
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI",
@@ -1095,7 +1100,8 @@ class TestMLBTwoRowLayout:
         """Both teams used all challenges: 4 grey dashes."""
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import CHALLENGE_USED, _build_two_row_message
+        from led_ticker_baseball.scores import _build_two_row_message
+        from led_ticker_baseball.teams import CHALLENGE_USED
 
         game = GameInfo(
             away_abbr="NYM", home_abbr="PHI",
@@ -1345,7 +1351,8 @@ class TestMLBTwoRowLayout:
         """Top band carries Away @ Home in team colors."""
         from zoneinfo import ZoneInfo
 
-        from led_ticker_baseball.scores import _build_two_row_series_title, _team_color
+        from led_ticker_baseball.scores import _build_two_row_series_title
+        from led_ticker_baseball.teams import _team_color
 
         series = SeriesInfo(
             opponent_abbr="NYM",
