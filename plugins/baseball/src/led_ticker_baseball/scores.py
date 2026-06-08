@@ -489,7 +489,7 @@ class MLBScoreboardMessage(FrameAwareBase):
     ) -> DrawResult:
         from led_ticker.plugin import (
             compute_baseline_for_band,
-            draw_with_emoji,
+            draw_text,
             measure_width,
             safe_scale,
         )
@@ -531,7 +531,7 @@ class MLBScoreboardMessage(FrameAwareBase):
         ) -> None:
             w = measure_width(self.font, text, canvas)
             x = zone_start + max(0, (zone_w - w) // 2)
-            draw_with_emoji(canvas, self.font, x, y + y_offset, color, text)
+            draw_text(canvas, self.font, text, x, y + y_offset, color)
 
         away_abbr = game.away_abbr
         home_abbr = game.home_abbr
@@ -578,8 +578,8 @@ class MLBScoreboardMessage(FrameAwareBase):
                     if i < n
                     else _team_palette("CHALLENGE_USED")
                 )
-                draw_with_emoji(
-                    canvas, self.small_font, x, y=y + y_offset, color=color, text="-"
+                draw_text(
+                    canvas, self.small_font, "-", x, y=y + y_offset, color=color
                 )
 
         _draw_dash_pips(game.away_challenges, align_right=False)
@@ -599,8 +599,8 @@ class MLBScoreboardMessage(FrameAwareBase):
         )
 
         def _draw_small(text: str, x: int, y: int, color: Color) -> None:
-            draw_with_emoji(
-                canvas, self.small_font, x, y=y + y_offset, color=color, text=text
+            draw_text(
+                canvas, self.small_font, text, x, y=y + y_offset, color=color
             )
 
         # Helper: draw primary-font text horizontally centered in the full
@@ -608,8 +608,8 @@ class MLBScoreboardMessage(FrameAwareBase):
         def _draw_center(text: str, y: int, color: Color) -> None:
             w = measure_width(self.font, text, canvas)
             x = cl_start + max(0, (center_total - w) // 2)
-            draw_with_emoji(
-                canvas, self.font, x, y=y + y_offset, color=color, text=text
+            draw_text(
+                canvas, self.font, text, x, y=y + y_offset, color=color
             )
 
         if game.state == "live":
@@ -662,14 +662,14 @@ class MLBScoreboardMessage(FrameAwareBase):
             diamond_bot_y = half_h + compute_baseline_for_band(
                 self.font, half_h, scale, valign="bottom"
             )
-            draw_with_emoji(
-                canvas, self.font, b2_x, y=diamond_top_y + y_offset, color=b2_c, text=b2
+            draw_text(
+                canvas, self.font, b2, b2_x, y=diamond_top_y + y_offset, color=b2_c
             )
-            draw_with_emoji(
-                canvas, self.font, b3_x, y=diamond_bot_y + y_offset, color=b3_c, text=b3
+            draw_text(
+                canvas, self.font, b3, b3_x, y=diamond_bot_y + y_offset, color=b3_c
             )
-            draw_with_emoji(
-                canvas, self.font, b1_x, y=diamond_bot_y + y_offset, color=b1_c, text=b1
+            draw_text(
+                canvas, self.font, b1, b1_x, y=diamond_bot_y + y_offset, color=b1_c
             )
 
         elif game.state == "final":
@@ -1094,7 +1094,7 @@ class MLBTwoRowMessage(FrameAwareBase):
     ) -> DrawResult:
         from led_ticker.plugin import (
             compute_baseline_for_band,
-            draw_with_emoji,
+            draw_text,
             font_line_height_logical,
             measure_width,
             resolve_band_heights,
@@ -1150,8 +1150,8 @@ class MLBTwoRowMessage(FrameAwareBase):
             x = max(0, (canvas.width - total_w) // 2)
             for seg in segments:
                 seg_font = seg[2] if len(seg) == 3 else default_font
-                x += draw_with_emoji(
-                    canvas, seg_font, x, baseline + y_offset, seg[1], seg[0]
+                x = draw_text(
+                    canvas, seg_font, seg[0], x, baseline + y_offset, seg[1]
                 )
 
         top_segs = self.top_segments

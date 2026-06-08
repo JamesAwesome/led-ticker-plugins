@@ -395,7 +395,7 @@ class TestBaseballRotation:
 
 class TestHiresSnapRespectsIncomingBg:
     """The hires snap inside `render_hires_baseball_frame`
-    (`_snap_reset`) does its own bg-aware reset before drawing incoming
+    (`snap_reset`) does its own bg-aware reset before drawing incoming
     at t>=SNAP_THRESHOLD. Without it, the snap calls `canvas.Clear()`
     and the last transition frame paints incoming on black — clobbering
     the Fill(incoming_bg) that `run_transition` did one line earlier.
@@ -404,33 +404,33 @@ class TestHiresSnapRespectsIncomingBg:
     def test_snap_clear_when_incoming_bg_is_none(self):
         """Default → snap calls Clear(). Legacy behavior preserved
         for transitions between two no-bg sections."""
-        from led_ticker_baseball.transition import _snap_reset
+        from led_ticker_baseball.transition import snap_reset
 
         canvas = mock.MagicMock()
-        _snap_reset(canvas, None)
+        snap_reset(canvas, None)
         canvas.Clear.assert_called_once_with()
         canvas.Fill.assert_not_called()
 
     def test_snap_fill_when_incoming_bg_set(self):
         """Tuple `(r, g, b)` → snap calls Fill(r, g, b) instead of
         Clear, so the snap-drawn incoming sits on the right bg."""
-        from led_ticker_baseball.transition import _snap_reset
+        from led_ticker_baseball.transition import snap_reset
 
         canvas = mock.MagicMock()
-        _snap_reset(canvas, (255, 230, 80))
+        snap_reset(canvas, (255, 230, 80))
         canvas.Fill.assert_called_once_with(255, 230, 80)
         canvas.Clear.assert_not_called()
 
     def test_snap_normalizes_graphics_color(self):
-        """`_snap_reset` accepts an un-normalized `graphics.Color` —
+        """`snap_reset` accepts an un-normalized `graphics.Color` —
         future direct callers that pass a widget's `bg_color` (which is
         a Color post-coercion) work without re-normalizing at every site."""
         from rgbmatrix.graphics import Color
 
-        from led_ticker_baseball.transition import _snap_reset
+        from led_ticker_baseball.transition import snap_reset
 
         canvas = mock.MagicMock()
-        _snap_reset(canvas, Color(42, 0, 16))
+        snap_reset(canvas, Color(42, 0, 16))
         canvas.Fill.assert_called_once_with(42, 0, 16)
         canvas.Clear.assert_not_called()
 
@@ -438,7 +438,7 @@ class TestHiresSnapRespectsIncomingBg:
         """End-to-end integration tripwire on the snap path. Drives
         `Baseball.frame_at(t=0.95)` through the hires dispatch (real
         ScaledCanvas → real `render_hires_baseball_frame` →
-        `_snap_reset`) with `incoming_bg_color` set, asserts the
+        `snap_reset`) with `incoming_bg_color` set, asserts the
         underlying real canvas saw `Fill(...)` and NOT `Clear()`.
 
         Baseball is fully procedural (no Pillow decode), so this test
@@ -470,10 +470,10 @@ class TestHiresSnapRespectsIncomingBg:
 
         # The snap must Fill, not Clear. Outgoing.draw and the trail
         # paint via SetPixel — those don't touch Fill/Clear. So any
-        # Fill call here came from _snap_reset.
+        # Fill call here came from snap_reset.
         assert real.Fill.called, (
             "Baseball hires snap did not call Fill — "
-            "`_snap_reset` regressed to `canvas.Clear()`"
+            "`snap_reset` regressed to `canvas.Clear()`"
         )
         real.Fill.assert_any_call(255, 230, 80)
         real.Clear.assert_not_called()

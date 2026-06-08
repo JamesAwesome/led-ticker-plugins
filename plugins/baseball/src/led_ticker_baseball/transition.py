@@ -16,7 +16,15 @@ from typing import Any, ClassVar
 
 from PIL import Image
 
-from led_ticker.plugin import Canvas, PixelData, ScaledCanvas, Transition, unwrap_to_real
+from led_ticker.plugin import (
+    SNAP_THRESHOLD,
+    Canvas,
+    PixelData,
+    Transition,
+    is_scaled,
+    snap_reset,
+    unwrap_to_real,
+)
 
 SPRITE_SIZE: int = 14
 SPRITE_Y_OFFSET: int = 1  # centers 14px sprite in 16px display
@@ -328,45 +336,6 @@ def draw_baseball_frame_rtl(
 # baseball "fill, hold, cut" feel.
 TRAIL_SATURATION_T: float = 0.85
 
-# Snap to incoming this fraction of the way through. By this t the trail
-# has fully filled the panel (TRAIL_SATURATION_T < SNAP_THRESHOLD).
-SNAP_THRESHOLD: float = 0.95
-
-
-def _normalize_bg(c: Any) -> tuple[int, int, int] | None:
-    """Coerce an `(r, g, b)` tuple, a `graphics.Color`, or `None` to
-    a tuple/None pair.
-
-    Local copy of core's `transitions._normalize_bg` (an internal not on
-    the plugin's public surface) so `_snap_reset` can call it without
-    importing a core internal.
-    """
-    if c is None:
-        return None
-    if hasattr(c, "red"):
-        return (c.red, c.green, c.blue)
-    return c
-
-
-def _snap_reset(canvas: Any, incoming_bg_color: Any) -> None:
-    """Reset before drawing incoming at t>=SNAP_THRESHOLD.
-
-    `Clear()` (legacy) wipes any bg fill the run_transition outer
-    loop just painted, so the last frame ends up "incoming on black"
-    even when the section has a bg color — visible as a one-tick
-    flash on bordered widgets. When the run_transition caller
-    forwards `incoming_bg_color` here, Fill it instead so the snap
-    matches the section's first reset_canvas.
-
-    Accepts None, an `(r, g, b)` tuple, or a `graphics.Color` —
-    same shape `run_transition` accepts.
-    """
-    bg = _normalize_bg(incoming_bg_color)
-    if bg is not None:
-        canvas.Fill(*bg)
-    else:
-        canvas.Clear()
-
 
 # Rotation frames cycled through as the baseball rolls. 8 frames at
 # 45° increments — fast 90° steps read as alternating patterns; very
@@ -513,7 +482,7 @@ def render_hires_baseball_frame(
     )
 
     if t >= SNAP_THRESHOLD:
-        _snap_reset(canvas, kwargs.get("incoming_bg_color"))
+        snap_reset(canvas, kwargs.get("incoming_bg_color"))
         incoming.draw(canvas)
 
     return canvas
@@ -543,7 +512,7 @@ class Baseball:
             incoming.draw(canvas, cursor_pos=0)
             return canvas
 
-        if isinstance(canvas, ScaledCanvas):
+        if is_scaled(canvas):
             return self._frame_at_hires(t, canvas, outgoing, incoming, **kwargs)
         return self._frame_at_lowres(t, canvas, outgoing, incoming, **kwargs)
 
@@ -584,7 +553,7 @@ class BaseballReverse:
             incoming.draw(canvas, cursor_pos=0)
             return canvas
 
-        if isinstance(canvas, ScaledCanvas):
+        if is_scaled(canvas):
             return self._frame_at_hires(t, canvas, outgoing, incoming, **kwargs)
         return self._frame_at_lowres(t, canvas, outgoing, incoming, **kwargs)
 

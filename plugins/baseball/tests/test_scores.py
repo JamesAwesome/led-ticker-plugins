@@ -374,7 +374,7 @@ class TestBuildSeriesTitle:
         text = "".join(t for t, _ in msg.segments)
         assert "(ST)" in text
         # Slug-bearing segment is rendered as an inline pixel-art flower
-        # via draw_with_emoji (replaces the old `msg.icon` parameter).
+        # via draw_text (replaces the old `msg.icon` parameter).
         assert ":flower:" in text
         # Single home team: should use @ separator
         texts = [t for t, _ in msg.segments]

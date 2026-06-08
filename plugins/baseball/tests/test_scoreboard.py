@@ -564,11 +564,11 @@ def test_scoreboard_draw_uses_self_small_font_not_hardcoded():
     """Center zone draws must route through self.small_font, not FONT_SMALL.
 
     Strategy: pass FONT_DEFAULT as small_font (a different object than FONT_SMALL),
-    then spy on draw_with_emoji calls to verify FONT_SMALL is never passed when a
+    then spy on draw_text calls to verify FONT_SMALL is never passed when a
     custom small_font is set.
     """
     from led_ticker.fonts import FONT_DEFAULT, FONT_SMALL
-    from led_ticker.plugin import draw_with_emoji as real_dwe
+    from led_ticker.plugin import draw_text as real_dwe
 
     canvas = _stub_canvas()
     game = GameInfo(
@@ -596,7 +596,7 @@ def test_scoreboard_draw_uses_self_small_font_not_hardcoded():
 
     import unittest.mock as mock
 
-    with mock.patch("led_ticker.plugin.draw_with_emoji", side_effect=_spy_dwe):
+    with mock.patch("led_ticker.plugin.draw_text", side_effect=_spy_dwe):
         msg.draw(canvas)
 
     assert (
