@@ -4,6 +4,8 @@ A cryptocurrency price ticker **plugin** for [led-ticker](https://github.com/Jam
 
 Each line shows the coin symbol, current price (adaptive precision — sub-dollar tokens never collapse to `0.0000`), and 24-hour percent change. The change value is trend-colored: green for positive, red for negative, gray for neutral — readable at a glance on any panel.
 
+![crypto.coingecko cycling BTC, ETH, and SHIB (note the sub-cent SHIB price)](docs/crypto-coingecko.gif)
+
 ## Prerequisites
 
 - A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install.

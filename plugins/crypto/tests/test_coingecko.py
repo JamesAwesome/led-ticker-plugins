@@ -90,9 +90,10 @@ class TestRenderHelpers:
 
 class TestDrawPriceTicker:
     def test_returns_canvas(self, canvas):
+        # center=True by default → cursor lands at canvas.width == 160
         result, pos = draw_price_ticker(canvas, "BTC", "50000.00", "2.55%")
         assert result is canvas
-        assert pos > 0
+        assert pos == 160
 
     def test_centered_fills_canvas(self, canvas):
         _, pos = draw_price_ticker(canvas, "BTC", "50000.00", "2.55%", center=True)
@@ -102,7 +103,7 @@ class TestDrawPriceTicker:
 class TestCoinTicker:
     @pytest.fixture
     def story(self):
-        s = _CoinTicker(symbol="ETH", currency="USD")
+        s = _CoinTicker(symbol="ETH")
         s.price_data = {"price": "3,000.0000", "change_24h": "1.50%"}
         return s
 
@@ -110,12 +111,13 @@ class TestCoinTicker:
         assert isinstance(story, Widget)
 
     def test_draw_returns_canvas(self, canvas, story):
+        # story uses center=True (default), so cursor lands at canvas.width == 160
         result, pos = story.draw(canvas)
         assert result is canvas
-        assert pos > 0
+        assert pos == 160
 
     def test_default_price_data(self):
-        s = _CoinTicker(symbol="BTC", currency="USD")
+        s = _CoinTicker(symbol="BTC")
         assert s.price_data == {"price": "0.0000", "change_24h": "0.00%"}
 
 
@@ -309,6 +311,32 @@ def _mock_session_seq(bodies, status=200):
 
     session.get = mock.Mock(side_effect=_get)
     return session
+
+
+class TestStartResilience:
+    async def test_start_tolerates_initial_price_fetch_failure(self):
+        session = _mock_session({"status": {"error_code": 429}}, status=429)
+        w = await CoinGeckoMonitor.start(
+            symbol="BTC", symbol_id="bitcoin", currency="USD", session=session
+        )
+        assert w is not None
+        assert w.feed_stories[0].price_data["price"] == "0.0000"
+
+
+class TestUpdateRouting:
+    async def test_update_routes_by_coin_id_not_position(self):
+        session = _mock_session({
+            "bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0},
+            "ethereum": {"usd": 3000.0, "usd_24h_change": -2.0},
+        })
+        w = CoinGeckoMonitor(
+            coins=[("BTC", "bitcoin"), ("ETH", "ethereum")], currency="USD", session=session
+        )
+        w.feed_stories.reverse()  # skew order vs coins
+        await w.update()
+        by_sym = {s.symbol: s.price_data["price"] for s in w.feed_stories}
+        assert by_sym["BTC"] == "50,000.0000"
+        assert by_sym["ETH"] == "3,000.0000"
 
 
 class TestCoinGeckoMonitorAdditional:

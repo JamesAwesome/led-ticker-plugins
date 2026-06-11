@@ -41,7 +41,6 @@ class _CoinTicker(FrameAwareBase):
     """One coin's price line — a Container "story" drawn via draw_price_ticker."""
 
     symbol: str
-    currency: str
     center: bool = True
     padding: int = 6
     hold_time: float = 0.0
@@ -166,12 +165,12 @@ class CoinGeckoMonitor:
     )
     feed_title: None = attrs.field(init=False, default=None)
     feed_stories: list[_CoinTicker] = attrs.field(init=False, factory=list)
+    _story_by_id: dict = attrs.field(init=False, factory=dict)
 
     def __attrs_post_init__(self) -> None:
         self.feed_stories = [
             _CoinTicker(
                 symbol=display,
-                currency=self.currency,
                 center=self.center,
                 padding=self.padding,
                 hold_time=self.hold_time,
@@ -180,6 +179,9 @@ class CoinGeckoMonitor:
             )
             for display, _ in self.coins
         ]
+        self._story_by_id = {
+            cid: story for (_, cid), story in zip(self.coins, self.feed_stories)
+        }
 
     @classmethod
     def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
@@ -255,7 +257,19 @@ class CoinGeckoMonitor:
             session=session,
             **{k: v for k, v in kwargs.items() if k in valid},
         )
-        await widget.update()
+        # Tolerate a failed INITIAL price fetch (e.g. a CoinGecko 429 at boot)
+        # so the widget still constructs and the monitor loop can recover, rather
+        # than the whole widget being skipped for the session. The broad except
+        # also swallows a coding bug in update() — that surfaces only as a
+        # repeating warning log + frozen placeholder data, which is the
+        # acceptable tradeoff for "a data fetch must never crash startup".
+        try:
+            await widget.update()
+        except Exception as e:
+            logging.warning(
+                "crypto.coingecko initial fetch failed (%s); starting with placeholder data, will retry",
+                e,
+            )
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
 
@@ -285,10 +299,9 @@ class CoinGeckoMonitor:
 
         cur = self.currency.lower()
         cur_change = f"{cur}_24h_change"
-        by_id = {coin_id: story for (_, coin_id), story in zip(self.coins, self.feed_stories)}
 
         updated = 0
-        for coin_id, story in by_id.items():
+        for coin_id, story in self._story_by_id.items():
             entry = data.get(coin_id)
             if not entry or cur not in entry or cur_change not in entry:
                 logging.warning(

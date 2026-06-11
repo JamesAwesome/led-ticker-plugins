@@ -1,4 +1,9 @@
-from led_ticker_crypto._ticker_render import _format_price
+from led_ticker_crypto._ticker_render import (
+    FONT_VALUE,
+    FONT_VALUE_SMALL,
+    _format_price,
+    _get_price_font,
+)
 
 
 def test_normal_price_keeps_four_decimals():
@@ -51,3 +56,19 @@ def test_sub_dollar_just_below_one_rounds_up():
 def test_large_value_thousands_separated():
     # >= 1 branch: 4 decimals with thousands separator
     assert _format_price(1234567.89) == "1,234,567.8900"
+
+
+# ---------------------------------------------------------------------------
+# _get_price_font boundary: FONT_VALUE when len <= 10, FONT_VALUE_SMALL when > 10
+# ---------------------------------------------------------------------------
+
+def test_price_font_boundary_at_ten_chars():
+    # "1234567890" is exactly 10 chars → FONT_VALUE
+    assert len("1234567890") == 10
+    assert _get_price_font("1234567890") is FONT_VALUE
+
+
+def test_price_font_boundary_at_eleven_chars():
+    # "12345678901" is exactly 11 chars → FONT_VALUE_SMALL
+    assert len("12345678901") == 11
+    assert _get_price_font("12345678901") is FONT_VALUE_SMALL
