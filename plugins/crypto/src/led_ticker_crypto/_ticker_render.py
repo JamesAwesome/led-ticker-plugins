@@ -66,7 +66,7 @@ def make_default_font_color() -> ColorProvider:
 def _get_change_color(change_str: str) -> Color:
     try:
         value = float(change_str.rstrip("%"))
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return NEUTRAL_TREND_COLOR
     if value < 0:
         return DOWN_TREND_COLOR
@@ -126,11 +126,17 @@ def draw_price_ticker(
     )
 
     baseline_y = compute_baseline(FONT_LABEL, canvas, valign="center") + y_offset
-    cursor_pos = draw_text(canvas, FONT_LABEL, symbol, cursor_pos, baseline_y, label_color)
+    cursor_pos = draw_text(
+        canvas, FONT_LABEL, symbol, cursor_pos, baseline_y, label_color
+    )
     cursor_pos += padding
-    cursor_pos = draw_text(canvas, font_price, price_str, cursor_pos, baseline_y, label_color)
+    cursor_pos = draw_text(
+        canvas, font_price, price_str, cursor_pos, baseline_y, label_color
+    )
     cursor_pos += padding
-    cursor_pos = draw_text(canvas, FONT_DELTA, change_str, cursor_pos, baseline_y, change_color)
+    cursor_pos = draw_text(
+        canvas, FONT_DELTA, change_str, cursor_pos, baseline_y, change_color
+    )
     cursor_pos += end_padding
 
     return canvas, cursor_pos

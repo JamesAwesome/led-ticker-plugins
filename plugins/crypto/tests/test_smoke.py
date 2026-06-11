@@ -8,7 +8,9 @@ def test_entry_point_registers_crypto_namespace():
     try:
         result = L.load_plugins(None, entry_points_enabled=True)
         loaded = {info.namespace for info in result.loaded}
-        assert "crypto" in loaded, f"crypto plugin not discovered via entry point: {result}"
+        assert "crypto" in loaded, (
+            f"crypto plugin not discovered via entry point: {result}"
+        )
 
         from led_ticker.widgets import get_widget_class
 

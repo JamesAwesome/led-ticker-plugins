@@ -34,6 +34,7 @@ def test_small_but_above_one_cent():
 # Boundary cases added by Phase-3 review
 # ---------------------------------------------------------------------------
 
+
 def test_sub_dollar_just_below_one():
     # 0.9999 < 1 → sub-dollar path: log10(0.9999) ≈ -4.3e-5, floor = -1,
     # decimals = 3 - (-1) = 4 → "0.9999"
@@ -61,6 +62,7 @@ def test_large_value_thousands_separated():
 # ---------------------------------------------------------------------------
 # _get_price_font boundary: FONT_VALUE when len <= 10, FONT_VALUE_SMALL when > 10
 # ---------------------------------------------------------------------------
+
 
 def test_price_font_boundary_at_ten_chars():
     # "1234567890" is exactly 10 chars → FONT_VALUE

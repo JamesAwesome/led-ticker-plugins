@@ -13,7 +13,6 @@ from typing import Any, Self
 
 import aiohttp
 import attrs
-
 from led_ticker.plugin import (
     Canvas,
     Color,
@@ -180,7 +179,8 @@ class CoinGeckoMonitor:
             for display, _ in self.coins
         ]
         self._story_by_id = {
-            cid: story for (_, cid), story in zip(self.coins, self.feed_stories)
+            cid: story
+            for (_, cid), story in zip(self.coins, self.feed_stories, strict=True)
         }
 
     @classmethod
@@ -267,7 +267,8 @@ class CoinGeckoMonitor:
             await widget.update()
         except Exception as e:
             logging.warning(
-                "crypto.coingecko initial fetch failed (%s); starting with placeholder data, will retry",
+                "crypto.coingecko initial fetch failed (%s); "
+                "starting with placeholder data, will retry",
                 e,
             )
         spawn_tracked(run_monitor_loop(widget, update_interval))

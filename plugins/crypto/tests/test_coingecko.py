@@ -4,7 +4,6 @@ import unittest.mock as mock
 
 import aiohttp
 import pytest
-
 from led_ticker.plugin import Widget
 
 from led_ticker_crypto._colors import (
@@ -174,7 +173,9 @@ class TestCoinGeckoMonitor:
 
     async def test_non_200_raises_for_backoff(self):
         session = _mock_session({"status": {"error_code": 429}}, status=429)
-        w = CoinGeckoMonitor(coins=[("BTC", "bitcoin")], currency="USD", session=session)
+        w = CoinGeckoMonitor(
+            coins=[("BTC", "bitcoin")], currency="USD", session=session
+        )
         with pytest.raises(aiohttp.ClientResponseError):
             await w.update()
         # stale price preserved (not overwritten with garbage)
@@ -232,7 +233,9 @@ class TestCoinGeckoMonitor:
 
     async def test_missing_coin_preserves_prior_price(self):
         session = _mock_session({})  # coin-not-found → {} (HTTP 200)
-        w = CoinGeckoMonitor(coins=[("BTC", "bitcoin")], currency="USD", session=session)
+        w = CoinGeckoMonitor(
+            coins=[("BTC", "bitcoin")], currency="USD", session=session
+        )
         await w.update()
         assert w.feed_stories[0].price_data["price"] == "0.0000"
 
@@ -245,7 +248,10 @@ class TestCoinGeckoMonitor:
 
     def test_hold_time_threads_to_stories(self):
         w = CoinGeckoMonitor(
-            coins=[("BTC", "bitcoin")], currency="USD", session=mock.Mock(), hold_time=4.0
+            coins=[("BTC", "bitcoin")],
+            currency="USD",
+            session=mock.Mock(),
+            hold_time=4.0,
         )
         assert all(s.hold_time == 4.0 for s in w.feed_stories)
 
@@ -256,8 +262,12 @@ class TestValidateConfig:
         assert any("symbol" in m for m in msgs)
 
     def test_legacy_single_coin_ok(self):
-        assert CoinGeckoMonitor.validate_config(
-            {"symbol": "BTC", "symbol_id": "bitcoin", "currency": "USD"}) == []
+        assert (
+            CoinGeckoMonitor.validate_config(
+                {"symbol": "BTC", "symbol_id": "bitcoin", "currency": "USD"}
+            )
+            == []
+        )
 
     def test_symbols_list_ok(self):
         assert CoinGeckoMonitor.validate_config({"symbols": ["BTC", "ETH"]}) == []
@@ -325,12 +335,16 @@ class TestStartResilience:
 
 class TestUpdateRouting:
     async def test_update_routes_by_coin_id_not_position(self):
-        session = _mock_session({
-            "bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0},
-            "ethereum": {"usd": 3000.0, "usd_24h_change": -2.0},
-        })
+        session = _mock_session(
+            {
+                "bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0},
+                "ethereum": {"usd": 3000.0, "usd_24h_change": -2.0},
+            }
+        )
         w = CoinGeckoMonitor(
-            coins=[("BTC", "bitcoin"), ("ETH", "ethereum")], currency="USD", session=session
+            coins=[("BTC", "bitcoin"), ("ETH", "ethereum")],
+            currency="USD",
+            session=session,
         )
         w.feed_stories.reverse()  # skew order vs coins
         await w.update()
@@ -367,10 +381,12 @@ class TestCoinGeckoMonitorAdditional:
 
     async def test_start_classmethod_resolves_and_updates(self):
         """start() via symbol_ids resolves coins and populates prices."""
-        session = _mock_session_seq([
-            # First .get = /simple/price (no symbols → no coin-list fetch)
-            {"bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0}},
-        ])
+        session = _mock_session_seq(
+            [
+                # First .get = /simple/price (no symbols → no coin-list fetch)
+                {"bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0}},
+            ]
+        )
         widget = await CoinGeckoMonitor.start(
             symbol_ids=["bitcoin"],
             currency="USD",
@@ -381,12 +397,14 @@ class TestCoinGeckoMonitorAdditional:
 
     async def test_start_with_symbols_fetches_coin_list_first(self):
         """start() with symbols= fetches the coin list then prices."""
-        session = _mock_session_seq([
-            # First .get = /coins/list
-            [{"id": "bitcoin", "symbol": "btc", "name": "Bitcoin"}],
-            # Second .get = /simple/price
-            {"bitcoin": {"usd": 60000.0, "usd_24h_change": 2.5}},
-        ])
+        session = _mock_session_seq(
+            [
+                # First .get = /coins/list
+                [{"id": "bitcoin", "symbol": "btc", "name": "Bitcoin"}],
+                # Second .get = /simple/price
+                {"bitcoin": {"usd": 60000.0, "usd_24h_change": 2.5}},
+            ]
+        )
         widget = await CoinGeckoMonitor.start(
             symbols=["BTC"],
             currency="USD",

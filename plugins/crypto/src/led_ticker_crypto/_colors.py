@@ -22,5 +22,5 @@ _trend_palette = colors.lazy_palette(
 )
 
 
-def __getattr__(name: str) -> "Color":
+def __getattr__(name: str) -> Color:
     return _trend_palette(name)
