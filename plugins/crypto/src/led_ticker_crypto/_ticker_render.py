@@ -11,6 +11,8 @@ returns the ABSOLUTE next-x (and routes inline emoji), so core's
 for plain text (proven by the led-ticker-baseball migration).
 """
 
+import math
+
 from led_ticker.plugin import (
     FONT_DEFAULT,
     FONT_SMALL,
@@ -77,6 +79,19 @@ def _get_price_font(price_str: str) -> Font:
     if len(price_str) > 10:
         return FONT_VALUE_SMALL
     return FONT_VALUE
+
+
+def _format_price(value: float) -> str:
+    """Format a price with adaptive precision.
+
+    Normal coins (>= 1) keep the historical 4-decimal, thousands-separated form.
+    Sub-dollar coins get extra decimals so cheap tokens (e.g. SHIB ~4.6e-06)
+    don't collapse to "0.0000".
+    """
+    if value >= 1 or value == 0:
+        return f"{value:,.4f}"
+    decimals = min(12, max(4, 3 - int(math.floor(math.log10(abs(value))))))
+    return f"{value:.{decimals}f}"
 
 
 def draw_price_ticker(
