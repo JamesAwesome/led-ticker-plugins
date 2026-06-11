@@ -13,9 +13,9 @@ Imports the transition family / hi-res helpers from
 
 import unittest.mock as mock
 
+from led_ticker.scaled_canvas import ScaledCanvas
 from rgbmatrix import _StubCanvas
 
-from led_ticker.scaled_canvas import ScaledCanvas
 from led_ticker_baseball.transition import (
     BASEBALL_FRAMES,
     SNAP_THRESHOLD,
@@ -212,9 +212,7 @@ class TestBaseballHiresDispatch:
             mock.patch.object(
                 bb, "_frame_at_lowres", wraps=bb._frame_at_lowres
             ) as lowres,
-            mock.patch.object(
-                bb, "_frame_at_hires", wraps=bb._frame_at_hires
-            ) as hires,
+            mock.patch.object(bb, "_frame_at_hires", wraps=bb._frame_at_hires) as hires,
         ):
             bb.frame_at(0.5, canvas, outgoing, incoming)
             lowres.assert_called_once()

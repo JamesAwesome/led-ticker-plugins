@@ -9,11 +9,10 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 import attrs
-
 from led_ticker.plugin import (
+    FONT_DEFAULT,
     Color,
     ColorProvider,
-    FONT_DEFAULT,
     Font,
     SegmentMessage,
     TickerMessage,
@@ -21,6 +20,7 @@ from led_ticker.plugin import (
     run_monitor_loop,
     spawn_tracked,
 )
+
 from led_ticker_baseball.teams import (
     MLB_API,
     MLB_NAME_TO_ABBR,
@@ -136,7 +136,9 @@ class MLBStandingsMonitor:
             await self._set_offseason_state()
             return
 
-        title_color = self.font_color if self.font_color is not None else colors.RGB_WHITE
+        title_color = (
+            self.font_color if self.font_color is not None else colors.RGB_WHITE
+        )
         self.feed_title = TickerMessage(
             self.title,
             font_color=title_color,
@@ -263,7 +265,9 @@ class MLBStandingsMonitor:
         opening_day = await self._fetch_opening_day()
         msg = f"Opens {opening_day}" if opening_day else "Opens soon"
 
-        body_color = self.font_color if self.font_color is not None else colors.RGB_WHITE
+        body_color = (
+            self.font_color if self.font_color is not None else colors.RGB_WHITE
+        )
         self.feed_title = TickerMessage(
             self.title,
             font_color=body_color,
@@ -282,7 +286,9 @@ class MLBStandingsMonitor:
 
     def _set_error_state(self) -> None:
         """Set display to error state."""
-        body_color = self.font_color if self.font_color is not None else colors.RGB_WHITE
+        body_color = (
+            self.font_color if self.font_color is not None else colors.RGB_WHITE
+        )
         self.feed_title = TickerMessage(
             self.title,
             font_color=body_color,

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from led_ticker.widgets.message import SegmentMessage
+
 from led_ticker_baseball.scores import (
     GameInfo,
     MLBScoreMonitor,
@@ -681,16 +682,19 @@ class TestMLBTwoRowLayout:
 
     def test_monitor_top_font_default_is_none(self):
         from unittest import mock
+
         m = MLBScoreMonitor(session=mock.Mock(), team="PHI")
         assert m.top_font is None
 
     def test_monitor_top_row_height_default_is_none(self):
         from unittest import mock
+
         m = MLBScoreMonitor(session=mock.Mock(), team="PHI")
         assert m.top_row_height is None
 
     def test_monitor_layout_default_is_ticker(self):
         from unittest import mock
+
         m = MLBScoreMonitor(session=mock.Mock(), team="PHI")
         assert m.layout == "ticker"
 
@@ -704,8 +708,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import MLBTwoRowMessage, _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         assert isinstance(msg, MLBTwoRowMessage)
@@ -718,7 +725,9 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import _team_color
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI", state="preview",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            state="preview",
             start_time=None,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
@@ -749,19 +758,22 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="MIA", home_abbr="NYM",
-            away_score=5, home_score=3, state="final",
+            away_abbr="MIA",
+            home_abbr="NYM",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "NYM", ZoneInfo("America/New_York"))
         assert msg.matchup is None
 
     def test_matchup_expands_to_full_names_when_room(self):
         """On a wide canvas the abbr matchup expands to full team names."""
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
-
         from led_ticker.colors import RGB_WHITE
         from led_ticker.fonts import FONT_SMALL
         from led_ticker.scaled_canvas import ScaledCanvas
+        from rgbmatrix import RGBMatrix, RGBMatrixOptions
+
         from led_ticker_baseball.scores import _expand_matchup_if_fits
         from led_ticker_baseball.teams import _team_color
 
@@ -791,6 +803,7 @@ class TestMLBTwoRowLayout:
 
         from led_ticker.colors import RGB_WHITE
         from led_ticker.fonts import FONT_SMALL
+
         from led_ticker_baseball.scores import _expand_matchup_if_fits
         from led_ticker_baseball.teams import _team_color
 
@@ -835,8 +848,11 @@ class TestMLBTwoRowLayout:
             away_abbr="NYM", home_abbr="PHI", state="preview", start_time=None
         )
         msg = _build_two_row_message(
-            game, "PHI", ZoneInfo("America/New_York"),
-            series_wins=2, series_losses=1,
+            game,
+            "PHI",
+            ZoneInfo("America/New_York"),
+            series_wins=2,
+            series_losses=1,
         )
         top_text = "".join(t for t, _ in msg.top_segments)
         assert "2-1" in top_text
@@ -851,8 +867,11 @@ class TestMLBTwoRowLayout:
             away_abbr="NYM", home_abbr="PHI", state="preview", start_time=None
         )
         msg = _build_two_row_message(
-            game, "PHI", ZoneInfo("America/New_York"),
-            series_wins=0, series_losses=0,
+            game,
+            "PHI",
+            ZoneInfo("America/New_York"),
+            series_wins=0,
+            series_losses=0,
         )
         # exactly: away_abbr, " @ ", home_abbr — no record segment
         assert len(msg.top_segments) == 3
@@ -865,8 +884,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         texts = [t for t, _ in msg.top_segments]
@@ -884,8 +906,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import LOSS_COLOR, WIN_COLOR
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=8, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=8,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         texts = [t for t, _ in msg.top_segments]
@@ -901,8 +926,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -914,12 +942,18 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(
-            game, "PHI", ZoneInfo("America/New_York"),
-            series_wins=2, series_losses=1,
+            game,
+            "PHI",
+            ZoneInfo("America/New_York"),
+            series_wins=2,
+            series_losses=1,
             series_total_games=3,
         )
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -931,12 +965,18 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(
-            game, "PHI", ZoneInfo("America/New_York"),
-            series_wins=1, series_losses=0,
+            game,
+            "PHI",
+            ZoneInfo("America/New_York"),
+            series_wins=1,
+            series_losses=0,
             series_total_games=1,
         )
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -949,9 +989,15 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=5, state="live",
-            inning="▼7", balls=2, strikes=1, outs=1,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=5,
+            state="live",
+            inning="▼7",
+            balls=2,
+            strikes=1,
+            outs=1,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         full = "".join(t for t, _ in msg.top_segments)
@@ -966,9 +1012,15 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=5, state="live",
-            inning="▼7", balls=2, strikes=1, outs=1,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=5,
+            state="live",
+            inning="▼7",
+            balls=2,
+            strikes=1,
+            outs=1,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -980,10 +1032,18 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=5, state="live",
-            inning="▼7", balls=2, strikes=1, outs=1,
-            on_first=True, on_second=False, on_third=True,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=5,
+            state="live",
+            inning="▼7",
+            balls=2,
+            strikes=1,
+            outs=1,
+            on_first=True,
+            on_second=False,
+            on_third=True,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -998,21 +1058,28 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         from led_ticker.colors import make_color
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=5, state="live",
-            inning="▼7", balls=3, strikes=2, outs=1,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=5,
+            state="live",
+            inning="▼7",
+            balls=3,
+            strikes=2,
+            outs=1,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         ball_c = make_color(80, 255, 80)
         strike_c = make_color(255, 255, 80)
         out_c = make_color(255, 80, 80)
         seg_map = {t: c for t, c in msg.bottom_segments}
-        assert seg_map.get("3") == ball_c    # balls
+        assert seg_map.get("3") == ball_c  # balls
         assert seg_map.get("2") == strike_c  # strikes
-        assert seg_map.get("1") == out_c     # outs
+        assert seg_map.get("1") == out_c  # outs
 
     def test_postponed_top_has_matchup(self):
         from zoneinfo import ZoneInfo
@@ -1021,8 +1088,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import _team_color
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI", state="postponed",
-            postpone_tag="PPD", postpone_reason="Rain",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            state="postponed",
+            postpone_tag="PPD",
+            postpone_reason="Rain",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         texts = [t for t, _ in msg.top_segments]
@@ -1038,8 +1108,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI", state="postponed",
-            postpone_tag="PPD", postpone_reason="Rain",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            state="postponed",
+            postpone_tag="PPD",
+            postpone_reason="Rain",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -1052,8 +1125,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI", state="postponed",
-            postpone_tag="CANC", postpone_reason="",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            state="postponed",
+            postpone_tag="CANC",
+            postpone_reason="",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in msg.bottom_segments)
@@ -1066,9 +1142,13 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
-            away_challenges=None, home_challenges=None,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
+            away_challenges=None,
+            home_challenges=None,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         top_texts = [seg[0] for seg in msg.top_segments]
@@ -1082,9 +1162,13 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import CHALLENGE_COLOR, CHALLENGE_USED
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
-            away_challenges=1, home_challenges=2,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
+            away_challenges=1,
+            home_challenges=2,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         pip_segs = [seg for seg in msg.top_segments if seg[0] == "-"]
@@ -1104,9 +1188,13 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.teams import CHALLENGE_USED
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
-            away_challenges=0, home_challenges=0,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
+            away_challenges=0,
+            home_challenges=0,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         pip_segs = [seg for seg in msg.top_segments if seg[0] == "-"]
@@ -1118,12 +1206,17 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         from led_ticker.fonts import FONT_SMALL
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
-            away_challenges=1, home_challenges=1,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
+            away_challenges=1,
+            home_challenges=1,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         # 3-tuple segments carry a font override
@@ -1138,12 +1231,17 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         from led_ticker.fonts import FONT_DEFAULT
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
-            away_challenges=2, home_challenges=0,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
+            away_challenges=2,
+            home_challenges=0,
         )
         msg = _build_two_row_message(
             game, "PHI", ZoneInfo("America/New_York"), small_font=FONT_DEFAULT
@@ -1161,8 +1259,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         result_canvas, cursor = msg.draw(canvas)
@@ -1175,9 +1276,15 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=3, home_score=5, state="live",
-            inning="▼7", balls=2, strikes=1, outs=1,
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=3,
+            home_score=5,
+            state="live",
+            inning="▼7",
+            balls=2,
+            strikes=1,
+            outs=1,
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         result_canvas, cursor = msg.draw(canvas)
@@ -1194,13 +1301,16 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         import pytest
-
         from led_ticker.fonts import resolve_font
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         big_font = resolve_font("Inter-Regular", 40)
         msg = _build_two_row_message(
@@ -1221,13 +1331,16 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         import pytest
-
         from led_ticker.fonts import FONT_DEFAULT
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(
             game, "PHI", ZoneInfo("America/New_York"), font=FONT_DEFAULT
@@ -1240,11 +1353,15 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         from led_ticker.fonts import FONT_SMALL
+
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(game, "PHI", ZoneInfo("America/New_York"))
         assert msg.font is FONT_SMALL
@@ -1256,9 +1373,12 @@ class TestMLBTwoRowLayout:
         from unittest import mock
 
         from led_ticker.fonts import FONT_DEFAULT
+
         m = MLBScoreMonitor(
-            session=mock.Mock(), team="PHI",
-            layout="two_row", top_font=FONT_DEFAULT,
+            session=mock.Mock(),
+            team="PHI",
+            layout="two_row",
+            top_font=FONT_DEFAULT,
         )
         assert m.top_font is FONT_DEFAULT
 
@@ -1269,8 +1389,11 @@ class TestMLBTwoRowLayout:
         from led_ticker_baseball.scores import _build_two_row_message
 
         game = GameInfo(
-            away_abbr="NYM", home_abbr="PHI",
-            away_score=5, home_score=3, state="final",
+            away_abbr="NYM",
+            home_abbr="PHI",
+            away_score=5,
+            home_score=3,
+            state="final",
         )
         msg = _build_two_row_message(
             game, "PHI", ZoneInfo("America/New_York"), top_row_height=4
@@ -1309,17 +1432,28 @@ class TestMLBTwoRowLayout:
         states_and_games = [
             GameInfo(away_abbr="NYM", home_abbr="PHI", state="preview"),
             GameInfo(
-                away_abbr="NYM", home_abbr="PHI",
-                away_score=3, home_score=5, state="final",
+                away_abbr="NYM",
+                home_abbr="PHI",
+                away_score=3,
+                home_score=5,
+                state="final",
             ),
             GameInfo(
-                away_abbr="NYM", home_abbr="PHI",
-                away_score=1, home_score=2, state="live",
-                inning="▼5", balls=1, strikes=2, outs=1,
+                away_abbr="NYM",
+                home_abbr="PHI",
+                away_score=1,
+                home_score=2,
+                state="live",
+                inning="▼5",
+                balls=1,
+                strikes=2,
+                outs=1,
             ),
             GameInfo(
-                away_abbr="NYM", home_abbr="PHI",
-                state="postponed", postpone_tag="PPD",
+                away_abbr="NYM",
+                home_abbr="PHI",
+                state="postponed",
+                postpone_tag="PPD",
             ),
         ]
         for game in states_and_games:
@@ -1342,9 +1476,7 @@ class TestMLBTwoRowLayout:
             opponent_abbr="NYM",
             games=[GameInfo(away_abbr="NYM", home_abbr="PHI", state="preview")],
         )
-        title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York")
-        )
+        title = _build_two_row_series_title("PHI", series, ZoneInfo("America/New_York"))
         assert isinstance(title, MLBTwoRowMessage)
 
     def test_series_title_top_band_has_matchup_with_team_colors(self):
@@ -1358,9 +1490,7 @@ class TestMLBTwoRowLayout:
             opponent_abbr="NYM",
             games=[GameInfo(away_abbr="NYM", home_abbr="PHI", state="preview")],
         )
-        title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York")
-        )
+        title = _build_two_row_series_title("PHI", series, ZoneInfo("America/New_York"))
         top_text = "".join(t for t, _ in title.top_segments)
         assert "@" in top_text
         assert "Mets" in top_text  # away (NYM) full name
@@ -1385,9 +1515,7 @@ class TestMLBTwoRowLayout:
             team_wins=2,
             team_losses=1,
         )
-        title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York")
-        )
+        title = _build_two_row_series_title("PHI", series, ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in title.bottom_segments)
         assert "leads" in bottom_text
         assert "2-1" in bottom_text
@@ -1405,9 +1533,7 @@ class TestMLBTwoRowLayout:
             team_wins=0,
             team_losses=0,
         )
-        title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York")
-        )
+        title = _build_two_row_series_title("PHI", series, ZoneInfo("America/New_York"))
         assert title.bottom_segments == []
 
     def test_series_title_bottom_band_shows_spring_badge(self):
@@ -1420,14 +1546,14 @@ class TestMLBTwoRowLayout:
             opponent_abbr="NYM",
             games=[
                 GameInfo(
-                    away_abbr="NYM", home_abbr="PHI",
-                    state="preview", game_type="S",
+                    away_abbr="NYM",
+                    home_abbr="PHI",
+                    state="preview",
+                    game_type="S",
                 )
             ],
         )
-        title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York")
-        )
+        title = _build_two_row_series_title("PHI", series, ZoneInfo("America/New_York"))
         bottom_text = "".join(t for t, _ in title.bottom_segments)
         assert "(ST)" in bottom_text
 
@@ -1436,6 +1562,7 @@ class TestMLBTwoRowLayout:
         from zoneinfo import ZoneInfo
 
         from led_ticker.fonts import FONT_DEFAULT
+
         from led_ticker_baseball.scores import _build_two_row_series_title
 
         series = SeriesInfo(
@@ -1443,8 +1570,11 @@ class TestMLBTwoRowLayout:
             games=[GameInfo(away_abbr="NYM", home_abbr="PHI", state="preview")],
         )
         title = _build_two_row_series_title(
-            "PHI", series, ZoneInfo("America/New_York"),
-            top_font=FONT_DEFAULT, top_row_height=6,
+            "PHI",
+            series,
+            ZoneInfo("America/New_York"),
+            top_font=FONT_DEFAULT,
+            top_row_height=6,
         )
         assert title.top_font is FONT_DEFAULT
         assert title.top_row_height == 6
@@ -1499,9 +1629,7 @@ class TestScoresValidateConfig:
 
     def test_top_field_with_two_row_layout_ok(self):
         assert (
-            MLBScoreMonitor.validate_config(
-                {"layout": "two_row", "top_font_size": 16}
-            )
+            MLBScoreMonitor.validate_config({"layout": "two_row", "top_font_size": 16})
             == []
         )
 
@@ -1541,9 +1669,7 @@ class TestScoresUpdate:
         def make_ctx(url, *args, **kwargs):
             resp = mock.AsyncMock()
             if "/teams" in url:
-                resp.json.return_value = {
-                    "teams": [{"id": 121, "abbreviation": "NYM"}]
-                }
+                resp.json.return_value = {"teams": [{"id": 121, "abbreviation": "NYM"}]}
             elif "/schedule" in url:
                 if games:
                     resp.json.return_value = {"dates": [{"games": games}]}

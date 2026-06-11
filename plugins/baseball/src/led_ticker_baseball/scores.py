@@ -11,14 +11,13 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 import attrs
-
 from led_ticker.plugin import (
+    FONT_DEFAULT,
+    FONT_SMALL,
     Canvas,
     Color,
     ColorProvider,
     DrawResult,
-    FONT_DEFAULT,
-    FONT_SMALL,
     Font,
     FrameAwareBase,
     SegmentMessage,
@@ -30,9 +29,9 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_baseball.teams import (
+    _MLB_LIVE_API,
     MLB_API,
     MLB_TEAM_NAMES,
-    _MLB_LIVE_API,
     _team_color,
     _team_palette,
 )
@@ -450,9 +449,7 @@ class MLBScoreboardMessage(FrameAwareBase):
                     if i < n
                     else _team_palette("CHALLENGE_USED")
                 )
-                draw_text(
-                    canvas, self.small_font, "-", x, y=y + y_offset, color=color
-                )
+                draw_text(canvas, self.small_font, "-", x, y=y + y_offset, color=color)
 
         _draw_dash_pips(game.away_challenges, align_right=False)
         _draw_dash_pips(game.home_challenges, align_right=True)
@@ -471,18 +468,14 @@ class MLBScoreboardMessage(FrameAwareBase):
         )
 
         def _draw_small(text: str, x: int, y: int, color: Color) -> None:
-            draw_text(
-                canvas, self.small_font, text, x, y=y + y_offset, color=color
-            )
+            draw_text(canvas, self.small_font, text, x, y=y + y_offset, color=color)
 
         # Helper: draw primary-font text horizontally centered in the full
         # center zone (cl_start → right_start).
         def _draw_center(text: str, y: int, color: Color) -> None:
             w = measure_width(self.font, text, canvas)
             x = cl_start + max(0, (center_total - w) // 2)
-            draw_text(
-                canvas, self.font, text, x, y=y + y_offset, color=color
-            )
+            draw_text(canvas, self.font, text, x, y=y + y_offset, color=color)
 
         if game.state == "live":
             # Row 0: inning + outs dots
@@ -674,9 +667,9 @@ def _compute_final_two_row(
 def _compute_live_two_row(
     game: GameInfo,
     team_abbr: str,  # uniform signature — unused here
-    tz: ZoneInfo,    # uniform signature — unused here
-    series_wins: int,   # uniform signature — unused here
-    series_losses: int, # uniform signature — unused here
+    tz: ZoneInfo,  # uniform signature — unused here
+    series_wins: int,  # uniform signature — unused here
+    series_losses: int,  # uniform signature — unused here
     small_font: Font | None = None,
 ) -> tuple[list, list]:
     """Compute top/bottom segment lists for a live-state game."""
@@ -696,11 +689,11 @@ def _compute_live_two_row(
     top.extend(_pip_segments(game.home_challenges, _small_font))
 
     live_c = _team_palette("LIVE_COLOR")
-    ball_c = make_color(80, 255, 80)    # green — balls
+    ball_c = make_color(80, 255, 80)  # green — balls
     strike_c = make_color(255, 255, 80)  # yellow — strikes
-    out_c = make_color(255, 80, 80)     # red — outs
+    out_c = make_color(255, 80, 80)  # red — outs
     occupied_c = make_color(255, 220, 50)  # yellow — occupied base
-    empty_c = make_color(50, 50, 50)       # dim — empty base
+    empty_c = make_color(50, 50, 50)  # dim — empty base
 
     inning_str = game.inning or "–"
     b3 = "◆" if game.on_third else "◇"
@@ -728,10 +721,10 @@ def _compute_live_two_row(
 
 def _compute_postponed_two_row(
     game: GameInfo,
-    team_abbr: str,    # uniform signature — unused here
-    tz: ZoneInfo,      # uniform signature — unused here
+    team_abbr: str,  # uniform signature — unused here
+    tz: ZoneInfo,  # uniform signature — unused here
     series_wins: int,  # uniform signature — unused here
-    series_losses: int, # uniform signature — unused here
+    series_losses: int,  # uniform signature — unused here
 ) -> tuple[list[tuple[str, Color]], list[tuple[str, Color]]]:
     """Compute top/bottom segment lists for a postponed-state game."""
     away_c = _team_color(game.away_abbr)
@@ -772,12 +765,21 @@ def _build_two_row_message(
         )
     elif game.state == "final":
         top_segs, bot_segs = _compute_final_two_row(
-            game, team_abbr, tz, series_wins, series_losses, series_total_games,
+            game,
+            team_abbr,
+            tz,
+            series_wins,
+            series_losses,
+            series_total_games,
             small_font=_small_font,
         )
     elif game.state == "live":
         top_segs, bot_segs = _compute_live_two_row(
-            game, team_abbr, tz, series_wins, series_losses,
+            game,
+            team_abbr,
+            tz,
+            series_wins,
+            series_losses,
             small_font=_small_font,
         )
     elif game.state == "postponed":
@@ -868,7 +870,9 @@ def _build_two_row_series_title(
             leader_abbr = series.opponent_abbr
             w, lo = series.team_losses, series.team_wins
         if leader_abbr is None:
-            bot.append((f"Tied {series.team_wins}-{series.team_losses}", colors.RGB_WHITE))
+            bot.append(
+                (f"Tied {series.team_wins}-{series.team_losses}", colors.RGB_WHITE)
+            )
         else:
             bot.append((leader_abbr, _team_color(leader_abbr)))
             bot.append((f" leads {w}-{lo}", colors.RGB_WHITE))
@@ -1022,15 +1026,11 @@ class MLBTwoRowMessage(FrameAwareBase):
             x = max(0, (canvas.width - total_w) // 2)
             for seg in segments:
                 seg_font = seg[2] if len(seg) == 3 else default_font
-                x = draw_text(
-                    canvas, seg_font, seg[0], x, baseline + y_offset, seg[1]
-                )
+                x = draw_text(canvas, seg_font, seg[0], x, baseline + y_offset, seg[1])
 
         top_segs = self.top_segments
         if self.matchup is not None:
-            top_segs = _expand_matchup_if_fits(
-                top_segs, self.matchup, top_font, canvas
-            )
+            top_segs = _expand_matchup_if_fits(top_segs, self.matchup, top_font, canvas)
 
         _render_segments(top_segs, top_baseline, top_font)
         _render_segments(self.bottom_segments, bot_baseline, bot_font)
@@ -1151,7 +1151,9 @@ class MLBScoreMonitor:
         title_color = (
             self.font_color if self.font_color is not None else _team_color(self.team)
         )
-        body_color = self.font_color if self.font_color is not None else colors.RGB_WHITE
+        body_color = (
+            self.font_color if self.font_color is not None else colors.RGB_WHITE
+        )
 
         if not self._team_id:
             title = TickerMessage(

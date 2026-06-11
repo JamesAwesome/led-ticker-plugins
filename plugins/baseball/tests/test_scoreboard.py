@@ -491,6 +491,7 @@ async def test_layout_ticker_builds_game_messages():
 def test_fit_team_name_returns_name_when_it_fits():
     """Short names like 'Mets' should fit in a 128px column and be returned."""
     from led_ticker.fonts import FONT_DEFAULT
+
     from led_ticker_baseball.scores import _fit_team_name
 
     canvas = _stub_canvas(w=128, h=16)
@@ -502,6 +503,7 @@ def test_fit_team_name_returns_name_when_it_fits():
 def test_fit_team_name_falls_back_to_abbr_when_too_wide():
     """On a narrow canvas, even short names should fall back to the abbreviation."""
     from led_ticker.fonts import FONT_DEFAULT
+
     from led_ticker_baseball.scores import _fit_team_name
 
     canvas = _stub_canvas(w=32, h=16)
@@ -513,6 +515,7 @@ def test_fit_team_name_falls_back_to_abbr_when_too_wide():
 def test_fit_team_name_unknown_abbr_returns_abbr():
     """An unknown abbreviation returns itself regardless of zone width."""
     from led_ticker.fonts import FONT_DEFAULT
+
     from led_ticker_baseball.scores import _fit_team_name
 
     canvas = _stub_canvas(w=128, h=16)
@@ -548,6 +551,7 @@ def test_build_scoreboard_message_threads_small_font():
     from zoneinfo import ZoneInfo
 
     from led_ticker.fonts import FONT_DEFAULT
+
     from led_ticker_baseball.scores import _build_scoreboard_message
 
     game = _live_game()
@@ -599,12 +603,12 @@ def test_scoreboard_draw_uses_self_small_font_not_hardcoded():
     with mock.patch("led_ticker.plugin.draw_text", side_effect=_spy_dwe):
         msg.draw(canvas)
 
-    assert (
-        FONT_DEFAULT in fonts_drawn
-    ), "small_font (FONT_DEFAULT) was never used in draw()"
-    assert (
-        FONT_SMALL not in fonts_drawn
-    ), "hardcoded FONT_SMALL is still being used in draw()"
+    assert FONT_DEFAULT in fonts_drawn, (
+        "small_font (FONT_DEFAULT) was never used in draw()"
+    )
+    assert FONT_SMALL not in fonts_drawn, (
+        "hardcoded FONT_SMALL is still being used in draw()"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -688,9 +692,9 @@ async def test_monitor_threads_small_font_to_scoreboard_messages():
     ]
     assert scoreboard_stories, "no MLBScoreboardMessage in feed_stories"
     for story in scoreboard_stories:
-        assert (
-            story.small_font is FONT_DEFAULT
-        ), f"story.small_font is {story.small_font!r}, expected FONT_DEFAULT"
+        assert story.small_font is FONT_DEFAULT, (
+            f"story.small_font is {story.small_font!r}, expected FONT_DEFAULT"
+        )
 
 
 # ---------------------------------------------------------------------------

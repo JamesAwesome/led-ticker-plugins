@@ -14,8 +14,6 @@ the registry decorators from core are intentionally dropped here.
 import functools
 from typing import Any, ClassVar
 
-from PIL import Image
-
 from led_ticker.plugin import (
     SNAP_THRESHOLD,
     Canvas,
@@ -25,6 +23,7 @@ from led_ticker.plugin import (
     snap_reset,
     unwrap_to_real,
 )
+from PIL import Image
 
 SPRITE_SIZE: int = 14
 SPRITE_Y_OFFSET: int = 1  # centers 14px sprite in 16px display

@@ -3,9 +3,9 @@
 import unittest.mock as mock
 
 import pytest
-
 from led_ticker.colors import RGB_WHITE
 from led_ticker.widgets.message import SegmentMessage, TickerMessage
+
 from led_ticker_baseball.standings import (
     MLBStandingsMonitor,
     TeamStanding,
@@ -484,9 +484,7 @@ class TestMLBStandingsUpdateLogging:
 
         widget._tz = ZoneInfo("America/New_York")
 
-        with caplog.at_level(
-            logging.INFO, logger="led_ticker_baseball.standings"
-        ):
+        with caplog.at_level(logging.INFO, logger="led_ticker_baseball.standings"):
             await widget.update()
 
         matching = [
