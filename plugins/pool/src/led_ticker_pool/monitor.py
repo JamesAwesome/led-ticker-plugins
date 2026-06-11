@@ -11,7 +11,6 @@ from typing import Any, Self
 
 import aiohttp
 import attrs
-
 from led_ticker.plugin import (
     Color,
     ColorProviderBase,
@@ -249,9 +248,7 @@ class PoolMonitor:
     influxdb_token: str = attrs.field(factory=lambda: os.getenv("INFLUXDB_TOKEN", ""))
     font: Font = attrs.field(factory=lambda: resolve_font("6x12"), kw_only=True)
     layout: str = attrs.field(default="ticker", kw_only=True)
-    label_color: Color = attrs.field(
-        factory=lambda: colors.RGB_WHITE, kw_only=True
-    )
+    label_color: Color = attrs.field(factory=lambda: colors.RGB_WHITE, kw_only=True)
     top_font: Font | None = attrs.field(default=None, kw_only=True)
     bottom_font: Font | None = attrs.field(default=None, kw_only=True)
     top_row_height: int | None = attrs.field(default=None, kw_only=True)
@@ -268,7 +265,7 @@ class PoolMonitor:
         cw = cfg.get("current_window")
         if cw is not None and not re.match(r"^-(\d+(ns|us|ms|s|m|h|d|w))+$", str(cw)):
             msgs.append(
-                'current_window must be a negative Flux duration '
+                "current_window must be a negative Flux duration "
                 f'(e.g. "-24h", "-90m"); got {cw!r}'
             )
         sid = cfg.get("sensor_id")
@@ -279,16 +276,14 @@ class PoolMonitor:
             hint = ""
             close = difflib.get_close_matches(str(layout), _VALID_LAYOUTS, n=1)
             if close:
-                hint = f' (did you mean {close[0]!r}?)'
-            msgs.append(
-                f"layout must be one of {_VALID_LAYOUTS}; got {layout!r}{hint}"
-            )
+                hint = f" (did you mean {close[0]!r}?)"
+            msgs.append(f"layout must be one of {_VALID_LAYOUTS}; got {layout!r}{hint}")
         if cfg.get("layout", "ticker") != "two_row":
             present = [k for k in _TWO_ROW_ONLY if k in cfg]
             if present:
                 msgs.append(
                     f'{", ".join(present)} only valid with layout = "two_row" '
-                    f'(current layout: {cfg.get("layout", "ticker")!r})'
+                    f"(current layout: {cfg.get('layout', 'ticker')!r})"
                 )
         return msgs
 

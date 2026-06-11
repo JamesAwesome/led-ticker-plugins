@@ -3,9 +3,8 @@
 import unittest.mock as mock
 
 import pytest
+from led_ticker.plugin import SegmentMessage, Widget, colors
 
-from led_ticker.plugin import Widget, colors
-from led_ticker.plugin import SegmentMessage
 from led_ticker_pool.monitor import (
     DIM,
     HI_COLOR,
@@ -815,9 +814,7 @@ class TestValidateConfig:
         assert PoolMonitor.validate_config({"layout": "two_row"}) == []
 
     def test_top_font_with_ticker_layout_rejected(self):
-        msgs = PoolMonitor.validate_config(
-            {"layout": "ticker", "top_font_size": 19}
-        )
+        msgs = PoolMonitor.validate_config({"layout": "ticker", "top_font_size": 19})
         assert msgs, "expected a validation error"
         assert any("top_font_size" in m for m in msgs)
 
@@ -828,9 +825,7 @@ class TestValidateConfig:
 
     def test_top_font_with_two_row_layout_passes(self):
         assert (
-            PoolMonitor.validate_config(
-                {"layout": "two_row", "top_font_size": 19}
-            )
+            PoolMonitor.validate_config({"layout": "two_row", "top_font_size": 19})
             == []
         )
 
