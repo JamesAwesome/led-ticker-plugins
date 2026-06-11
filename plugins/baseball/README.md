@@ -45,7 +45,7 @@ pip install "git+https://github.com/JamesAwesome/led-ticker-baseball.git@main"
 
 led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
-Once installed, the `baseball.scores` / `baseball.standings` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
+Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
 
 ## Widgets
 
@@ -115,9 +115,47 @@ teams = ["NYY", "BOS"]
 | `font` | string | `"6x12"` | BDF or hires font for standings text. |
 | `update_interval` | int | `86400` | Seconds between fetches (24 h default; standings move slowly). |
 
+### `baseball.promotions`
+
+Upcoming home-game promotions — giveaways and theme nights, e.g. the Blue Jays'
+Loonie Dogs Night — for a tracked team, from the schedule API's promotions feed.
+Shows today's promos when there's a home game today, otherwise the next home
+game's, one scrolling line per promo led by the team abbreviation in its brand
+color, with a grey date prefix: `TOR Jun 22 · Retro Domer Hat Giveaway`. Sponsor tails ("presented by …") are
+stripped, and near-duplicate feed entries are collapsed. Promos matching
+`highlight` render in amber and sort first.
+
+```toml
+[[playlist.section.widget]]
+type = "baseball.promotions"
+team = "TOR"
+highlight = ["Loonie Dogs"]
+```
+
+**`team` is the only required field** — everything below is optional tuning.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `team` | string | required | MLB team abbreviation — see [Team codes](#team-codes). Case-insensitive. |
+| `highlight` | list of strings | `[]` | Case-insensitive substrings; matching promos render amber and sort first. |
+| `filter` | list of strings | `[]` | If non-empty, only promos matching one of these substrings are shown. |
+| `limit` | int | `0` | Max promo lines (`0` = all). Applied after highlight sorting, so highlighted promos are never the ones dropped. |
+| `lookahead_days` | int | `14` | How far ahead to look for the next home game with promotions. |
+| `update_interval` | int | `21600` | Seconds between refreshes (6 h — keeps the "Today" label honest after midnight). |
+| `title` | string | `"<Team> Promos"` | Section title override. |
+| `timezone` | string | `"America/New_York"` | IANA timezone governing "Today" and date labels. |
+| `padding` | int | `6` | Horizontal padding (logical px) after each message when scrolling. |
+| `bg_color` | RGB list | none | Background fill behind all messages. |
+| `font_color` | RGB list / string / table | unset | RGB list tints the promo names; the team prefix, date label, and amber highlights keep their callout colors. A string/table provider overrides all text, as in the other widgets. |
+| `font` | string | `"6x12"` | Display font. Hires name needs `font_size`. |
+
+With nothing to show, the widget falls back to a team-prefixed
+`Next home game: Jun 22` (promo-free homestand), `No home games soon`
+(road trip), or `Opens <date>` / `Opens soon` (offseason).
+
 ## Team codes
 
-All 30 teams (shared by both widgets):
+All 30 teams (shared by all three widgets):
 
 `ARI` D-backs · `ATL` Braves · `BAL` Orioles · `BOS` Red Sox · `CHC` Cubs · `CIN` Reds · `CLE` Guardians · `COL` Rockies · `CWS` White Sox · `DET` Tigers · `HOU` Astros · `KC` Royals · `LAA` Angels · `LAD` Dodgers · `MIA` Marlins · `MIL` Brewers · `MIN` Twins · `NYM` Mets · `NYY` Yankees · `OAK` Athletics · `PHI` Phillies · `PIT` Pirates · `SD` Padres · `SEA` Mariners · `SF` Giants · `STL` Cardinals · `TB` Rays · `TEX` Rangers · `TOR` Blue Jays · `WSH` Nationals
 

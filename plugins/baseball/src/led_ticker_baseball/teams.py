@@ -1,18 +1,19 @@
-"""Shared MLB team data + lazy color palette.
+"""Shared MLB team data, lazy color palette, and team-ID resolution.
 
-This module owns the data tables and color helpers that both the scores
-widget (`scores.py`) and the standings widget (`standings.py`) depend on:
+This module owns what the scores, standings, and promotions widgets share:
 the MLB API base URLs, the per-team primary-color / name tables, the
-name->abbreviation lookup, the lazy WIN/LOSS/LIVE/CHALLENGE palette, and the
-color helpers built on top of them. Keeping them here means standings no
-longer reaches into the scores widget for shared data.
+name->abbreviation lookup, the lazy WIN/LOSS/LIVE/CHALLENGE palette, the
+color helpers built on top of them, and the async `resolve_team_id()`
+abbreviation->ID lookup. Keeping them here means no widget reaches into
+another widget for shared data.
 """
 
-from led_ticker.plugin import (
-    Color,
-    colors,
-    make_color,
-)
+import logging
+
+import aiohttp
+from led_ticker.plugin import Color, colors, make_color
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 # ColorTuple is a plain type alias; it is not on the public surface, so define
 # it locally (was led_ticker._types.ColorTuple).
@@ -144,3 +145,23 @@ def _team_color_by_name(name: str) -> Color:
     r, g, b = MLB_TEAM_COLORS.get(abbr, (255, 255, 255))
     r, g, b = _lift_color(r, g, b)
     return make_color(r, g, b)
+
+
+async def resolve_team_id(session: aiohttp.ClientSession, abbr: str) -> int | None:
+    """Resolve a team abbreviation (e.g. "TOR") to its MLB StatsAPI team ID.
+
+    Returns None when the abbreviation is unknown or the request fails.
+    """
+    url = f"{MLB_API}/teams?sportId=1"
+    try:
+        async with session.get(url) as resp:
+            data = await resp.json()
+    except Exception:
+        logger.exception("Failed to resolve team ID for %s", abbr)
+        return None
+    for t in data.get("teams", []):
+        if t.get("abbreviation") == abbr:
+            team_id = t.get("id")
+            return team_id if isinstance(team_id, int) else None
+    logger.warning("Team %s not found in MLB API", abbr)
+    return None

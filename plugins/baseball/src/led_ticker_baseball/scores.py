@@ -34,6 +34,7 @@ from led_ticker_baseball.teams import (
     MLB_TEAM_NAMES,
     _team_color,
     _team_palette,
+    resolve_team_id,
 )
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -1127,19 +1128,11 @@ class MLBScoreMonitor:
 
     async def _resolve_team_id(self) -> None:
         """Fetch team ID from MLB API."""
-        url = f"{MLB_API}/teams?sportId=1"
         logger.debug("MLB: resolving team ID for %s", self.team)
-        try:
-            async with self.session.get(url) as resp:
-                data = await resp.json()
-                for t in data.get("teams", []):
-                    if t.get("abbreviation") == self.team:
-                        self._team_id = t["id"]
-                        logger.debug("MLB: %s → id %d", self.team, self._team_id)
-                        return
-            logger.warning("Team %s not found in MLB API", self.team)
-        except Exception:
-            logger.exception("Failed to resolve team ID for %s", self.team)
+        team_id = await resolve_team_id(self.session, self.team)
+        if team_id is not None:
+            self._team_id = team_id
+            logger.debug("MLB: %s → id %d", self.team, self._team_id)
 
     async def update(self) -> None:
         """Fetch schedule and build display messages."""
