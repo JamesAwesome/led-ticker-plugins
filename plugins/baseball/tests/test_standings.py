@@ -493,3 +493,42 @@ class TestMLBStandingsUpdateLogging:
             if r.levelno == logging.INFO and "standings" in r.message.lower()
         ]
         assert matching, f"expected INFO log; got {[r.message for r in caplog.records]}"
+
+
+def _empty_json_session():
+    """Session returning empty JSON for every URL (no standings records)."""
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStart:
+    async def test_resolves_state_runs_update_and_spawns_loop(self):
+        import led_ticker_baseball.standings as mod
+
+        # Empty /standings drives update() to its error state; we only assert
+        # the wiring around it.
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBStandingsMonitor.start(
+                _empty_json_session(), ["nym"], update_interval=88
+            )
+
+        assert isinstance(widget, MLBStandingsMonitor)
+        assert widget.teams == ["NYM"]  # upper-cased
+        assert widget._tz is not None
+        assert widget.feed_stories  # update() ran
+        loop.assert_called_once_with(widget, 88)
+        spawn.assert_called_once_with("LOOP")

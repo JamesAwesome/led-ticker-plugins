@@ -757,3 +757,34 @@ class TestBgColor:
         assert story.bg_color is bg
         widget._set_error_state()
         assert widget.feed_stories[0].bg_color is bg
+
+
+class TestStart:
+    async def test_resolves_tz_runs_update_and_spawns_loop(self):
+        import led_ticker_baseball.statcast as mod
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        # All-empty routes drive update() down its no-games path so start()
+        # completes deterministically; we only assert the wiring around it.
+        session = make_session(
+            {
+                "sportId=1&date=": {"dates": []},
+                "statcast_search": make_csv(),
+                "startDate": {"dates": []},
+            }
+        )
+        # Sync mocks: run_monitor_loop is async, so patch.object would
+        # otherwise install an AsyncMock and hand spawn_tracked a coroutine.
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBStatcastMonitor.start(session, update_interval=123)
+
+        assert isinstance(widget, MLBStatcastMonitor)
+        assert widget._tz is not None  # resolved from timezone
+        assert widget.feed_stories  # update() ran
+        loop.assert_called_once_with(widget, 123)
+        spawn.assert_called_once_with("LOOP")

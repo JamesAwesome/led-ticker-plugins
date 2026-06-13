@@ -611,3 +611,29 @@ class TestValidateConfig:
     def test_messages_returned_not_raised(self):
         msgs = self._validate({"team": "TOR", "limit": -1, "filter": "x"})
         assert len(msgs) == 2
+
+
+class TestStart:
+    async def test_resolves_state_runs_update_and_spawns_loop(self):
+        import led_ticker_baseball.promotions as mod
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        # Empty /teams leaves the team unresolved, so update() takes its
+        # no-data path; we only assert the wiring around it.
+        session = make_session({})
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBPromotionsMonitor.start(
+                session, "tor", update_interval=99
+            )
+
+        assert isinstance(widget, MLBPromotionsMonitor)
+        assert widget.team == "TOR"  # upper-cased
+        assert widget._tz is not None
+        assert widget.feed_stories  # update() ran
+        loop.assert_called_once_with(widget, 99)
+        spawn.assert_called_once_with("LOOP")
