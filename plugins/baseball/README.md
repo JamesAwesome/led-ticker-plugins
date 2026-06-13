@@ -45,7 +45,7 @@ pip install "git+https://github.com/JamesAwesome/led-ticker-baseball.git@main"
 
 led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
-Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
+Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
 
 ## Widgets
 
@@ -153,9 +153,45 @@ With nothing to show, the widget falls back to a team-prefixed
 `Next home game: Jun 22` (promo-free homestand), `No home games soon`
 (road trip), or `Opens <date>` / `Opens soon` (offseason).
 
+### `baseball.statcast`
+
+League-wide daily Statcast superlatives — the longest home run, hardest-hit
+ball, and fastest/slowest pitch across all of MLB, re-derived through the day
+as games progress. One scrolling line per stat with the value in amber and the
+record holder's team abbreviation in its brand color:
+`Today · Longest HR 463 ft — Butler OAK`. Mornings fall back to yesterday's
+finals, labeled with the short date (`6/12 · …`). Data comes from Baseball
+Savant's day CSV (an
+undocumented endpoint — the widget refreshes at a polite default cadence and
+skips the pull entirely when no games are live or newly final).
+
+```toml
+[[playlist.section.widget]]
+type = "baseball.statcast"
+```
+
+**No required fields** — everything below is optional tuning.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `stats` | list of strings | all four | Which lines to show, in display order: `"longest_hr"`, `"hardest_hit"`, `"fastest_pitch"`, `"slowest_pitch"`. |
+| `update_interval` | int | `1800` | Seconds between refreshes (30 min). A ~10 KB schedule check skips the ~3 MB data pull when nothing changed. |
+| `title` | string | `"Statcast"` | Section title override. |
+| `timezone` | string | `"America/New_York"` | IANA timezone governing "Today" and the day rollover. |
+| `padding` | int | `6` | Horizontal padding (logical px) after each message when scrolling. |
+| `bg_color` | RGB list | none | Background fill behind all messages. |
+| `font_color` | RGB list / string / table | unset | RGB list tints the stat label and name; the day label, amber value, and team abbr keep their callout colors. A string/table provider overrides all text, as in the other widgets. |
+| `font` | string | `"6x12"` | Display font. Hires name needs `font_size`. |
+
+The slowest-pitch line appends the pitch name when known (`69.6 mph (Slow
+Curve)`) — that's where the eephus and position-player pitching comedy lives.
+With no Statcast data for today or yesterday, the widget falls back to
+`Next games: Mar 26` (offseason) or `No games soon`; a fetch failure shows
+`No Data`.
+
 ## Team codes
 
-All 30 teams (shared by all three widgets):
+All 30 teams (shared by the scores, standings, and promotions widgets — statcast is league-wide):
 
 `ARI` D-backs · `ATL` Braves · `BAL` Orioles · `BOS` Red Sox · `CHC` Cubs · `CIN` Reds · `CLE` Guardians · `COL` Rockies · `CWS` White Sox · `DET` Tigers · `HOU` Astros · `KC` Royals · `LAA` Angels · `LAD` Dodgers · `MIA` Marlins · `MIL` Brewers · `MIN` Twins · `NYM` Mets · `NYY` Yankees · `OAK` Athletics · `PHI` Phillies · `PIT` Pirates · `SD` Padres · `SEA` Mariners · `SF` Giants · `STL` Cardinals · `TB` Rays · `TEX` Rangers · `TOR` Blue Jays · `WSH` Nationals
 

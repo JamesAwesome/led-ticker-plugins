@@ -13,6 +13,7 @@ def test_entry_point_registers_baseball_namespace():
         assert get_widget_class("baseball.scores") is not None
         assert get_widget_class("baseball.standings") is not None
         assert get_widget_class("baseball.promotions") is not None
+        assert get_widget_class("baseball.statcast") is not None
 
         from led_ticker.transitions import get_transition_class
 

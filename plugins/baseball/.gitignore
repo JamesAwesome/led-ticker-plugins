@@ -7,3 +7,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 .env
+
+# Coverage artifacts
+.coverage
+.coverage.*
