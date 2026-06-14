@@ -17,6 +17,9 @@ used to live in led-ticker core (`type = "mlb"`):
 - `baseball.standings` — scrolling division standings (top-N + tracked teams), offseason-aware.
 - `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks.
 - `baseball.statcast` — league-wide daily Statcast superlatives (longest HR, hardest hit, fastest/slowest pitch) from Baseball Savant's day CSV; schedule-gated stateless re-derive.
+- `baseball.attendance` — ballpark attendance: league-wide daily superlatives
+  (biggest/smallest crowd, fullest/emptiest park) or one team's game
+  (attendance + fill % + venue + weather); schedule-gated.
 - `baseball.roll` / `baseball.roll_reverse` / `baseball.roll_alternating` — a rolling-baseball
   sprite transition (lo-res 4-frame; procedural hi-res on the bigsign).
 - `:baseball.ball:` — inline emoji (8×8 lo-res + 32×32 procedural hi-res).
@@ -51,10 +54,11 @@ src/led_ticker_baseball/
   standings.py    # baseball.standings widget (MLBStandingsMonitor); top-N + tracked teams; offseason awareness
   promotions.py   # baseball.promotions widget (MLBPromotionsMonitor); home-game promos; today-first + fallback states
   statcast.py     # baseball.statcast widget (MLBStatcastMonitor); Savant day-CSV superlatives; schedule-gated
+  attendance.py   # baseball.attendance widget (MLBAttendanceMonitor); league superlatives + team mode; schedule-gated
   transition.py   # baseball.roll* family; lo-res 4-frame + procedural hi-res rotation
 ```
 
-All four widget modules import the shared tables from `teams.py` (no widget reaches into
+All five widget modules import the shared tables from `teams.py` (no widget reaches into
 another widget). `transition.py` reuses the hi-res sprite generator from
 `emoji.py`. These sibling intra-package imports are allowed; see the import contract below.
 
@@ -66,6 +70,7 @@ def register(api):
     api.widget("standings")(MLBStandingsMonitor)
     api.widget("promotions")(MLBPromotionsMonitor)
     api.widget("statcast")(MLBStatcastMonitor)
+    api.widget("attendance")(MLBAttendanceMonitor)
     api.transition("roll")(Baseball)
     api.transition("roll_reverse")(BaseballReverse)
     api.transition("roll_alternating")(BaseballAlternating)
@@ -124,7 +129,7 @@ rotations at 45° (90° reads as alternating; 22.5° reads chaotic on small pane
 - `test_smoke.py` — loads the plugin through led-ticker's real plugin loader and asserts the
   widgets/transitions/emoji register under the `baseball.*` namespace (entry-point wiring guard).
 - `test_scores.py` / `test_scoreboard.py` / `test_standings.py` / `test_promotions.py` /
-  `test_statcast.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage.
+  `test_statcast.py` / `test_attendance.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage.
 
 CI (`.github/workflows/ci.yml`): checks out this repo + led-ticker as siblings (deploy key),
 Python 3.14, `uv sync --extra dev`, then `ruff check src tests` and `pytest -q`.

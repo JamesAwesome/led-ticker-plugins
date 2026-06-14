@@ -45,7 +45,7 @@ pip install "git+https://github.com/JamesAwesome/led-ticker-baseball.git@main"
 
 led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
-Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
+Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` / `baseball.attendance` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
 
 ## Widgets
 
@@ -188,6 +188,45 @@ Curve)`) — that's where the eephus and position-player pitching comedy lives.
 With no Statcast data for today or yesterday, the widget falls back to
 `Next games: Mar 26` (offseason) or `No games soon`; a fetch failure shows
 `No Data`.
+
+### `baseball.attendance`
+
+Ballpark attendance and conditions. Two modes, chosen by whether you set a
+`team`:
+
+- **League-wide** (no `team`): the day's attendance superlatives —
+  `Today · Biggest crowd 45,123 — Dodger Stadium`, plus smallest crowd and
+  fullest/emptiest park by capacity %. Venue name in the home team's brand
+  color.
+- **Team** (`team` set): that team's game —
+  `TOR · Rogers Centre 41,212 (90%) · 72° Clear, wind 5 mph, In From CF`.
+  Attendance and fill % appear once the game is final; venue and weather show
+  before that.
+
+```toml
+[[playlist.section.widget]]
+type = "baseball.attendance"
+# team = "TOR"   # set for team mode; omit for league-wide
+```
+
+**No required fields** — everything is optional tuning.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `team` | string | unset | Set → that team's game; omit → league-wide superlatives. |
+| `stats` | list of strings | all four | League mode only, in display order: `"biggest_crowd"`, `"smallest_crowd"`, `"fullest"`, `"emptiest"`. |
+| `update_interval` | int | `1800` | Seconds between refreshes (30 min). A ~47 KB schedule check skips the per-game fetches when nothing changed. |
+| `title` | string | `"Attendance"` | Section title override. |
+| `timezone` | string | `"America/New_York"` | IANA timezone for "Today" / day rollover. |
+| `padding` | int | `6` | Horizontal padding (logical px) after each message. |
+| `bg_color` | RGB list | none | Background fill behind all messages. |
+| `font_color` | RGB list / string / table | unset | RGB list tints body text; the day label, amber value, and venue/team color keep their callout colors. A string/table provider overrides all text. |
+| `font` | string | `"6x12"` | Display font. Hires name needs `font_size`. |
+
+Fill % is omitted when a venue lists no capacity (spring sites). With nothing
+final yet, the widget shows yesterday's data (short-date labeled, e.g.
+`6/12 · …`); with no games at all it shows `Next game: Jun 20` (team) /
+`Next games: Jun 20` (league); a fetch failure shows `No Data`.
 
 ## Team codes
 
