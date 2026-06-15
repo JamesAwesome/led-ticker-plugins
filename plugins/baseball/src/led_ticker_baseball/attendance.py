@@ -34,8 +34,10 @@ from led_ticker.plugin import (
 
 from led_ticker_baseball.teams import (
     _MLB_LIVE_API,
+    API_TO_CANONICAL_ABBR,
     MLB_API,
     _team_color,
+    next_game_date,
     resolve_team_id,
 )
 
@@ -117,13 +119,15 @@ def _parse_schedule_games(data: dict[str, Any]) -> list[GameVenue]:
             home = teams.get("home", {}).get("team", {})
             away = teams.get("away", {}).get("team", {})
             venue = g.get("venue", {})
+            home_raw = home.get("abbreviation", "")
+            away_raw = away.get("abbreviation", "")
             games.append(
                 GameVenue(
                     game_pk=g.get("gamePk", 0),
                     state=g.get("status", {}).get("abstractGameState", "Preview"),
                     game_number=g.get("gameNumber", 1),
-                    home_abbr=home.get("abbreviation", ""),
-                    away_abbr=away.get("abbreviation", ""),
+                    home_abbr=(API_TO_CANONICAL_ABBR.get(home_raw) or home_raw),
+                    away_abbr=(API_TO_CANONICAL_ABBR.get(away_raw) or away_raw),
                     venue=venue.get("name", ""),
                     capacity=venue.get("fieldInfo", {}).get("capacity", 0) or 0,
                 )
@@ -384,35 +388,16 @@ class MLBAttendanceMonitor:
         )
 
     async def _set_no_games_state(self, today: date) -> None:
-        """Off-day / offseason probe (30 days). Team mode names the next game
-        date; league mode names the next slate. Failed probe → 'No games soon'.
+        """Off-day / offseason fallback line.
+
+        Team mode names the next game, league mode the next slate; both gate on
+        ``_team_id`` so a failed resolve degrades honestly to the league line.
+        The 30-day probe lives in ``teams.next_game_date``.
         """
-        start = today.isoformat()
-        end = (today + timedelta(days=30)).isoformat()
-        team_q = f"&teamId={self._team_id}" if self._team_id else ""
-        url = (
-            f"{MLB_API}/schedule?sportId=1&startDate={start}&endDate={end}"
-            f"&gameType=R{team_q}"
-        )
-        data: dict[str, Any] = {}
-        try:
-            async with self.session.get(url) as resp:
-                data = await resp.json()
-        except Exception:
-            logger.debug("MLB Attendance probe failed")
-        next_date: date | None = None
-        for date_entry in data.get("dates", []):
-            raw = date_entry.get("date")
-            if not raw:
-                continue
-            try:
-                next_date = date.fromisoformat(raw)
-                break
-            except ValueError:
-                continue
+        next_date = await next_game_date(self.session, today, team_id=self._team_id)
         if next_date is None:
             text = "No games soon"
-        elif self.team:
+        elif self._team_id:
             text = f"Next game: {next_date.strftime('%b %-d')}"
         else:
             text = f"Next games: {next_date.strftime('%b %-d')}"

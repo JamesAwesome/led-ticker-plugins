@@ -36,6 +36,7 @@ from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
     MLB_API,
     _team_color,
+    next_game_date,
     resolve_team_id,
 )
 
@@ -451,38 +452,13 @@ class MLBStatcastMonitor:
         )
 
     async def _set_no_games_state(self, today: date) -> None:
-        """Off-day / offseason: probe 30 days for the next game date.
+        """Off-day / offseason fallback line.
 
-        Team mode names the next game (``teamId``-scoped); league mode names the
-        next slate. A failed probe degrades to 'No games soon' silently.
+        Team mode names the next game, league mode the next slate; both gate on
+        ``_team_id`` so a failed resolve degrades honestly to the league line.
+        The 30-day probe lives in ``teams.next_game_date``.
         """
-        start = today.isoformat()
-        end = (today + timedelta(days=30)).isoformat()
-        team_q = f"&teamId={self._team_id}" if self._team_id else ""
-        url = (
-            f"{MLB_API}/schedule?sportId=1&startDate={start}&endDate={end}"
-            f"&gameType=R{team_q}"
-        )
-        data: dict[str, Any] = {}
-        try:
-            async with self.session.get(url) as resp:
-                data = await resp.json()
-        except Exception:
-            logger.debug("MLB Statcast probe failed")
-        next_date: date | None = None
-        for date_entry in data.get("dates", []):
-            raw = date_entry.get("date")
-            if not raw:
-                continue
-            try:
-                next_date = date.fromisoformat(raw)
-                break
-            except ValueError:
-                continue
-        # Gate the label on the SAME condition as the teamId query (_team_id),
-        # not on self.team — so a team whose id failed to resolve degrades
-        # honestly to the league "Next games" instead of mislabeling a
-        # league-wide date as the team's "Next game".
+        next_date = await next_game_date(self.session, today, team_id=self._team_id)
         if next_date is None:
             text = "No games soon"
         elif self._team_id:

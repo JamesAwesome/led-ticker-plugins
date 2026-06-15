@@ -9,6 +9,7 @@ another widget for shared data.
 """
 
 import logging
+from datetime import date, timedelta
 
 import aiohttp
 from led_ticker.plugin import Color, colors, make_color
@@ -177,4 +178,41 @@ async def resolve_team_id(session: aiohttp.ClientSession, abbr: str) -> int | No
             team_id = t.get("id")
             return team_id if isinstance(team_id, int) else None
     logger.warning("Team %s not found in MLB API", abbr)
+    return None
+
+
+async def next_game_date(
+    session: aiohttp.ClientSession,
+    today: date,
+    *,
+    team_id: int = 0,
+    lookahead_days: int = 30,
+) -> date | None:
+    """Earliest scheduled regular-season game date in
+    ``[today, today + lookahead_days]``, optionally scoped to ``team_id``.
+
+    Returns None on fetch failure or when no game is found. Shared by the
+    statcast and attendance off-day/offseason fallbacks.
+    """
+    start = today.isoformat()
+    end = (today + timedelta(days=lookahead_days)).isoformat()
+    team_q = f"&teamId={team_id}" if team_id else ""
+    url = (
+        f"{MLB_API}/schedule?sportId=1&startDate={start}&endDate={end}"
+        f"&gameType=R{team_q}"
+    )
+    try:
+        async with session.get(url) as resp:
+            data = await resp.json()
+    except Exception:
+        logger.debug("next_game_date probe failed")
+        return None
+    for date_entry in data.get("dates", []):
+        raw = date_entry.get("date")
+        if not raw:
+            continue
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            continue
     return None

@@ -525,6 +525,24 @@ class TestFallbackStates:
         w._set_error_state()
         assert w.feed_stories[0].text == "No Data"
 
+    async def test_team_set_but_unresolved_says_next_games(self):
+        # team configured but id failed to resolve (_team_id == 0): the label
+        # and the (absent) teamId query must agree — league fallback, not a
+        # mislabeled "Next game" over a league-wide date.
+        captured = {}
+
+        def side_effect(url, *args, **kwargs):
+            captured["url"] = url
+            return _ctx({"dates": [{"date": "2027-03-26"}]})
+
+        session = mock.MagicMock()
+        session.get.side_effect = side_effect
+        widget = make_widget(session=session, team="TOR")
+        widget._team_id = 0  # resolve failed
+        await widget._set_no_games_state(TODAY)
+        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert "teamId" not in captured["url"]
+
     async def test_probe_finds_next_game_team_mode(self):
         # Team mode → "Next game: <date>".
         session = make_session({"startDate": {"dates": [{"date": "2027-03-26"}]}})
@@ -880,3 +898,53 @@ class TestValidateConfig:
         msgs = self._v({"team": "TOR", "stats": ["rowdiest"]})
         assert len(msgs) == 1
         assert "rowdiest" in msgs[0]
+
+
+class TestScheduleAbbrNormalization:
+    def _parse(self, data):
+        from led_ticker_baseball.attendance import _parse_schedule_games
+
+        return _parse_schedule_games(data)
+
+    def test_savant_api_abbrs_normalized_to_canonical(self):
+        data = schedule(
+            sched_game(1, "Final", home="ATH", away="AZ", venue="Sutter Health Park")
+        )
+        g = self._parse(data)[0]
+        assert g.home_abbr == "OAK"
+        assert g.away_abbr == "ARI"
+
+    def test_other_abbrs_unchanged(self):
+        g = self._parse(schedule(sched_game(2, "Final", home="TOR", away="NYY")))[0]
+        assert (g.home_abbr, g.away_abbr) == ("TOR", "NYY")
+
+    def test_team_mode_matches_canonical_for_athletics(self):
+        # User configures canonical "OAK"; schedule says "ATH" → still matched.
+        w = make_widget(team="OAK")
+        games = self._parse(schedule(sched_game(3, "Final", home="ATH", away="SEA")))
+        assert w._pick_team_game(games) is not None
+
+    def test_athletics_venue_uses_brand_color_not_white(self):
+        from led_ticker.colors import RGB_WHITE
+
+        from led_ticker_baseball.teams import _team_color
+
+        w = make_widget(stats=["biggest_crowd"])  # league mode
+        gv = self._parse(
+            schedule(sched_game(4, "Final", home="ATH", away="SEA", capacity=46000))
+        )[0]
+        # Build a league story for that game's crowd; venue colored by home abbr.
+        from led_ticker_baseball.attendance import CrowdRecord
+
+        rec = CrowdRecord(
+            value=10000, venue=gv.venue, home_abbr=gv.home_abbr, is_pct=False
+        )
+        story = w._build_league_stories({"biggest_crowd": rec}, "Today")[0]
+        venue_c = story.segments[-1][1]
+        oak = _team_color("OAK")
+        assert (venue_c.red, venue_c.green, venue_c.blue) == (
+            oak.red,
+            oak.green,
+            oak.blue,
+        )
+        assert venue_c is not RGB_WHITE
