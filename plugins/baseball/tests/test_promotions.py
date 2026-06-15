@@ -57,6 +57,26 @@ class TestResolveTeamId:
         session.get.side_effect = RuntimeError("network down")
         assert await resolve_team_id(session, "TOR") is None
 
+    async def test_canonical_code_resolves_api_abbreviation(self):
+        # StatsAPI emits ATH/AZ; the plugin's canonical config codes are
+        # OAK/ARI. A canonical code must still resolve.
+        from led_ticker_baseball.teams import resolve_team_id
+
+        session = make_session(
+            {
+                "/teams": {
+                    "teams": [
+                        {"id": 133, "abbreviation": "ATH"},
+                        {"id": 109, "abbreviation": "AZ"},
+                    ]
+                }
+            }
+        )
+        assert await resolve_team_id(session, "OAK") == 133
+        assert await resolve_team_id(session, "ARI") == 109
+        # The raw API spelling still works too.
+        assert await resolve_team_id(session, "ATH") == 133
+
 
 class TestCleanPromoName:
     def test_strips_presented_by(self):

@@ -1,10 +1,12 @@
-"""MLB league-wide Statcast superlatives widget.
+"""MLB Statcast superlatives widget — league-wide or scoped to one team.
 
 Derives the day's longest home run, hardest-hit ball, and fastest/slowest
 pitch from Baseball Savant's day CSV — an undocumented website endpoint, so
 requests carry a User-Agent and the default refresh is a polite 30 minutes,
 gated on the (tiny) StatsAPI day schedule so off-hours refreshes skip the
-3 MB pull. Stateless: every refresh re-derives from the full day so far.
+pull. With ``team`` set, the CSV is scoped server-side to that team's games
+and the superlatives to its own players. Stateless: every refresh re-derives
+from the full day so far.
 """
 
 import csv
@@ -30,7 +32,12 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
-from led_ticker_baseball.teams import MLB_API, _team_color
+from led_ticker_baseball.teams import (
+    API_TO_CANONICAL_ABBR,
+    MLB_API,
+    _team_color,
+    resolve_team_id,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -60,12 +67,6 @@ _STAT_LABELS: dict[str, str] = {
     "fastest_pitch": "Fastest pitch",
     "slowest_pitch": "Slowest pitch",
 }
-
-# Baseball Savant uses a few team codes that differ from the StatsAPI
-# abbreviations the rest of the plugin (scores/standings/teams.py) speaks.
-# Normalize them so the displayed abbr and team color match the other
-# widgets — ATH→OAK (Athletics), AZ→ARI (D-backs).
-_SAVANT_ABBR: dict[str, str] = {"ATH": "OAK", "AZ": "ARI"}
 
 
 def _to_float(row: dict[str, Any], key: str) -> float | None:
@@ -103,7 +104,9 @@ def _row_team(row: dict[str, Any], who: str) -> str:
     else:
         team = row.get("home_team") if batting_away else row.get("away_team")
     team = team or ""
-    return _SAVANT_ABBR.get(team, team)
+    # Savant emits ATH/AZ; normalize to the plugin's canonical OAK/ARI so the
+    # filter, team color, and config code all agree (single map in teams.py).
+    return API_TO_CANONICAL_ABBR.get(team, team)
 
 
 def _format_value(key: str, value: float) -> str:
@@ -122,12 +125,14 @@ class StatRecord:
 
 
 def _derive_records(
-    rows: list[dict[str, Any]], stats: list[str]
+    rows: list[dict[str, Any]], stats: list[str], team: str = ""
 ) -> dict[str, StatRecord]:
     """One pass over Savant rows → best record per requested stat key.
 
-    Strict comparisons keep the first row on ties (CSV order). Rows missing
-    the relevant value are skipped.
+    When ``team`` is set, only that team's own players qualify: the batter must
+    be on ``team`` for batting stats, the pitcher for pitch stats. Strict
+    comparisons keep the first row on ties (CSV order). Rows missing the
+    relevant value are skipped.
     """
     records: dict[str, StatRecord] = {}
 
@@ -140,6 +145,8 @@ def _derive_records(
         lower: bool = False,
     ) -> None:
         if value is None:
+            return
+        if team and _row_team(r, who) != team:
             return
         cur = records.get(key)
         if cur is not None and (value >= cur.value if lower else value <= cur.value):
@@ -167,9 +174,13 @@ def _derive_records(
 
 @attrs.define
 class MLBStatcastMonitor:
-    """League-wide daily Statcast superlatives."""
+    """Daily Statcast superlatives — league-wide, or scoped to one team's
+    players via an optional ``team``."""
 
     session: aiohttp.ClientSession
+    # "" → league-wide; else scope superlatives to that team's own players.
+    # Upper-cased at construction so the abbr matches the API on any build path.
+    team: str = attrs.field(default="", converter=lambda v: v.upper() if v else "")
     stats: list[str] = attrs.field(factory=lambda: list(_STAT_KEYS))
     title: str = "Statcast"
     timezone: str = "America/New_York"
@@ -179,6 +190,7 @@ class MLBStatcastMonitor:
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
+    _team_id: int = attrs.field(init=False, default=0)
     # (local date, Final-game count) at the last successful derive; None
     # means no successful derive yet (first run, or the last update ended
     # in an error/fallback state).
@@ -199,6 +211,9 @@ class MLBStatcastMonitor:
         sibling widgets.
         """
         msgs: list[str] = []
+        team = cfg.get("team")
+        if team is not None and not isinstance(team, str):
+            msgs.append(f"statcast team={team!r} must be a string abbreviation.")
         stats = cfg.get("stats")
         if stats is None:
             return msgs
@@ -227,6 +242,8 @@ class MLBStatcastMonitor:
         logger.debug("MLBStatcastMonitor.start")
         widget = cls(session=session, **kwargs)
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.team:  # upper-cased by the field converter
+            widget._team_id = await resolve_team_id(session, widget.team) or 0
         await widget.update()
         logger.info("MLB Statcast: %d stories", len(widget.feed_stories))
         spawn_tracked(run_monitor_loop(widget, update_interval))
@@ -330,6 +347,11 @@ class MLBStatcastMonitor:
         ships a UTF-8 BOM; strip it before DictReader sees the header row.
         """
         url = SAVANT_CSV_URL.format(day=day.isoformat())
+        if self.team:
+            # Scope the pull to the team's games server-side (~24x smaller).
+            # The CSV still includes the opponent's rows, so the client-side
+            # _row_team filter in _derive_records stays necessary and correct.
+            url += f"&hfTeam={self.team}%7C"
         async with self.session.get(
             url,
             headers={"User-Agent": _USER_AGENT},
@@ -343,7 +365,7 @@ class MLBStatcastMonitor:
             resp.raise_for_status()
             text = await resp.text()
         rows = list(csv.DictReader(io.StringIO(text.lstrip("﻿"))))
-        return _derive_records(rows, self.stats)
+        return _derive_records(rows, self.stats, self.team)
 
     async def _resolve_names(self, person_ids: set[int]) -> dict[int, str]:
         """Batched StatsAPI lookup: person id → last name; {} on failure."""
@@ -369,12 +391,14 @@ class MLBStatcastMonitor:
         day_label: str,
         names: dict[int, str],
     ) -> list[TickerMessage | SegmentMessage]:
-        """One centered line per stat: 'Today · Longest HR 463 ft — Butler OAK'.
+        """One centered line per stat.
 
-        Lines are self-contained (day label, stat, value, record holder, team
-        abbr in brand color) — stories scroll independently of the title.
-        ``self.stats`` order is display order; stats with no record are
-        omitted; an unresolved name degrades to value + team abbr.
+        League mode: 'Today · Longest HR 463 ft — Butler OAK' (trailing team
+        abbr in brand color). Team mode (``self.team`` set): the line leads with
+        the team abbr in brand color and drops the trailing abbr — the holder is
+        always the tracked team — e.g. 'PHI Today · Longest HR 472 ft — Schwarber'.
+        ``self.stats`` order is display order; stats with no record are omitted;
+        an unresolved name degrades to value only.
         """
         grey = make_color(150, 150, 150)  # grey — day label
         amber = make_color(255, 200, 60)  # amber — the record value
@@ -385,16 +409,21 @@ class MLBStatcastMonitor:
             record = records.get(key)
             if record is None:
                 continue
-            segments: list[tuple[str, Color | ColorProvider]] = [
-                (f"{day_label} · ", grey),
-                (f"{_STAT_LABELS[key]} ", body_c),
-                (_format_value(key, record.value), amber),
-            ]
+            segments: list[tuple[str, Color | ColorProvider]] = []
+            if self.team:
+                segments.append((f"{self.team} ", _team_color(self.team)))
+            segments.append((f"{day_label} · ", grey))
+            segments.append((f"{_STAT_LABELS[key]} ", body_c))
+            segments.append((_format_value(key, record.value), amber))
             if key == "slowest_pitch" and record.pitch_name:
                 segments.append((f" ({record.pitch_name})", body_c))
             name = names.get(record.person_id, "")
-            segments.append((f" — {name} " if name else " — ", body_c))
-            segments.append((record.team_abbr, _team_color(record.team_abbr)))
+            if self.team:
+                # Holder shown as bare name; team is implied by the prefix.
+                segments.append((f" — {name}" if name else " —", body_c))
+            else:
+                segments.append((f" — {name} " if name else " — ", body_c))
+                segments.append((record.team_abbr, _team_color(record.team_abbr)))
             stories.append(
                 SegmentMessage(
                     segments,
@@ -422,14 +451,18 @@ class MLBStatcastMonitor:
         )
 
     async def _set_no_games_state(self, today: date) -> None:
-        """Off-day / offseason: probe 30 days for the next league game date.
+        """Off-day / offseason: probe 30 days for the next game date.
 
-        Fallback lines are league-generic and self-explanatory, so they carry
-        no team prefix. A failed probe degrades to 'No games soon' silently.
+        Team mode names the next game (``teamId``-scoped); league mode names the
+        next slate. A failed probe degrades to 'No games soon' silently.
         """
         start = today.isoformat()
         end = (today + timedelta(days=30)).isoformat()
-        url = f"{MLB_API}/schedule?sportId=1&startDate={start}&endDate={end}&gameType=R"
+        team_q = f"&teamId={self._team_id}" if self._team_id else ""
+        url = (
+            f"{MLB_API}/schedule?sportId=1&startDate={start}&endDate={end}"
+            f"&gameType=R{team_q}"
+        )
         data: dict[str, Any] = {}
         try:
             async with self.session.get(url) as resp:
@@ -446,10 +479,16 @@ class MLBStatcastMonitor:
                 break
             except ValueError:
                 continue
-        if next_date is not None:
-            text = f"Next games: {next_date.strftime('%b %-d')}"
-        else:
+        # Gate the label on the SAME condition as the teamId query (_team_id),
+        # not on self.team — so a team whose id failed to resolve degrades
+        # honestly to the league "Next games" instead of mislabeling a
+        # league-wide date as the team's "Next game".
+        if next_date is None:
             text = "No games soon"
+        elif self._team_id:
+            text = f"Next game: {next_date.strftime('%b %-d')}"
+        else:
+            text = f"Next games: {next_date.strftime('%b %-d')}"
         self.feed_stories = [
             TickerMessage(
                 text,

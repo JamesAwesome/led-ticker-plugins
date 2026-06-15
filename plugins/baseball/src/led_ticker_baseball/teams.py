@@ -22,6 +22,16 @@ ColorTuple = tuple[int, int, int]
 MLB_API: str = "https://statsapi.mlb.com/api/v1"
 _MLB_LIVE_API: str = "https://statsapi.mlb.com/api/v1.1"
 
+# A few teams whose StatsAPI / Baseball Savant abbreviation differs from the
+# plugin's canonical code (the MLB_TEAM_* keys, the config-facing codes, and the
+# README Team-codes list). Maps the API/Savant code → the canonical one; the
+# inverse drives team-id resolution from a canonical config code. Single source
+# of truth for the duality (Savant rows normalize through it via _row_team).
+API_TO_CANONICAL_ABBR: dict[str, str] = {"ATH": "OAK", "AZ": "ARI"}
+_CANONICAL_TO_API_ABBR: dict[str, str] = {
+    v: k for k, v in API_TO_CANONICAL_ABBR.items()
+}
+
 _team_palette = colors.lazy_palette(
     {
         "WIN_COLOR": (46, 200, 46),
@@ -159,8 +169,11 @@ async def resolve_team_id(session: aiohttp.ClientSession, abbr: str) -> int | No
     except Exception:
         logger.exception("Failed to resolve team ID for %s", abbr)
         return None
+    # A canonical config code (e.g. "OAK"/"ARI") must match the API's own
+    # abbreviation (e.g. "ATH"/"AZ"); accept either spelling.
+    target = _CANONICAL_TO_API_ABBR.get(abbr, abbr)
     for t in data.get("teams", []):
-        if t.get("abbreviation") == abbr:
+        if t.get("abbreviation") in (abbr, target):
             team_id = t.get("id")
             return team_id if isinstance(team_id, int) else None
     logger.warning("Team %s not found in MLB API", abbr)

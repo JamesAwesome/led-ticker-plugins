@@ -1,4 +1,4 @@
-"""Tests for the MLB league-wide Statcast superlatives widget."""
+"""Tests for the MLB Statcast superlatives widget (league-wide + team filter)."""
 
 import datetime as dt
 import logging
@@ -442,6 +442,19 @@ class TestDeriveDay:
         assert "game_date_gt=2026-06-11" in url
         assert "game_date_lt=2026-06-11" in url
 
+    async def test_league_mode_pulls_unscoped_csv(self):
+        session = make_session({"statcast_search": make_csv()})
+        widget = make_widget(session=session)  # no team
+        await widget._derive_day(dt.date(2026, 6, 11))
+        assert "hfTeam" not in session.get.call_args_list[0].args[0]
+
+    async def test_team_mode_scopes_csv_server_side(self):
+        session = make_session({"statcast_search": make_csv()})
+        widget = make_widget(session=session, team="PHI")
+        await widget._derive_day(dt.date(2026, 6, 11))
+        # Savant team scope: hfTeam=PHI| (pipe url-encoded).
+        assert "hfTeam=PHI%7C" in session.get.call_args_list[0].args[0]
+
 
 class TestResolveNames:
     async def test_resolves_last_names(self):
@@ -577,6 +590,31 @@ class TestValidateConfig:
 
     def test_messages_returned_not_raised(self):
         assert isinstance(self._validate({"stats": 42}), list)
+
+
+class TestValidateConfigTeam:
+    def _validate(self, cfg):
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        return MLBStatcastMonitor.validate_config(cfg)
+
+    def test_string_team_passes(self):
+        assert self._validate({"team": "PHI"}) == []
+
+    def test_non_string_team_rejected(self):
+        msgs = self._validate({"team": 42})
+        assert len(msgs) == 1
+        assert "team" in msgs[0]
+
+    def test_team_plus_stats_passes(self):
+        assert self._validate({"team": "PHI", "stats": ["longest_hr"]}) == []
+
+    def test_team_and_stats_messages_accumulate(self):
+        # Both a bad team and bad stats → two messages, neither raises.
+        msgs = self._validate({"team": 42, "stats": "longest_hr"})
+        assert len(msgs) == 2
+        assert any("team" in m for m in msgs)
+        assert any("stats" in m for m in msgs)
 
 
 class TestUpdate:
@@ -757,6 +795,189 @@ class TestBgColor:
         assert story.bg_color is bg
         widget._set_error_state()
         assert widget.feed_stories[0].bg_color is bg
+
+
+class TestDeriveRecordsTeamFilter:
+    def _derive(self, rows, stats, team=""):
+        from led_ticker_baseball.statcast import _derive_records
+
+        return _derive_records(rows, list(stats), team)
+
+    def test_longest_hr_only_counts_team_batter(self):
+        rows = [
+            # Opponent (TOR) hits the longer HR but must be excluded.
+            hr(470, batter=99, away_team="TOR", home_team="PHI", inning_topbot="Top"),
+            # Phillies batter (away on Top) HR.
+            hr(450, batter=11, away_team="PHI", home_team="NYM", inning_topbot="Top"),
+        ]
+        rec = self._derive(rows, ["longest_hr"], team="PHI")["longest_hr"]
+        assert rec.value == 450.0
+        assert rec.person_id == 11
+        assert rec.team_abbr == "PHI"
+
+    def test_fastest_pitch_only_counts_team_pitcher(self):
+        rows = [
+            # Phillies pitcher (home team on Top) throws 99.
+            row(release_speed=99.0, pitcher=21, home_team="PHI", inning_topbot="Top"),
+            # Opponent pitcher throws harder but excluded.
+            row(release_speed=103.0, pitcher=88, home_team="NYM", inning_topbot="Top"),
+        ]
+        rec = self._derive(rows, ["fastest_pitch"], team="PHI")["fastest_pitch"]
+        assert rec.value == 99.0
+        assert rec.person_id == 21
+
+    def test_no_team_event_omits_stat(self):
+        rows = [
+            hr(470, batter=99, away_team="TOR", home_team="NYM", inning_topbot="Top")
+        ]
+        assert "longest_hr" not in self._derive(rows, ["longest_hr"], team="PHI")
+
+    def test_savant_abbr_normalized_in_filter(self):
+        # Savant 'AZ' batter matches team='ARI'.
+        rows = [hr(440, batter=7, away_team="AZ", home_team="LAD", inning_topbot="Top")]
+        rec = self._derive(rows, ["longest_hr"], team="ARI")["longest_hr"]
+        assert rec.person_id == 7
+
+    def test_empty_team_is_league_wide(self):
+        # team="" → unchanged: the longest HR wins regardless of team.
+        rows = [
+            hr(470, batter=99, away_team="TOR", home_team="PHI", inning_topbot="Top"),
+            hr(450, batter=11, away_team="PHI", home_team="NYM", inning_topbot="Top"),
+        ]
+        rec = self._derive(rows, ["longest_hr"], team="")["longest_hr"]
+        assert rec.value == 470.0
+
+
+class TestTeamField:
+    def test_team_upper_cased_at_construction(self):
+        assert make_widget(team="phi").team == "PHI"
+
+    def test_default_is_league_mode(self):
+        assert make_widget().team == ""
+
+
+class TestBuildStatStoriesTeamMode:
+    def test_team_line_leads_with_abbr_no_trailing(self):
+        widget = make_widget(team="PHI", stats=["longest_hr"])
+        records = {"longest_hr": rec(472, person_id=10, team="PHI")}
+        stories = widget._build_stat_stories(records, "Today", {10: "Schwarber"})
+        assert line_text(stories[0]) == "PHI Today · Longest HR 472 ft — Schwarber"
+
+    def test_team_prefix_in_brand_color(self):
+        from led_ticker_baseball.teams import _team_color
+
+        widget = make_widget(team="PHI", stats=["longest_hr"])
+        stories = widget._build_stat_stories(
+            {"longest_hr": rec(472, person_id=10, team="PHI")},
+            "Today",
+            {10: "Schwarber"},
+        )
+        prefix_c = stories[0].segments[0][1]
+        phi = _team_color("PHI")
+        assert (prefix_c.red, prefix_c.green, prefix_c.blue) == (
+            phi.red,
+            phi.green,
+            phi.blue,
+        )
+
+    def test_team_line_unresolved_name_degrades(self):
+        widget = make_widget(team="PHI", stats=["longest_hr"])
+        stories = widget._build_stat_stories(
+            {"longest_hr": rec(472, person_id=10, team="PHI")}, "6/14", {}
+        )
+        assert line_text(stories[0]) == "PHI 6/14 · Longest HR 472 ft —"
+
+    def test_team_slowest_pitch_keeps_pitch_name(self):
+        widget = make_widget(team="PHI", stats=["slowest_pitch"])
+        records = {
+            "slowest_pitch": rec(
+                68.0, person_id=31, team="PHI", pitch_name="Slow Curve"
+            )
+        }
+        stories = widget._build_stat_stories(records, "Today", {31: "Strahm"})
+        assert line_text(stories[0]) == (
+            "PHI Today · Slowest pitch 68.0 mph (Slow Curve) — Strahm"
+        )
+
+    def test_league_line_unchanged(self):
+        widget = make_widget(stats=["longest_hr"])  # no team
+        stories = widget._build_stat_stories(
+            {"longest_hr": rec(463, person_id=5, team="OAK")}, "Today", {5: "Butler"}
+        )
+        assert line_text(stories[0]) == "Today · Longest HR 463 ft — Butler OAK"
+
+
+class TestNoGamesStateTeamAware:
+    async def test_team_mode_says_next_game_with_teamid(self):
+        captured = {}
+
+        def side_effect(url, *args, **kwargs):
+            captured["url"] = url
+            return _ctx({"dates": [{"date": "2027-03-26"}]})
+
+        session = mock.MagicMock()
+        session.get.side_effect = side_effect
+        widget = make_widget(session=session, team="PHI")
+        widget._team_id = 143
+        await widget._set_no_games_state(TODAY)
+        assert widget.feed_stories[0].text == "Next game: Mar 26"
+        assert "teamId=143" in captured["url"]
+
+    async def test_league_mode_says_next_games_no_teamid(self):
+        captured = {}
+
+        def side_effect(url, *args, **kwargs):
+            captured["url"] = url
+            return _ctx({"dates": [{"date": "2027-03-26"}]})
+
+        session = mock.MagicMock()
+        session.get.side_effect = side_effect
+        widget = make_widget(session=session)  # league
+        await widget._set_no_games_state(TODAY)
+        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert "teamId" not in captured["url"]
+
+    async def test_team_set_but_unresolved_degrades_to_next_games(self):
+        # team configured but id failed to resolve (_team_id == 0): the label
+        # and the (absent) teamId query must agree — honest league fallback,
+        # not a mislabeled "Next game" over a league-wide date.
+        captured = {}
+
+        def side_effect(url, *args, **kwargs):
+            captured["url"] = url
+            return _ctx({"dates": [{"date": "2027-03-26"}]})
+
+        session = mock.MagicMock()
+        session.get.side_effect = side_effect
+        widget = make_widget(session=session, team="PHI")
+        widget._team_id = 0  # resolve failed
+        await widget._set_no_games_state(TODAY)
+        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert "teamId" not in captured["url"]
+
+
+class TestStartTeamMode:
+    async def test_team_mode_resolves_team_id(self):
+        import led_ticker_baseball.statcast as mod
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        routes = {
+            "/teams": {"teams": [{"id": 143, "abbreviation": "PHI"}]},
+            "sportId=1&date=": {"dates": []},
+            "statcast_search": make_csv(),
+            "startDate": {"dates": []},
+        }
+        session = make_session(routes)
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            w = await MLBStatcastMonitor.start(session, team="phi", update_interval=55)
+        assert w.team == "PHI"
+        assert w._team_id == 143
+        spawn.assert_called_once_with("LOOP")
 
 
 class TestStart:

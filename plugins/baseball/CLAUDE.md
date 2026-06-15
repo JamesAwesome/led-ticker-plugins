@@ -16,7 +16,9 @@ used to live in led-ticker core (`type = "mlb"`):
 - `baseball.scores` — live/final/preview scores; `ticker`, `scoreboard`, or `two_row` layout.
 - `baseball.standings` — scrolling division standings (top-N + tracked teams), offseason-aware.
 - `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks.
-- `baseball.statcast` — league-wide daily Statcast superlatives (longest HR, hardest hit, fastest/slowest pitch) from Baseball Savant's day CSV; schedule-gated stateless re-derive.
+- `baseball.statcast` — daily Statcast superlatives (longest HR, hardest hit,
+  fastest/slowest pitch), league-wide or scoped to one team's players via an
+  optional `team`; from Baseball Savant's day CSV, schedule-gated.
 - `baseball.attendance` — ballpark attendance: league-wide daily superlatives
   (biggest/smallest crowd, fullest/emptiest park) or one team's game
   (attendance + fill % + venue + weather); schedule-gated.

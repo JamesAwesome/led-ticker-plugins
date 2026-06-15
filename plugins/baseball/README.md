@@ -156,9 +156,10 @@ With nothing to show, the widget falls back to a team-prefixed
 ### `baseball.statcast`
 
 League-wide daily Statcast superlatives — the longest home run, hardest-hit
-ball, and fastest/slowest pitch across all of MLB, re-derived through the day
-as games progress. One scrolling line per stat with the value in amber and the
-record holder's team abbreviation in its brand color:
+ball, and fastest/slowest pitch across all of MLB — or, with a `team` set, the
+same superlatives scoped to that team's own players.
+Re-derived through the day as games progress. One scrolling line per stat with
+the value in amber and the record holder's team abbreviation in its brand color:
 `Today · Longest HR 463 ft — Butler OAK`. Mornings fall back to yesterday's
 finals, labeled with the short date (`6/12 · …`). Data comes from Baseball
 Savant's day CSV (an
@@ -174,6 +175,7 @@ type = "baseball.statcast"
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `team` | string | unset | Scope superlatives to this team's own players (e.g. a Phillies batter for `longest_hr`, a Phillies pitcher for `fastest_pitch`). Omit for league-wide. Case-insensitive — see [Team codes](#team-codes). |
 | `stats` | list of strings | all four | Which lines to show, in display order: `"longest_hr"`, `"hardest_hit"`, `"fastest_pitch"`, `"slowest_pitch"`. |
 | `update_interval` | int | `1800` | Seconds between refreshes (30 min). A ~10 KB schedule check skips the ~3 MB data pull when nothing changed. |
 | `title` | string | `"Statcast"` | Section title override. |
@@ -188,6 +190,11 @@ Curve)`) — that's where the eephus and position-player pitching comedy lives.
 With no Statcast data for today or yesterday, the widget falls back to
 `Next games: Mar 26` (offseason) or `No games soon`; a fetch failure shows
 `No Data`.
+
+With a team set, lines lead with the team abbreviation in its brand color and
+drop the (now-redundant) trailing one:
+`PHI Today · Longest HR 472 ft — Schwarber`. The off-day fallback then names
+the team's next game (`Next game: Jun 20`) rather than the league slate.
 
 ### `baseball.attendance`
 
@@ -230,7 +237,7 @@ final yet, the widget shows yesterday's data (short-date labeled, e.g.
 
 ## Team codes
 
-All 30 teams (shared by the scores, standings, and promotions widgets — statcast is league-wide):
+All 30 teams (used by the scores, standings, promotions, statcast, and attendance widgets):
 
 `ARI` D-backs · `ATL` Braves · `BAL` Orioles · `BOS` Red Sox · `CHC` Cubs · `CIN` Reds · `CLE` Guardians · `COL` Rockies · `CWS` White Sox · `DET` Tigers · `HOU` Astros · `KC` Royals · `LAA` Angels · `LAD` Dodgers · `MIA` Marlins · `MIL` Brewers · `MIN` Twins · `NYM` Mets · `NYY` Yankees · `OAK` Athletics · `PHI` Phillies · `PIT` Pirates · `SD` Padres · `SEA` Mariners · `SF` Giants · `STL` Cardinals · `TB` Rays · `TEX` Rangers · `TOR` Blue Jays · `WSH` Nationals
 
