@@ -91,7 +91,10 @@ def _format_weather(weather: dict[str, Any] | None) -> str | None:
         return None
     temp = weather.get("temp")
     condition = weather.get("condition")
-    wind = weather.get("wind")
+    # MLB encodes wind as "<speed>, <direction>"; a closed roof or dead calm
+    # sends the literal "None" as the direction ("0 mph, None"). Strip it so
+    # the line doesn't trail off with ", None".
+    wind = (weather.get("wind") or "").removesuffix(", None").strip()
     # Build from whatever is present: "72° Clear", "72°", or "Clear".
     head = " ".join(p for p in (f"{temp}°" if temp else "", condition or "") if p)
     if not head:

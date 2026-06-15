@@ -70,6 +70,19 @@ class TestFormatWeather:
         assert _format_weather({"temp": "72"}) == "72°"
         assert _format_weather({"temp": "72", "wind": "5 mph"}) == "72°, wind 5 mph"
 
+    def test_strips_none_wind_direction(self):
+        from led_ticker_baseball.attendance import _format_weather
+
+        # MLB encodes wind as "<speed>, <direction>"; a closed roof / dead
+        # calm sends the literal "None" as the direction. Strip it so the
+        # line doesn't read "wind 0 mph, None" (real 6/14 TOR feed).
+        w = {"condition": "Roof Closed", "temp": "68", "wind": "0 mph, None"}
+        assert _format_weather(w) == "68° Roof Closed, wind 0 mph"
+        # A "None" direction at non-zero speed is stripped too.
+        assert (
+            _format_weather({"temp": "72", "wind": "5 mph, None"}) == "72°, wind 5 mph"
+        )
+
 
 def sched_game(
     pk, state, home="PIT", away="MIA", venue="PNC Park", capacity=38753, game_number=1
