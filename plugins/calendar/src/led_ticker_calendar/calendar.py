@@ -21,6 +21,7 @@ import attrs
 import icalendar
 import recurring_ical_events
 from led_ticker.plugin import (
+    EMOJI_ROW_CAP,
     FONT_DEFAULT,
     FONT_SMALL,
     Canvas,
@@ -1127,12 +1128,11 @@ class Calendar:
         real = SimpleNamespace(width=ctx.panel_width, height=ctx.panel_height)
         canvas = ScaledCanvas(real, scale=ctx.scale, content_height=ctx.content_height)
         canvas_w = canvas.width
-        # EMOJI_ROW_CAP = 8 in core (the 8x8 lo-res sprite height — a physical
-        # constant unlikely to change). The held phrase has no inline emoji, so this
-        # cap only bounds a hypothetical sprite and never affects the measured width.
-        # Hardcoded because EMOJI_ROW_CAP is not exported from led_ticker.plugin;
-        # fast-follow: export it so plugins can reference it symbolically.
-        emoji_cap = max(8, top_h)
+        # The held phrase has no inline emoji, so this cap only bounds a
+        # hypothetical sprite and never affects the measured width. Mirrors core's
+        # held-top check, which caps the band at EMOJI_ROW_CAP (the lo-res sprite
+        # height).
+        emoji_cap = max(EMOJI_ROW_CAP, top_h)
         width = measure_width(font, top_text, canvas, max_emoji_height=emoji_cap)
         if width <= canvas_w:
             return []

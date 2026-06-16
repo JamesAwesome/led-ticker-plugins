@@ -111,12 +111,6 @@ substitution so validate matches runtime. Don't remove the substitution without 
 
 ## Sharp edges / Gotchas
 
-**Hardcoded `8` in the held-top overflow check** — `_warn_two_row_held_top_overflow` uses a
-literal `8` as the minimum top-band height for the overflow guard. This equals
-`EMOJI_ROW_CAP` from core, but that constant is not yet exported on `led_ticker.plugin.__all__`.
-When it is promoted to the public surface, replace the literal with the imported constant and
-add it to the import list.
-
 **`strftime` time formats bypass the overflow warning** — `_warn_two_row_held_top_overflow` only
 runs for `"12h"` / `"24h"` (known worst-case widths). Custom `strftime` templates are skipped
 with an early return. If a user sets a pathologically wide format (e.g. a full weekday name),

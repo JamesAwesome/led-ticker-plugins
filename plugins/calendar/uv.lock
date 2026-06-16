@@ -278,9 +278,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "attrs" },
     { name = "feedparser" },
-    { name = "icalendar" },
     { name = "pillow" },
-    { name = "recurring-ical-events" },
     { name = "tomli-w" },
 ]
 
@@ -289,7 +287,6 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.9" },
     { name = "attrs", specifier = ">=23.0" },
     { name = "feedparser", specifier = ">=6.0" },
-    { name = "icalendar", specifier = ">=6.1" },
     { name = "imageio", marker = "extra == 'render'", specifier = ">=2.31" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
@@ -298,7 +295,6 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12" },
-    { name = "recurring-ical-events", specifier = ">=3.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "tomli-w", specifier = ">=1.0" },
     { name = "tomli-w", marker = "extra == 'render'", specifier = ">=1.0" },
