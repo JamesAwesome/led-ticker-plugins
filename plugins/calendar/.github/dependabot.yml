@@ -1,0 +1,29 @@
+# Dependabot — automated dependency-update PRs for this led-ticker plugin.
+# Two ecosystems: GitHub Actions, and Python deps via uv (Dependabot handles
+# uv-managed pyproject.toml under the `pip` umbrella). Weekly; dev tooling is
+# grouped to keep PR noise low. PRs are auto-rebased — review and merge.
+#
+# Note: led-ticker is a sibling path/git dependency (not on PyPI), so Dependabot
+# skips it; runtime deps (aiohttp, icalendar, recurring-ical-events, etc.) land
+# individually for a focused review.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-tools:
+        patterns:
+          - "ruff"
+          - "pytest*"
