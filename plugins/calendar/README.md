@@ -2,6 +2,10 @@
 
 Calendar widget for [led-ticker](https://github.com/JamesAwesome/led-ticker) — displays upcoming events from any `.ics` feed as a rotating agenda, a live next-event countdown, or per-event two-row cards.
 
+![calendar — agenda layout: each upcoming event scrolls as its own line; the day + time render in amber and the title in rainbow, with the highlighted "1:1 with Sam" event in amber](docs/agenda.gif)
+
+![calendar — next layout: the single soonest upcoming event shown as one live line, title in rainbow](docs/next.gif)
+
 ## Prerequisites
 
 - A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install.
