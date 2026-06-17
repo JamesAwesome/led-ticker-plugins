@@ -11,6 +11,15 @@ _ARCADE_TRANSITIONS = (
     "arcade.sailor_moon_alternating",
 )
 
+_HIRES_TRANSITIONS = (
+    "arcade.nyancat",
+    "arcade.nyancat_reverse",
+    "arcade.nyancat_alternating",
+    "arcade.pokeball",
+    "arcade.pokeball_reverse",
+    "arcade.pokeball_alternating",
+)
+
 
 def test_entry_point_registers_arcade_namespace():
     L.reset_plugins()
@@ -21,6 +30,18 @@ def test_entry_point_registers_arcade_namespace():
 
         for name in _ARCADE_TRANSITIONS:
             assert get_transition_class(name) is not None
+
+        for name in _HIRES_TRANSITIONS:
+            assert get_transition_class(name) is not None
+
+        # pokeball emoji registered (lowres + hires) under the arcade namespace.
+        # The loader merges api._buffers["emojis"] → EMOJI_REGISTRY and
+        # api._buffers["hires_emojis"] → HIRES_REGISTRY using _qualify(), so
+        # the key is the namespaced slug "arcade.pokeball".
+        from led_ticker.pixel_emoji import EMOJI_REGISTRY, HIRES_REGISTRY
+
+        assert "arcade.pokeball" in EMOJI_REGISTRY
+        assert "arcade.pokeball" in HIRES_REGISTRY
 
     finally:
         L.reset_plugins()
