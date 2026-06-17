@@ -11,5 +11,6 @@ def test_entry_point_registers_feeds_namespace():
         from led_ticker.widgets import get_widget_class
 
         assert get_widget_class("feeds.rss") is not None
+        assert get_widget_class("feeds.weather") is not None
     finally:
         L.reset_plugins()
