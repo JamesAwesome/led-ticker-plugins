@@ -7,8 +7,6 @@ from led_ticker_arcade.pokeball import (
     PIKACHU_HEIGHT,
     PIKACHU_WIDTH,
     POKEBALL_FRAMES,
-    POKEBALL_SPEC,
-    POKEBALL_SPEC_REVERSE,
     SPRITE_SIZE,
     Pokeball,
     PokeballAlternating,
@@ -262,22 +260,6 @@ class TestPokeballDispatch:
             hires.assert_called_once()
             lowres.assert_not_called()
 
-    def test_pokeball_spec(self):
-        """POKEBALL_SPEC should be the forward (non-flipped) spec."""
-        assert POKEBALL_SPEC.flip_horizontal is False
-        assert POKEBALL_SPEC.trail == "black"
-
-    def test_pokeball_reverse_spec(self):
-        """POKEBALL_SPEC_REVERSE should be the flipped spec."""
-        assert POKEBALL_SPEC_REVERSE.flip_horizontal is True
-        assert POKEBALL_SPEC_REVERSE.trail == "black"
-
-    def test_pokeball_class_spec(self):
-        assert Pokeball._spec is POKEBALL_SPEC
-
-    def test_pokeball_reverse_class_spec(self):
-        assert PokeballReverse._spec is POKEBALL_SPEC_REVERSE
-
     def test_show_pikachu_kwarg_preserved(self):
         """The existing show_pikachu constructor kwarg still works."""
         p1 = Pokeball(show_pikachu=False)
@@ -480,3 +462,74 @@ def test_pokeball_renders_hires_at_scale_4():
     Pokeball().frame_at(0.5, wrapped, _W(), _W(), duration_ms=500)
     lit = sum(1 for v in real._pixels.values() if v != (0, 0, 0))
     assert lit > 0, "hi-res pokeball painted nothing at scale=4"
+
+
+# --- hi-res sprite SELECTION tests (baked-sprite path) ---
+
+
+def _render_pixels(pokeball_obj, t=0.4, width=256):
+    from led_ticker.plugin import ScaledCanvas
+    from rgbmatrix import _StubCanvas
+
+    real = _StubCanvas(width=width, height=64)
+    wrapped = ScaledCanvas(real, scale=4, content_height=16)
+
+    class _W:
+        def draw(self, c, cursor_pos=0, **k):
+            return c, cursor_pos
+
+    pokeball_obj.frame_at(t, wrapped, _W(), _W(), duration_ms=2000)
+    return real._pixels  # {(x, y): (r, g, b)}
+
+
+def _has_red_ball(px):
+    # Baked ball red is pure (255, 30, 30); Pikachu's reddest pixel is the
+    # cheek at (205, 17, 30), so the r>230 floor keeps the cheek from
+    # false-positiving as the ball.
+    return any(r > 230 and g < 90 and b < 90 for (r, g, b) in px.values())
+
+
+def _has_pikachu(px):
+    return any(r > 180 and g > 150 and b < 100 for (r, g, b) in px.values())
+
+
+class TestPokeballHiresSpriteSelection:
+    def test_both_renders_ball_and_pikachu(self):
+        px = _render_pixels(Pokeball(show_pokeball=True, show_pikachu=True))
+        assert _has_red_ball(px) and _has_pikachu(px)
+
+    def test_ball_only_has_ball_no_pikachu(self):
+        px = _render_pixels(Pokeball(show_pokeball=True, show_pikachu=False))
+        assert _has_red_ball(px) and not _has_pikachu(px)
+
+    def test_pikachu_only_has_pikachu_no_ball(self):
+        px = _render_pixels(Pokeball(show_pokeball=False, show_pikachu=True))
+        assert _has_pikachu(px) and not _has_red_ball(px)
+
+    def test_neither_renders_nothing(self):
+        px = _render_pixels(Pokeball(show_pokeball=False, show_pikachu=False))
+        nonblack = [c for c in px.values() if c != (0, 0, 0)]
+        assert not nonblack, f"expected no lit pixels, got {len(nonblack)}"
+
+    def test_reverse_flips_entity(self):
+        # Ball-only at the mid-travel t where forward sits on the RIGHT half
+        # and reverse sits on the LEFT half. t=0.5 separates them cleanly:
+        # forward red x in (136..172) all > 128; reverse red x in (83..119)
+        # all < 128.
+        t = 0.5
+        fwd = _render_pixels(Pokeball(show_pokeball=True, show_pikachu=False), t=t)
+        rev = _render_pixels(
+            PokeballReverse(show_pokeball=True, show_pikachu=False), t=t
+        )
+        fwd_red_x = [
+            x for (x, y), (r, g, b) in fwd.items() if r > 230 and g < 90 and b < 90
+        ]
+        rev_red_x = [
+            x for (x, y), (r, g, b) in rev.items() if r > 230 and g < 90 and b < 90
+        ]
+        assert fwd_red_x and all(x > 128 for x in fwd_red_x), (
+            f"forward ball red should be on right half, got x={sorted(set(fwd_red_x))}"
+        )
+        assert rev_red_x and all(x < 128 for x in rev_red_x), (
+            f"reverse ball red should be on left half, got x={sorted(set(rev_red_x))}"
+        )

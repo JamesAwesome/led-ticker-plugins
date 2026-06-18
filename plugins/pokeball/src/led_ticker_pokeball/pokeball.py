@@ -13,11 +13,32 @@ from led_ticker.plugin import (
     render_hires_frame,
 )
 
-_SPRITE = Path(__file__).resolve().parent / "sprites" / "pikachu-run-transparent.gif"
-POKEBALL_SPEC = HiresSpec(sprite_path=_SPRITE, flip_horizontal=False, trail="black")
-POKEBALL_SPEC_REVERSE = HiresSpec(
-    sprite_path=_SPRITE, flip_horizontal=True, trail="black"
-)
+_SPRITES = Path(__file__).resolve().parent / "sprites"
+_COMBINED = _SPRITES / "pokeball-pikachu.gif"
+_BALL = _SPRITES / "pokeball.gif"
+_PIKACHU = _SPRITES / "pikachu-run-transparent.gif"
+
+
+def _sprite_for(show_pokeball: bool, show_pikachu: bool) -> Path | None:
+    """(show_pokeball, show_pikachu) -> forward sprite path; (False, False) -> None."""
+    if show_pokeball and show_pikachu:
+        return _COMBINED
+    if show_pokeball:
+        return _BALL
+    if show_pikachu:
+        return _PIKACHU
+    return None
+
+
+def _spec_for(
+    show_pokeball: bool, show_pikachu: bool, reverse: bool
+) -> HiresSpec | None:
+    """Select the hi-res sprite spec; None when no entity is visible."""
+    path = _sprite_for(show_pokeball, show_pikachu)
+    if path is None:
+        return None
+    return HiresSpec(sprite_path=path, flip_horizontal=reverse, trail="black")
+
 
 SPRITE_SIZE: int = 14
 SPRITE_Y_OFFSET: int = 1  # centers 14px sprite in 16px display
@@ -840,7 +861,6 @@ class Pokeball:
 
     min_frames: int = 40
     scale_switch_at: ClassVar[float] = SNAP_THRESHOLD
-    _spec: ClassVar[HiresSpec] = POKEBALL_SPEC
 
     def __init__(
         self,
@@ -851,6 +871,8 @@ class Pokeball:
         # Coerce in case TOML user passes a string ("false" is truthy in Python).
         self._show_pikachu = bool(show_pikachu)
         self._show_pokeball = bool(show_pokeball)
+        # Flags are fixed at construction, so the hi-res spec is too.
+        self._spec = _spec_for(self._show_pokeball, self._show_pikachu, reverse=False)
 
     def frame_at(
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
@@ -881,16 +903,9 @@ class Pokeball:
     def _frame_at_hires(
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
     ) -> Canvas:
-        return render_hires_frame(
-            t,
-            canvas,
-            outgoing,
-            incoming,
-            self._spec,
-            show_pikachu=self._show_pikachu,
-            show_pokeball=self._show_pokeball,
-            **kwargs,
-        )
+        if self._spec is None:  # neither entity visible — nothing to render hi-res
+            return canvas
+        return render_hires_frame(t, canvas, outgoing, incoming, self._spec, **kwargs)
 
 
 class PokeballReverse:
@@ -898,7 +913,6 @@ class PokeballReverse:
 
     min_frames: int = 40
     scale_switch_at: ClassVar[float] = SNAP_THRESHOLD
-    _spec: ClassVar[HiresSpec] = POKEBALL_SPEC_REVERSE
 
     def __init__(
         self,
@@ -909,6 +923,8 @@ class PokeballReverse:
         # Coerce in case TOML user passes a string ("false" is truthy in Python).
         self._show_pikachu = bool(show_pikachu)
         self._show_pokeball = bool(show_pokeball)
+        # Flags are fixed at construction, so the hi-res spec is too.
+        self._spec = _spec_for(self._show_pokeball, self._show_pikachu, reverse=True)
 
     def frame_at(
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
@@ -939,16 +955,9 @@ class PokeballReverse:
     def _frame_at_hires(
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
     ) -> Canvas:
-        return render_hires_frame(
-            t,
-            canvas,
-            outgoing,
-            incoming,
-            self._spec,
-            show_pikachu=self._show_pikachu,
-            show_pokeball=self._show_pokeball,
-            **kwargs,
-        )
+        if self._spec is None:  # neither entity visible — nothing to render hi-res
+            return canvas
+        return render_hires_frame(t, canvas, outgoing, incoming, self._spec, **kwargs)
 
 
 class PokeballAlternating:
