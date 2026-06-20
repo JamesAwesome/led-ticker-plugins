@@ -255,7 +255,14 @@ on the smallest surface before the bulk move.
 - **#233 `led_ticker.testkit`** — separate engine effort; this spec only
   consumes it via the harness swap. May trickle.
 - **Core rss/weather removal** — still needed (both are live registered
-  widgets); separate engine PR. May trickle.
+  widgets). Done as a **follow-up engine PR after the extraction lands**, not a
+  prerequisite: core must keep serving `rss_feed`/`weather` until the monorepo
+  `rss`/`weather` packages are the documented, installable path (P3), or
+  existing configs break. So the order is: P2 folds the packages in → P3 makes
+  the monorepo authoritative + docs flip → *then* a separate engine PR strips
+  `rss_feed.py`/`weather.py`/`weather_icons.py` and their `widgets/__init__.py`
+  registrations (mirrors the calendar "Phase 3 core removal" pattern). May
+  trickle.
 - **Final split names** — locked to the variant-suffix *style*; literal strings
   finalized in a follow-up naming brainstorm before P2.
 - **Atomic engine+plugin PRs** — accepted non-goal.
