@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Compute the member matrix from changed paths. A change under tests/, the
+  # root pyproject, or the workflow runs ALL members; otherwise only the
+  # plugins/<name> dirs that changed.
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      members: ${{ steps.set.outputs.members }}
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+          path: led-ticker-plugins
+      - id: set
+        working-directory: led-ticker-plugins
+        run: |
+          ALL=$(ls -d plugins/*/ | sed 's#plugins/##; s#/##' | jq -R . | jq -cs .)
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "members=$ALL" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE" HEAD)
+          if echo "$CHANGED" | grep -qE '^(pyproject\.toml|tests/|\.github/workflows/ci\.yml)'; then
+            echo "members=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            M=$(echo "$CHANGED" | grep -oE '^plugins/[^/]+/' | sed 's#plugins/##; s#/##' | sort -u | jq -R . | jq -cs .)
+            [ "$M" = "[]" ] && M="$ALL"
+            echo "members=$M" >> "$GITHUB_OUTPUT"
+          fi
+
+  check:
+    needs: matrix
+    if: needs.matrix.outputs.members != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        member: ${{ fromJson(needs.matrix.outputs.members) }}
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          path: led-ticker-plugins
+      # Sibling engine checkout (private; read-only deploy key) so the
+      # workspace led-ticker source resolves and the vendored stub matches.
+      - uses: actions/checkout@v6.0.3
+        with:
+          repository: JamesAwesome/led-ticker
+          path: led-ticker
+          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+      - name: Sync workspace
+        working-directory: led-ticker-plugins
+        run: uv sync --extra dev
+      - name: Ruff check
+        working-directory: led-ticker-plugins
+        run: uv run ruff check plugins/${{ matrix.member }}
+      - name: Ruff format check
+        working-directory: led-ticker-plugins
+        run: uv run ruff format --check plugins/${{ matrix.member }}
+      - name: Pyright
+        working-directory: led-ticker-plugins
+        run: uv run pyright plugins/${{ matrix.member }}/src
+      - name: Test
+        working-directory: led-ticker-plugins
+        run: uv run pytest plugins/${{ matrix.member }} --cov=plugins/${{ matrix.member }}/src --cov-report=term-missing
+
+  ci-passed:
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ needs.check.result }}" != "success" ]; then
+            echo "matrix check did not succeed: ${{ needs.check.result }}"; exit 1
+          fi
+          echo "all member checks passed"
