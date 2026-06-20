@@ -33,28 +33,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/led_ticker_pool"]
 
-# led-ticker is not published to PyPI yet. For local development, install it
-# editable from a checkout alongside the pool plugin (see README "Development").
-# This source pin keeps `uv run`/`uv sync` resolving against that checkout; drop
-# it once led-ticker is published.
-[tool.uv.sources]
-led-ticker = { path = "../led-ticker", editable = true }
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-pythonpath = ["../led-ticker/tests/stubs"]
-
 [tool.ruff]
 target-version = "py314"
 src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-
-[tool.pyright]
-pythonPlatform = "All"
-pythonVersion = "3.14"
-extraPaths = ["../led-ticker/tests/stubs"]
 
 [tool.coverage.report]
 fail_under = 90
