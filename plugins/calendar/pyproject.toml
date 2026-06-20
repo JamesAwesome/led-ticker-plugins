@@ -35,27 +35,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/led_ticker_calendar"]
 
-# led-ticker is not published to PyPI yet. For local development, install it
-# editable from a checkout alongside this plugin (see README "Development").
-# Drop this source pin once led-ticker is published.
-[tool.uv.sources]
-led-ticker = { path = "../led-ticker", editable = true }
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-pythonpath = ["../led-ticker/tests/stubs"]
-
 [tool.ruff]
 target-version = "py314"
 src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-
-[tool.pyright]
-pythonPlatform = "All"
-pythonVersion = "3.14"
-extraPaths = ["../led-ticker/tests/stubs"]
 
 [tool.coverage.report]
 fail_under = 90
