@@ -8,9 +8,16 @@
 
 Fold the first-party plugins into a single `led-ticker-plugins` uv-workspace
 monorepo, **leaving the engine repo (`led-ticker`) structurally untouched** —
-no change to its Docker layers, `deploy/install.sh`, or constraint-based
-install flow. The only engine change is content, not structure:
-`config/requirements-plugins.example.txt` URLs flip to monorepo subdirectories.
+no change to its Docker layers, `deploy/install.sh`, constraint-based install
+flow, or `led_ticker.plugin` public API.
+
+"Structurally untouched" is **not** "untouched". The engine **is** modified in
+P3, but only its *content* — the plugin **catalog**, the **unknown-name hint**
+data, the plugin **CLI** catalog handling, the example requirements file, the
+`CLAUDE.md` plugin-ecosystem section, and the docs site. None of that is the
+risky deploy/install path. See "Engine-side changes (P3)" for the concrete list.
+This engine work lands as its **own engine-repo PR** (no atomic cross-repo
+change — see accepted non-goals).
 
 Third-party plugins still live in their own external repos; the "anyone can
 build a plugin independently" goal is preserved. This keeps the spec out of the
@@ -160,6 +167,38 @@ never logs it.
   **production guidance pins to a namespaced tag** (consistent with prior
   deploy-hardening guidance).
 
+## Engine-side changes (P3)
+
+These all live in the `led-ticker` repo and ship as one engine PR. They are
+content/data + docs only — no change to Docker, `deploy/install.sh`, the
+constraint install, or the `led_ticker.plugin` API.
+
+- **`src/led_ticker/plugins_catalog.json`** — the load-bearing one. Each entry
+  carries `homepage`, `sources[].url`, `ref`, and a `provides[]` type list.
+  Required edits:
+  - Repoint every `homepage`/`sources[].url` to the monorepo.
+  - Express the subdirectory: add a `subdirectory` field to the source schema
+    (likely a `schema_version` bump) **or** encode it in the URL — decide in P3.
+  - **Split the entries**: `feeds` → `rss` + `weather`; `arcade` → `nyancat`,
+    `pokeball`, `pacman`, `sailor_moon`, each with its new `provides[]` names
+    (from the finalized naming brainstorm) and namespaced-tag `ref`.
+- **`src/led_ticker/_plugin_hint.py`** — unknown-name suggestions that point at
+  `arcade.*` / `feeds.*`; update to the new type names + install hints.
+- **`src/led_ticker/app/plugin_cmd.py`** — the plugin CLI that reads the
+  catalog; verify it handles the split entries + `subdirectory` source.
+- **`src/led_ticker/app/factories.py`, `transitions/__init__.py`** — audit for
+  any hardcoded `arcade.*`/`feeds.*` references or hint examples.
+- **`config/requirements-plugins.example.txt`** — flip to monorepo subdirectory
+  URLs; expand `feeds`/`arcade` lines into the split package lines.
+- **`CLAUDE.md`** — rewrite the "Plugin ecosystem" list (6 repos → 1 monorepo,
+  10 packages) and the public-surface note.
+- **Docs site (~15 pages)** — `plugins/available.mdx`, `plugins/index.mdx`, the
+  authoring guide pages, `widgets/rss_feed.mdx`, `transitions/sprite.mdx`, and
+  the drift-guarded catalog/API pages. Follow `docs/DOCS-STYLE.md`.
+
+Drift guards to honour: `tests/test_docs_plugin_api_drift.py` and any
+catalog-vs-docs audit must stay green after the rename/split.
+
 ## Old-repo archival & migration
 
 Existing deployed signs pin plugins by URL in `requirements-plugins.txt`
@@ -203,8 +242,11 @@ on the smallest surface before the bulk move.
   history maps to multiple subdirs; messier than a 1:1 move but still
   history-preserving). Apply the finalized split names (from the naming
   brainstorm). CI matrix grows to all 10 members.
-- **P3 — Distribution + cutover.** Flip engine example reqs; archive the source
-  repos with README redirects; write the migration note.
+- **P3 — Distribution + cutover (includes the engine-repo PR).** Land the
+  engine-side content changes (see "Engine-side changes" below), archive the
+  source repos with README redirects, and write the migration note. The engine
+  changes ship as a separate `led-ticker` PR, sequenced so the catalog/docs go
+  live as the monorepo becomes authoritative.
 - **P4 — Hardware validation.** Install monorepo plugins, smoke on smallsign +
   bigsign.
 
