@@ -1,8 +1,8 @@
-"""Tests for the arcade Pokeball transition."""
+"""Tests for the Pokeball transition."""
 
 from rgbmatrix import _StubCanvas
 
-from led_ticker_arcade.pokeball import (
+from led_ticker_pokeball.pokeball import (
     PIKACHU_FRAMES,
     PIKACHU_HEIGHT,
     PIKACHU_WIDTH,

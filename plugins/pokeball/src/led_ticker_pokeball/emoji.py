@@ -1,4 +1,4 @@
-"""Pokeball emoji (arcade.pokeball) — lowres 8x8 + hi-res 32x32 sprites,
+"""Pokeball emoji (pokeball.ball) — lowres 8x8 + hi-res 32x32 sprites,
 ported from led-ticker core. Self-contained (procedural pixel math)."""
 
 import math

@@ -1,6 +1,6 @@
 from led_ticker.plugin import HiResEmoji
 
-from led_ticker_arcade.emoji import POKEBALL, POKEBALL_HIRES
+from led_ticker_pokeball.emoji import POKEBALL, POKEBALL_HIRES
 
 
 def test_pokeball_lowres_is_pixeldata():
