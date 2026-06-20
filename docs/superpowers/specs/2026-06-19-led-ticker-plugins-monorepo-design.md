@@ -91,11 +91,17 @@ including `pacman` / `sailor_moon` which carry no hires variant:
 The `forward` variant suffix avoids the redundant `nyancat.nyancat`;
 `:pokeball.ball:` mirrors the existing `:baseball.ball:` convention.
 
-> **Names are a WORKING proposal.** The variant-suffix scheme is the default,
-> but the exact final type/slug names are to be **finalized in a follow-up
-> naming brainstorm** before P2 implements them. The split granularity (10
-> packages) and the variant-suffix *style* are locked; the literal strings are
-> not.
+> **Names are FINALIZED** (naming brainstorm, 2026-06-19). The table above is
+> the literal, implementable set: base variant `forward` (with `reverse` /
+> `alternating`), `rss.feed`, `weather.current`, `:pokeball.ball:`. The split
+> granularity (10 packages) and these exact strings are locked — P2 implements
+> them verbatim. Every old `feeds.*` / `arcade.*` config type is a breaking
+> rename (P3 migration note).
+>
+> Note: `feeds.weather` (→ `weather.current`) is a **shipped, working**
+> `WeatherWidget`, not a stub — the `led-ticker-feeds` pyproject description
+> still says "weather planned", which is stale and must be corrected when the
+> `weather` package is folded in (P2).
 
 ### Resulting package set (10 members)
 
@@ -180,8 +186,10 @@ constraint install, or the `led_ticker.plugin` API.
   - Express the subdirectory: add a `subdirectory` field to the source schema
     (likely a `schema_version` bump) **or** encode it in the URL — decide in P3.
   - **Split the entries**: `feeds` → `rss` + `weather`; `arcade` → `nyancat`,
-    `pokeball`, `pacman`, `sailor_moon`, each with its new `provides[]` names
-    (from the finalized naming brainstorm) and namespaced-tag `ref`.
+    `pokeball`, `pacman`, `sailor_moon`, each with its finalized `provides[]`
+    names (the split-name table above: `rss.feed`, `weather.current`,
+    `<family>.forward`/`.reverse`/`.alternating`, `:pokeball.ball:`) and
+    namespaced-tag `ref`.
 - **`src/led_ticker/_plugin_hint.py`** — unknown-name suggestions that point at
   `arcade.*` / `feeds.*`; update to the new type names + install hints.
 - **`src/led_ticker/app/plugin_cmd.py`** — the plugin CLI that reads the
@@ -263,8 +271,8 @@ on the smallest surface before the bulk move.
   `rss_feed.py`/`weather.py`/`weather_icons.py` and their `widgets/__init__.py`
   registrations (mirrors the calendar "Phase 3 core removal" pattern). May
   trickle.
-- **Final split names** — locked to the variant-suffix *style*; literal strings
-  finalized in a follow-up naming brainstorm before P2.
+- **Final split names** — DONE (finalized 2026-06-19; see the split-name table
+  in "Plugin splits"). No longer a P2 blocker.
 - **Atomic engine+plugin PRs** — accepted non-goal.
 
 ## Process constraints
