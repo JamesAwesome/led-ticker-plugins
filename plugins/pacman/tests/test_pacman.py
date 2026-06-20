@@ -2,7 +2,7 @@
 
 from rgbmatrix import _StubCanvas
 
-from led_ticker_arcade.pacman import (
+from led_ticker_pacman.pacman import (
     GHOST_FRAMES,
     GHOST_HEIGHT,
     GHOST_WIDTH,
@@ -106,7 +106,7 @@ class TestPacmanBlackoutFrontEdge:
     he passes. Ghosts (further ahead) pass over still-visible letters."""
 
     def test_ltr_blackout_includes_pacman_right_edge(self):
-        from led_ticker_arcade.pacman import (
+        from led_ticker_pacman.pacman import (
             GROUP_WIDTH,
             PACMAN_SIZE,
             draw_pacman_frame,
@@ -140,7 +140,7 @@ class TestPacmanBlackoutFrontEdge:
         # transparent regions the red shows). Sample at +5 cells past
         # Pac-Man's right edge but BEFORE the first ghost (which starts at
         # pacman_x + PACMAN_SIZE + PACMAN_GHOST_GAP).
-        from led_ticker_arcade.pacman import PACMAN_GHOST_GAP
+        from led_ticker_pacman.pacman import PACMAN_GHOST_GAP
 
         ahead_x = pacman_x + PACMAN_SIZE + (PACMAN_GHOST_GAP // 2)
         if 0 <= ahead_x < 160:
@@ -151,7 +151,7 @@ class TestPacmanBlackoutFrontEdge:
                 )
 
     def test_rtl_blackout_includes_pacman_left_edge(self):
-        from led_ticker_arcade.pacman import (
+        from led_ticker_pacman.pacman import (
             GROUP_WIDTH,
             PACMAN_SIZE,
             draw_pacman_frame_rtl,
@@ -178,7 +178,7 @@ class TestPacmanBlackoutFrontEdge:
 
         # And before Pac-Man's left edge (where ghosts are, to the left in RTL),
         # original red SHOULD still be visible.
-        from led_ticker_arcade.pacman import PACMAN_GHOST_GAP
+        from led_ticker_pacman.pacman import PACMAN_GHOST_GAP
 
         ahead_x = pacman_x - (PACMAN_GHOST_GAP // 2)
         if 0 <= ahead_x < 160:
@@ -226,9 +226,9 @@ class TestDrawPacmanFrameRTL:
 
 
 class TestPacmanTransition:
-    # test_registered DROPPED: plugin registers as "arcade.pacman" via the
+    # test_registered DROPPED: plugin registers as "pacman.forward" via the
     # led_ticker.plugins entry point, not as the bare name "pacman" in core's
-    # registry. Registration smoke-test is covered by the Task 4 plugin loader test.
+    # registry. Registration smoke-test is covered by tests/test_smoke.py.
 
     def test_frame_at_draws_to_canvas(self, make_widget):
         pixel_canvas = _StubCanvas(width=160, height=16)
