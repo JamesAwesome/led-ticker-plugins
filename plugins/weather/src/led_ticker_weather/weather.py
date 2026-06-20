@@ -14,13 +14,14 @@ from led_ticker.plugin import (
     DrawResult,
     Font,
     FrameAwareBase,
-    coerce_color_provider,
+    as_color_provider,
     compute_baseline,
     compute_cursor,
     draw_emoji_at,
     draw_text,
     draw_text_per_char,
     get_text_width,
+    make_color,
     measure_emoji_at,
     run_monitor_loop,
     spawn_tracked,
@@ -30,6 +31,24 @@ from led_ticker.plugin import (
 )
 
 WEATHERAPI_URL: str = "https://api.weatherapi.com/v1/current.json"
+
+
+def _coerce_provider(value: Any) -> ColorProvider:
+    """Coerce a color field to a ColorProvider.
+
+    None -> default; an existing provider (has ``color_for``) -> as-is; a raw
+    [r, g, b] list/tuple -> ``as_color_provider(make_color(...))``; an existing
+    ``graphics.Color`` -> ``as_color_provider``. Config strings/tables (e.g.
+    "rainbow", {style=...}) are coerced into providers by the loader BEFORE
+    construction, so they arrive here already as providers and pass through.
+    """
+    if value is None:
+        return as_color_provider(_colors.DEFAULT_COLOR)
+    if hasattr(value, "color_for"):
+        return value
+    if isinstance(value, (list, tuple)):
+        return as_color_provider(make_color(*value))
+    return as_color_provider(value)  # already a graphics.Color
 
 
 def _match_condition(condition: str) -> str:
@@ -80,15 +99,13 @@ class WeatherWidget(FrameAwareBase):
     weather: str = attrs.field(init=False, default="")
 
     def __attrs_post_init__(self) -> None:
-        # Coerce raw TOML color specs into ColorProvider instances. font_color is
-        # also pre-coerced by core (shared field name) — coerce_color_provider is
-        # idempotent, so this is a safe pass-through there. font_color_temp is
-        # plugin-unique and NOT coerced by core, so this is where its rich forms
-        # ("rainbow", {style=...}, etc.) are parsed.
-        self.font_color = coerce_color_provider(self.font_color, "font_color")
-        self.font_color_temp = coerce_color_provider(
-            self.font_color_temp, "font_color_temp"
-        )
+        # Normalize both color fields to ColorProvider instances. The loader
+        # pre-coerces rich config forms ("rainbow", {style=...}) into providers
+        # before construction, so _coerce_provider is an idempotent pass-through
+        # for those; raw graphics.Color / [r, g, b] values (e.g. from defaults or
+        # direct construction) get wrapped here.
+        self.font_color = _coerce_provider(self.font_color)
+        self.font_color_temp = _coerce_provider(self.font_color_temp)
 
         # Support dict location from TOML: {lat = 40.71, lon = -74.01}
         if isinstance(self.location, dict):
