@@ -1,9 +1,9 @@
-"""Tests for the Nyan Cat transition (arcade plugin port)."""
+"""Tests for the Nyan Cat transition."""
 
 from led_ticker.plugin import SNAP_THRESHOLD
 from rgbmatrix import _StubCanvas
 
-from led_ticker_arcade.nyancat import (
+from led_ticker_nyancat.nyancat import (
     NYAN_CAT,
     NYANCAT_SPEC,
     NYANCAT_SPEC_REVERSE,
