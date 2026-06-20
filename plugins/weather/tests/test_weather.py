@@ -1,11 +1,11 @@
-"""Tests for led_ticker_feeds.weather."""
+"""Tests for led_ticker_weather.weather."""
 
 import unittest.mock as mock
 
 import pytest
 from led_ticker.widget import Widget
 
-from led_ticker_feeds.weather import WeatherWidget
+from led_ticker_weather.weather import WeatherWidget
 
 
 @pytest.fixture(autouse=True)
@@ -90,7 +90,7 @@ class TestWeatherWidget:
 
 def test_weather_bg_color_default_is_none(monkeypatch):
     monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
-    from led_ticker_feeds.weather import WeatherWidget
+    from led_ticker_weather.weather import WeatherWidget
 
     w = WeatherWidget(session=mock.Mock(), location="London", text="London")
     assert w.bg_color is None
@@ -100,7 +100,7 @@ def test_weather_bg_color_accepts_color(monkeypatch):
     monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
     from rgbmatrix.graphics import Color
 
-    from led_ticker_feeds.weather import WeatherWidget
+    from led_ticker_weather.weather import WeatherWidget
 
     w = WeatherWidget(
         session=mock.Mock(),
@@ -120,7 +120,7 @@ class TestWeatherColorProvider:
         from led_ticker.color_providers import _ConstantColor
         from rgbmatrix.graphics import Color
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         w = WeatherWidget(
             session=mock.Mock(),
@@ -134,7 +134,7 @@ class TestWeatherColorProvider:
         from led_ticker.color_providers import _ConstantColor
         from rgbmatrix.graphics import Color
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         w = WeatherWidget(
             session=mock.Mock(),
@@ -147,7 +147,7 @@ class TestWeatherColorProvider:
     def test_provider_passed_through_unchanged(self):
         from led_ticker.color_providers import Rainbow
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         provider = Rainbow()
         w = WeatherWidget(
@@ -156,7 +156,7 @@ class TestWeatherColorProvider:
         assert w.font_color is provider
 
     def test_advance_frame_increments_count(self):
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         w = WeatherWidget(session=mock.Mock(), text="NYC", location="NYC")
         assert w._frame_count == 0
@@ -189,7 +189,7 @@ class TestWeatherPerCharProviderDispatch:
     def test_label_per_char_provider_iterates_chars(self):
         from rgbmatrix import _StubCanvas
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         provider = _TrackingProvider()
         w = WeatherWidget(
@@ -227,7 +227,7 @@ class TestWeatherPerCharProviderDispatch:
         value. Should also dispatch per-char."""
         from rgbmatrix import _StubCanvas
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         temp_provider = _TrackingProvider()
         w = WeatherWidget(
@@ -272,7 +272,7 @@ class TestWeatherPerEffectCounter:
         """
         from rgbmatrix import _StubCanvas
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         provider = _TrackingProvider()
         w = WeatherWidget(
@@ -309,7 +309,7 @@ class TestWeatherPerEffectCounter:
         """
         from rgbmatrix import _StubCanvas
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         temp_provider = _TrackingProvider()
         w = WeatherWidget(
@@ -360,7 +360,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         from led_ticker.scaled_canvas import ScaledCanvas
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         opts = RGBMatrixOptions()
         opts.cols = 64
@@ -403,7 +403,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         from led_ticker.scaled_canvas import ScaledCanvas
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         opts = RGBMatrixOptions()
         opts.cols = 64
@@ -452,7 +452,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         from led_ticker.scaled_canvas import ScaledCanvas
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         opts = RGBMatrixOptions()
         opts.cols = 64
@@ -513,7 +513,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         from led_ticker.scaled_canvas import ScaledCanvas
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         opts = RGBMatrixOptions()
         opts.cols = 64
@@ -558,7 +558,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
         from rgbmatrix import _StubCanvas
 
-        from led_ticker_feeds.weather import WeatherWidget
+        from led_ticker_weather.weather import WeatherWidget
 
         captured_baseline: list[int] = []
 
@@ -573,7 +573,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         # pixel_emoji.draw_emoji_at), so patching pixel_emoji.draw_emoji_at here
         # would not be observed. Core's weather.py deferred-imported inside
         # draw(), so it could patch the source module — the plugin can't.
-        monkeypatch.setattr("led_ticker_feeds.weather.draw_emoji_at", spy)
+        monkeypatch.setattr("led_ticker_weather.weather.draw_emoji_at", spy)
 
         canvas = _StubCanvas(width=160, height=16)
         w = WeatherWidget(session=mock.Mock(), location="NYC", text="NYC")
@@ -601,7 +601,7 @@ class TestWeatherSlugCoverage:
     def test_every_match_condition_slug_in_both_registries(self):
         from led_ticker.pixel_emoji import HIRES_REGISTRY, _get_registry
 
-        from led_ticker_feeds.weather import _match_condition
+        from led_ticker_weather.weather import _match_condition
 
         # Probe every branch in `_match_condition` plus the default
         # fallthrough. WeatherAPI returns these or similar strings.

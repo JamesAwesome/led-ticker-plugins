@@ -1,6 +1,6 @@
 """Tests for weather icons."""
 
-from led_ticker_feeds.weather import _match_condition
+from led_ticker_weather.weather import _match_condition
 
 
 class TestMatchCondition:

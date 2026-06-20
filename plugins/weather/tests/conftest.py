@@ -1,4 +1,4 @@
-"""Shared test fixtures for the led-ticker-feeds plugin test suite.
+"""Shared test fixtures for the led-ticker-weather plugin test suite.
 
 The rgbmatrix stub is on the pytest path via ``pythonpath`` in
 ``pyproject.toml`` (``../led-ticker/tests/stubs``). The plugin doesn't ship

@@ -1,14 +1,12 @@
-"""led-ticker-feeds: data-feed widgets contributed via the
-``led_ticker.plugins`` entry point.
+"""led-ticker-weather: current-conditions widget (weather.current) contributed
+via the ``led_ticker.plugins`` entry point.
 
-The entry-point name ``feeds`` is the plugin namespace, so widgets are
-``type = "feeds.rss"`` and ``type = "feeds.weather"`` in config.toml.
+The entry-point name ``weather`` is the plugin namespace, so the widget is
+referenced in config.toml as ``type = "weather.current"``.
 """
 
-from led_ticker_feeds.rss import RSSFeedMonitor
-from led_ticker_feeds.weather import WeatherWidget
+from led_ticker_weather.weather import WeatherWidget
 
 
 def register(api):
-    api.widget("rss")(RSSFeedMonitor)
-    api.widget("weather")(WeatherWidget)
+    api.widget("current")(WeatherWidget)

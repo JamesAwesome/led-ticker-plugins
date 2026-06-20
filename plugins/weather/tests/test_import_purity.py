@@ -1,7 +1,7 @@
 import ast
 import pathlib
 
-SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "led_ticker_feeds"
+SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "led_ticker_weather"
 
 
 def _led_ticker_imports(path):

@@ -1,4 +1,4 @@
-"""Weather widget using WeatherAPI.com (feeds.weather)."""
+"""Weather widget using WeatherAPI.com (weather.current)."""
 
 import logging
 import os
