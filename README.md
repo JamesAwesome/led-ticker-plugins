@@ -1,2 +1,23 @@
 # led-ticker-plugins
-Core monorepo for first party led-ticker plugins
+
+The official first-party plugin pack for [led-ticker](https://github.com/JamesAwesome/led-ticker),
+developed together in one uv workspace and **distributed per-plugin** so you
+install only what you want.
+
+## Install one plugin
+
+```bash
+pip install "git+https://github.com/JamesAwesome/led-ticker-plugins.git@<plugin>-vX.Y.Z#subdirectory=plugins/<plugin>"
+```
+
+## Develop
+
+```bash
+make dev    # uv sync the whole workspace (needs a sibling ../led-ticker checkout)
+make test   # pytest every member
+make lint   # ruff + pyright
+```
+
+Each plugin lives under `plugins/<name>/` with its own `pyproject.toml`,
+version, `CLAUDE.md`, and `README.md`. See
+`docs/superpowers/specs/2026-06-19-led-ticker-plugins-monorepo-design.md`.
