@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout led-ticker-calendar
+        uses: actions/checkout@v6.0.3
+        with:
+          path: led-ticker-calendar
+      # led-ticker is private and not on PyPI; check it out as a sibling so
+      # [tool.uv.sources] resolves and its tests/stubs are available. Uses a
+      # read-only deploy key scoped to that repo.
+      - name: Checkout led-ticker (sibling dependency)
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: JamesAwesome/led-ticker
+          path: led-ticker
+          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+      - name: Sync
+        working-directory: led-ticker-calendar
+        run: uv sync --extra dev
+      - name: Ruff check
+        working-directory: led-ticker-calendar
+        run: uv run ruff check src tests
+      - name: Ruff format check
+        working-directory: led-ticker-calendar
+        run: uv run ruff format --check src tests
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout led-ticker-calendar
+        uses: actions/checkout@v6.0.3
+        with:
+          path: led-ticker-calendar
+      - name: Checkout led-ticker (sibling dependency)
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: JamesAwesome/led-ticker
+          path: led-ticker
+          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+      - name: Sync
+        working-directory: led-ticker-calendar
+        run: uv sync --extra dev
+      - name: Pyright
+        working-directory: led-ticker-calendar
+        run: uv run pyright src
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout led-ticker-calendar
+        uses: actions/checkout@v6.0.3
+        with:
+          path: led-ticker-calendar
+      - name: Checkout led-ticker (sibling dependency)
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: JamesAwesome/led-ticker
+          path: led-ticker
+          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+      - name: Sync
+        working-directory: led-ticker-calendar
+        run: uv sync --extra dev
+      - name: Test
+        working-directory: led-ticker-calendar
+        run: uv run pytest --cov=src --cov-report=term-missing
+
+  ci-passed:
+    needs: [lint, typecheck, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all required jobs passed
+        run: |
+          for r in "${{ needs.lint.result }}" "${{ needs.typecheck.result }}" "${{ needs.test.result }}"; do
+            if [ "$r" != "success" ]; then echo "a required job did not succeed: $r"; exit 1; fi
+          done
+          echo "all required jobs passed"
