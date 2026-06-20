@@ -1,4 +1,4 @@
-"""Tests for led_ticker_feeds.rss."""
+"""Tests for led_ticker_rss.rss."""
 
 import unittest.mock as mock
 
@@ -6,7 +6,7 @@ import feedparser as _feedparser
 import pytest
 from led_ticker.widgets.message import TickerMessage
 
-from led_ticker_feeds.rss import RSSFeedMonitor
+from led_ticker_rss.rss import RSSFeedMonitor
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -175,7 +175,7 @@ class TestFeedparserOffEventLoop:
             calls.append((func, args, kwargs))
             return func(*args, **kwargs)
 
-        monkeypatch.setattr("led_ticker_feeds.rss.asyncio.to_thread", _fake_to_thread)
+        monkeypatch.setattr("led_ticker_rss.rss.asyncio.to_thread", _fake_to_thread)
 
         monitor = RSSFeedMonitor(
             session=mock_session, feed_url="http://example.com/rss"
@@ -196,13 +196,13 @@ class TestRSSFeedUpdateLogging:
     async def test_rss_update_logs_info(self, mock_session, caplog) -> None:
         import logging
 
-        from led_ticker_feeds.rss import RSSFeedMonitor
+        from led_ticker_rss.rss import RSSFeedMonitor
 
         widget = RSSFeedMonitor(
             session=mock_session, feed_url="http://example.com/feed"
         )
 
-        with caplog.at_level(logging.INFO, logger="led_ticker_feeds.rss"):
+        with caplog.at_level(logging.INFO, logger="led_ticker_rss.rss"):
             await widget.update()
 
         matching = [

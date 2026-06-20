@@ -1,14 +1,12 @@
-"""led-ticker-feeds: data-feed widgets contributed via the
+"""led-ticker-rss: RSS/Atom headline widget (rss.feed) contributed via the
 ``led_ticker.plugins`` entry point.
 
-The entry-point name ``feeds`` is the plugin namespace, so widgets are
-``type = "feeds.rss"`` and ``type = "feeds.weather"`` in config.toml.
+The entry-point name ``rss`` is the plugin namespace, so the widget is
+referenced in config.toml as ``type = "rss.feed"``.
 """
 
-from led_ticker_feeds.rss import RSSFeedMonitor
-from led_ticker_feeds.weather import WeatherWidget
+from led_ticker_rss.rss import RSSFeedMonitor
 
 
 def register(api):
-    api.widget("rss")(RSSFeedMonitor)
-    api.widget("weather")(WeatherWidget)
+    api.widget("feed")(RSSFeedMonitor)
