@@ -4,6 +4,7 @@ requires-python = ">=3.14"
 
 [manifest]
 members = [
+    "led-ticker-baseball",
     "led-ticker-crypto",
     "led-ticker-pool",
 ]
@@ -281,6 +282,40 @@ requires-dist = [
     { name = "tomli-w", marker = "extra == 'render'", specifier = ">=1.0" },
 ]
 provides-extras = ["render", "dev"]
+
+[[package]]
+name = "led-ticker-baseball"
+version = "0.1.0"
+source = { editable = "plugins/baseball" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "led-ticker" },
+    { name = "pillow" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp" },
+    { name = "led-ticker", editable = "../led-ticker" },
+    { name = "pillow" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-crypto"
