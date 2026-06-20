@@ -1,10 +1,10 @@
-.PHONY: dev test lint format
+.PHONY: dev test lint format format-check
 
 dev:
 	uv sync --extra dev
 
 test:
-	uv run pytest plugins --cov-report=term-missing
+	uv run pytest plugins $(foreach m,$(wildcard plugins/*/src),--cov=$(m)) --cov-report=term-missing
 
 lint:
 	uv run ruff check plugins
@@ -12,3 +12,6 @@ lint:
 
 format:
 	uv run ruff format plugins
+
+format-check:
+	uv run ruff format --check plugins

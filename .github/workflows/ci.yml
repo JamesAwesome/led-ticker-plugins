@@ -27,7 +27,7 @@ jobs:
             echo "members=$ALL" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED=$(git diff --name-only "$BASE" HEAD)
-          if echo "$CHANGED" | grep -qE '^(pyproject.toml|tests/|.github/workflows/ci.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(pyproject\.toml|tests/|\.github/workflows/ci\.yml)'; then
             echo "members=$ALL" >> "$GITHUB_OUTPUT"
           else
             M=$(echo "$CHANGED" | grep -oE '^plugins/[^/]+/' | sed 's#plugins/##; s#/##' | sort -u | jq -R . | jq -cs .)

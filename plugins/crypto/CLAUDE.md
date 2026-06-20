@@ -32,7 +32,7 @@ importable headless from the workspace root — no sibling `../led-ticker` path 
 ```bash
 uv sync --extra dev          # install deps (needs ../led-ticker checked out)
 uv run pytest -q             # full suite (asyncio_mode = "auto")
-uv run ruff check src tests  # lint — run before pushing
+make lint                    # lint (monorepo root); or: uv run ruff check plugins/crypto
 ```
 
 Python **3.14+** only.
@@ -173,8 +173,9 @@ on first access. Do not call `_trend_palette(name)` directly from outside `_colo
 identity between the ported renderer and core's original. Retired after core's renderer was
 removed in led-ticker#188; see PR history for the comparison baseline.
 
-CI (`.github/workflows/ci.yml`): checks out this repo + led-ticker as siblings (deploy key),
-Python 3.14, `uv sync --extra dev`, then `ruff check src tests` and `pytest -q`.
+CI is the monorepo's single root path-filtered per-member matrix (`.github/workflows/ci.yml`):
+it checks out led-ticker as a sibling (deploy key), Python 3.14, `uv sync --extra dev`, then
+runs ruff check, ruff format --check, pyright, and pytest for the changed member.
 
 ## Adding to the plugin
 
