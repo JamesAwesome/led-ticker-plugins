@@ -25,6 +25,11 @@ extraPaths = ["tests/stubs"]
 asyncio_mode = "auto"
 # Vendored stub on the import path; run pytest from the repo root.
 pythonpath = ["tests/stubs"]
+# importlib import mode so members can share test basenames (test_smoke.py,
+# test_import_purity.py) across plugins without __init__.py collisions when
+# the whole workspace is collected at once (make test). Per-member CI runs
+# are unaffected.
+addopts = "--import-mode=importlib"
 
 [tool.coverage.report]
 fail_under = 90
