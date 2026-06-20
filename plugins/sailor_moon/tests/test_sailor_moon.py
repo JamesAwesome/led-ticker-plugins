@@ -5,8 +5,8 @@ from rgbmatrix import _StubCanvas
 # Dropped: core-registry assertions (test_registered in TestSailorMoonTransition,
 # TestSailorMoonReverseTransition, TestSailorMoonAlternating) that called
 # get_transition_class("sailor_moon") etc. The plugin registers as
-# "arcade.sailor_moon" via the loader; smoke coverage lives in test_register.py.
-from led_ticker_arcade.sailor_moon import (
+# "sailor_moon.forward" via the loader; smoke coverage lives in test_smoke.py.
+from led_ticker_sailor_moon.sailor_moon import (
     MOON_STICK,
     WAND_WIDTH,
     SailorMoon,
@@ -124,7 +124,7 @@ class TestDrawSailorMoonFrameRTL:
 
 
 class TestSailorMoonTransition:
-    # Dropped: test_registered — plugin registers as "arcade.sailor_moon" via
+    # Dropped: test_registered — plugin registers as "sailor_moon.forward" via
     # the loader; core get_transition_class does not apply here.
 
     def test_frame_at_draws_to_canvas(self, make_widget):
