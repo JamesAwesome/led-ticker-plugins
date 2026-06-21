@@ -241,7 +241,7 @@ class CoinGeckoMonitor:
         update_interval: int = 300,
         **kwargs: Any,
     ) -> Self:
-        api_key = kwargs.get("api_key") or os.getenv("COINGECKO_API_KEY", "")
+        api_key = os.getenv("COINGECKO_API_KEY", "")
         headers = {"x-cg-demo-api-key": api_key} if api_key else {}
         coin_list = (
             await _get_coingecko_coin_list(session, headers=headers)
@@ -255,7 +255,8 @@ class CoinGeckoMonitor:
             coins=coins,
             currency=currency,
             session=session,
-            **{k: v for k, v in kwargs.items() if k in valid},
+            # api_key never comes from config — env (COINGECKO_API_KEY) only
+            **{k: v for k, v in kwargs.items() if k in valid and k != "api_key"},
         )
         # Tolerate a failed INITIAL price fetch (e.g. a CoinGecko 429 at boot)
         # so the widget still constructs and the monitor loop can recover, rather
