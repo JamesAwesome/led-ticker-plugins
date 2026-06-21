@@ -94,7 +94,6 @@ Use `symbol_id` (or `symbol_ids`) when:
 | `symbols` | list of strings | — | Ticker symbols auto-resolved to CoinGecko ids at startup (e.g. `["BTC", "ETH"]`). Unique-or-error. |
 | `symbol_ids` | list of strings | — | CoinGecko ids used directly, uppercased as panel labels (e.g. `["bitcoin", "ethereum"]`). |
 | `currency` | string | `"USD"` | Fiat currency code (e.g. `"USD"`, `"EUR"`). |
-| `api_key` | string | `""` | CoinGecko free demo API key. Falls back to the `COINGECKO_API_KEY` env var. |
 | `update_interval` | int | `300` | Seconds between CoinGecko fetches (5 min default). |
 | `center` | bool | `true` | Center the ticker on the canvas when it fits; scroll when it overflows. |
 | `padding` | int | `6` | Horizontal spacing (logical px) between the symbol, price, and change segments. |
@@ -108,14 +107,10 @@ At least one of `symbol`+`symbol_id`, `symbols`, or `symbol_ids` must be specifi
 
 CoinGecko's keyless free tier allows roughly **5 requests per minute**. For a single low-frequency widget at the default 5-minute interval this is plenty; if you add more coins or shorten `update_interval`, you may hit HTTP 429. When that happens the widget logs the rate-limit clearly and lets its monitor loop back off — it will not show stale garbage.
 
-To raise the limit, create a free account at [coingecko.com](https://www.coingecko.com) and get a **Demo API key** (no credit card required). Supply it via the `api_key` config field or the `COINGECKO_API_KEY` environment variable:
+To raise the limit, create a free account at [coingecko.com](https://www.coingecko.com) and get a **Demo API key** (no credit card required). Supply it via the `COINGECKO_API_KEY` environment variable (the only supported path — config-file secrets are intentionally not accepted):
 
-```toml
-[[playlist.section.widget]]
-type = "crypto.coingecko"
-symbols = ["BTC", "ETH", "SOL", "DOGE"]
-currency = "USD"
-api_key = "CG-xxxxxxxxxxxxxxxxxxxx"
+```bash
+export COINGECKO_API_KEY="CG-xxxxxxxxxxxxxxxxxxxx"
 ```
 
 The key is sent as the `x-cg-demo-api-key` request header.

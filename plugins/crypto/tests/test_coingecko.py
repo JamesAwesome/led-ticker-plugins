@@ -454,3 +454,23 @@ class TestCoinGeckoMonitorAdditional:
         )
         assert result[0]["id"] == "bitcoin"
         assert captured["headers"]["x-cg-demo-api-key"] == "k"
+
+
+class TestStartApiKeyEnvOnly:
+    """Config-path api_key must be silently ignored; env is the only source."""
+
+    async def test_inline_api_key_ignored_env_wins(self, monkeypatch):
+        """Inline api_key= kwarg must be ignored; COINGECKO_API_KEY env wins."""
+        monkeypatch.setenv("COINGECKO_API_KEY", "env-wins")
+        session = _mock_session_seq(
+            [
+                {"bitcoin": {"usd": 50000.0, "usd_24h_change": 1.0}},
+            ]
+        )
+        widget = await CoinGeckoMonitor.start(
+            symbol_ids=["bitcoin"],
+            currency="USD",
+            session=session,
+            api_key="inline-should-be-ignored",
+        )
+        assert widget.api_key == "env-wins"
