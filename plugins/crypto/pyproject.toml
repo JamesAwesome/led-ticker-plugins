@@ -14,7 +14,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Topic :: Multimedia :: Graphics",
 ]
-dependencies = ["ledticker>=2.0", "aiohttp"]
+dependencies = ["led-ticker-core>=2.0", "aiohttp"]
 
 # Entry-point NAME ("crypto") is the plugin namespace -> TOML `type = "crypto.coingecko"`.
 [project.entry-points."led_ticker.plugins"]

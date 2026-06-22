@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
 dependencies = [
-    "ledticker",
+    "led-ticker-core",
 ]
 
 # Entry-point NAME ("pacman") is the plugin namespace -> TOML `transition = "pacman.forward"`.
