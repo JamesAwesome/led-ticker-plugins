@@ -30,3 +30,9 @@ any bundled sprite artwork belong to their respective owners and are **not**
 covered by this project's license. See [NOTICE.md](NOTICE.md) for details. The
 data plugins (`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`) are
 original works.
+
+## License
+
+[MIT](LICENSE) © James Awesome — applies to the plugin **code**. The third-party
+characters/artwork referenced by the sprite-trail homage plugins are **not**
+covered by it; see [NOTICE.md](NOTICE.md).
