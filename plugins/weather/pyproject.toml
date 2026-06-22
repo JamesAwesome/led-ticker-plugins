@@ -3,10 +3,19 @@ name = "led-ticker-weather"
 version = "0.2.0"
 description = "Current-conditions weather widget for led-ticker (weather.current)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Graphics",
+]
 dependencies = [
-    "led-ticker",
+    "ledticker>=2.0",
     "aiohttp",
 ]
 
@@ -23,6 +32,11 @@ dev = [
     "ruff>=0.4",
     "pyright>=1.1",
 ]
+
+[project.urls]
+Homepage = "https://docs.ledticker.dev"
+Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
+Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
 
 [build-system]
 requires = ["hatchling"]
