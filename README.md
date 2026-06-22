@@ -21,3 +21,12 @@ make lint   # ruff + pyright
 Each plugin lives under `plugins/<name>/` with its own `pyproject.toml`,
 version, `CLAUDE.md`, and `README.md`. See
 `docs/superpowers/specs/2026-06-19-led-ticker-plugins-monorepo-design.md`.
+
+## Third-party homages
+
+The sprite-trail transition plugins (`nyancat`, `pokeball`, `pacman`,
+`sailor_moon`) are **unofficial fan homages** — the character names/designs and
+any bundled sprite artwork belong to their respective owners and are **not**
+covered by this project's license. See [NOTICE.md](NOTICE.md) for details. The
+data plugins (`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`) are
+original works.
