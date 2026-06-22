@@ -24,21 +24,24 @@ It cycles four screens — a title card, today's current temperature with a tren
 
 The widget auto-registers via the `led_ticker.plugins` entry point — once the package is installed, no `[plugins]` config change is needed.
 
-**Into a containerized led-ticker (recommended):** add this package to `config/requirements-plugins.txt` (copy it from `config/requirements-plugins.example.txt`, which already lists it), then rebuild:
+**Into a containerized led-ticker (recommended):** add this package to `config/requirements-plugins.txt` (copy it from `config/requirements-plugins.example.txt`), then rebuild:
+
+```text
+led-ticker-pool
+```
 
 ```bash
 # in your led-ticker checkout
-cp config/requirements-plugins.example.txt config/requirements-plugins.txt
 docker compose up -d --build
 ```
 
-**Standalone (bare-metal / a venv that already has led-ticker):**
+**Standalone (a venv that already has led-ticker):**
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-pool.git@main"
+pip install led-ticker-pool
 ```
 
-(led-ticker isn't on PyPI, so `pip` can't fetch it — this path works only where led-ticker is already installed, e.g. inside the led-ticker Docker image or a venv set up as in [Development](#development) below. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the image uses.)
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
 ## Configuration
 

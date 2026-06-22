@@ -6,6 +6,14 @@ install only what you want.
 
 ## Install one plugin
 
+The **data plugins** (`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`) are published to PyPI:
+
+```bash
+pip install led-ticker-<name>   # e.g. pip install led-ticker-baseball
+```
+
+The **homage plugins** (`nyancat`, `pokeball`, `pacman`, `sailor_moon`) are not on PyPI — install from source:
+
 ```bash
 pip install "git+https://github.com/JamesAwesome/led-ticker-plugins.git@<plugin>-vX.Y.Z#subdirectory=plugins/<plugin>"
 ```

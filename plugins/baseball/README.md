@@ -40,16 +40,16 @@ docker compose up -d --build
 That example file lists every first-party plugin — trim the live copy to just the ones you want. The baseball line is:
 
 ```text
-git+https://github.com/JamesAwesome/led-ticker-baseball.git@main
+led-ticker-baseball
 ```
 
 **Standalone (a venv that already has led-ticker):**
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-baseball.git@main"
+pip install led-ticker-baseball
 ```
 
-led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
 Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` / `baseball.attendance` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
 
