@@ -15,7 +15,7 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
 ]
 dependencies = [
-    "ledticker>=2.0",
+    "led-ticker-core>=2.0",
     "aiohttp",
 ]
 

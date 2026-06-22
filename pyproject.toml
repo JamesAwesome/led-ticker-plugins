@@ -4,13 +4,13 @@
 members = ["plugins/*"]
 
 # The engine is a sibling checkout, sourced once here for the whole workspace.
-# pip/git installs ignore this (uv-only metadata) and resolve ledticker from
+# pip/git installs ignore this (uv-only metadata) and resolve led-ticker-core from
 # the pre-installed, constraint-pinned engine — see docs/spike/p0-install-model.md.
-# NOTE: the key MUST match the engine's distribution name (`ledticker`), which
-# members depend on as `ledticker>=2.0`; the `../led-ticker` value is just the
+# NOTE: the key MUST match the engine's distribution name (`led-ticker-core`), which
+# members depend on as `led-ticker-core>=2.0`; the `../led-ticker` value is just the
 # sibling checkout directory name (set by CI's `path: led-ticker`).
 [tool.uv.sources]
-ledticker = { path = "../led-ticker", editable = true }
+led-ticker-core = { path = "../led-ticker", editable = true }
 
 [tool.ruff]
 target-version = "py314"
