@@ -26,22 +26,16 @@ docker compose up -d --build
 That example file lists every first-party plugin — trim the live copy to just the ones you want. The calendar line is:
 
 ```text
-git+https://github.com/JamesAwesome/led-ticker-calendar.git@main
-```
-
-For production use, pin to a tag or SHA rather than `@main`:
-
-```text
-git+https://github.com/JamesAwesome/led-ticker-calendar.git@v0.1.0
+led-ticker-calendar
 ```
 
 **Standalone (a venv that already has led-ticker):**
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-calendar.git@main"
+pip install led-ticker-calendar
 ```
 
-led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
 Once installed, the `calendar.events` widget is available automatically.
 

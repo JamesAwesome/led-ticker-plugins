@@ -26,16 +26,16 @@ docker compose up -d --build
 That example file lists every first-party plugin — trim the live copy to just the ones you want. The crypto line is:
 
 ```text
-git+https://github.com/JamesAwesome/led-ticker-crypto.git@main
+led-ticker-crypto
 ```
 
 **Standalone (a venv that already has led-ticker):**
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-crypto.git@main"
+pip install led-ticker-crypto
 ```
 
-led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
 ## Configuration
 

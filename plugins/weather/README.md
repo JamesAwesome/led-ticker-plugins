@@ -17,7 +17,7 @@ The widget auto-registers via the `led_ticker.plugins` entry point — once the 
 **Into a containerized led-ticker (recommended):** add this package to `config/requirements-plugins.txt` (copy it from `config/requirements-plugins.example.txt`), then rebuild:
 
 ```text
-git+https://github.com/JamesAwesome/led-ticker-plugins.git@weather-v0.2.0#subdirectory=plugins/weather
+led-ticker-weather
 ```
 
 ```bash
@@ -28,10 +28,10 @@ docker compose up -d --build
 **Standalone (a venv that already has led-ticker):**
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-plugins.git@weather-v0.2.0#subdirectory=plugins/weather"
+pip install led-ticker-weather
 ```
 
-led-ticker isn't on PyPI, so this path only works where led-ticker is already installed. See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
 ## Configuration
 
