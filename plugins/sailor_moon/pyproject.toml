@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
 dependencies = [
-    "led-ticker",
+    "ledticker",
 ]
 
 # Entry-point NAME ("sailor_moon") is the plugin namespace -> TOML `transition = "sailor_moon.forward"`.

@@ -3,9 +3,18 @@ name = "led-ticker-crypto"
 version = "0.2.0"
 description = "Crypto-price widgets for led-ticker (CoinGecko)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
-dependencies = ["led-ticker", "aiohttp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = ["ledticker>=2.0", "aiohttp"]
 
 # Entry-point NAME ("crypto") is the plugin namespace -> TOML `type = "crypto.coingecko"`.
 [project.entry-points."led_ticker.plugins"]
@@ -20,6 +29,11 @@ dev = [
     "ruff>=0.4",
     "pyright>=1.1",
 ]
+
+[project.urls]
+Homepage = "https://docs.ledticker.dev"
+Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
+Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
 
 [build-system]
 requires = ["hatchling"]
