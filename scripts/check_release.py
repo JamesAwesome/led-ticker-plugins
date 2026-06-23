@@ -1,27 +1,32 @@
 """Resolve a `<plugin>-vX.Y.Z` release tag to a buildable plugin dir.
 
-Allows only the 6 DATA plugins; rejects homage plugins (GitHub-only) and any
-tag whose version doesn't match the plugin's pyproject version. On success,
-prints the plugin directory to stdout and exits 0; otherwise exits 1.
+Allows only the publishable plugins (the 6 data plugins + the `flair` homage
+pack) and any tag whose version doesn't match the plugin's pyproject version.
+On success, prints the plugin directory to stdout and exits 0; otherwise exits 1.
 """
 
 import sys
 import tomllib
 from pathlib import Path
 
-DATA_PLUGINS = {"pool", "baseball", "crypto", "calendar", "rss", "weather"}
-HOMAGE_PLUGINS = {"flair"}
+# Plugins published to PyPI on a `<plugin>-vX.Y.Z` release: the 6 data plugins
+# plus `flair` (the consolidated homage sprite-trail pack).
+PUBLISHABLE_PLUGINS = {
+    "pool",
+    "baseball",
+    "crypto",
+    "calendar",
+    "rss",
+    "weather",
+    "flair",
+}
 
 
 def resolve(tag: str, plugins_root: str = "plugins") -> tuple[str | None, str]:
     if "-v" not in tag:
         return None, f"Tag {tag!r} is malformed (expected <plugin>-vX.Y.Z)."
     plugin, _, version = tag.rpartition("-v")
-    if plugin in HOMAGE_PLUGINS:
-        return None, (
-            f"Plugin {plugin!r} is GitHub-install-only and is not published to PyPI."
-        )
-    if plugin not in DATA_PLUGINS:
+    if plugin not in PUBLISHABLE_PLUGINS:
         return None, f"Unknown plugin {plugin!r} (not in the publishable set)."
     plugin_dir = Path(plugins_root) / plugin
     pyproject = plugin_dir / "pyproject.toml"

@@ -5,8 +5,7 @@ from pathlib import Path
 
 from scripts.check_release import resolve
 
-DATA = ["pool", "baseball", "crypto", "calendar", "rss", "weather"]
-HOMAGE = ["flair"]
+PUBLISHABLE = ["pool", "baseball", "crypto", "calendar", "rss", "weather", "flair"]
 
 
 def _mk(tmp_path: Path, plugin: str, version: str) -> str:
@@ -26,11 +25,11 @@ def test_data_plugin_matching_ok(tmp_path):
     assert plugin_dir == str(Path(root) / "pool"), msg
 
 
-def test_homage_plugin_rejected(tmp_path):
+def test_flair_is_publishable(tmp_path):
+    # flair (the consolidated homage pack) ships to PyPI, like the data plugins.
     root = _mk(tmp_path, "flair", "0.1.0")
     plugin_dir, msg = resolve("flair-v0.1.0", root)
-    assert plugin_dir is None
-    assert "not published to PyPI" in msg
+    assert plugin_dir == str(Path(root) / "flair"), msg
 
 
 def test_version_mismatch_rejected(tmp_path):
@@ -58,7 +57,7 @@ def test_cli_exit_codes(tmp_path):
         [sys.executable, "scripts/check_release.py", "pool-v0.1.0", root],
         capture_output=True, text=True)
     bad = subprocess.run(
-        [sys.executable, "scripts/check_release.py", "flair-v0.1.0", root],
+        [sys.executable, "scripts/check_release.py", "bogus-v1.0.0", root],
         capture_output=True, text=True)
     assert ok.returncode == 0 and ok.stdout.strip().endswith("pool")
     assert bad.returncode == 1
