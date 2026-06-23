@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for led-ticker-arcade tests."""
+"""Shared pytest fixtures for led-ticker-flair tests."""
 
 from unittest import mock
 

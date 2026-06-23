@@ -5,7 +5,7 @@ The entry-point name ``nyancat`` is the plugin namespace, so transitions are
 referenced in config.toml as ``transition = "nyancat.forward"`` etc.
 """
 
-from led_ticker_nyancat.nyancat import NyanCat, NyanCatAlternating, NyanCatReverse
+from led_ticker_flair.nyancat.nyancat import NyanCat, NyanCatAlternating, NyanCatReverse
 
 
 def register(api):

@@ -3,7 +3,7 @@
 from led_ticker.plugin import SNAP_THRESHOLD
 from rgbmatrix import _StubCanvas
 
-from led_ticker_nyancat.nyancat import (
+from led_ticker_flair.nyancat.nyancat import (
     NYAN_CAT,
     NYANCAT_SPEC,
     NYANCAT_SPEC_REVERSE,

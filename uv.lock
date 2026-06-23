@@ -7,6 +7,7 @@ members = [
     "led-ticker-baseball",
     "led-ticker-calendar",
     "led-ticker-crypto",
+    "led-ticker-flair",
     "led-ticker-nyancat",
     "led-ticker-pacman",
     "led-ticker-pokeball",
@@ -407,6 +408,36 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
+    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "led-ticker-flair"
+version = "0.1.0"
+source = { editable = "plugins/flair" }
+dependencies = [
+    { name = "led-ticker-core" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
     { name = "led-ticker-core", editable = "../led-ticker" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },

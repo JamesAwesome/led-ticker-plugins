@@ -2,13 +2,10 @@
 
 from pathlib import Path
 
-import led_ticker_nyancat
-
-
-def _sprites_dir() -> Path:
-    return Path(led_ticker_nyancat.__file__).resolve().parent / "sprites"
+import led_ticker_flair.nyancat
 
 
 def test_nyancat_sprite_present():
-    p = _sprites_dir() / "nyancat.webp"
+    base = Path(led_ticker_flair.nyancat.__file__).resolve().parent
+    p = base / "sprites" / "nyancat.webp"
     assert p.is_file(), f"missing bundled sprite: {p}"
