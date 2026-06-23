@@ -6,7 +6,7 @@ from pathlib import Path
 from scripts.check_release import resolve
 
 DATA = ["pool", "baseball", "crypto", "calendar", "rss", "weather"]
-HOMAGE = ["nyancat", "pokeball", "pacman", "sailor_moon"]
+HOMAGE = ["flair"]
 
 
 def _mk(tmp_path: Path, plugin: str, version: str) -> str:
@@ -27,8 +27,8 @@ def test_data_plugin_matching_ok(tmp_path):
 
 
 def test_homage_plugin_rejected(tmp_path):
-    root = _mk(tmp_path, "nyancat", "0.1.0")
-    plugin_dir, msg = resolve("nyancat-v0.1.0", root)
+    root = _mk(tmp_path, "flair", "0.1.0")
+    plugin_dir, msg = resolve("flair-v0.1.0", root)
     assert plugin_dir is None
     assert "not published to PyPI" in msg
 
@@ -58,7 +58,7 @@ def test_cli_exit_codes(tmp_path):
         [sys.executable, "scripts/check_release.py", "pool-v0.1.0", root],
         capture_output=True, text=True)
     bad = subprocess.run(
-        [sys.executable, "scripts/check_release.py", "nyancat-v0.1.0", root],
+        [sys.executable, "scripts/check_release.py", "flair-v0.1.0", root],
         capture_output=True, text=True)
     assert ok.returncode == 0 and ok.stdout.strip().endswith("pool")
     assert bad.returncode == 1
