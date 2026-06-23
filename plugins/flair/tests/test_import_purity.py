@@ -1,7 +1,10 @@
+"""AST-verified: led_ticker_flair imports only from led_ticker.plugin (public
+surface), never from led_ticker.<internal> submodules."""
+
 import ast
 import pathlib
 
-SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "led_ticker_nyancat"
+SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "led_ticker_flair"
 
 
 def _led_ticker_imports(path):
@@ -23,7 +26,7 @@ def test_plugin_imports_only_public_surface():
     for py in SRC.rglob("*.py"):
         bad = [m for m in _led_ticker_imports(py) if m != "led_ticker.plugin"]
         if bad:
-            offenders[py.name] = bad
+            offenders[str(py.relative_to(SRC))] = bad
     assert not offenders, (
         f"modules import led_ticker internals instead of led_ticker.plugin: {offenders}"
     )

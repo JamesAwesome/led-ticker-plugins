@@ -8,12 +8,8 @@ members = [
     "led-ticker-calendar",
     "led-ticker-crypto",
     "led-ticker-flair",
-    "led-ticker-nyancat",
-    "led-ticker-pacman",
-    "led-ticker-pokeball",
     "led-ticker-pool",
     "led-ticker-rss",
-    "led-ticker-sailor-moon",
     "led-ticker-weather",
 ]
 
@@ -449,96 +445,6 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
-name = "led-ticker-nyancat"
-version = "0.1.0"
-source = { editable = "plugins/nyancat" }
-dependencies = [
-    { name = "led-ticker-core" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "led-ticker-core", editable = "../led-ticker" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "led-ticker-pacman"
-version = "0.1.0"
-source = { editable = "plugins/pacman" }
-dependencies = [
-    { name = "led-ticker-core" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "led-ticker-core", editable = "../led-ticker" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "led-ticker-pokeball"
-version = "0.1.0"
-source = { editable = "plugins/pokeball" }
-dependencies = [
-    { name = "led-ticker-core" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "led-ticker-core", editable = "../led-ticker" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "led-ticker-pool"
 version = "0.1.0"
 source = { editable = "plugins/pool" }
@@ -594,36 +500,6 @@ dev = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "feedparser", specifier = ">=6.0" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "led-ticker-sailor-moon"
-version = "0.1.0"
-source = { editable = "plugins/sailor_moon" }
-dependencies = [
-    { name = "led-ticker-core" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
     { name = "led-ticker-core", editable = "../led-ticker" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
