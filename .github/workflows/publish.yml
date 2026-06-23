@@ -1,8 +1,9 @@
 name: publish
 
 # Publishes a single data plugin to PyPI via OIDC Trusted Publishing when a
-# GitHub Release tagged `<plugin>-vX.Y.Z` is published. Homage plugins are
-# rejected by scripts/check_release.py. GitHub-hosted runner, `release`-gated.
+# GitHub Release tagged `<plugin>-vX.Y.Z` is published (the 6 data plugins +
+# the `flair` homage pack; gated by scripts/check_release.py). GitHub-hosted
+# runner, `release`-gated.
 on:
   release:
     types: [published]
