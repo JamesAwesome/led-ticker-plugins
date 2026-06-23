@@ -1,22 +1,31 @@
 # led-ticker-plugins
 
-The official first-party plugin pack for [led-ticker](https://github.com/JamesAwesome/led-ticker),
-developed together in one uv workspace and **distributed per-plugin** so you
-install only what you want.
+The official first-party plugin pack for [led-ticker](https://github.com/JamesAwesome/led-ticker) — the
+asyncio toolkit that drives Adafruit RGB Matrix HAT / HUB75 LED panels from a Raspberry Pi.
+These plugins add live data and effects to your sign: current **weather**, **RSS/Atom**
+headlines, **cryptocurrency** prices, **calendar** agendas, **MLB** scores, **pool**
+water-temperature, and homage **sprite-trail transitions**. Developed together in one uv
+workspace and **distributed per-plugin** so you install only what you want.
 
-## Install one plugin
+## Install a plugin
 
-The **data plugins** (`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`) are published to PyPI:
-
-```bash
-pip install led-ticker-<name>   # e.g. pip install led-ticker-baseball
-```
-
-The **homage plugins** (all four sprite-trail families: `nyancat`, `pokeball`, `pacman`, `sailor_moon`) ship together as **`led-ticker-flair`** — not on PyPI, install from source:
+All first-party plugins are published to PyPI — install only the ones you want:
 
 ```bash
-pip install "git+https://github.com/JamesAwesome/led-ticker-plugins.git@flair-v0.1.0#subdirectory=plugins/flair"
+pip install led-ticker-<name>   # e.g. pip install led-ticker-weather
 ```
+
+### What's included
+
+| Plugin | PyPI package | Widget / transition types | Data source |
+|--------|--------------|---------------------------|-------------|
+| Weather | `led-ticker-weather` | `weather.current` | [WeatherAPI.com](https://www.weatherapi.com/) |
+| RSS / Atom | `led-ticker-rss` | `rss.feed` | any RSS or Atom feed |
+| Crypto | `led-ticker-crypto` | `crypto.coingecko` | [CoinGecko](https://www.coingecko.com/) |
+| Calendar | `led-ticker-calendar` | `calendar.events` | iCalendar (`.ics`) URL |
+| Baseball / MLB | `led-ticker-baseball` | `baseball.scores`, `.standings`, `.promotions`, `.statcast`, `.attendance` | MLB Stats API |
+| Pool | `led-ticker-pool` | `pool.monitor` | InfluxDB v2 |
+| Flair | `led-ticker-flair` | sprite-trail transitions `nyancat.*`, `pokeball.*`, `pacman.*`, `sailor_moon.*` (+ `:pokeball.ball:` emoji) | bundled sprite artwork |
 
 ## Develop
 

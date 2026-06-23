@@ -7,12 +7,26 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
+keywords = [
+    "led-ticker",
+    "led-ticker-plugin",
+    "raspberry-pi",
+    "led-matrix",
+    "rgb-led-matrix",
+    "pool",
+    "influxdb",
+    "temperature",
+    "iot",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
     "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Hardware",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
 ]
 dependencies = [
     "led-ticker-core>=2.0",
