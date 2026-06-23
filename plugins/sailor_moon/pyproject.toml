@@ -9,10 +9,6 @@ dependencies = [
     "led-ticker-core",
 ]
 
-# Entry-point NAME ("sailor_moon") is the plugin namespace -> TOML `transition = "sailor_moon.forward"`.
-[project.entry-points."led_ticker.plugins"]
-sailor_moon = "led_ticker_sailor_moon:register"
-
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

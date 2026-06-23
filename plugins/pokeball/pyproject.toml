@@ -9,11 +9,6 @@ dependencies = [
     "led-ticker-core",
 ]
 
-# Entry-point NAME ("pokeball") is the plugin namespace -> TOML `transition = "pokeball.forward"`,
-# emoji `:pokeball.ball:`.
-[project.entry-points."led_ticker.plugins"]
-pokeball = "led_ticker_pokeball:register"
-
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

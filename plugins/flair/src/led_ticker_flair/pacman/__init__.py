@@ -5,7 +5,7 @@ The entry-point name ``pacman`` is the plugin namespace, so transitions are
 referenced in config.toml as ``transition = "pacman.forward"`` etc.
 """
 
-from led_ticker_pacman.pacman import Pacman, PacmanAlternating, PacmanReverse
+from led_ticker_flair.pacman.pacman import Pacman, PacmanAlternating, PacmanReverse
 
 
 def register(api):

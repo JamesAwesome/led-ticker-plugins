@@ -6,7 +6,7 @@ from rgbmatrix import _StubCanvas
 # TestSailorMoonReverseTransition, TestSailorMoonAlternating) that called
 # get_transition_class("sailor_moon") etc. The plugin registers as
 # "sailor_moon.forward" via the loader; smoke coverage lives in test_smoke.py.
-from led_ticker_sailor_moon.sailor_moon import (
+from led_ticker_flair.sailor_moon.sailor_moon import (
     MOON_STICK,
     WAND_WIDTH,
     SailorMoon,

@@ -6,8 +6,8 @@ The entry-point name ``pokeball`` is the plugin namespace, so transitions are
 ``transition = "pokeball.forward"`` etc. and the emoji is ``:pokeball.ball:``.
 """
 
-from led_ticker_pokeball.emoji import POKEBALL, POKEBALL_HIRES
-from led_ticker_pokeball.pokeball import Pokeball, PokeballAlternating, PokeballReverse
+from led_ticker_flair.pokeball.emoji import POKEBALL, POKEBALL_HIRES
+from led_ticker_flair.pokeball.pokeball import Pokeball, PokeballAlternating, PokeballReverse
 
 
 def register(api):

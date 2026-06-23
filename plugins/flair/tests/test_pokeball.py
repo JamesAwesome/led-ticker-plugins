@@ -2,7 +2,7 @@
 
 from rgbmatrix import _StubCanvas
 
-from led_ticker_pokeball.pokeball import (
+from led_ticker_flair.pokeball.pokeball import (
     PIKACHU_FRAMES,
     PIKACHU_HEIGHT,
     PIKACHU_WIDTH,

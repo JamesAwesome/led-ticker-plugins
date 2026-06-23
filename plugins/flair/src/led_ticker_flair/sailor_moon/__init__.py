@@ -5,7 +5,7 @@ The entry-point name ``sailor_moon`` is the plugin namespace, so transitions are
 referenced in config.toml as ``transition = "sailor_moon.forward"`` etc.
 """
 
-from led_ticker_sailor_moon.sailor_moon import (
+from led_ticker_flair.sailor_moon.sailor_moon import (
     SailorMoon,
     SailorMoonAlternating,
     SailorMoonReverse,
