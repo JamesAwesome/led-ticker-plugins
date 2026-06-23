@@ -42,6 +42,10 @@ Each plugin lives under `plugins/<name>/` with its own `pyproject.toml`,
 version, `CLAUDE.md`, and `README.md`. See
 `docs/superpowers/specs/2026-06-19-led-ticker-plugins-monorepo-design.md`.
 
+## Contributing
+
+This is the curated first-party pack. **New plugins belong in your own repo** — the [authoring guide](https://docs.ledticker.dev/plugins/authoring/01-scaffold/) shows how, no fork needed. Fixes and improvements to the *existing* plugins here are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Third-party homages
 
 The `led-ticker-flair` pack (`nyancat`, `pokeball`, `pacman`, `sailor_moon`)
