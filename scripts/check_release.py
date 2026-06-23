@@ -10,7 +10,7 @@ import tomllib
 from pathlib import Path
 
 DATA_PLUGINS = {"pool", "baseball", "crypto", "calendar", "rss", "weather"}
-HOMAGE_PLUGINS = {"nyancat", "pokeball", "pacman", "sailor_moon"}
+HOMAGE_PLUGINS = {"flair"}
 
 
 def resolve(tag: str, plugins_root: str = "plugins") -> tuple[str | None, str]:
