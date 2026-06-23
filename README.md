@@ -1,5 +1,8 @@
 # led-ticker-plugins
 
+[![CI](https://github.com/JamesAwesome/led-ticker-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/JamesAwesome/led-ticker-plugins/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 The official first-party plugin pack for [led-ticker](https://github.com/JamesAwesome/led-ticker) — the
 asyncio toolkit that drives Adafruit RGB Matrix HAT / HUB75 LED panels from a Raspberry Pi.
 These plugins add live data and effects to your sign: current **weather**, **RSS/Atom**
