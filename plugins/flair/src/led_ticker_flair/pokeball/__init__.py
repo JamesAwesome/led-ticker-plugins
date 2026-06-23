@@ -1,4 +1,4 @@
-"""led-ticker-pokeball: Pokeball/Pikachu sprite-trail transitions + the
+"""led-ticker-flair / pokeball: Pokeball/Pikachu sprite-trail transitions + the
 ``:pokeball.ball:`` emoji, contributed via the ``led_ticker.plugins`` entry
 point.
 

@@ -7,12 +7,12 @@ respective owners. They are used here in good faith as **non-commercial homage**
 and are **NOT covered by this project's license** — the license grant applies to
 the led-ticker plugin *code*, not to third-party characters or artwork.
 
-| Plugin | Homage to | Rights holder | Bundled artwork |
-|--------|-----------|---------------|-----------------|
-| `led-ticker-nyancat` | Nyan Cat | Christopher Torres | `sprites/nyancat.webp` |
-| `led-ticker-pokeball` | Poké Ball / Pikachu (Pokémon) | Nintendo · Game Freak · The Pokémon Company | `sprites/pokeball.gif`, `sprites/pokeball-pikachu.gif`, `sprites/pikachu-run-transparent.gif`; `:pokeball.ball:` emoji |
-| `led-ticker-pacman` | Pac-Man | Bandai Namco | none — drawn procedurally |
-| `led-ticker-sailor-moon` | Sailor Moon | Naoko Takeuchi · Toei Animation · Kodansha | none — drawn procedurally |
+| Package | Family | Homage to | Rights holder | Bundled artwork |
+|---------|--------|-----------|---------------|-----------------|
+| `led-ticker-flair` | `nyancat` | Nyan Cat | Christopher Torres | `sprites/nyancat.webp` |
+| `led-ticker-flair` | `pokeball` | Poké Ball / Pikachu (Pokémon) | Nintendo · Game Freak · The Pokémon Company | `sprites/pokeball.gif`, `sprites/pokeball-pikachu.gif`, `sprites/pikachu-run-transparent.gif`; `:pokeball.ball:` emoji |
+| `led-ticker-flair` | `pacman` | Pac-Man | Bandai Namco | none — drawn procedurally |
+| `led-ticker-flair` | `sailor_moon` | Sailor Moon | Naoko Takeuchi · Toei Animation · Kodansha | none — drawn procedurally |
 
 These plugins are provided for personal, non-commercial use. No affiliation with,
 sponsorship by, or endorsement from any of the above rights holders is claimed or

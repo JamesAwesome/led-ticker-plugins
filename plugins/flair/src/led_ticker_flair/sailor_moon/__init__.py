@@ -1,5 +1,5 @@
-"""led-ticker-sailor-moon: Sailor Moon sprite-trail transitions contributed via
-the ``led_ticker.plugins`` entry point.
+"""led-ticker-flair / sailor_moon: Sailor Moon sprite-trail transitions
+contributed via the ``led_ticker.plugins`` entry point.
 
 The entry-point name ``sailor_moon`` is the plugin namespace, so transitions are
 referenced in config.toml as ``transition = "sailor_moon.forward"`` etc.
