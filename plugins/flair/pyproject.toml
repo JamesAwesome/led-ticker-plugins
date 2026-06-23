@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
 dependencies = [
-    "led-ticker-core",
+    "led-ticker-core>=2.0",
 ]
 
 # Each entry-point NAME is a plugin namespace -> e.g. transition = "nyancat.forward".
