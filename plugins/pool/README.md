@@ -110,13 +110,10 @@ The widget queries water-temperature readings with Flux over HTTP and computes t
 
 ## Development
 
-led-ticker isn't on PyPI, so install it editable from a sibling checkout. This repo's `pyproject.toml` pins `led-ticker` to `../led-ticker` via `[tool.uv.sources]`:
+Install dev deps and run the suite:
 
 ```bash
-git clone https://github.com/JamesAwesome/led-ticker ../led-ticker   # sibling checkout
-git clone https://github.com/JamesAwesome/led-ticker-pool && cd led-ticker-pool
-uv venv
-uv pip install -e ../led-ticker -e ".[dev]"
+uv sync --extra dev      # resolves led-ticker-core from PyPI
 uv run pytest -q
 ```
 

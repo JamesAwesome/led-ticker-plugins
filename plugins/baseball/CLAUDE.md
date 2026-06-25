@@ -31,15 +31,15 @@ names are all `baseball.<name>` (see `register()` in `__init__.py`).
 
 ## Commands
 
-led-ticker is **not on PyPI**; it resolves from a sibling checkout via
-`[tool.uv.sources] led-ticker = { path = "../led-ticker", editable = true }`. CI checks out
-`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). Tests
+`led-ticker-core` resolves from PyPI (`>=2.1`) like any other dependency — no sibling
+checkout, no `[tool.uv.sources]`, no deploy key. (To co-develop against an unreleased
+engine, add it editable on top: `uv pip install -e ../led-ticker`.) Tests
 that need a real headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1); there is no
 rgbmatrix stub on the pytest path anymore.
 
 ```bash
-uv sync --extra dev          # install deps (needs ../led-ticker checked out)
+uv sync --extra dev          # install deps (led-ticker-core from PyPI)
 uv run pytest -q             # full suite (asyncio_mode = "auto")
 uv run ruff check src tests  # lint — run before pushing
 ```
@@ -134,8 +134,8 @@ rotations at 45° (90° reads as alternating; 22.5° reads chaotic on small pane
 - `test_scores.py` / `test_scoreboard.py` / `test_standings.py` / `test_promotions.py` /
   `test_statcast.py` / `test_attendance.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage.
 
-CI (`.github/workflows/ci.yml`): checks out this repo + led-ticker as siblings (deploy key),
-Python 3.14, `uv sync --extra dev`, then `ruff check src tests` and `pytest -q`.
+CI (`.github/workflows/ci.yml`): checks out this repo, Python 3.14, `uv sync --extra dev`
+(led-ticker-core from PyPI), then `ruff check src tests` and `pytest -q`.
 
 ## Adding to the plugin
 

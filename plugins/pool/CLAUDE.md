@@ -22,15 +22,15 @@ The entry-point name `pool` is the plugin namespace, so the config `type` is `po
 
 ## Commands
 
-led-ticker is **not on PyPI**; it resolves from a sibling checkout via
-`[tool.uv.sources] led-ticker = { path = "../led-ticker", editable = true }`. CI checks out
-`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). Tests
+`led-ticker-core` resolves from PyPI (`>=2.1`) like any other dependency — no sibling
+checkout, no `[tool.uv.sources]`, no deploy key. (To co-develop against an unreleased
+engine, add it editable on top: `uv pip install -e ../led-ticker`.) Tests
 that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix
 stub on the pytest path.
 
 ```bash
-uv sync --extra dev          # install deps (needs ../led-ticker checked out)
+uv sync --extra dev          # install deps (led-ticker-core from PyPI)
 uv run pytest -q             # full suite (asyncio_mode = "auto")
 uv run ruff check src tests  # lint — run before pushing
 ```
@@ -113,8 +113,8 @@ consistent across imperial/metric. `PoolMonitor` is an `attrs.define` class with
   building (incl. the `group()` tripwire), both layouts' screen building, `validate_config`, and the
   token/staleness/logging contracts.
 
-CI (`.github/workflows/ci.yml`): checks out this repo + led-ticker as siblings (deploy key),
-Python 3.14, `uv sync --extra dev`, then `ruff check src tests` and `pytest -q`.
+CI (`.github/workflows/ci.yml`): checks out this repo, Python 3.14, `uv sync --extra dev`
+(led-ticker-core from PyPI), then `ruff check src tests` and `pytest -q`.
 
 ## Adding to the plugin
 

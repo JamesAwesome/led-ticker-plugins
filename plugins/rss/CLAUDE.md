@@ -31,8 +31,8 @@ This package split out of `led-ticker-feeds` (was `feeds.rss`); history is prese
 
 ## Commands
 
-led-ticker is **not on PyPI**; it resolves from a sibling checkout via the monorepo root
-`[tool.uv.sources]`. Tests use `make_color` from `led_ticker.plugin` (led-ticker-core ≥ 2.1);
+`led-ticker-core` resolves from PyPI (`>=2.1`); no sibling checkout or `[tool.uv.sources]`.
+Tests use `make_color` from `led_ticker.plugin` (led-ticker-core ≥ 2.1);
 no rgbmatrix stub on the import path. Run tooling from the repo root:
 
 ```bash

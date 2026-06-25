@@ -359,15 +359,10 @@ It renders as an 8×8 sprite, auto-upgrading to a 32×32 hi-res sprite on bigsig
 
 ## Development
 
-led-ticker isn't on PyPI, so this plugin resolves it from a sibling checkout. Clone both side by side:
-
-```
-~/projects/.../led-ticker
-~/projects/.../led-ticker-baseball
-```
+Install dev deps and run the checks:
 
 ```bash
-uv sync --extra dev      # resolves led-ticker from ../led-ticker
+uv sync --extra dev      # resolves led-ticker-core from PyPI
 uv run pytest -q
 uv run ruff check src tests
 ```

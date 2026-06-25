@@ -37,8 +37,8 @@ This package split out of `led-ticker-feeds` (was `feeds.weather`); history is p
 
 ## Commands
 
-led-ticker is **not on PyPI**; it resolves from a sibling checkout via the monorepo root
-`[tool.uv.sources]`. Tests obtain a canvas via `HeadlessBackend(...).create_canvas()` from
+`led-ticker-core` resolves from PyPI (`>=2.1`); no sibling checkout or `[tool.uv.sources]`.
+Tests obtain a canvas via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (shipped in led-ticker-core ≥ 2.1); no rgbmatrix stub on the path. Run
 tooling from the repo root:
 
