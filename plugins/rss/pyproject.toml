@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-rss"
-version = "0.2.0"
+version = "0.2.1"
 description = "RSS/Atom headline widget for led-ticker (rss.feed)."
 readme = "README.md"
 license = "MIT"
@@ -30,7 +30,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=2.0",
+    "led-ticker-core>=2.1",
     "aiohttp",
     "feedparser>=6.0",
 ]

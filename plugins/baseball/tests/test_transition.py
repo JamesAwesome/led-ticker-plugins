@@ -13,8 +13,8 @@ Imports the transition family / hi-res helpers from
 
 import unittest.mock as mock
 
+from led_ticker.plugin import HeadlessBackend, make_color
 from led_ticker.scaled_canvas import ScaledCanvas
-from rgbmatrix import _StubCanvas
 
 from led_ticker_baseball.transition import (
     BASEBALL_FRAMES,
@@ -53,18 +53,18 @@ class TestBaseballSprite:
 
 class TestDrawBaseballFrame:
     def test_at_zero_ball_offscreen_left(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_baseball_frame(canvas, 0.0, width=40, height=16)
         # At t=0 the ball is fully offscreen to the left → nothing lit.
         assert canvas.count_nonzero() == 0
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_baseball_frame(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_left_of_ball(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 100, 100, 100)
@@ -72,7 +72,7 @@ class TestDrawBaseballFrame:
         assert canvas.get_pixel(0, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_baseball_frame(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -84,7 +84,7 @@ class TestDrawBaseballFrame:
         prev_black = 0
         for step in range(1, 11):
             p = step / 10.0
-            canvas = _StubCanvas(width=80, height=16)
+            canvas = HeadlessBackend(80, 16).create_canvas()
             for y in range(16):
                 for x in range(80):
                     canvas.SetPixel(x, y, 100, 100, 100)
@@ -96,18 +96,18 @@ class TestDrawBaseballFrame:
 
 class TestDrawBaseballFrameRTL:
     def test_at_zero_ball_offscreen_right(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_baseball_frame_rtl(canvas, 0.0, width=40, height=16)
         # At t=0 the ball is fully offscreen to the right → nothing lit.
         assert canvas.count_nonzero() == 0
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_baseball_frame_rtl(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_right_of_ball(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 100, 100, 100)
@@ -115,7 +115,7 @@ class TestDrawBaseballFrameRTL:
         assert canvas.get_pixel(159, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_baseball_frame_rtl(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -123,8 +123,8 @@ class TestDrawBaseballFrameRTL:
                 assert 0 <= y < 16
 
     def test_sprite_is_flipped(self):
-        canvas_ltr = _StubCanvas(width=160, height=16)
-        canvas_rtl = _StubCanvas(width=160, height=16)
+        canvas_ltr = HeadlessBackend(160, 16).create_canvas()
+        canvas_rtl = HeadlessBackend(160, 16).create_canvas()
         draw_baseball_frame(canvas_ltr, 0.3, width=160, height=16)
         draw_baseball_frame_rtl(canvas_rtl, 0.3, width=160, height=16)
         ltr_pixels = set(canvas_ltr._pixels.keys())
@@ -134,7 +134,7 @@ class TestDrawBaseballFrameRTL:
 
 class TestBaseballTransition:
     def test_frame_at_draws_to_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         bb = Baseball()
@@ -142,7 +142,7 @@ class TestBaseballTransition:
         assert result is pixel_canvas
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         bb = Baseball()
@@ -150,7 +150,7 @@ class TestBaseballTransition:
         assert outgoing.draw.called
 
     def test_complete_shows_incoming_only(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         bb = Baseball()
@@ -159,7 +159,7 @@ class TestBaseballTransition:
         assert incoming.draw.called
 
     def test_returns_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         bb = Baseball()
         result = bb.frame_at(0.5, pixel_canvas, make_widget(40), make_widget(40))
         assert result is pixel_canvas
@@ -167,7 +167,7 @@ class TestBaseballTransition:
 
 class TestBaseballReverseTransition:
     def test_complete_shows_incoming(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         bb = BaseballReverse()
@@ -176,7 +176,7 @@ class TestBaseballReverseTransition:
         assert incoming.draw.called
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         bb = BaseballReverse()
@@ -187,7 +187,7 @@ class TestBaseballReverseTransition:
 class TestBaseballAlternatingTransition:
     def test_alternates_direction(self, make_widget):
         bb = BaseballAlternating()
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         bb.frame_at(0.0, canvas, make_widget(40), make_widget(40))
         assert bb._index == 0
         bb.frame_at(1.0, canvas, make_widget(40), make_widget(40))
@@ -220,14 +220,7 @@ class TestBaseballHiresDispatch:
 
     def test_hires_paints_visible_baseball_pixels(self):
         """ScaledCanvas → hires path produces white + red stitch pixels."""
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
-
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
         outgoing = mock.MagicMock()
@@ -251,14 +244,7 @@ class TestBaseballHiresDispatch:
 
     def test_baseball_reverse_hires(self):
         """BaseballReverse on ScaledCanvas paints visible baseball."""
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
-
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
         outgoing = mock.MagicMock()
@@ -300,14 +286,7 @@ class TestBaseballRotation:
     distinct frames as the ball rolls. Locks in the 'rolling' behavior."""
 
     def _setup(self):
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
-
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
         return real, wrapped
 
@@ -423,12 +402,10 @@ class TestHiresSnapRespectsIncomingBg:
         """`snap_reset` accepts an un-normalized `graphics.Color` —
         future direct callers that pass a widget's `bg_color` (which is
         a Color post-coercion) work without re-normalizing at every site."""
-        from rgbmatrix.graphics import Color
-
         from led_ticker_baseball.transition import snap_reset
 
         canvas = mock.MagicMock()
-        snap_reset(canvas, Color(42, 0, 16))
+        snap_reset(canvas, make_color(42, 0, 16))
         canvas.Fill.assert_called_once_with(42, 0, 16)
         canvas.Clear.assert_not_called()
 

@@ -1,6 +1,6 @@
 """Tests for the Sailor Moon wand transition."""
 
-from rgbmatrix import _StubCanvas
+from led_ticker.plugin import HeadlessBackend
 
 # Dropped: core-registry assertions (test_registered in TestSailorMoonTransition,
 # TestSailorMoonReverseTransition, TestSailorMoonAlternating) that called
@@ -32,17 +32,17 @@ class TestMoonStickSprite:
 
 class TestDrawSailorMoonFrame:
     def test_at_zero_wand_offscreen(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_sailor_moon_frame(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_sailor_moon_frame(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_sparkle_zone_has_colored_pixels(self):
         """Sparkle region should contain non-black pixels."""
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_sailor_moon_frame(canvas, 0.5, width=160, height=16)
         found_colors = set()
         for (_x, _y), color in canvas._pixels.items():
@@ -53,7 +53,7 @@ class TestDrawSailorMoonFrame:
 
     def test_blackout_zone_is_black(self):
         """Area well behind the sparkle trail should be blacked out."""
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_sailor_moon_frame(canvas, 0.7, width=160, height=16)
         # Far left should be black
         for y in range(16):
@@ -61,7 +61,7 @@ class TestDrawSailorMoonFrame:
             assert pixel == (0, 0, 0), f"Expected black at (0, {y}), got {pixel}"
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_sailor_moon_frame(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -70,16 +70,16 @@ class TestDrawSailorMoonFrame:
 
     def test_progressive_coverage(self):
         """Later progress should have more coverage than early progress."""
-        canvas_early = _StubCanvas(width=80, height=16)
-        canvas_late = _StubCanvas(width=80, height=16)
+        canvas_early = HeadlessBackend(80, 16).create_canvas()
+        canvas_late = HeadlessBackend(80, 16).create_canvas()
         draw_sailor_moon_frame(canvas_early, 0.2, width=80, height=16)
         draw_sailor_moon_frame(canvas_late, 0.8, width=80, height=16)
         assert canvas_late.count_nonzero() > canvas_early.count_nonzero()
 
     def test_sparkle_twinkle(self):
         """Sparkle pattern should differ between adjacent progress values."""
-        canvas_a = _StubCanvas(width=160, height=16)
-        canvas_b = _StubCanvas(width=160, height=16)
+        canvas_a = HeadlessBackend(160, 16).create_canvas()
+        canvas_b = HeadlessBackend(160, 16).create_canvas()
         draw_sailor_moon_frame(canvas_a, 0.50, width=160, height=16)
         draw_sailor_moon_frame(canvas_b, 0.51, width=160, height=16)
         # Pixels should differ due to twinkle
@@ -88,18 +88,18 @@ class TestDrawSailorMoonFrame:
 
 class TestDrawSailorMoonFrameRTL:
     def test_at_zero_wand_offscreen(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_sailor_moon_frame_rtl(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_sailor_moon_frame_rtl(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_sprite_is_flipped(self):
         """RTL sprite should be at different positions than LTR."""
-        canvas_ltr = _StubCanvas(width=160, height=16)
-        canvas_rtl = _StubCanvas(width=160, height=16)
+        canvas_ltr = HeadlessBackend(160, 16).create_canvas()
+        canvas_rtl = HeadlessBackend(160, 16).create_canvas()
         draw_sailor_moon_frame(canvas_ltr, 0.3, width=160, height=16)
         draw_sailor_moon_frame_rtl(canvas_rtl, 0.3, width=160, height=16)
         ltr_pixels = set(canvas_ltr._pixels.keys())
@@ -108,14 +108,14 @@ class TestDrawSailorMoonFrameRTL:
 
     def test_blackout_zone_is_black_rtl(self):
         """Right edge should be blacked out when wand is mid-screen."""
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_sailor_moon_frame_rtl(canvas, 0.7, width=160, height=16)
         for y in range(16):
             pixel = canvas._pixels.get((159, y), (0, 0, 0))
             assert pixel == (0, 0, 0), f"Expected black at (159, {y}), got {pixel}"
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_sailor_moon_frame_rtl(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -128,7 +128,7 @@ class TestSailorMoonTransition:
     # the loader; core get_transition_class does not apply here.
 
     def test_frame_at_draws_to_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         sm = SailorMoon()
@@ -136,7 +136,7 @@ class TestSailorMoonTransition:
         assert result is pixel_canvas
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         sm = SailorMoon()
@@ -145,7 +145,7 @@ class TestSailorMoonTransition:
         assert not incoming.draw.called
 
     def test_complete_shows_incoming_only(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         sm = SailorMoon()
@@ -158,7 +158,7 @@ class TestSailorMoonReverseTransition:
     # Dropped: test_registered — same reason as above.
 
     def test_at_one_shows_incoming(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         sm = SailorMoonReverse()
@@ -167,7 +167,7 @@ class TestSailorMoonReverseTransition:
         assert incoming.draw.called
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         sm = SailorMoonReverse()
@@ -180,7 +180,7 @@ class TestSailorMoonAlternating:
     # Dropped: test_registered — same reason as above.
 
     def test_alternates_direction(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         alt = SailorMoonAlternating()
@@ -193,7 +193,7 @@ class TestSailorMoonAlternating:
         alt.frame_at(1.0, pixel_canvas, outgoing, incoming)
 
         # Second cycle: RTL (t resets to 0)
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         alt.frame_at(0.3, pixel_canvas, outgoing, incoming)
         canvas_b = dict(pixel_canvas._pixels)
 
@@ -236,22 +236,17 @@ class TestScaleSwitchAt:
 
         from led_ticker.scaled_canvas import ScaledCanvas
         from led_ticker.transitions import run_transition
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         monkeypatch.setattr(asyncio, "sleep", mock.AsyncMock())
 
-        opts = RGBMatrixOptions()
-        opts.cols = 64
-        opts.rows = 32
-        opts.chain_length = 8
-        opts.parallel = 1
-        opts.pixel_mapper_config = "U-mapper"
-        real_canvas = RGBMatrix(options=opts).CreateFrameCanvas()
+        real_canvas = HeadlessBackend(
+            512, 32, pixel_mapper_config="U-mapper"
+        ).create_canvas()
 
         outgoing_canvas = ScaledCanvas(real_canvas, scale=2, content_height=32)
 
         frame = mock.Mock()
-        frame.matrix.CreateFrameCanvas.return_value = real_canvas
+        frame.create_canvas.return_value = real_canvas
         # frame.swap() receives the underlying real canvas and must return a
         # physical canvas (not a wrapper); _swap then rewires wrapper.real.
         frame.swap.return_value = real_canvas

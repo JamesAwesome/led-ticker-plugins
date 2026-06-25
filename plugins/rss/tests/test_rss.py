@@ -96,9 +96,9 @@ class TestRssBgColor:
     def test_bg_color_propagates_to_stories(self, mock_session):
         """bg_color set on the container propagates to every story
         TickerMessage in feed_stories."""
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
-        bg = Color(40, 50, 60)
+        bg = make_color(40, 50, 60)
         feed = RSSFeedMonitor(
             session=mock_session, feed_url="https://example.com/feed", bg_color=bg
         )
@@ -114,9 +114,9 @@ class TestRssBgColor:
 
     async def test_update_threads_bg_color(self, mock_session):
         """After update(), every story and the title carry bg_color."""
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
-        bg = Color(40, 50, 60)
+        bg = make_color(40, 50, 60)
         feed = RSSFeedMonitor(
             session=mock_session, feed_url="https://example.com/feed", bg_color=bg
         )

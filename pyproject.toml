@@ -22,12 +22,13 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pyright]
 pythonPlatform = "All"
 pythonVersion = "3.14"
-extraPaths = ["tests/stubs"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-# Vendored stub on the import path; run pytest from the repo root.
-pythonpath = ["tests/stubs", "."]
+# Repo root on the import path so the root tests/ package resolves; run pytest
+# from the repo root. (The headless canvas now comes from led_ticker.plugin's
+# shipped HeadlessBackend — no vendored rgbmatrix stub on the path.)
+pythonpath = ["."]
 # importlib import mode so members can share test basenames (test_smoke.py,
 # test_import_purity.py) across plugins without __init__.py collisions when
 # the whole workspace is collected at once (make test). Per-member CI runs

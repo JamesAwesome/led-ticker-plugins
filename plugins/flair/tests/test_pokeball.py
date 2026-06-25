@@ -1,6 +1,6 @@
 """Tests for the Pokeball transition."""
 
-from rgbmatrix import _StubCanvas
+from led_ticker.plugin import HeadlessBackend
 
 from led_ticker_flair.pokeball.pokeball import (
     PIKACHU_FRAMES,
@@ -64,16 +64,16 @@ class TestPikachuSprite:
 
 class TestDrawPokeballFrame:
     def test_at_zero_ball_offscreen_left(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pokeball_frame(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pokeball_frame(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_left_of_ball(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         # Pre-fill canvas to simulate outgoing text
         for y in range(16):
             for x in range(160):
@@ -83,7 +83,7 @@ class TestDrawPokeballFrame:
         assert canvas.get_pixel(0, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_pokeball_frame(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -95,7 +95,7 @@ class TestDrawPokeballFrame:
         prev_black = 0
         for step in range(1, 11):
             p = step / 10.0
-            canvas = _StubCanvas(width=80, height=16)
+            canvas = HeadlessBackend(80, 16).create_canvas()
             for y in range(16):
                 for x in range(80):
                     canvas.SetPixel(x, y, 100, 100, 100)
@@ -107,7 +107,7 @@ class TestDrawPokeballFrame:
 
 class TestPokeballTransition:
     def test_frame_at_draws_to_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         poke = Pokeball()
@@ -115,7 +115,7 @@ class TestPokeballTransition:
         assert result is pixel_canvas
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         poke = Pokeball()
@@ -123,7 +123,7 @@ class TestPokeballTransition:
         assert outgoing.draw.called
 
     def test_complete_shows_incoming_only(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         poke = Pokeball()
@@ -132,7 +132,7 @@ class TestPokeballTransition:
         assert incoming.draw.called
 
     def test_returns_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         poke = Pokeball()
         result = poke.frame_at(0.5, pixel_canvas, make_widget(40), make_widget(40))
         assert result is pixel_canvas
@@ -140,16 +140,16 @@ class TestPokeballTransition:
 
 class TestDrawPokeballFrameRTL:
     def test_at_zero_ball_offscreen_right(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pokeball_frame_rtl(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pokeball_frame_rtl(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_right_of_ball(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 100, 100, 100)
@@ -157,7 +157,7 @@ class TestDrawPokeballFrameRTL:
         assert canvas.get_pixel(159, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_pokeball_frame_rtl(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -165,8 +165,8 @@ class TestDrawPokeballFrameRTL:
                 assert 0 <= y < 16
 
     def test_sprite_is_flipped(self):
-        canvas_ltr = _StubCanvas(width=160, height=16)
-        canvas_rtl = _StubCanvas(width=160, height=16)
+        canvas_ltr = HeadlessBackend(160, 16).create_canvas()
+        canvas_rtl = HeadlessBackend(160, 16).create_canvas()
         draw_pokeball_frame(canvas_ltr, 0.3, width=160, height=16)
         draw_pokeball_frame_rtl(canvas_rtl, 0.3, width=160, height=16)
         ltr_pixels = set(canvas_ltr._pixels.keys())
@@ -176,7 +176,7 @@ class TestDrawPokeballFrameRTL:
 
 class TestPokeballReverseTransition:
     def test_complete_shows_incoming(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         poke = PokeballReverse()
@@ -185,7 +185,7 @@ class TestPokeballReverseTransition:
         assert incoming.draw.called
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         poke = PokeballReverse()
@@ -196,7 +196,7 @@ class TestPokeballReverseTransition:
 class TestPokeballAlternatingTransition:
     def test_alternates_direction(self, make_widget):
         poke = PokeballAlternating()
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         # First cycle — t drops below last_t (1.0), advances to index 0
         poke.frame_at(0.0, canvas, make_widget(40), make_widget(40))
         assert poke._index == 0
@@ -236,14 +236,8 @@ class TestPokeballDispatch:
         import unittest.mock as mock_mod
 
         from led_ticker.plugin import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
         outgoing = mock_mod.MagicMock()
         incoming = mock_mod.MagicMock()
@@ -283,14 +277,8 @@ class TestPokeballAlternatingDelegatesToHires:
         import unittest.mock as mock_mod
 
         from led_ticker.plugin import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
         outgoing = mock_mod.MagicMock()
         incoming = mock_mod.MagicMock()
@@ -317,7 +305,7 @@ class TestLowresShowPokeballToggle:
         # Filter out black (background / Pikachu shares some neutrals).
         ball_colors.discard((0, 0, 0))
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_pokeball_frame(
             canvas,
             0.5,
@@ -340,7 +328,7 @@ class TestLowresShowPokeballToggle:
                 ball_colors.add((r, g, b))
         ball_colors.discard((0, 0, 0))
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_pokeball_frame_rtl(
             canvas,
             0.5,
@@ -364,7 +352,7 @@ class TestLowresShowPokeballToggle:
                 ball_colors.add((r, g, b))
         ball_colors.discard((0, 0, 0))
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_pokeball_frame(
             canvas,
             0.5,
@@ -450,9 +438,8 @@ class TestScaleSwitchAt:
 
 def test_pokeball_renders_hires_at_scale_4():
     from led_ticker.plugin import ScaledCanvas
-    from rgbmatrix import _StubCanvas
 
-    real = _StubCanvas(width=256, height=64)
+    real = HeadlessBackend(256, 64).create_canvas()
     wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
     class _W:
@@ -469,9 +456,8 @@ def test_pokeball_renders_hires_at_scale_4():
 
 def _render_pixels(pokeball_obj, t=0.4, width=256):
     from led_ticker.plugin import ScaledCanvas
-    from rgbmatrix import _StubCanvas
 
-    real = _StubCanvas(width=width, height=64)
+    real = HeadlessBackend(width, 64).create_canvas()
     wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
     class _W:

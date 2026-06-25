@@ -785,9 +785,9 @@ class TestBgColor:
         assert "bg_color" in names
 
     def test_bg_color_propagates_to_title_and_stories(self):
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
-        bg = Color(11, 22, 33)
+        bg = make_color(11, 22, 33)
         widget = make_widget(bg_color=bg, stats=["longest_hr"])
         widget._set_title()
         assert widget.feed_title.bg_color is bg

@@ -1,6 +1,6 @@
 """Tests for the Pac-Man transition."""
 
-from rgbmatrix import _StubCanvas
+from led_ticker.plugin import HeadlessBackend
 
 from led_ticker_flair.pacman.pacman import (
     GHOST_FRAMES,
@@ -62,16 +62,16 @@ class TestGhostSprite:
 
 class TestDrawPacmanFrame:
     def test_at_zero_group_offscreen_left(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pacman_frame(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_pacman_frame(canvas, 0.5, width=160, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_left_of_pacman(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 100, 100, 100)
@@ -79,7 +79,7 @@ class TestDrawPacmanFrame:
         assert canvas.get_pixel(0, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_pacman_frame(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -90,7 +90,7 @@ class TestDrawPacmanFrame:
         prev_black = 0
         for step in range(1, 11):
             p = step / 10.0
-            canvas = _StubCanvas(width=160, height=16)
+            canvas = HeadlessBackend(160, 16).create_canvas()
             for y in range(16):
                 for x in range(160):
                     canvas.SetPixel(x, y, 100, 100, 100)
@@ -112,7 +112,7 @@ class TestPacmanBlackoutFrontEdge:
             draw_pacman_frame,
         )
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         # Pre-paint the panel red so we can detect what got blacked out.
         for y in range(16):
             for x in range(160):
@@ -157,7 +157,7 @@ class TestPacmanBlackoutFrontEdge:
             draw_pacman_frame_rtl,
         )
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 255, 0, 0)
@@ -191,16 +191,16 @@ class TestPacmanBlackoutFrontEdge:
 
 class TestDrawPacmanFrameRTL:
     def test_at_zero_group_offscreen_right(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_pacman_frame_rtl(canvas, 0.0, width=40, height=16)
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_pacman_frame_rtl(canvas, 0.5, width=160, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_blackout_right_of_pacman(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         for y in range(16):
             for x in range(160):
                 canvas.SetPixel(x, y, 100, 100, 100)
@@ -208,7 +208,7 @@ class TestDrawPacmanFrameRTL:
         assert canvas.get_pixel(159, 8) == (0, 0, 0)
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_pacman_frame_rtl(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -216,8 +216,8 @@ class TestDrawPacmanFrameRTL:
                 assert 0 <= y < 16
 
     def test_sprite_is_flipped(self):
-        canvas_ltr = _StubCanvas(width=160, height=16)
-        canvas_rtl = _StubCanvas(width=160, height=16)
+        canvas_ltr = HeadlessBackend(160, 16).create_canvas()
+        canvas_rtl = HeadlessBackend(160, 16).create_canvas()
         draw_pacman_frame(canvas_ltr, 0.3, width=160, height=16)
         draw_pacman_frame_rtl(canvas_rtl, 0.3, width=160, height=16)
         ltr_pixels = set(canvas_ltr._pixels.keys())
@@ -231,7 +231,7 @@ class TestPacmanTransition:
     # registry. Registration smoke-test is covered by tests/test_smoke.py.
 
     def test_frame_at_draws_to_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(160)
         incoming = make_widget(160)
         pm = Pacman()
@@ -239,7 +239,7 @@ class TestPacmanTransition:
         assert result is pixel_canvas
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(160)
         incoming = make_widget(160)
         pm = Pacman()
@@ -247,7 +247,7 @@ class TestPacmanTransition:
         assert outgoing.draw.called
 
     def test_complete_shows_incoming_only(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(160)
         incoming = make_widget(160)
         pm = Pacman()
@@ -256,7 +256,7 @@ class TestPacmanTransition:
         assert incoming.draw.called
 
     def test_returns_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         pm = Pacman()
         result = pm.frame_at(0.5, pixel_canvas, make_widget(160), make_widget(160))
         assert result is pixel_canvas
@@ -266,7 +266,7 @@ class TestPacmanReverseTransition:
     # test_registered DROPPED: same reason as TestPacmanTransition.
 
     def test_complete_shows_incoming(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(160)
         incoming = make_widget(160)
         pm = PacmanReverse()
@@ -275,7 +275,7 @@ class TestPacmanReverseTransition:
         assert incoming.draw.called
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=160, height=16)
+        pixel_canvas = HeadlessBackend(160, 16).create_canvas()
         outgoing = make_widget(160)
         incoming = make_widget(160)
         pm = PacmanReverse()
@@ -288,7 +288,7 @@ class TestPacmanAlternatingTransition:
 
     def test_alternates_direction(self, make_widget):
         pm = PacmanAlternating()
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         pm.frame_at(0.0, canvas, make_widget(160), make_widget(160))
         assert pm._index == 0
         pm.frame_at(1.0, canvas, make_widget(160), make_widget(160))

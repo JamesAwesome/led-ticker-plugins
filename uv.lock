@@ -283,7 +283,7 @@ wheels = [
 
 [[package]]
 name = "led-ticker-baseball"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "plugins/baseball" }
 dependencies = [
     { name = "aiohttp" },
@@ -317,7 +317,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-calendar"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "plugins/calendar" }
 dependencies = [
     { name = "aiohttp" },
@@ -353,7 +353,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-core"
-version = "2.0.0"
+version = "2.1.0"
 source = { editable = "../led-ticker" }
 dependencies = [
     { name = "aiohttp" },
@@ -384,7 +384,7 @@ provides-extras = ["render", "dev"]
 
 [[package]]
 name = "led-ticker-crypto"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "plugins/crypto" }
 dependencies = [
     { name = "aiohttp" },
@@ -416,7 +416,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-flair"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "plugins/flair" }
 dependencies = [
     { name = "led-ticker-core" },
@@ -446,7 +446,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-pool"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "plugins/pool" }
 dependencies = [
     { name = "aiohttp" },
@@ -478,7 +478,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-rss"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "plugins/rss" }
 dependencies = [
     { name = "aiohttp" },
@@ -512,7 +512,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-weather"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "plugins/weather" }
 dependencies = [
     { name = "aiohttp" },

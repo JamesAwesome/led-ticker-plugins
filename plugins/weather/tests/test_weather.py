@@ -98,7 +98,7 @@ def test_weather_bg_color_default_is_none(monkeypatch):
 
 def test_weather_bg_color_accepts_color(monkeypatch):
     monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
-    from rgbmatrix.graphics import Color
+    from led_ticker.plugin import make_color
 
     from led_ticker_weather.weather import WeatherWidget
 
@@ -106,7 +106,7 @@ def test_weather_bg_color_accepts_color(monkeypatch):
         session=mock.Mock(),
         location="London",
         text="London",
-        bg_color=Color(5, 10, 15),
+        bg_color=make_color(5, 10, 15),
     )
     assert w.bg_color.red == 5
 
@@ -118,7 +118,7 @@ class TestWeatherColorProvider:
 
     def test_font_color_wrapped_to_constant_provider_in_post_init(self):
         from led_ticker.color_providers import _ConstantColor
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -126,13 +126,13 @@ class TestWeatherColorProvider:
             session=mock.Mock(),
             text="NYC",
             location="NYC",
-            font_color=Color(255, 0, 0),
+            font_color=make_color(255, 0, 0),
         )
         assert isinstance(w.font_color, _ConstantColor)
 
     def test_font_color_temp_wrapped_to_constant_provider(self):
         from led_ticker.color_providers import _ConstantColor
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -140,7 +140,7 @@ class TestWeatherColorProvider:
             session=mock.Mock(),
             text="NYC",
             location="NYC",
-            font_color_temp=Color(0, 255, 0),
+            font_color_temp=make_color(0, 255, 0),
         )
         assert isinstance(w.font_color_temp, _ConstantColor)
 
@@ -171,10 +171,10 @@ class _TrackingProvider:
         self.calls: list[tuple[int, int, int]] = []
 
     def color_for(self, frame, char_index, total_chars):
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
         self.calls.append((frame, char_index, total_chars))
-        return Color(255, 255, 255)
+        return make_color(255, 255, 255)
 
 
 class TestWeatherPerCharProviderDispatch:
@@ -187,7 +187,7 @@ class TestWeatherPerCharProviderDispatch:
     """
 
     def test_label_per_char_provider_iterates_chars(self):
-        from rgbmatrix import _StubCanvas
+        from led_ticker.plugin import HeadlessBackend
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -202,7 +202,7 @@ class TestWeatherPerCharProviderDispatch:
         w.current_temp = 64
         w.unit_symbol = "F"
         w.weather = "Sunny"
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
 
         w.draw(canvas)
 
@@ -225,7 +225,7 @@ class TestWeatherPerCharProviderDispatch:
     def test_temp_per_char_provider_iterates_chars(self):
         """font_color_temp is a separate provider for the temperature
         value. Should also dispatch per-char."""
-        from rgbmatrix import _StubCanvas
+        from led_ticker.plugin import HeadlessBackend
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -239,7 +239,7 @@ class TestWeatherPerCharProviderDispatch:
         w.current_temp = 64
         w.unit_symbol = "F"
         w.weather = "Sunny"
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
 
         w.draw(canvas)
 
@@ -270,7 +270,7 @@ class TestWeatherPerEffectCounter:
         `_frame_count`. Pre-populate the counter and verify it
         flows through.
         """
-        from rgbmatrix import _StubCanvas
+        from led_ticker.plugin import HeadlessBackend
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -289,7 +289,7 @@ class TestWeatherPerEffectCounter:
         w._effect_frames["font_color"] = 77
         w._frame_count = 0
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         w.draw(canvas)
 
         # Every call to the label provider must see frame=77 — the
@@ -307,7 +307,7 @@ class TestWeatherPerEffectCounter:
         `font_color`'s counter. This is why the two are separate
         registrations in `_EFFECT_ATTRS`.
         """
-        from rgbmatrix import _StubCanvas
+        from led_ticker.plugin import HeadlessBackend
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -327,7 +327,7 @@ class TestWeatherPerEffectCounter:
         w._effect_frames["font_color_temp"] = 99
         w._frame_count = 0
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         w.draw(canvas)
 
         assert temp_provider.calls, "temp provider should have been called"
@@ -357,18 +357,12 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         weather icon."""
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
         from led_ticker import pixel_emoji
+        from led_ticker.plugin import HeadlessBackend
         from led_ticker.scaled_canvas import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         from led_ticker_weather.weather import WeatherWidget
 
-        opts = RGBMatrixOptions()
-        opts.cols = 64
-        opts.rows = 32
-        opts.chain_length = 8
-        opts.parallel = 1
-        opts.pixel_mapper_config = "U-mapper"
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(512, 32, pixel_mapper_config="U-mapper").create_canvas()
         sc = ScaledCanvas(real, scale=4)
 
         calls: list[str] = []
@@ -400,18 +394,12 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         acknowledgement when a variant lands. Acknowledging now."""
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
         from led_ticker import pixel_emoji
+        from led_ticker.plugin import HeadlessBackend
         from led_ticker.scaled_canvas import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         from led_ticker_weather.weather import WeatherWidget
 
-        opts = RGBMatrixOptions()
-        opts.cols = 64
-        opts.rows = 32
-        opts.chain_length = 8
-        opts.parallel = 1
-        opts.pixel_mapper_config = "U-mapper"
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(512, 32, pixel_mapper_config="U-mapper").create_canvas()
         sc = ScaledCanvas(real, scale=4)
 
         calls: list[str] = []
@@ -449,18 +437,12 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         from led_ticker import pixel_emoji
         from led_ticker.drawing import compute_baseline
         from led_ticker.fonts import resolve_font
+        from led_ticker.plugin import HeadlessBackend
         from led_ticker.scaled_canvas import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         from led_ticker_weather.weather import WeatherWidget
 
-        opts = RGBMatrixOptions()
-        opts.cols = 64
-        opts.rows = 32
-        opts.chain_length = 8
-        opts.parallel = 1
-        opts.pixel_mapper_config = "U-mapper"
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(512, 32, pixel_mapper_config="U-mapper").create_canvas()
         sc = ScaledCanvas(real, scale=4)
 
         captured_baseline: list[int] = []
@@ -510,18 +492,12 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         width is wrong.
         """
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+        from led_ticker.plugin import HeadlessBackend
         from led_ticker.scaled_canvas import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         from led_ticker_weather.weather import WeatherWidget
 
-        opts = RGBMatrixOptions()
-        opts.cols = 64
-        opts.rows = 32
-        opts.chain_length = 8
-        opts.parallel = 1
-        opts.pixel_mapper_config = "U-mapper"
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(512, 32, pixel_mapper_config="U-mapper").create_canvas()
         sc = ScaledCanvas(real, scale=2, content_height=16)
         # 256 real wide / scale=2 = 128 logical wide.
         assert sc.width == 128
@@ -556,7 +532,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         passed the formula tripwire.
         """
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
-        from rgbmatrix import _StubCanvas
+        from led_ticker.plugin import HeadlessBackend
 
         from led_ticker_weather.weather import WeatherWidget
 
@@ -575,7 +551,7 @@ class TestWeatherWidgetHiresOnScaledCanvas:
         # draw(), so it could patch the source module — the plugin can't.
         monkeypatch.setattr("led_ticker_weather.weather.draw_emoji_at", spy)
 
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         w = WeatherWidget(session=mock.Mock(), location="NYC", text="NYC")
         w.current_temp = 72
         w.weather = "Clear"

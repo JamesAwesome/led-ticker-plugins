@@ -646,20 +646,22 @@ class TestMlbBgColor:
         assert "bg_color" in names
 
     def test_accepts_bg_color(self):
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
-        w = MLBScoreMonitor(session=mock.Mock(), team="NYY", bg_color=Color(70, 80, 90))
+        w = MLBScoreMonitor(
+            session=mock.Mock(), team="NYY", bg_color=make_color(70, 80, 90)
+        )
         assert w.bg_color.red == 70
 
     def test_game_message_has_bg_color_field(self):
         """SegmentMessage needs bg_color so the orchestrator can read it."""
+        from led_ticker.plugin import make_color
+
         msg = SegmentMessage(
             [
                 (
                     "NYY 4 BOS 2 (Final)",
-                    __import__("rgbmatrix.graphics", fromlist=["Color"]).Color(
-                        255, 255, 255
-                    ),
+                    make_color(255, 255, 255),
                 )
             ]
         )
@@ -667,11 +669,11 @@ class TestMlbBgColor:
         assert msg.bg_color is None  # default
 
     def test_game_message_accepts_bg_color(self):
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
-        bg = Color(10, 20, 30)
+        bg = make_color(10, 20, 30)
         msg = SegmentMessage(
-            [("NYY", Color(255, 255, 255))],
+            [("NYY", make_color(255, 255, 255))],
             bg_color=bg,
         )
         assert msg.bg_color is bg
@@ -771,17 +773,13 @@ class TestMLBTwoRowLayout:
         """On a wide canvas the abbr matchup expands to full team names."""
         from led_ticker.colors import RGB_WHITE
         from led_ticker.fonts import FONT_SMALL
+        from led_ticker.plugin import HeadlessBackend
         from led_ticker.scaled_canvas import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         from led_ticker_baseball.scores import _expand_matchup_if_fits
         from led_ticker_baseball.teams import _team_color
 
-        opts = RGBMatrixOptions()
-        opts.rows = 64
-        opts.cols = 256
-        opts.chain_length = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         canvas = ScaledCanvas(real, scale=2)  # 128 logical wide — ample room
 
         top = [

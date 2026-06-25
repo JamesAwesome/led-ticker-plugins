@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-weather"
-version = "0.2.0"
+version = "0.2.1"
 description = "Current-conditions weather widget for led-ticker (weather.current)."
 readme = "README.md"
 license = "MIT"
@@ -28,7 +28,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=2.0",
+    "led-ticker-core>=2.1",
     "aiohttp",
 ]
 

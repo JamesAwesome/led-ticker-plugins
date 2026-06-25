@@ -138,9 +138,9 @@ def _live_game() -> GameInfo:
 
 
 def _stub_canvas(w=128, h=16):
-    from rgbmatrix import _StubCanvas
+    from led_ticker.plugin import HeadlessBackend
 
-    return _StubCanvas(width=w, height=h)
+    return HeadlessBackend(w, h).create_canvas()
 
 
 def test_scoreboard_draw_live_returns_correct_cursor():
@@ -776,11 +776,11 @@ async def test_update_parse_error_shows_no_data_not_stale():
     monitor._team_id = 143
     monitor._tz = ZoneInfo("America/New_York")
 
-    from rgbmatrix.graphics import Color
+    from led_ticker.plugin import make_color
 
     from led_ticker_baseball.scores import SegmentMessage
 
-    stale = SegmentMessage([("PHI 5 NYM 3 (Final)", Color(255, 255, 255))])
+    stale = SegmentMessage([("PHI 5 NYM 3 (Final)", make_color(255, 255, 255))])
     monitor.feed_stories = [stale]
 
     resp = mock.AsyncMock()

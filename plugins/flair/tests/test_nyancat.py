@@ -1,7 +1,6 @@
 """Tests for the Nyan Cat transition."""
 
-from led_ticker.plugin import SNAP_THRESHOLD
-from rgbmatrix import _StubCanvas
+from led_ticker.plugin import SNAP_THRESHOLD, HeadlessBackend
 
 from led_ticker_flair.nyancat.nyancat import (
     NYAN_CAT,
@@ -36,25 +35,25 @@ class TestNyanCatSprite:
 
 class TestDrawNyanFrame:
     def test_at_zero_cat_offscreen_left(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_nyan_frame(canvas, 0.0, width=40, height=16)
         # Cat is at x=-12, mostly offscreen. Some pixels
         # may be visible if sprite overlaps x=0.
         # Rainbow trail_end = -12, so no rainbow visible either.
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_nyan_frame(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_at_one_cat_offscreen_right(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_nyan_frame(canvas, 1.0, width=40, height=16)
         # Rainbow should fill most of the canvas
         assert canvas.count_nonzero() > 0
 
     def test_rainbow_colors_present_at_midpoint(self):
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_nyan_frame(canvas, 0.5, width=160, height=16)
         # Check that rainbow stripe colors appear
         found_colors = set()
@@ -66,7 +65,7 @@ class TestDrawNyanFrame:
         assert len(found_colors & rainbow_set) >= 3
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_nyan_frame(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -78,7 +77,7 @@ class TestDrawNyanFrame:
         prev_count = 0
         for step in range(1, 11):
             p = step / 10.0
-            canvas = _StubCanvas(width=80, height=16)
+            canvas = HeadlessBackend(80, 16).create_canvas()
             draw_nyan_frame(canvas, p, width=80, height=16)
             count = canvas.count_nonzero()
             assert count >= prev_count
@@ -87,7 +86,7 @@ class TestDrawNyanFrame:
 
 class TestNyanCatTransition:
     def test_frame_at_draws_to_canvas(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCat()
@@ -95,7 +94,7 @@ class TestNyanCatTransition:
         assert result is pixel_canvas
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCat()
@@ -105,7 +104,7 @@ class TestNyanCatTransition:
 
     def test_complete_shows_incoming_only(self, make_widget):
         """At t=1.0, only incoming should be drawn."""
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCat()
@@ -115,7 +114,7 @@ class TestNyanCatTransition:
 
     def test_no_early_cut_after_cat_exits(self, make_widget):
         """Outgoing should still be drawn after cat exits right edge."""
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCat()
@@ -128,7 +127,7 @@ class TestNyanCatTransition:
 class TestNyanCatRainbowCoverage:
     def test_rainbow_covers_left_edge_near_end(self):
         """At t=0.99, rainbow should cover x=0."""
-        canvas = _StubCanvas(width=160, height=16)
+        canvas = HeadlessBackend(160, 16).create_canvas()
         draw_nyan_frame(canvas, 0.99, width=160, height=16)
         # Check a rainbow row at x=0
         y = RAINBOW_TOP_Y
@@ -137,7 +136,7 @@ class TestNyanCatRainbowCoverage:
 
     def test_rainbow_covers_full_width_at_end(self):
         """At t=1.0, rainbow should cover x=0 to x=width-1."""
-        canvas = _StubCanvas(width=80, height=16)
+        canvas = HeadlessBackend(80, 16).create_canvas()
         draw_nyan_frame(canvas, 1.0, width=80, height=16)
         y = RAINBOW_TOP_Y
         for x in [0, 20, 40, 60, 79]:
@@ -147,18 +146,18 @@ class TestNyanCatRainbowCoverage:
 
 class TestDrawNyanFrameRTL:
     def test_at_zero_cat_offscreen_right(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_nyan_frame_rtl(canvas, 0.0, width=40, height=16)
         # Cat is at x=40, offscreen right. No rainbow visible.
 
     def test_at_midpoint_draws_pixels(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         draw_nyan_frame_rtl(canvas, 0.5, width=40, height=16)
         assert canvas.count_nonzero() > 0
 
     def test_rainbow_covers_right_edge_near_end(self):
         """RTL rainbow should cover x=width-1 near end."""
-        canvas = _StubCanvas(width=80, height=16)
+        canvas = HeadlessBackend(80, 16).create_canvas()
         draw_nyan_frame_rtl(canvas, 0.99, width=80, height=16)
         y = RAINBOW_TOP_Y
         pixel = canvas._pixels.get((79, y))
@@ -166,8 +165,8 @@ class TestDrawNyanFrameRTL:
 
     def test_sprite_is_flipped(self):
         """RTL sprite should be horizontally mirrored."""
-        canvas_ltr = _StubCanvas(width=160, height=16)
-        canvas_rtl = _StubCanvas(width=160, height=16)
+        canvas_ltr = HeadlessBackend(160, 16).create_canvas()
+        canvas_rtl = HeadlessBackend(160, 16).create_canvas()
         draw_nyan_frame(canvas_ltr, 0.3, width=160, height=16)
         draw_nyan_frame_rtl(canvas_rtl, 0.3, width=160, height=16)
         # Sprites at different x positions — pixel sets differ
@@ -176,7 +175,7 @@ class TestDrawNyanFrameRTL:
         assert ltr_pixels != rtl_pixels
 
     def test_no_out_of_bounds(self):
-        canvas = _StubCanvas(width=40, height=16)
+        canvas = HeadlessBackend(40, 16).create_canvas()
         for p in [0.0, 0.25, 0.5, 0.75, 1.0]:
             draw_nyan_frame_rtl(canvas, p, width=40, height=16)
             for x, y in canvas._pixels:
@@ -186,7 +185,7 @@ class TestDrawNyanFrameRTL:
 
 class TestNyanCatReverseTransition:
     def test_at_one_shows_incoming(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCatReverse()
@@ -195,7 +194,7 @@ class TestNyanCatReverseTransition:
         assert incoming.draw.called
 
     def test_midpoint_draws_outgoing(self, make_widget):
-        pixel_canvas = _StubCanvas(width=40, height=16)
+        pixel_canvas = HeadlessBackend(40, 16).create_canvas()
         outgoing = make_widget(40)
         incoming = make_widget(40)
         nyan = NyanCatReverse()
@@ -233,14 +232,8 @@ class TestNyanCatDispatch:
         import unittest.mock as mock_mod
 
         from led_ticker.plugin import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
         outgoing = mock_mod.MagicMock()
@@ -288,14 +281,8 @@ class TestNyanCatAlternatingDelegatesToHires:
         import unittest.mock as mock_mod
 
         from led_ticker.plugin import ScaledCanvas
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
-        opts = RGBMatrixOptions()
-        opts.cols = 256
-        opts.rows = 64
-        opts.chain_length = 1
-        opts.parallel = 1
-        real = RGBMatrix(options=opts).CreateFrameCanvas()
+        real = HeadlessBackend(256, 64).create_canvas()
         wrapped = ScaledCanvas(real, scale=4, content_height=16)
         outgoing = mock_mod.MagicMock()
         incoming = mock_mod.MagicMock()
@@ -334,9 +321,8 @@ class TestScaleSwitchAt:
 
 def test_nyancat_renders_hires_at_scale_4():
     from led_ticker.plugin import ScaledCanvas
-    from rgbmatrix import _StubCanvas
 
-    real = _StubCanvas(width=256, height=64)
+    real = HeadlessBackend(256, 64).create_canvas()
     wrapped = ScaledCanvas(real, scale=4, content_height=16)
 
     class _W:

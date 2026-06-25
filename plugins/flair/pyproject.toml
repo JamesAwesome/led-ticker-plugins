@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-flair"
-version = "0.1.0"
+version = "0.1.1"
 description = "Homage sprite-trail transitions for led-ticker: nyancat, pokeball, pacman, sailor_moon (+ :pokeball.ball:)."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -27,7 +27,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=2.0",
+    "led-ticker-core>=2.1",
 ]
 
 # Each entry-point NAME is a plugin namespace -> e.g. transition = "nyancat.forward".
