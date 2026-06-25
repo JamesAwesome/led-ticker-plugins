@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-calendar"
-version = "0.1.0"
+version = "0.1.1"
 description = "Calendar (.ics) agenda/next/two_row widget for led-ticker."
 readme = "README.md"
 license = "MIT"

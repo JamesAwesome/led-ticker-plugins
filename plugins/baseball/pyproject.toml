@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-baseball"
-version = "0.1.0"
+version = "0.1.1"
 description = "MLB scores/standings widgets, baseball emoji, and baseball transitions for led-ticker."
 readme = "README.md"
 license = "MIT"

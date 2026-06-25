@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-crypto"
-version = "0.2.0"
+version = "0.2.1"
 description = "Crypto-price widgets for led-ticker (CoinGecko)."
 readme = "README.md"
 license = "MIT"

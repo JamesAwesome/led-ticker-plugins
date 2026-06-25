@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-weather"
-version = "0.2.0"
+version = "0.2.1"
 description = "Current-conditions weather widget for led-ticker (weather.current)."
 readme = "README.md"
 license = "MIT"
