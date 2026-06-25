@@ -47,14 +47,8 @@ jobs:
       - uses: actions/checkout@v6.0.3
         with:
           path: led-ticker-plugins
-      # Sibling engine checkout (private; read-only deploy key) so the
-      # workspace led-ticker source resolves (incl. the shipped HeadlessBackend
-      # that tests use via led_ticker.plugin — no vendored stub anymore).
-      - uses: actions/checkout@v6.0.3
-        with:
-          repository: JamesAwesome/led-ticker
-          path: led-ticker
-          ssh-key: ${{ secrets.LED_TICKER_DEPLOY_KEY }}
+      # No engine checkout: led-ticker-core resolves from PyPI (>=2.1, ships the
+      # HeadlessBackend that tests use via led_ticker.plugin).
       - uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.14"

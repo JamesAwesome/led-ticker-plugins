@@ -22,15 +22,15 @@ The entry-point name `crypto` is the plugin namespace, so the config `type` is
 
 ## Commands
 
-led-ticker is **not on PyPI**; it resolves from a sibling checkout via
-`[tool.uv.sources] led-ticker = { path = "../led-ticker", editable = true }`. CI checks out
-`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). Tests
+`led-ticker-core` resolves from PyPI (`>=2.1`) like any other dependency — no sibling
+checkout, no `[tool.uv.sources]`, no deploy key. (To co-develop against an unreleased
+engine, add it editable on top: `uv pip install -e ../led-ticker`.) Tests
 that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix
 stub on the path, no sibling `../led-ticker/tests/stubs` plumbing.
 
 ```bash
-uv sync --extra dev          # install deps (needs ../led-ticker checked out)
+uv sync --extra dev          # install deps (led-ticker-core from PyPI)
 uv run pytest -q             # full suite (asyncio_mode = "auto")
 make lint                    # lint (monorepo root); or: uv run ruff check plugins/crypto
 ```
@@ -174,8 +174,8 @@ identity between the ported renderer and core's original. Retired after core's r
 removed in led-ticker#188; see PR history for the comparison baseline.
 
 CI is the monorepo's single root path-filtered per-member matrix (`.github/workflows/ci.yml`):
-it checks out led-ticker as a sibling (deploy key), Python 3.14, `uv sync --extra dev`, then
-runs ruff check, ruff format --check, pyright, and pytest for the changed member.
+Python 3.14, `uv sync --extra dev` (led-ticker-core from PyPI), then runs ruff check,
+ruff format --check, pyright, and pytest for the changed member.
 
 ## Adding to the plugin
 

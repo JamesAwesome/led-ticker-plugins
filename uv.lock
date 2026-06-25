@@ -304,7 +304,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pillow" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
@@ -340,7 +340,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "icalendar", specifier = ">=6.1" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -354,7 +354,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "led-ticker-core"
 version = "2.1.0"
-source = { editable = "../led-ticker" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "attrs" },
@@ -362,25 +362,10 @@ dependencies = [
     { name = "pillow" },
     { name = "tomli-w" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = ">=3.9" },
-    { name = "attrs", specifier = ">=23.0" },
-    { name = "feedparser", specifier = ">=6.0" },
-    { name = "imageio", marker = "extra == 'render'", specifier = ">=2.31" },
-    { name = "pillow", specifier = ">=10.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
-    { name = "tomli-w", specifier = ">=1.0" },
-    { name = "tomli-w", marker = "extra == 'render'", specifier = ">=1.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/e9/71/1941d911631fb1aff4a6e6df8837fbabf2e81807fcde4757c2b8f5993bb8/led_ticker_core-2.1.0.tar.gz", hash = "sha256:914c15e0ef1b0963a557937b5f7b920a1944b11b436eccb04bd81c9cae89e0e8", size = 18650902, upload-time = "2026-06-24T21:16:12.593Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/5c/9239dc708e213da8b537c5beab99bc6602f2d75be143913f3a850212101f/led_ticker_core-2.1.0-py3-none-any.whl", hash = "sha256:2737626d0ee2c3c54b240939f89997b32970fff1c8831181528f958fcf20764d", size = 955822, upload-time = "2026-06-24T21:16:10.584Z" },
 ]
-provides-extras = ["render", "dev"]
 
 [[package]]
 name = "led-ticker-crypto"
@@ -404,7 +389,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -434,7 +419,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -466,7 +451,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -500,7 +485,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "feedparser", specifier = ">=6.0" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -532,7 +517,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "led-ticker-core", editable = "../led-ticker" },
+    { name = "led-ticker-core", specifier = ">=2.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

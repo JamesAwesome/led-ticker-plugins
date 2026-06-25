@@ -3,14 +3,11 @@
 [tool.uv.workspace]
 members = ["plugins/*"]
 
-# The engine is a sibling checkout, sourced once here for the whole workspace.
-# pip/git installs ignore this (uv-only metadata) and resolve led-ticker-core from
-# the pre-installed, constraint-pinned engine — see docs/spike/p0-install-model.md.
-# NOTE: the key MUST match the engine's distribution name (`led-ticker-core`), which
-# members depend on as `led-ticker-core>=2.0`; the `../led-ticker` value is just the
-# sibling checkout directory name (set by CI's `path: led-ticker`).
-[tool.uv.sources]
-led-ticker-core = { path = "../led-ticker", editable = true }
+# The engine (`led-ticker-core`) resolves from PyPI like any other dependency;
+# members declare `led-ticker-core>=2.1` (the release shipping HeadlessBackend, the
+# software backend tests use via `led_ticker.plugin`). No sibling checkout / uv
+# source override is needed. To co-develop against an unreleased engine, install it
+# editable on top of the synced env: `uv pip install -e ../led-ticker`.
 
 [tool.ruff]
 target-version = "py314"

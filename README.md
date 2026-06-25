@@ -33,7 +33,7 @@ pip install led-ticker-<name>   # e.g. pip install led-ticker-weather
 ## Develop
 
 ```bash
-make dev    # uv sync the whole workspace (needs a sibling ../led-ticker checkout)
+make dev    # uv sync the whole workspace (led-ticker-core from PyPI)
 make test   # pytest every member
 make lint   # ruff + pyright
 ```
