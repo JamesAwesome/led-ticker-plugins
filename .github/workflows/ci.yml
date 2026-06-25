@@ -48,7 +48,8 @@ jobs:
         with:
           path: led-ticker-plugins
       # Sibling engine checkout (private; read-only deploy key) so the
-      # workspace led-ticker source resolves and the vendored stub matches.
+      # workspace led-ticker source resolves (incl. the shipped HeadlessBackend
+      # that tests use via led_ticker.plugin — no vendored stub anymore).
       - uses: actions/checkout@v6.0.3
         with:
           repository: JamesAwesome/led-ticker

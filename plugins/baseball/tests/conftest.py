@@ -2,9 +2,10 @@
 
 The ported scores/scoreboard tests came from core, where a ``canvas`` fixture
 (a simple Mock with width/height) lives in core's ``tests/conftest.py``. The
-plugin doesn't ship core's conftest, so re-provide the same fixture here. The
-rgbmatrix stub is already on the pytest path via ``pythonpath`` in
-``pyproject.toml`` (``../led-ticker/tests/stubs``).
+plugin doesn't ship core's conftest, so re-provide the same fixture here. Tests
+that need a real headless canvas obtain one via
+``HeadlessBackend(...).create_canvas()`` from ``led_ticker.plugin`` (the shipped
+headless backend in led-ticker-core).
 """
 
 import unittest.mock as mock

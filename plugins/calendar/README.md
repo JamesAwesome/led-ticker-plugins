@@ -167,11 +167,7 @@ uv run pytest -q
 uv run ruff check src tests
 ```
 
-The test suite needs the rgbmatrix stub on the path — `pyproject.toml` wires this automatically via `pythonpath = ["../led-ticker/tests/stubs"]`. To run tests manually without the project config:
-
-```bash
-PYTHONPATH=../led-ticker/tests/stubs uv run pytest -q
-```
+Tests that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from `led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix stub or `PYTHONPATH` plumbing required.
 
 The plugin imports only the public `led_ticker.plugin` surface — `tests/test_import_purity.py` enforces it.
 

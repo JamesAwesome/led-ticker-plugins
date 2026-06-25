@@ -353,7 +353,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-core"
-version = "2.0.0"
+version = "2.1.0"
 source = { editable = "../led-ticker" }
 dependencies = [
     { name = "aiohttp" },

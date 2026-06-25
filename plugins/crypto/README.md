@@ -130,7 +130,7 @@ uv run pytest -q
 uv run ruff check src tests
 ```
 
-> **Note:** led-ticker's `graphics` surface works headless via its bundled stub, but the full `RGBMatrix`/canvas test stub lives in led-ticker's `tests/stubs/` and isn't shipped. This repo's tests put it on the path via `pyproject.toml`'s `[tool.pytest.ini_options] pythonpath = ["../led-ticker/tests/stubs"]`.
+> **Note:** tests that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from `led_ticker.plugin` — the software backend shipped in led-ticker-core ≥ 2.1. No rgbmatrix test stub or `PYTHONPATH` plumbing is required.
 
 The plugin imports only the public `led_ticker.plugin` surface — `tests/test_import_purity.py` enforces it.
 

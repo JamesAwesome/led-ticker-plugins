@@ -454,10 +454,10 @@ class TestMlbStandingsBgColor:
         assert "bg_color" in names
 
     def test_accepts_bg_color(self):
-        from rgbmatrix.graphics import Color
+        from led_ticker.plugin import make_color
 
         w = MLBStandingsMonitor(
-            session=mock.Mock(), teams=[], bg_color=Color(11, 22, 33)
+            session=mock.Mock(), teams=[], bg_color=make_color(11, 22, 33)
         )
         assert w.bg_color.green == 22
 

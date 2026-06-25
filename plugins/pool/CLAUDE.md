@@ -24,9 +24,10 @@ The entry-point name `pool` is the plugin namespace, so the config `type` is `po
 
 led-ticker is **not on PyPI**; it resolves from a sibling checkout via
 `[tool.uv.sources] led-ticker = { path = "../led-ticker", editable = true }`. CI checks out
-`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). The
-sibling checkout matters at test time too: `pyproject.toml` puts `../led-ticker/tests/stubs`
-on the pytest path so the rgbmatrix stub is importable headless.
+`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). Tests
+that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
+`led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix
+stub on the pytest path.
 
 ```bash
 uv sync --extra dev          # install deps (needs ../led-ticker checked out)

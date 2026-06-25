@@ -24,10 +24,10 @@ The entry-point name `crypto` is the plugin namespace, so the config `type` is
 
 led-ticker is **not on PyPI**; it resolves from a sibling checkout via
 `[tool.uv.sources] led-ticker = { path = "../led-ticker", editable = true }`. CI checks out
-`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). The
-rgbmatrix stub is vendored at the monorepo root (`tests/stubs/`) and put on the import path
-by the **root** `pyproject.toml` (pytest `pythonpath` + pyright `extraPaths`), so the stub is
-importable headless from the workspace root — no sibling `../led-ticker` path is involved.
+`led-ticker` next to this repo using a read-only deploy key (`LED_TICKER_DEPLOY_KEY`). Tests
+that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
+`led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix
+stub on the path, no sibling `../led-ticker/tests/stubs` plumbing.
 
 ```bash
 uv sync --extra dev          # install deps (needs ../led-ticker checked out)

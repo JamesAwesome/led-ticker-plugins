@@ -1,8 +1,7 @@
 """Shared test fixtures for the led-ticker-rss plugin test suite.
 
-The rgbmatrix stub is on the pytest path via ``pythonpath`` in
-``pyproject.toml`` (``../led-ticker/tests/stubs``). The plugin doesn't ship
-core's conftest, so re-provide the small fixtures the ported tests use.
+The plugin doesn't ship core's conftest, so re-provide the small fixtures the
+ported tests use.
 """
 
 import unittest.mock as mock
