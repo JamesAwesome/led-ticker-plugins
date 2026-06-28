@@ -1,4 +1,7 @@
+import asyncio
+import contextlib
 import logging
+import os
 
 from led_ticker.plugin import HeadlessCanvas
 
@@ -20,18 +23,64 @@ class TelnetBackend:
             HeadlessCanvas(width, height),
         ]
         self._back = 0
+        self._clients: set = set()
+        self._server = None
+        self._host = os.environ.get("LED_TICKER_TELNET_HOST", "0.0.0.0")
+        self._port = int(os.environ.get("LED_TICKER_TELNET_PORT", "2300"))
 
     def setup(self) -> None:
-        # Network added in Task B3.
-        pass
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.warning(
+                "telnet backend: no running event loop at setup(); server not "
+                "started (rendering still works, no clients)"
+            )
+            return
+        loop.create_task(self._serve())
+
+    async def _serve(self) -> None:
+        try:
+            self._server = await asyncio.start_server(
+                self._on_client, self._host, self._port
+            )
+        except OSError as e:  # bind failure must NOT freeze the panel (constraint #1)
+            logger.warning(
+                "telnet backend: could not bind %s:%s — %s", self._host, self._port, e
+            )
+            return
+        logger.info("telnet backend ready — connect: telnet <host> %s", self._port)
+
+    async def _on_client(self, reader, writer) -> None:
+        self._clients.add(writer)
+        writer.write(b"\x1b[2J")  # clear the client's screen on connect
+        try:
+            await reader.read()  # block until the client disconnects
+        finally:
+            self._clients.discard(writer)
+            with contextlib.suppress(Exception):
+                writer.close()
 
     def create_canvas(self) -> HeadlessCanvas:
         return self._buffers[self._back]
 
     def swap(self, canvas: HeadlessCanvas) -> HeadlessCanvas:
         # `canvas` is the just-drawn back buffer (the "presented" frame).
-        # Frame broadcast is added in B3. Flip + return the OTHER buffer so the
-        # caller draws into a different object next tick (constraint #8).
+        # Broadcast to all connected clients WITHOUT await drain — we must never
+        # block swap on a slow client; its TCP send buffer grows and frames drop
+        # naturally (constraint: swap() must never block the render loop).
+        if self._clients:
+            frame = render_ansi(canvas).encode("utf-8", "replace")
+            for w in list(self._clients):
+                try:
+                    if getattr(w, "is_closing", lambda: False)():
+                        self._clients.discard(w)
+                        continue
+                    w.write(frame)
+                except Exception:
+                    self._clients.discard(w)
+        # Flip + return the OTHER buffer so the caller draws into a different
+        # object next tick (constraint #8).
         self._back ^= 1
         return self._buffers[self._back]
 
