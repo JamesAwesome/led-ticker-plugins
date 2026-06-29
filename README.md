@@ -39,7 +39,7 @@ make lint   # ruff + pyright
 ```
 
 Each plugin lives under `plugins/<name>/` with its own `pyproject.toml`,
-version, `CLAUDE.md`, and `README.md`. See
+`CLAUDE.md`, and `README.md` (versions derive from per-plugin git tags via hatch-vcs — no manual bump needed). See
 `docs/superpowers/specs/2026-06-19-led-ticker-plugins-monorepo-design.md`.
 
 ## Contributing
