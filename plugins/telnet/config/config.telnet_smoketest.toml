@@ -3,7 +3,8 @@
 # Validates the telnet backend end-to-end on real hardware (or a headless run):
 #   1. Start led-ticker with this config.
 #   2. Connect: telnet <host> 2300  OR  nc <host> 2300
-#   3. Confirm the message scrolls as ANSI color in your terminal.
+#   3. Confirm the bordered messages render as ANSI color, animate, and
+#      transition (dissolve between widgets, wipe between sections).
 #   4. Open a second connection — both clients should receive live frames.
 #   5. Disconnect one client — the other must keep receiving frames (no crash).
 #   6. Confirm bind-failure handling: start a second instance while the first
@@ -28,17 +29,38 @@ brightness = 80
 default_scale = 1
 
 [transitions]
-default = "cut"
-duration = 0.3
+default = "dissolve"
+duration = 0.6
 easing = "ease_out"
-between_sections = "cut"
+between_sections = "wipe_left"
 
+# Section 1 — two bordered messages that dissolve into each other.
 [[playlist.section]]
 mode = "swap"
 content_height = 16
-hold_time = 6
+hold_time = 5
+transition = "dissolve"   # inter-widget transition within this section
 
 [[playlist.section.widget]]
 type = "message"
-text = "Hello from led-ticker-telnet! :sun: Watch the sign in your terminal."
+text = "led-ticker-telnet :sun:"
 font_color = "rainbow"
+border = {style = "bands", colors = "rainbow", band_width = 10}
+
+[[playlist.section.widget]]
+type = "message"
+text = "ANSI pixels, live in your terminal!"
+font_color = "color_cycle"
+border = {style = "bands", colors = "candy_cane", band_width = 8}
+
+# Section 2 — entered via the between_sections wipe; a chasing USA-banded ring.
+[[playlist.section]]
+mode = "swap"
+content_height = 16
+hold_time = 5
+
+[[playlist.section.widget]]
+type = "message"
+text = "Wide terminal + truecolor for the full effect.  Exit: Ctrl-] then quit"
+font_color = "rainbow"
+border = {style = "bands", colors = "usa", band_width = 10, speed = -2}
