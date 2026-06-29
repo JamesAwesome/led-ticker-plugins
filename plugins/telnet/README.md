@@ -91,9 +91,11 @@ environment:
   LED_TICKER_TELNET_PORT: "3000"
 ```
 
-## Known limitation
+## Known limitations
 
-Plugin backends cannot read TOML `[display]` config fields today. The port and host are therefore environment-only — there is no `port = 2300` or `host = "0.0.0.0"` key in the `[display]` block.
+**`pixel_mapper_config` is accepted but ignored.** The telnet backend accepts the `pixel_mapper_config` argument (required by led-ticker's backend constructor convention) but does not apply any chain-folding or U-mapper remapping — it renders the logical canvas directly to the terminal. Physical-panel layout concerns (serpentine chains, rotation) are a hardware-level concern irrelevant to a terminal preview.
+
+**TOML `[display]` sub-keys are not readable by plugin backends today.** The port and host are therefore environment-only — there is no `port = 2300` or `host = "0.0.0.0"` key in the `[display]` block.
 
 A future led-ticker-core `[display.<backend>]` → `from_config(cls, cfg)` mechanism would close this: plugins could define their own sub-table and receive a typed config object at startup. Port and host would then be first-class TOML knobs alongside `brightness`, `rows`, and the rest. This is the key usability gap to resolve in a follow-up core change.
 

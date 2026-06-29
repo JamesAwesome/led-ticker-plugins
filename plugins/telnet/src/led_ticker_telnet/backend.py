@@ -14,7 +14,18 @@ class TelnetBackend:
     """Renders frames as ANSI color over a telnet/TCP socket. Output device is a
     terminal; the backend owns its transport (like rgbmatrix owns GPIO)."""
 
-    def __init__(self, width: int = 160, height: int = 16) -> None:
+    def __init__(
+        self,
+        width: int = 160,
+        height: int = 16,
+        *,
+        pixel_mapper_config: str = "",
+    ) -> None:
+        # pixel_mapper_config is accepted (matches HeadlessBackend's constructor
+        # shape — build_frame_from_config always passes it as a keyword arg) but
+        # intentionally ignored: the telnet backend renders the logical canvas
+        # to a terminal; physical-panel chain-folding (U-mapper, etc.) is a
+        # hardware-layout concern irrelevant to a terminal preview.
         self.width = width
         self.height = height
         self.brightness = 100

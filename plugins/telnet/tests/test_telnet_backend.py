@@ -186,6 +186,19 @@ async def test_on_client_close_exception_is_silenced():
 
 
 # ---------------------------------------------------------------------------
+# Engine-convention constructor regression
+# ---------------------------------------------------------------------------
+
+
+def test_constructs_via_engine_convention():
+    # build_frame_from_config calls backend_cls(width, height, pixel_mapper_config=...)
+    # for every non-rgbmatrix backend. This test locks that signature so a future
+    # refactor that drops pixel_mapper_config would be caught immediately.
+    b = TelnetBackend(160, 16, pixel_mapper_config="")
+    assert b.create_canvas() is not None
+
+
+# ---------------------------------------------------------------------------
 # B4 carry-forward additions
 # ---------------------------------------------------------------------------
 

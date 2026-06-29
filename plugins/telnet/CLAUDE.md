@@ -125,8 +125,11 @@ unreachable dead code.
 - `test_telnet_backend.py` — backend conformance, buffer-flip, ANSI serialization, client
   lifecycle (connect / disconnect / slow / broken), server bind/failure, and register smoke.
 
-CI (`.github/workflows/ci.yml`): checks out this repo, Python 3.14, `uv sync --extra dev`
-(led-ticker-core from PyPI), then `ruff check src tests` and `pytest -q`.
+CI runs at the **workspace level** (`.github/workflows/ci.yml` in the monorepo root, not a
+per-plugin file). The workflow auto-discovers changed `plugins/*/` members and runs
+`ruff check`, `ruff format --check`, `pyright`, and `pytest --cov` for each member against
+Python 3.14, resolving `led-ticker-core` from PyPI. There is no per-plugin workflow file to
+look for.
 
 ## Adding to the plugin
 
