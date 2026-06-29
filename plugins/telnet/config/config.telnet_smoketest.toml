@@ -1,0 +1,41 @@
+# Telnet backend smoke-test config — smallsign (160×16 canvas)
+#
+# Validates the telnet backend end-to-end on real hardware (or a headless run):
+#   1. Start led-ticker with this config.
+#   2. Connect: telnet <host> 2300  OR  nc <host> 2300
+#   3. Confirm the message scrolls as ANSI color in your terminal.
+#   4. Open a second connection — both clients should receive live frames.
+#   5. Disconnect one client — the other must keep receiving frames (no crash).
+#   6. Confirm bind-failure handling: start a second instance while the first
+#      is running; the second should log a warning and continue rendering
+#      (no freeze, no crash).
+#
+# Usage: cp config/config.telnet_smoketest.toml config/config.toml
+#
+# Environment:
+#   LED_TICKER_TELNET_PORT  default 2300   — TCP port to listen on
+#   LED_TICKER_TELNET_HOST  default 0.0.0.0 — bind address
+
+[display]
+backend = "telnet.telnet"
+rows = 16
+cols = 32
+chain_length = 5
+brightness = 80
+default_scale = 1
+
+[transitions]
+default = "cut"
+duration = 0.3
+easing = "ease_out"
+between_sections = "cut"
+
+[[playlist.section]]
+mode = "swap"
+content_height = 16
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "message"
+text = "Hello from led-ticker-telnet! :sun: Watch the sign in your terminal."
+font_color = "rainbow"

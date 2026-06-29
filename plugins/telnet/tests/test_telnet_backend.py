@@ -183,3 +183,50 @@ async def test_on_client_close_exception_is_silenced():
             return b""
 
     await b._on_client(FakeReader(), BadWriter())  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# B4 carry-forward additions
+# ---------------------------------------------------------------------------
+
+
+def test_register_wires_backend_under_telnet_namespace():
+    """register(api) must call api.backend("telnet")(TelnetBackend).
+
+    The entry-point name is "telnet" (the plugin namespace); api.backend("telnet")
+    then makes the fully-qualified backend id "telnet.telnet".
+    """
+    from led_ticker_telnet import register
+
+    registered: dict = {}
+
+    class FakeApi:
+        def backend(self, name):
+            def decorator(cls):
+                registered[name] = cls
+                return cls
+
+            return decorator
+
+    register(FakeApi())
+    assert "telnet" in registered, "api.backend('telnet') was not called"
+    assert registered["telnet"] is TelnetBackend
+
+
+def test_render_ansi_odd_height_bottom_pixel_is_black():
+    """On an odd-height canvas the unpaired bottom row uses (0,0,0) as bg.
+
+    render_ansi pairs rows with range(0, height, 2); when height is odd the
+    last row has no partner, so the bottom-pixel default is black.
+    """
+    # 1-wide, 3-tall: rows 0+1 pair normally; row 2 has no row 3 partner.
+    c = TelnetBackend(width=1, height=3).create_canvas()
+    c.SetPixel(0, 0, 10, 20, 30)  # top of first pair — fg
+    c.SetPixel(0, 1, 40, 50, 60)  # bottom of first pair — bg
+    c.SetPixel(0, 2, 99, 88, 77)  # lone bottom row — fg; bg must be (0,0,0)
+
+    frame = render_ansi(c)
+
+    # The lone bottom row: fg = (99,88,77), bg must be black (0,0,0).
+    assert "38;2;99;88;77" in frame, "lone-row fg color missing"
+    assert "48;2;0;0;0" in frame, "lone-row bg should default to black (0,0,0)"
