@@ -24,7 +24,7 @@ The entry-point name `pool` is the plugin namespace, so the config `type` is `po
 
 `led-ticker-core` resolves from PyPI (`>=2.1`) like any other dependency — no sibling
 checkout, no `[tool.uv.sources]`, no deploy key. (To co-develop against an unreleased
-engine, add it editable on top: `uv pip install -e ../led-ticker`.) Tests
+engine, add it editable on top: `uv pip install -e ../../../led-ticker`, assuming led-ticker and led-ticker-plugins are checked out as siblings.) Tests
 that need a headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (the shipped headless backend in led-ticker-core ≥ 2.1) — no rgbmatrix
 stub on the pytest path.
