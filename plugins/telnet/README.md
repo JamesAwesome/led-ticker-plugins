@@ -120,6 +120,23 @@ uv run pyright src
 
 The plugin imports only the public `led_ticker.plugin` surface — `tests/test_import_purity.py` enforces it.
 
+### Headless smoke / profiling image
+
+`Dockerfile.smoke` runs led-ticker fully headless (no rgbmatrix, no hardware) with this backend and the bundled smoke config — handy for a quick visual check or profiling the render path on any machine:
+
+```bash
+cd plugins/telnet
+make smoke-run            # build + run, then: telnet localhost 2300
+make smoke-stop           # stop + remove the container
+```
+
+Profile a different engine/Python or change the port:
+
+```bash
+docker build -f Dockerfile.smoke --build-arg CORE_VERSION=2.3.0 -t led-ticker-telnet-smoke .
+docker run -d -p 3000:3000 -e LED_TICKER_TELNET_PORT=3000 led-ticker-telnet-smoke
+```
+
 ## Links
 
 - [led-ticker](https://github.com/JamesAwesome/led-ticker) — the core project

@@ -1,0 +1,11 @@
+# Keep the smoke-image build context lean + reproducible.
+.venv
+.ruff_cache
+.pytest_cache
+.mypy_cache
+dist
+build
+*.egg-info
+__pycache__
+.superpowers
+.git
