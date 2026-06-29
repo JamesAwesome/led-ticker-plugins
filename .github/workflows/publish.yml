@@ -38,10 +38,13 @@ jobs:
           WANT="${{ github.event.release.tag_name }}"; WANT="${WANT##*-v}"   # telnet-v0.1.0 -> 0.1.0
           # Tags must be PEP 440-normalized (X.Y.Z) — the wheel name carries the
           # normalized version, so a non-normalized tag (0.2.01, 1.0) would false-fail.
-          # A wheel named *-<WANT>-py3-none-any.whl must exist (robust vs parsing).
+          # The publish step uploads EVERYTHING in dist/ (wheel + sdist), so assert
+          # BOTH carry the tag version — named *-<WANT>-py3-none-any.whl and *-<WANT>.tar.gz.
           ls "$DIR"/dist/*-"$WANT"-py3-none-any.whl >/dev/null 2>&1 \
             || { echo "::error::No wheel for version $WANT in $DIR/dist — built version != tag $WANT, refusing to publish."; ls "$DIR"/dist; exit 1; }
-          echo "OK: wheel matches tag version $WANT"
+          ls "$DIR"/dist/*-"$WANT".tar.gz >/dev/null 2>&1 \
+            || { echo "::error::No sdist for version $WANT in $DIR/dist — refusing to publish."; ls "$DIR"/dist; exit 1; }
+          echo "OK: wheel + sdist match tag version $WANT"
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
