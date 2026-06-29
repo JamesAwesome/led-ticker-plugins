@@ -25,10 +25,11 @@ def test_render_ansi_encodes_top_and_bottom_pixel_colors():
     c.SetPixel(0, 0, 255, 0, 0)  # top → foreground
     c.SetPixel(0, 1, 0, 0, 255)  # bottom → background
     frame = render_ansi(c)
-    assert frame.startswith("\x1b[H")  # cursor home
-    assert "38;2;255;0;0" in frame  # fg = top pixel
-    assert "48;2;0;0;255" in frame  # bg = bottom pixel
-    assert "▀" in frame  # ▀ upper half block
+    assert isinstance(frame, bytes)  # render_ansi builds bytes directly
+    assert frame.startswith(b"\x1b[H")  # cursor home
+    assert b"38;2;255;0;0" in frame  # fg = top pixel
+    assert b"48;2;0;0;255" in frame  # bg = bottom pixel
+    assert "▀".encode() in frame  # ▀ upper half block
 
 
 def test_swap_broadcasts_frame_to_connected_clients():
@@ -54,8 +55,10 @@ def test_swap_broadcasts_frame_to_connected_clients():
 
 def test_setup_without_running_loop_degrades(caplog):
     b = TelnetBackend()
-    b.setup()  # no running loop (sync test) → no crash
+    with caplog.at_level(logging.WARNING):
+        b.setup()  # no running loop (sync test) → no crash
     assert b._server is None
+    assert any("no running event loop" in r.message for r in caplog.records)
 
 
 def test_swap_skips_closing_clients():
@@ -277,6 +280,29 @@ async def test_on_client_adds_and_removes_writer():
     assert any(b"\x1b[2J" in chunk for chunk in written)
 
 
+async def test_on_client_connect_write_failure_still_prunes_writer():
+    """If the connect-time screen-clear write() raises, the writer must NOT be
+    left in _clients — the screen-clear lives inside the try so finally always
+    prunes (the method honors its own invariant, not just the next swap)."""
+    b = TelnetBackend(width=2, height=2)
+
+    class WriteOnConnectFailsWriter:
+        def write(self, data):
+            raise OSError("connection reset on connect")
+
+        def close(self):
+            pass
+
+    class FakeReader:
+        async def read(self, n=-1):
+            return b""
+
+    wfw = WriteOnConnectFailsWriter()
+    with contextlib.suppress(OSError):
+        await b._on_client(FakeReader(), wfw)
+    assert wfw not in b._clients, "a writer that fails its connect write must be pruned"
+
+
 async def test_on_client_close_exception_is_silenced():
     """An exception in writer.close() inside _on_client must not propagate."""
     b = TelnetBackend(width=2, height=2)
@@ -336,6 +362,16 @@ def test_register_wires_backend_under_telnet_namespace():
     assert registered["telnet"] is TelnetBackend
 
 
+def test_render_ansi_all_black_canvas():
+    """A freshly created canvas with no SetPixel calls is all-black; every cell
+    encodes (0,0,0) as both fg and bg."""
+    c = TelnetBackend(width=2, height=2).create_canvas()
+    frame = render_ansi(c)
+    assert isinstance(frame, bytes)
+    assert b"38;2;0;0;0" in frame, "all-black fg should be (0,0,0)"
+    assert b"48;2;0;0;0" in frame, "all-black bg should be (0,0,0)"
+
+
 def test_render_ansi_odd_height_bottom_pixel_is_black():
     """On an odd-height canvas the unpaired bottom row uses (0,0,0) as bg.
 
@@ -351,5 +387,5 @@ def test_render_ansi_odd_height_bottom_pixel_is_black():
     frame = render_ansi(c)
 
     # The lone bottom row: fg = (99,88,77), bg must be black (0,0,0).
-    assert "38;2;99;88;77" in frame, "lone-row fg color missing"
-    assert "48;2;0;0;0" in frame, "lone-row bg should default to black (0,0,0)"
+    assert b"38;2;99;88;77" in frame, "lone-row fg color missing"
+    assert b"48;2;0;0;0" in frame, "lone-row bg should default to black (0,0,0)"

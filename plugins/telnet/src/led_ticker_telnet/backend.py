@@ -7,7 +7,12 @@ from led_ticker.plugin import HeadlessCanvas
 
 logger = logging.getLogger(__name__)
 
-_ESC = "\x1b"
+# Pre-encoded ANSI fragments. render_ansi builds bytes directly (bytearray) so
+# the hot path skips the str-join + .encode() double-copy — meaningful on the
+# bigsign (256x64) where every swap serializes ~16K cells.
+_CURSOR_HOME = b"\x1b[H"  # terminal repaints in place each frame
+_HALF_BLOCK = "▀".encode()  # b"\xe2\x96\x80" — Unicode UPPER HALF BLOCK
+_RESET_CRLF = b"\x1b[0m\r\n"  # reset attrs + CRLF (telnet line ending)
 
 # Per-client write-buffer cap (bytes). A client that is connected but not
 # reading (suspended `nc`, terminal under Ctrl-S/XOFF flow control, congested
@@ -38,13 +43,15 @@ class TelnetBackend:
         # hardware-layout concern irrelevant to a terminal preview.
         self.width = width
         self.height = height
+        # Required by the Backend protocol; no effect on ANSI output — terminal
+        # brightness/contrast applies.
         self.brightness = 100
         self._buffers = [
             HeadlessCanvas(width, height),
             HeadlessCanvas(width, height),
         ]
         self._back = 0
-        self._clients: set = set()
+        self._clients: set[asyncio.StreamWriter] = set()
         self._server = None
         # Strong reference to the _serve() startup task. The event loop holds
         # only a WEAK reference to a task, so a fire-and-forget create_task()
@@ -90,10 +97,12 @@ class TelnetBackend:
             return
         logger.info("telnet backend ready — connect: telnet <host> %s", self._port)
 
-    async def _on_client(self, reader, writer) -> None:
+    async def _on_client(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         self._clients.add(writer)
-        writer.write(b"\x1b[2J")  # clear the client's screen on connect
         try:
+            writer.write(b"\x1b[2J")  # clear the client's screen on connect
             await reader.read()  # block until the client disconnects
         finally:
             self._clients.discard(writer)
@@ -110,19 +119,29 @@ class TelnetBackend:
         # render loop). A stalled client's bytes would otherwise accumulate in
         # asyncio's transport write buffer with no cap, so we drop this frame for
         # any client whose buffer is already over _MAX_WRITE_BUFFER.
-        if self._clients:
-            frame = render_ansi(canvas).encode("utf-8", "replace")
-            for w in list(self._clients):
+        #
+        # Pre-filter to clients that can actually receive this frame (open AND
+        # under the high-water cap) BEFORE rendering — when every client is
+        # stalled (or none is connected) we skip building the frame entirely
+        # rather than serialize ~16K cells nobody will read.
+        writable = []
+        for w in list(self._clients):
+            # getattr guard: test fakes may omit is_closing.
+            if getattr(w, "is_closing", lambda: False)():
+                self._clients.discard(w)
+                continue
+            # getattr guard: test fakes may omit transport.
+            transport = getattr(w, "transport", None)
+            if (
+                transport is not None
+                and transport.get_write_buffer_size() > _MAX_WRITE_BUFFER
+            ):
+                continue  # stalled client — drop this frame, don't pile on
+            writable.append(w)
+        if writable:
+            frame = render_ansi(canvas)
+            for w in writable:
                 try:
-                    if getattr(w, "is_closing", lambda: False)():
-                        self._clients.discard(w)
-                        continue
-                    transport = getattr(w, "transport", None)
-                    if (
-                        transport is not None
-                        and transport.get_write_buffer_size() > _MAX_WRITE_BUFFER
-                    ):
-                        continue  # stalled client — drop this frame, don't pile on
                     w.write(frame)
                 except Exception:
                     self._clients.discard(w)
@@ -132,11 +151,14 @@ class TelnetBackend:
         return self._buffers[self._back]
 
 
-def render_ansi(canvas) -> str:
+def render_ansi(canvas) -> bytes:
     """One pixel row pair per text row: ▀ with fg=top pixel, bg=bottom pixel.
     Reads the backend's own canvas via the public get_pixel (constraint #3 bans
-    Canvas GetPixel for the ENGINE, not a backend reading the canvas it made)."""
-    out = [f"{_ESC}[H"]  # cursor home — terminal repaints in place each frame
+    Canvas GetPixel for the ENGINE, not a backend reading the canvas it made).
+
+    Builds bytes directly into a bytearray so the broadcast hot path avoids the
+    str-join + .encode() double-copy (meaningful on the bigsign)."""
+    out = bytearray(_CURSOR_HOME)
     for y in range(0, canvas.height, 2):
         for x in range(canvas.width):
             tr, tg, tb = canvas.get_pixel(x, y)
@@ -144,6 +166,11 @@ def render_ansi(canvas) -> str:
                 br, bg, bb = canvas.get_pixel(x, y + 1)
             else:
                 br, bg, bb = 0, 0, 0
-            out.append(f"{_ESC}[38;2;{tr};{tg};{tb}m{_ESC}[48;2;{br};{bg};{bb}m▀")
-        out.append(f"{_ESC}[0m\r\n")  # reset attrs + CRLF (telnet line ending)
-    return "".join(out)
+            out += b"\x1b[38;2;"
+            out += f"{tr};{tg};{tb}".encode()
+            out += b"m\x1b[48;2;"
+            out += f"{br};{bg};{bb}".encode()
+            out += b"m"
+            out += _HALF_BLOCK
+        out += _RESET_CRLF
+    return bytes(out)
