@@ -102,7 +102,7 @@ A future led-ticker-core `[display.<backend>]` → `from_config(cls, cfg)` mecha
 ## Behavior under error conditions
 
 - **Bind failure** (port in use, insufficient permissions): the backend logs a warning and continues without a server. The sign renders normally; clients simply cannot connect until the conflict is resolved and led-ticker restarts.
-- **Slow or disconnected client**: `swap()` writes to the client's TCP send buffer without waiting for a drain. A slow client's buffer fills and frames drop for that client; the render loop and other clients are unaffected.
+- **Slow or stalled client**: `swap()` writes to the client without waiting for a drain, so the render loop never blocks. Bytes a client hasn't read accumulate in that connection's in-process write buffer; to keep a stalled client (suspended `nc`, terminal under Ctrl-S flow control, congested link) from growing that buffer without bound, `swap()` checks each client's write-buffer size and **skips the write for any client over a ~4 MiB cap** — that frame is dropped for that client, which recovers automatically once it starts reading again. The render loop and other clients are unaffected.
 - **Client disconnect mid-session**: detected on the next `swap()` write; the client is pruned and rendering continues.
 
 ## Development

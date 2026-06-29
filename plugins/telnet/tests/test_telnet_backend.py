@@ -96,6 +96,63 @@ def test_swap_prunes_writers_that_raise():
     assert bw not in b._clients
 
 
+def test_swap_drops_frame_for_stalled_client_over_high_water():
+    """A connected-but-not-reading client (not is_closing, write never raises)
+    whose transport write buffer is over the cap must have this frame DROPPED —
+    not written — so its in-process buffer can't grow without bound. The client
+    stays in the set (it's stalled, not broken) so it recovers when it drains."""
+    from led_ticker_telnet.backend import _MAX_WRITE_BUFFER
+
+    class StalledTransport:
+        def get_write_buffer_size(self):
+            return _MAX_WRITE_BUFFER + 1  # over cap
+
+    class StalledWriter:
+        def __init__(self):
+            self.written = False
+            self.transport = StalledTransport()
+
+        def write(self, data):
+            self.written = True
+
+        def is_closing(self):
+            return False
+
+    b = TelnetBackend(width=4, height=4)
+    sw = StalledWriter()
+    b._clients = {sw}
+    c = b.create_canvas()
+    b.swap(c)
+    assert not sw.written, "frame should be dropped for an over-cap stalled client"
+    assert sw in b._clients, "a stalled client is dropped-from this frame, not evicted"
+
+
+def test_swap_writes_to_client_under_high_water():
+    """A client whose transport buffer is under the cap is written to normally."""
+    from led_ticker_telnet.backend import _MAX_WRITE_BUFFER
+
+    class HealthyTransport:
+        def get_write_buffer_size(self):
+            return _MAX_WRITE_BUFFER - 1  # under cap
+
+    class HealthyWriter:
+        def __init__(self):
+            self.written = False
+            self.transport = HealthyTransport()
+
+        def write(self, data):
+            self.written = True
+
+        def is_closing(self):
+            return False
+
+    b = TelnetBackend(width=4, height=4)
+    hw = HealthyWriter()
+    b._clients = {hw}
+    b.swap(b.create_canvas())
+    assert hw.written, "an under-cap client should be written to"
+
+
 async def test_setup_with_running_loop_spawns_server():
     """setup() inside a running loop creates the server task (no crash)."""
     b = TelnetBackend(width=2, height=2)

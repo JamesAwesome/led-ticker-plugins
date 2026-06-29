@@ -9,6 +9,16 @@ logger = logging.getLogger(__name__)
 
 _ESC = "\x1b"
 
+# Per-client write-buffer cap (bytes). A client that is connected but not
+# reading (suspended `nc`, terminal under Ctrl-S/XOFF flow control, congested
+# link) is NOT is_closing() and writer.write() never raises — asyncio's
+# transport buffers the unread bytes in-process with no high-water cap on this
+# path, so the buffer grows without bound (a 256x64 sign at ~20 fps is roughly
+# 6 MB/sec of accumulation per stalled client). We read the transport's write
+# buffer size each tick and skip the write for a stalled client — that, not the
+# write() itself, is what actually drops frames.
+_MAX_WRITE_BUFFER = 4 * 1024 * 1024  # 4 MiB ≈ a few frames at 256x64
+
 
 class TelnetBackend:
     """Renders frames as ANSI color over a telnet/TCP socket. Output device is a
@@ -78,8 +88,10 @@ class TelnetBackend:
     def swap(self, canvas: HeadlessCanvas) -> HeadlessCanvas:
         # `canvas` is the just-drawn back buffer (the "presented" frame).
         # Broadcast to all connected clients WITHOUT await drain — we must never
-        # block swap on a slow client; its TCP send buffer grows and frames drop
-        # naturally (constraint: swap() must never block the render loop).
+        # block swap on a slow client (constraint: swap() must never block the
+        # render loop). A stalled client's bytes would otherwise accumulate in
+        # asyncio's transport write buffer with no cap, so we drop this frame for
+        # any client whose buffer is already over _MAX_WRITE_BUFFER.
         if self._clients:
             frame = render_ansi(canvas).encode("utf-8", "replace")
             for w in list(self._clients):
@@ -87,6 +99,12 @@ class TelnetBackend:
                     if getattr(w, "is_closing", lambda: False)():
                         self._clients.discard(w)
                         continue
+                    transport = getattr(w, "transport", None)
+                    if (
+                        transport is not None
+                        and transport.get_write_buffer_size() > _MAX_WRITE_BUFFER
+                    ):
+                        continue  # stalled client — drop this frame, don't pile on
                     w.write(frame)
                 except Exception:
                     self._clients.discard(w)

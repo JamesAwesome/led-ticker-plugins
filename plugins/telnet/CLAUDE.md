@@ -62,10 +62,17 @@ change — raise it upstream; do not reach around the surface.
 core). Bare `tuple[int, int, int]` annotations are fine.
 
 **`swap()` must never block on a slow client** — the render loop calls `swap()` at panel cadence
-(~20 fps). `swap()` writes to each client's TCP send buffer with `writer.write(data)` — no
-`await writer.drain()`. A slow client's buffer fills and frames are dropped for that client;
-the render loop and other clients are never delayed. Adding an `await drain()` call here would
-freeze the panel on a single slow connection.
+(~20 fps). `swap()` writes to each client with `writer.write(data)` — no `await writer.drain()`.
+Adding an `await drain()` here would freeze the panel on a single slow connection. But
+`writer.write()` does NOT drop frames on its own: asyncio buffers unread bytes in the
+transport's in-process write buffer with no cap on this path, and a stalled client (suspended
+`nc`, terminal under Ctrl-S/XOFF, congested link) is NOT `is_closing()` and never raises — so
+its buffer would grow without bound. The actual frame-drop is the explicit high-water check:
+`swap()` reads `transport.get_write_buffer_size()` (guarded with `getattr` for test fakes) and
+skips the write for any client over `_MAX_WRITE_BUFFER` (~4 MiB). The skipped client stays in
+the set and recovers when it drains; do NOT remove this guard — without it a single stalled
+client leaks the display process's heap (~6 MB/sec for a 256x64 sign). Tripwire:
+`test_swap_drops_frame_for_stalled_client_over_high_water`.
 
 **Bind failure must degrade, not crash** — `_serve()` wraps `asyncio.start_server` in a
 `try/except OSError` and logs a warning before returning. A port-in-use or permission error

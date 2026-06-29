@@ -66,5 +66,12 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.pytest.ini_options]
+# Self-contained async test config: the workspace-root pyproject also sets this,
+# but pinning it here lets `pytest` rooted at plugins/telnet/ (standalone dev,
+# the plugin extracted/pinned on its own) run the async tests without relying on
+# the workspace root being present.
+asyncio_mode = "auto"
+
 [tool.coverage.report]
 fail_under = 90
