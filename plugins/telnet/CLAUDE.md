@@ -22,7 +22,7 @@ The entry-point name `telnet` is the plugin namespace, so the backend is `telnet
 ## Commands
 
 `led-ticker-core` resolves from PyPI (`>=2.2`) — no sibling checkout needed. To co-develop
-against an unreleased engine, add it editable on top: `uv pip install -e ../../../led-ticker`.
+against an unreleased engine, add it editable on top: `uv pip install -e ../led-ticker`.
 
 ```bash
 uv sync --extra dev          # install deps (led-ticker-core from PyPI)
