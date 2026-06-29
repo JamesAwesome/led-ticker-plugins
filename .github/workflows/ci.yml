@@ -16,6 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
         with:
+          # Full history + tags: per-plugin hatch-vcs runs `git describe --match
+          # <plugin>-v*`. uv sync itself survives a shallow clone (fallback_version
+          # 0.0.0), but test_versioning.py::test_versions_are_tag_scoped needs the
+          # tags to prove per-plugin scoping — don't drop this.
           fetch-depth: 0
           path: led-ticker-plugins
       - id: set
@@ -46,6 +50,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
         with:
+          # Full history + tags: per-plugin hatch-vcs runs `git describe --match
+          # <plugin>-v*`. uv sync itself survives a shallow clone (fallback_version
+          # 0.0.0), but test_versioning.py::test_versions_are_tag_scoped needs the
+          # tags to prove per-plugin scoping — don't drop this.
+          fetch-depth: 0
           path: led-ticker-plugins
       # No engine checkout: led-ticker-core resolves from PyPI (>=2.1, ships the
       # HeadlessBackend that tests use via led_ticker.plugin).

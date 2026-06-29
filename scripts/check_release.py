@@ -1,16 +1,17 @@
 """Resolve a `<plugin>-vX.Y.Z` release tag to a buildable plugin dir.
 
-Allows only the publishable plugins (the 6 data plugins + the `flair` homage
-pack) and any tag whose version doesn't match the plugin's pyproject version.
-On success, prints the plugin directory to stdout and exits 0; otherwise exits 1.
+With hatch-vcs, the git tag IS the version — no static version field in
+pyproject.toml to compare against. The resolver checks that the plugin is in
+the publishable allowlist and that the plugin directory (with a pyproject.toml)
+exists. On success, prints the plugin directory to stdout and exits 0; otherwise
+exits 1.
 """
 
 import sys
-import tomllib
 from pathlib import Path
 
-# Plugins published to PyPI on a `<plugin>-vX.Y.Z` release: the 6 data plugins
-# plus `flair` (the consolidated homage sprite-trail pack).
+# Plugins published to PyPI on a `<plugin>-vX.Y.Z` release: the 6 data plugins,
+# `flair` (the consolidated homage sprite-trail pack), and `telnet`.
 PUBLISHABLE_PLUGINS = {
     "pool",
     "baseball",
@@ -19,6 +20,7 @@ PUBLISHABLE_PLUGINS = {
     "rss",
     "weather",
     "flair",
+    "telnet",
 }
 
 
@@ -32,13 +34,6 @@ def resolve(tag: str, plugins_root: str = "plugins") -> tuple[str | None, str]:
     pyproject = plugin_dir / "pyproject.toml"
     if not pyproject.exists():
         return None, f"No pyproject at {pyproject}."
-    with open(pyproject, "rb") as f:
-        pp_version = tomllib.load(f)["project"]["version"]
-    if version != pp_version:
-        return None, (
-            f"Tag {tag!r} (version {version}) does not match {plugin} pyproject "
-            f"version {pp_version!r}. Bump the version or fix the tag."
-        )
     return str(plugin_dir), f"OK: {tag} -> {plugin_dir} (version {version})."
 
 

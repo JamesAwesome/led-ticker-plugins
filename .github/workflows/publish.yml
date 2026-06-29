@@ -1,8 +1,8 @@
 name: publish
 
 # Publishes a single data plugin to PyPI via OIDC Trusted Publishing when a
-# GitHub Release tagged `<plugin>-vX.Y.Z` is published (the 6 data plugins +
-# the `flair` homage pack; gated by scripts/check_release.py). GitHub-hosted
+# GitHub Release tagged `<plugin>-vX.Y.Z` is published (the 6 data plugins, the
+# `flair` homage pack, and `telnet`; gated by scripts/check_release.py). GitHub-hosted
 # runner, `release`-gated.
 on:
   release:
@@ -18,6 +18,8 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0   # hatch-vcs derives each plugin's version from its tag
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - name: Resolve + guard the release tag
         id: resolve
@@ -29,6 +31,20 @@ jobs:
         run: |
           cd "${{ steps.resolve.outputs.plugin_dir }}"
           rm -rf dist && uv build --out-dir dist
+      - name: Guard — built version matches the release tag
+        run: |
+          set -euo pipefail
+          DIR="${{ steps.resolve.outputs.plugin_dir }}"
+          WANT="${{ github.event.release.tag_name }}"; WANT="${WANT##*-v}"   # telnet-v0.1.0 -> 0.1.0
+          # Tags must be PEP 440-normalized (X.Y.Z) — the wheel name carries the
+          # normalized version, so a non-normalized tag (0.2.01, 1.0) would false-fail.
+          # The publish step uploads EVERYTHING in dist/ (wheel + sdist), so assert
+          # BOTH carry the tag version — named *-<WANT>-py3-none-any.whl and *-<WANT>.tar.gz.
+          ls "$DIR"/dist/*-"$WANT"-py3-none-any.whl >/dev/null 2>&1 \
+            || { echo "::error::No wheel for version $WANT in $DIR/dist — built version != tag $WANT, refusing to publish."; ls "$DIR"/dist; exit 1; }
+          ls "$DIR"/dist/*-"$WANT".tar.gz >/dev/null 2>&1 \
+            || { echo "::error::No sdist for version $WANT in $DIR/dist — refusing to publish."; ls "$DIR"/dist; exit 1; }
+          echo "OK: wheel + sdist match tag version $WANT"
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
