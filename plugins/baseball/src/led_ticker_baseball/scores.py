@@ -54,6 +54,7 @@ from led_ticker_baseball.teams import (
     _MLB_LIVE_API,
     MLB_API,
     MLB_TEAM_NAMES,
+    _team_color,
     resolve_team_id,
 )
 
@@ -205,8 +206,6 @@ class MLBScoreMonitor:
 
         # Resolve effective colors: honour explicit font_color override,
         # else fall back to the per-widget defaults.
-        from led_ticker_baseball.teams import _team_color
-
         title_color = (
             self.font_color if self.font_color is not None else _team_color(self.team)
         )

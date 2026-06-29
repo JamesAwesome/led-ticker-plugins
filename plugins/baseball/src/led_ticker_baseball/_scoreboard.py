@@ -18,7 +18,12 @@ from led_ticker.plugin import (
     make_color,
 )
 
-from led_ticker_baseball._models import GameInfo, SeriesInfo, _fit_team_name
+from led_ticker_baseball._models import (
+    GameInfo,
+    SeriesInfo,
+    _fit_team_name,
+    _format_game_time,
+)
 from led_ticker_baseball.teams import (
     MLB_TEAM_NAMES,
     _team_color,
@@ -413,8 +418,6 @@ def _build_game_message(
         ]
 
     else:  # preview
-        from led_ticker_baseball._models import _format_game_time
-
         time_str = _format_game_time(game.start_time, tz) if game.start_time else "TBD"
         segments = [
             (game.away_abbr, away_c),
