@@ -1,0 +1,37 @@
+# Lightweight smoke / profiling image for the led-ticker-telnet backend.
+#
+# Runs led-ticker fully HEADLESS with the telnet backend — no rgbmatrix C lib,
+# no hardware. led-ticker-core comes from PyPI; the plugin is installed from
+# this directory's source; the bundled smoke config drives a bordered, animated,
+# transitioning sign. Connect from the host with `telnet localhost 2300`.
+#
+# Build (run from THIS directory, plugins/telnet/):
+#   docker build -f Dockerfile.smoke -t led-ticker-telnet-smoke .
+# Run (publish the telnet port):
+#   docker run -d --name tsmoke -p 2300:2300 led-ticker-telnet-smoke
+#   telnet localhost 2300            # or: nc localhost 2300
+# Stop:
+#   docker rm -f tsmoke
+#
+# Or just: `make smoke-run` (see the Makefile).
+#
+# Profiling a different core / Python:
+#   docker build -f Dockerfile.smoke --build-arg CORE_VERSION=2.3.0 \
+#     --build-arg PYTHON_VERSION=3.14-bookworm -t led-ticker-telnet-smoke .
+# Override the listen port/host at run time:
+#   docker run -d -p 3000:3000 -e LED_TICKER_TELNET_PORT=3000 led-ticker-telnet-smoke
+
+ARG PYTHON_VERSION=3.14-bookworm
+FROM python:${PYTHON_VERSION}
+
+# Pin the core to install from PyPI (bump to profile a newer engine).
+ARG CORE_VERSION=2.2.0
+RUN pip install --no-cache-dir "led-ticker-core==${CORE_VERSION}"
+
+# Install this plugin from source (build context = plugins/telnet/).
+COPY . /plugin
+RUN pip install --no-cache-dir /plugin
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 2300
+CMD ["led-ticker", "--config", "/plugin/config/config.telnet_smoketest.toml"]
