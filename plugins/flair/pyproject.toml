@@ -3,6 +3,8 @@ name = "led-ticker-flair"
 dynamic = ["version"]
 description = "Homage sprite-trail transitions for led-ticker: nyancat, pokeball, pacman, sailor_moon (+ :pokeball.ball:)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
 keywords = [
