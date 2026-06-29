@@ -56,11 +56,11 @@ All other `[display]` fields (`rows`, `cols`, `chain_length`, `default_scale`, e
 Once led-ticker starts with the telnet backend, connect from any machine on the same network:
 
 ```bash
-telnet <host> 2300
+telnet <host> 2300  # default; see Configuration to change
 ```
 
 ```bash
-nc <host> 2300
+nc <host> 2300  # default; see Configuration to change
 ```
 
 Replace `<host>` with the hostname or IP of the machine running led-ticker. When connecting locally: `telnet localhost 2300`.
@@ -89,9 +89,12 @@ export LED_TICKER_TELNET_PORT=3000
 # docker compose (compose.yaml)
 environment:
   LED_TICKER_TELNET_PORT: "3000"
+  # LED_TICKER_TELNET_HOST: "0.0.0.0"   # bind address; default is all interfaces
 ```
 
 ## Known limitations
+
+**`brightness` is a no-op.** The `[display] brightness` field is required by led-ticker's backend protocol but has no effect on ANSI output — adjust brightness/contrast in your terminal instead.
 
 **`pixel_mapper_config` is accepted but ignored.** The telnet backend accepts the `pixel_mapper_config` argument (required by led-ticker's backend constructor convention) but does not apply any chain-folding or U-mapper remapping — it renders the logical canvas directly to the terminal. Physical-panel layout concerns (serpentine chains, rotation) are a hardware-level concern irrelevant to a terminal preview.
 

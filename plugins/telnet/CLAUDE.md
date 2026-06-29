@@ -22,7 +22,9 @@ The entry-point name `telnet` is the plugin namespace, so the backend is `telnet
 ## Commands
 
 `led-ticker-core` resolves from PyPI (`>=2.2`) — no sibling checkout needed. To co-develop
-against an unreleased engine, add it editable on top: `uv pip install -e ../led-ticker`.
+against an unreleased engine, add it editable on top: `uv pip install -e ../../../led-ticker`
+(run from `plugins/telnet/`; assumes led-ticker and led-ticker-plugins are checked out as
+siblings).
 
 ```bash
 uv sync --extra dev          # install deps (led-ticker-core from PyPI)
@@ -137,6 +139,18 @@ per-plugin file). The workflow auto-discovers changed `plugins/*/` members and r
 `ruff check`, `ruff format --check`, `pyright`, and `pytest --cov` for each member against
 Python 3.14, resolving `led-ticker-core` from PyPI. There is no per-plugin workflow file to
 look for.
+
+## Smoke testing
+
+`config/config.telnet_smoketest.toml` is a ready-to-run smallsign (160×16) config for an
+end-to-end manual check (start led-ticker → `telnet <host> 2300` → confirm the message
+scrolls; multi-client + disconnect + bind-failure steps are listed in the file's header). It
+is NOT auto-loaded — copy it into your led-ticker checkout's `config/` directory as
+`config.toml`:
+
+```bash
+cp <path-to-led-ticker-plugins>/plugins/telnet/config/config.telnet_smoketest.toml config/config.toml
+```
 
 ## Adding to the plugin
 
