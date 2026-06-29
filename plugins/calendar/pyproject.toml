@@ -1,6 +1,6 @@
 [project]
 name = "led-ticker-calendar"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Calendar (.ics) agenda/next/two_row widget for led-ticker."
 readme = "README.md"
 license = "MIT"
@@ -57,8 +57,18 @@ Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
 Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# Per-plugin tag scoping: only calendar-v* tags count toward calendar's version.
+root = "../.."
+git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "calendar-v*"]
+tag_regex = "^(?:.+-v)(?P<version>[0-9].*)$"
+fallback_version = "0.0.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/led_ticker_calendar"]
