@@ -46,6 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
         with:
+          fetch-depth: 0
           path: led-ticker-plugins
       # No engine checkout: led-ticker-core resolves from PyPI (>=2.1, ships the
       # HeadlessBackend that tests use via led_ticker.plugin).
