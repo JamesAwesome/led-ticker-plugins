@@ -1,8 +1,8 @@
 name: publish
 
 # Publishes a single data plugin to PyPI via OIDC Trusted Publishing when a
-# GitHub Release tagged `<plugin>-vX.Y.Z` is published (the 6 data plugins +
-# the `flair` homage pack; gated by scripts/check_release.py). GitHub-hosted
+# GitHub Release tagged `<plugin>-vX.Y.Z` is published (the 6 data plugins, the
+# `flair` homage pack, and `telnet`; gated by scripts/check_release.py). GitHub-hosted
 # runner, `release`-gated.
 on:
   release:
@@ -36,6 +36,8 @@ jobs:
           set -euo pipefail
           DIR="${{ steps.resolve.outputs.plugin_dir }}"
           WANT="${{ github.event.release.tag_name }}"; WANT="${WANT##*-v}"   # telnet-v0.1.0 -> 0.1.0
+          # Tags must be PEP 440-normalized (X.Y.Z) — the wheel name carries the
+          # normalized version, so a non-normalized tag (0.2.01, 1.0) would false-fail.
           # A wheel named *-<WANT>-py3-none-any.whl must exist (robust vs parsing).
           ls "$DIR"/dist/*-"$WANT"-py3-none-any.whl >/dev/null 2>&1 \
             || { echo "::error::No wheel for version $WANT in $DIR/dist — built version != tag $WANT, refusing to publish."; ls "$DIR"/dist; exit 1; }
