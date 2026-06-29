@@ -46,6 +46,13 @@ class TelnetBackend:
         self._back = 0
         self._clients: set = set()
         self._server = None
+        # Strong reference to the _serve() startup task. The event loop holds
+        # only a WEAK reference to a task, so a fire-and-forget create_task()
+        # whose result is discarded can be garbage-collected mid-await — here
+        # that would mean _serve() never finishes start_server(), the listener
+        # is never created, and NO log line is emitted (silent "never accepts").
+        # Keeping the reference closes that GC window.
+        self._serve_task = None
         self._host = os.environ.get("LED_TICKER_TELNET_HOST", "0.0.0.0")
         self._port = int(os.environ.get("LED_TICKER_TELNET_PORT", "2300"))
 
@@ -58,7 +65,18 @@ class TelnetBackend:
                 "started (rendering still works, no clients)"
             )
             return
-        loop.create_task(self._serve())
+        self._serve_task = loop.create_task(self._serve())
+        self._serve_task.add_done_callback(self._on_serve_done)
+
+    def _on_serve_done(self, task) -> None:
+        # Surface a crash in the startup task instead of letting it vanish as a
+        # GC-time "exception was never retrieved" warning. Cancellation is
+        # expected on shutdown and is not an error.
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("telnet backend: _serve task failed: %s", exc)
 
     async def _serve(self) -> None:
         try:

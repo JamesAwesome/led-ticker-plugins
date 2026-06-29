@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import logging
 import os
 
 from led_ticker.plugin import run_backend_conformance
@@ -151,6 +153,57 @@ def test_swap_writes_to_client_under_high_water():
     b._clients = {hw}
     b.swap(b.create_canvas())
     assert hw.written, "an under-cap client should be written to"
+
+
+async def test_setup_holds_strong_reference_to_serve_task():
+    """setup() must keep a strong reference to the _serve() task so the loop's
+    weak-only reference can't let GC drop it mid-await (silent never-accepts)."""
+    b = TelnetBackend(width=2, height=2)
+    b._host = "127.0.0.1"
+    b._port = 0  # OS assigns a free port
+    b.setup()
+    assert b._serve_task is not None, "setup() did not retain the _serve task"
+    await b._serve_task  # let it finish binding
+    if b._server is not None:
+        b._server.close()
+        await b._server.wait_closed()
+
+
+async def test_on_serve_done_surfaces_unexpected_exception(caplog):
+    """A non-OSError crash in the startup task must be logged via the
+    done-callback, not vanish as a GC-time 'never retrieved' warning."""
+    b = TelnetBackend(width=2, height=2)
+
+    async def boom():
+        raise RuntimeError("unexpected start_server failure")
+
+    task = asyncio.ensure_future(boom())
+    task.add_done_callback(b._on_serve_done)
+    with caplog.at_level(logging.WARNING):
+        with contextlib.suppress(RuntimeError):
+            await task
+        # Let the done-callback run.
+        await asyncio.sleep(0)
+    assert any("_serve task failed" in r.message for r in caplog.records), (
+        "an unexpected _serve crash should be logged by the done-callback"
+    )
+
+
+async def test_on_serve_done_ignores_cancellation():
+    """A cancelled startup task is expected on shutdown — the callback must not
+    raise (no .exception() on a cancelled task) and must not log it as failure."""
+    b = TelnetBackend(width=2, height=2)
+
+    async def forever():
+        await asyncio.Event().wait()
+
+    task = asyncio.ensure_future(forever())
+    task.add_done_callback(b._on_serve_done)
+    await asyncio.sleep(0)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0)  # callback runs — must not raise
 
 
 async def test_setup_with_running_loop_spawns_server():

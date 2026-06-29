@@ -10,7 +10,10 @@
 #      is running; the second should log a warning and continue rendering
 #      (no freeze, no crash).
 #
-# Usage: cp config/config.telnet_smoketest.toml config/config.toml
+# Usage: copy this file into your led-ticker checkout's `config/` directory and
+# rename it `config.toml`. From the led-ticker checkout (with this plugin repo
+# checked out alongside), that is:
+#   cp <path-to-led-ticker-plugins>/plugins/telnet/config/config.telnet_smoketest.toml config/config.toml
 #
 # Environment:
 #   LED_TICKER_TELNET_PORT  default 2300   — TCP port to listen on
