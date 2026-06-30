@@ -253,7 +253,7 @@ One team across every widget, rotating with the rolling-baseball transition.
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 transition = "baseball.roll_alternating"
 hold_time = 8
 
@@ -284,7 +284,7 @@ mode.
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 hold_time = 8
 scroll_step_ms = 35
 
@@ -305,7 +305,7 @@ A minimal single-team scrolling line.
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 hold_time = 6
 
 [[playlist.section.widget]]
