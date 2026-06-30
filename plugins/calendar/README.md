@@ -59,7 +59,7 @@ New to led-ticker configs? The [first-config tutorial](https://docs.ledticker.de
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 content_height = 16
 hold_time = 8
 
@@ -82,7 +82,7 @@ The held day+time row can overflow at `default_scale = 4` (only 64 logical pixel
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 scale = 2
 content_height = 24
 hold_time = 10
@@ -106,7 +106,7 @@ highlight = ["1:1", "interview"]
 
 ```toml
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 content_height = 16
 hold_time = 20
 

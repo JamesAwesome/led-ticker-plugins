@@ -38,6 +38,22 @@ jobs:
             [ "$M" = "[]" ] && M="$ALL"
             echo "members=$M" >> "$GITHUB_OUTPUT"
           fi
+      # Regression guard: the core section modes were renamed in core v3
+      # (swap->slideshow, forever_scroll->ticker, infini_scroll->one_at_a_time);
+      # old names now hard-error at config-load. Keep them out of plugin docs +
+      # smoketest configs. (Archived docs/superpowers/ plans are exempt.)
+      - name: No legacy section-mode names
+        working-directory: led-ticker-plugins
+        run: |
+          hits=$(grep -rnE "mode = ['\"](swap|forever_scroll|infini_scroll)['\"]|\bforever_scroll\b|\binfini_scroll\b" plugins/ \
+            --include='*.toml' --include='*.md' --include='*.mdx' --include='*.py' \
+            | grep -v '/docs/superpowers/' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::legacy section-mode name(s) found — rename to slideshow/ticker/one_at_a_time:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "no legacy section-mode names"
 
   check:
     needs: matrix

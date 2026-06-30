@@ -36,7 +36,7 @@ between_sections = "wipe_left"
 
 # Section 1 — two bordered messages that dissolve into each other.
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 content_height = 16
 hold_time = 5
 transition = "dissolve"   # inter-widget transition within this section
@@ -55,7 +55,7 @@ border = {style = "bands", colors = "candy_cane", band_width = 8}
 
 # Section 2 — entered via the between_sections wipe; a chasing USA-banded ring.
 [[playlist.section]]
-mode = "swap"
+mode = "slideshow"
 content_height = 16
 hold_time = 5
 
