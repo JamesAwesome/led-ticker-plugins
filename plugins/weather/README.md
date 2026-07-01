@@ -82,6 +82,11 @@ fields (current conditions): `temp_f`, `temp_c`, `condition`, `feelslike_f`,
 a condition icon — `format = "{temp_f}° {emoji}"` → `72° ☀`. The source polls
 on its own `interval`, independently of the `weather.current` widget.
 
+A full bigsign example that exercises the token (default format, the `{emoji}`
+sprite, feels-like/humidity fields, and a resilience check) lives at
+[`config/config.weather_smoketest.bigsign.toml`](config/config.weather_smoketest.bigsign.toml) —
+edit the `location` fields and copy it to your `config.toml`.
+
 ## Development
 
 This package lives in the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Run tooling from the repo root:
