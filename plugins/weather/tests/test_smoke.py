@@ -11,5 +11,10 @@ def test_entry_point_registers_weather_namespace():
         from led_ticker.widgets import get_widget_class
 
         assert get_widget_class("weather.current") is not None
+
+        # source registered under the same namespace
+        from led_ticker.app.factories import get_source_class
+
+        assert get_source_class("weather.current") is not None
     finally:
         L.reset_plugins()

@@ -62,3 +62,27 @@ def test_location_dict_normalized():
 
 def test_default_format_constant():
     assert _DEFAULT_FORMAT == "{temp_f}°F {condition}"
+
+
+def test_validate_config_missing_location():
+    errs = WeatherSource.validate_config({"type": "weather.current"})
+    assert any("location" in e for e in errs)
+
+
+def test_validate_config_unknown_format_field():
+    errs = WeatherSource.validate_config(
+        {"location": "NYC", "format": "{temp_f} {bogus}"}
+    )
+    assert any("bogus" in e for e in errs)
+
+
+def test_validate_config_valid_block():
+    errs = WeatherSource.validate_config(
+        {"location": "NYC", "format": "{temp_f}°F {emoji}"}
+    )
+    assert errs == []
+
+
+def test_validate_config_default_format_ok():
+    # format omitted -> the default is used -> no unknown-field error
+    assert WeatherSource.validate_config({"location": "NYC"}) == []

@@ -6,6 +6,7 @@ drives a supervised poll loop that calls `update()` every `interval` seconds;
 `self._set_value(...)` (write-order). Current-conditions fields only.
 """
 
+import string
 from typing import Any
 
 import attrs
@@ -36,6 +37,20 @@ class WeatherSource(PolledDataSource):
     location: Any = attrs.field(default="", kw_only=True)
     format: str = attrs.field(default=_DEFAULT_FORMAT, kw_only=True)
     placeholder: str = attrs.field(default="…", kw_only=True)
+
+    @classmethod
+    def validate_config(cls, cfg: dict) -> list[str]:
+        errors: list[str] = []
+        if not cfg.get("location"):
+            errors.append("weather.current: 'location' is required.")
+        fmt = cfg.get("format", _DEFAULT_FORMAT)
+        for _literal, field_name, _spec, _conv in string.Formatter().parse(fmt):
+            if field_name and field_name not in _FIELDS:
+                errors.append(
+                    f"weather.current: unknown field '{{{field_name}}}' in format "
+                    f"(known: {', '.join(_FIELDS)})."
+                )
+        return errors
 
     def __attrs_post_init__(self) -> None:
         # TOML may give location as {lat, lon} (same as the widget).
