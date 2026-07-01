@@ -86,3 +86,57 @@ def test_validate_config_valid_block():
 def test_validate_config_default_format_ok():
     # format omitted -> the default is used -> no unknown-field error
     assert WeatherSource.validate_config({"location": "NYC"}) == []
+
+
+# ── Finding 1: lazy field build ───────────────────────────────────────────────
+
+
+async def test_update_skips_unused_missing_fields(monkeypatch):
+    """update() must succeed when the API omits fields not used in the format.
+
+    Before the fix: an eager build of all 8 fields raised KeyError on feelslike_f
+    even though the format never referenced it, stalling the panel forever.
+    """
+    sparse_current = {
+        "temp_f": 0.0,
+        "condition": {"text": "x"},
+        # feelslike_f / feelslike_c / humidity / wind_mph / temp_c deliberately absent
+    }
+    monkeypatch.setattr(
+        "led_ticker_weather.source.fetch_current",
+        mock.AsyncMock(return_value=sparse_current),
+    )
+    s = _src(format="{temp_f}°F {condition}")
+    await s.update()  # must not raise
+    assert s.current == "0°F x"
+    assert s.version == 1
+
+
+# ── Finding 2: validate dry-run ───────────────────────────────────────────────
+
+
+def test_validate_config_bad_conversion_spec():
+    """{temp_f:zzz} is a valid field name but an invalid conversion spec."""
+    errs = WeatherSource.validate_config({"location": "NYC", "format": "{temp_f:zzz}"})
+    assert errs, "expected an error for bad conversion spec, got none"
+
+
+def test_validate_config_wrong_spec_for_type():
+    """{condition:d} asks for an integer conversion on a str value."""
+    errs = WeatherSource.validate_config({"location": "NYC", "format": "{condition:d}"})
+    assert errs, "expected an error for %d on a str field, got none"
+
+
+def test_validate_config_valid_float_spec():
+    """A well-formed float spec {temp_f:.0f} should pass validation."""
+    errs = WeatherSource.validate_config(
+        {"location": "NYC", "format": "{temp_f:.0f}°F"}
+    )
+    assert errs == []
+
+
+def test_validate_config_non_str_format():
+    """A non-string format value must produce a clear error, not a TypeError."""
+    errs = WeatherSource.validate_config({"location": "NYC", "format": 123})
+    assert errs, "expected an error for non-str format, got none"
+    assert any("string" in e for e in errs)
