@@ -11,3 +11,4 @@ build/
 htmlcov/
 .env
 .claude/
+.superpowers/
