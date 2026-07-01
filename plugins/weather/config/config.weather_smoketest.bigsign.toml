@@ -1,0 +1,140 @@
+# Weather value-token — bigsign smoke test (256×64)
+#
+# Validates the weather.current SOURCE (led-ticker-plugins#28): a live
+# `:weather.*:` token embedded in ordinary widget text, refreshed by a
+# background poll loop. Requires:
+#   - the led-ticker-weather plugin WITH the source (PR #28 / its release)
+#   - led-ticker-core >= 4.1
+#   - WEATHERAPI_KEY in your .env   (free tier: https://www.weatherapi.com/)
+#
+# >>> EDIT the three `location` values below to your city (name / ZIP /
+# >>> "lat,lon") before running. <<<
+#
+# What to look for on the panel:
+#   - Each weather token shows the placeholder "…" for the first ~60s
+#     (the poll loop fetches AFTER the first `interval` — kept short here so
+#     the smoke is quick), then resolves to live conditions.
+#   - :weather.emoji: renders a CONDITION SPRITE (sun / cloud / rain / …)
+#     inline next to the temperature — the {emoji} field is a colon-wrapped
+#     slug that the emoji renderer picks up for free.
+#   - feels-like + humidity + wind fields render (:weather.detail:).
+#   - The two locations poll INDEPENDENTLY.
+#   - Weather composes with v1 tokens (:clock.now: / :date.today:) and normal
+#     rendering (color providers, a rainbow border, a two-row scroll).
+#   - Resilience: a bad WEATHERAPI_KEY or a bad location must NOT freeze the
+#     panel — that token just stays on "…" and everything else keeps running.
+#     (Try a bogus location to confirm.)
+#   - Web UI: http://<pi>:8080  — status + live preview.
+#
+# Copy to config.toml on the bigsign Pi (or `make try` headless).
+# Reference: https://docs.ledticker.dev/concepts/value-tokens/
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+show_refresh_rate = true
+
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
+
+[title]
+delay = 3
+
+[transitions]
+default = "push_left"
+duration = 0.5
+easing = "ease_out"
+between_sections = "dissolve"
+
+# ---------------------------------------------------------------------------
+# Weather sources (the polled token registry). Each `id` is referenced as
+# :id: in any widget text. `interval` is short (60s) so weather appears fast
+# during the smoke; use 900–1800 in production.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "weather.home"
+type = "weather.current"
+location = "New York, US"        # <-- EDIT to your city
+interval = 60
+# format omitted -> default "{temp_f}°F {condition}"
+
+[[source]]
+id = "weather.emoji"
+type = "weather.current"
+location = "New York, US"        # <-- EDIT (same or a second city)
+interval = 60
+format = "{temp_f}° {emoji}"     # temperature + condition SPRITE
+
+[[source]]
+id = "weather.detail"
+type = "weather.current"
+location = "New York, US"        # <-- EDIT
+interval = 60
+format = "feels {feelslike_f}°  ·  {humidity}% RH  ·  {wind_mph}mph"
+
+# v1 sources, so weather composes alongside clock/date in the same text.
+[[source]]
+id = "clock.now"
+type = "clock"
+format = "%-I:%M %p"
+
+[[source]]
+id = "date.today"
+type = "date"
+format = "%A, %b %-d"
+
+# ---------------------------------------------------------------------------
+# Playlist. NOTE the schema: sections are [[playlist.section]] and widgets are
+# [[playlist.section.widget]] (singular) — NOT [[sections]]/[[sections.widgets]].
+# ---------------------------------------------------------------------------
+
+# 1) v1 + weather side by side; default weather format.
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+transition = "dissolve"
+
+[[playlist.section.widget]]
+type = "message"
+text = ":date.today:   ·   :clock.now:"
+font_color = "rainbow"
+
+[[playlist.section.widget]]
+type = "message"
+text = "Weather:  :weather.home:"
+
+# 2) the {emoji} sprite compose (temp + condition icon), with a rainbow border.
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "message"
+text = "It's  :weather.emoji:  out"
+border = "rainbow"
+
+[[playlist.section.widget]]
+type = "message"
+text = ":clock.now:    :weather.emoji:"
+font_color = "color_cycle"
+
+# 3) the detail fields on a two-row widget (held label + scrolling detail).
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "WEATHER"
+bottom_text = ":weather.detail:"
+top_color = "rainbow"

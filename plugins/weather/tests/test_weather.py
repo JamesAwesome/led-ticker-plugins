@@ -695,6 +695,49 @@ class TestWeatherUpdate:
         )
 
 
+class TestFetchCurrent:
+    async def test_fetch_current_returns_current_dict(self, monkeypatch):
+        import unittest.mock as mock
+
+        from led_ticker_weather.weather import fetch_current
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "k")
+        payload = {"current": {"temp_f": 72.0, "condition": {"text": "Clear"}}}
+        resp = mock.AsyncMock()
+        resp.json = mock.AsyncMock(return_value=payload)
+        session = mock.Mock()
+        session.get.return_value.__aenter__ = mock.AsyncMock(return_value=resp)
+        session.get.return_value.__aexit__ = mock.AsyncMock(return_value=False)
+
+        current = await fetch_current(session, "NYC")
+        assert current == {"temp_f": 72.0, "condition": {"text": "Clear"}}
+
+    async def test_fetch_current_raises_on_api_error(self, monkeypatch):
+        import unittest.mock as mock
+
+        from led_ticker_weather.weather import fetch_current
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "k")
+        payload = {"error": {"code": 1006, "message": "No matching location found."}}
+        resp = mock.AsyncMock()
+        resp.json = mock.AsyncMock(return_value=payload)
+        session = mock.Mock()
+        session.get.return_value.__aenter__ = mock.AsyncMock(return_value=resp)
+        session.get.return_value.__aexit__ = mock.AsyncMock(return_value=False)
+
+        with pytest.raises(ValueError, match="1006"):
+            await fetch_current(session, "Nowhere")
+
+    async def test_fetch_current_raises_without_key(self, monkeypatch):
+        import unittest.mock as mock
+
+        from led_ticker_weather.weather import fetch_current
+
+        monkeypatch.delenv("WEATHERAPI_KEY", raising=False)
+        with pytest.raises(ValueError, match="WEATHERAPI_KEY"):
+            await fetch_current(mock.Mock(), "NYC")
+
+
 class TestWeatherStart:
     """Behavior tests for WeatherWidget.start() — the factory classmethod."""
 

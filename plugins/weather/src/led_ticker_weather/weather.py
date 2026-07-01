@@ -33,6 +33,24 @@ from led_ticker.plugin import (
 WEATHERAPI_URL: str = "https://api.weatherapi.com/v1/current.json"
 
 
+async def fetch_current(session: aiohttp.ClientSession, location: str) -> dict:
+    """GET current conditions from WeatherAPI (/current.json) and return the
+    `current` dict. Reads WEATHERAPI_KEY from env. Raises ValueError on a
+    missing key or an API error. Shared by WeatherWidget and WeatherSource."""
+    api_key = os.getenv("WEATHERAPI_KEY", "")
+    if not api_key:
+        raise ValueError("WEATHERAPI_KEY not set. Add it to your .env file.")
+    async with session.get(
+        WEATHERAPI_URL, params={"key": api_key, "q": location}
+    ) as response:
+        data = await response.json()
+    if "error" in data:
+        code = data["error"].get("code", "?")
+        msg = data["error"].get("message", "Unknown error")
+        raise ValueError(f"WeatherAPI error {code}: {msg}")
+    return data["current"]
+
+
 def _coerce_provider(value: Any) -> ColorProvider:
     """Coerce a color field to a ColorProvider.
 
@@ -135,31 +153,12 @@ class WeatherWidget(FrameAwareBase):
 
     async def update(self) -> None:
         logging.info("Updating weather for: %s", self.location)
-        api_key = os.getenv("WEATHERAPI_KEY", "")
-        if not api_key:
-            raise ValueError("WEATHERAPI_KEY not set. Add it to your .env file.")
-        params = {
-            "key": api_key,
-            "q": self.location,
-        }
-        async with self.session.get(
-            WEATHERAPI_URL,
-            params=params,
-        ) as response:
-            data = await response.json()
-
-            # WeatherAPI returns {"error": {...}} on failure
-            if "error" in data:
-                code = data["error"].get("code", "?")
-                msg = data["error"].get("message", "Unknown error")
-                raise ValueError(f"WeatherAPI error {code}: {msg}")
-
-            current = data["current"]
-            if self.units == "imperial":
-                self.current_temp = int(current["temp_f"])
-            else:
-                self.current_temp = int(current["temp_c"])
-            self.weather = current["condition"]["text"]
+        current = await fetch_current(self.session, self.location)
+        if self.units == "imperial":
+            self.current_temp = int(current["temp_f"])
+        else:
+            self.current_temp = int(current["temp_c"])
+        self.weather = current["condition"]["text"]
 
     def draw(
         self,
