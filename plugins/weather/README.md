@@ -44,8 +44,8 @@ WEATHERAPI_KEY=your-key-here
 Then add the widget:
 
 ```toml
-[[sections]]
-[[sections.widgets]]
+[[playlist.section]]
+[[playlist.section.widget]]
 type = "weather.current"
 location = "London"
 ```
@@ -70,8 +70,8 @@ format = "{temp_f}°F {condition}"  # optional; this is the default
 Then reference it anywhere text is drawn:
 
 ```toml
-[[sections]]
-[[sections.widgets]]
+[[playlist.section]]
+[[playlist.section.widget]]
 type = "message"
 text = "NYC: :weather.nyc:"        # -> "NYC: 72°F Clear", updating live
 ```

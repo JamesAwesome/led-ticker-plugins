@@ -65,8 +65,15 @@ class WeatherSource(PolledDataSource):
                 f"weather.current: 'format' must be a string, got {type(fmt).__name__}."
             )
             return errors
+        # Parse the format (guarded: an unclosed brace like "{temp_f" raises
+        # ValueError — surface it as a clean plugin error, not a raised exception).
+        try:
+            parsed = list(string.Formatter().parse(fmt))
+        except ValueError as exc:
+            errors.append(f"weather.current: malformed format string: {exc}")
+            return errors
         # Check for unknown field names first (gives a clearer message).
-        for _literal, field_name, _spec, _conv in string.Formatter().parse(fmt):
+        for _literal, field_name, _spec, _conv in parsed:
             if field_name and field_name not in _FIELDS:
                 errors.append(
                     f"weather.current: unknown field '{{{field_name}}}' in format "

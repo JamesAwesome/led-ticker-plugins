@@ -135,6 +135,12 @@ def test_validate_config_valid_float_spec():
     assert errs == []
 
 
+def test_validate_config_malformed_format_returns_error():
+    # an unclosed brace must be a clean error, not a raised ValueError
+    errs = WeatherSource.validate_config({"location": "NYC", "format": "{temp_f"})
+    assert any("malformed" in e for e in errs)
+
+
 def test_validate_config_non_str_format():
     """A non-string format value must produce a clear error, not a TypeError."""
     errs = WeatherSource.validate_config({"location": "NYC", "format": 123})
