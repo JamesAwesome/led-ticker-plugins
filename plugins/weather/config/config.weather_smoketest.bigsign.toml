@@ -94,45 +94,46 @@ type = "date"
 format = "%A, %b %-d"
 
 # ---------------------------------------------------------------------------
-# Sections
+# Playlist. NOTE the schema: sections are [[playlist.section]] and widgets are
+# [[playlist.section.widget]] (singular) — NOT [[sections]]/[[sections.widgets]].
 # ---------------------------------------------------------------------------
 
 # 1) v1 + weather side by side; default weather format.
-[[sections]]
+[[playlist.section]]
 mode = "slideshow"
 hold_time = 6
 transition = "dissolve"
 
-[[sections.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = ":date.today:   ·   :clock.now:"
 font_color = "rainbow"
 
-[[sections.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = "Weather:  :weather.home:"
 
 # 2) the {emoji} sprite compose (temp + condition icon), with a rainbow border.
-[[sections]]
+[[playlist.section]]
 mode = "slideshow"
 hold_time = 6
 
-[[sections.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = "It's  :weather.emoji:  out"
 border = "rainbow"
 
-[[sections.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = ":clock.now:    :weather.emoji:"
 font_color = "color_cycle"
 
 # 3) the detail fields on a two-row widget (held label + scrolling detail).
-[[sections]]
+[[playlist.section]]
 mode = "slideshow"
 hold_time = 8
 
-[[sections.widgets]]
+[[playlist.section.widget]]
 type = "two_row"
 top_text = "WEATHER"
 bottom_text = ":weather.detail:"
