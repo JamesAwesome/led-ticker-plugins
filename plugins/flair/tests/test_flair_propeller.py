@@ -115,3 +115,21 @@ class TestPropellerContract:
             Propeller(spin_seconds=0.0)
         with pytest.raises(ValueError):
             Propeller(direction="sideways")
+
+
+class TestPropellerEaseDirection:
+    def test_mid_spin_angle_is_ease_out_not_ease_in(self) -> None:
+        """Pin one mid-spin angle THROUGH the live frame_for() against the
+        ease-out formula. An ease-in mutation (t**3) matches ease-out at
+        both endpoints, so endpoint tests can't catch it — this midpoint
+        can: at t=0.5, ease-out gives 0.875 (fast start), ease-in 0.125."""
+        p = Propeller(revolutions=2, spin_seconds=1.0)
+        mid = p.total_frames // 2  # t = 0.5 exactly (total_frames = 20)
+        t = mid / p.total_frames
+        eased_out = 1.0 - (1.0 - t) ** 3
+        expected = (360.0 * p.revolutions * eased_out) % 360.0
+        assert p.frame_for(mid, "HI", 160, 12).rotation == pytest.approx(expected)
+        # And distinguishable from ease-in at the same frame:
+        eased_in = t**3
+        wrong = (360.0 * p.revolutions * eased_in) % 360.0
+        assert p.frame_for(mid, "HI", 160, 12).rotation != pytest.approx(wrong)
