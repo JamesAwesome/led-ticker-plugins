@@ -31,9 +31,12 @@ def test_register_registers_propeller() -> None:
 
 def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
     """Version-skew error quality (spec §9): a core without the seam must
-    produce an actionable 'update core' message, not a bare ImportError."""
+    produce an actionable 'update core' message, not a bare ImportError.
+
+    Goes through register() — not _import_seam() directly — so a refactor
+    that drops the guard call from register() fails this test."""
     # Replace the led_ticker.plugin module in sys.modules with a stub that
-    # lacks ENGINE_TICK_MS so _import_seam() fails with the guard message.
+    # lacks ENGINE_TICK_MS so the guarded import fails with the message.
     import types
 
     stub = types.ModuleType("led_ticker.plugin")
@@ -41,4 +44,4 @@ def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "led_ticker.plugin", stub)
 
     with pytest.raises(ImportError, match=r"led-ticker-core >= 4\.3"):
-        flair_pkg._import_seam()
+        flair_pkg.register(_RecordingAPI())
