@@ -29,16 +29,19 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=2.1",
+    "led-ticker-core>=4.3",
 ]
 
 # Each entry-point NAME is a plugin namespace -> e.g. transition = "nyancat.forward".
-# One wheel, four namespaces (the loader iterates entry points, not distributions).
+# One wheel, five namespaces (the loader iterates entry points, not distributions).
+# ``flair`` is named after the wheel itself — documented exception to the
+# namespace-per-sprite-family pattern.
 [project.entry-points."led_ticker.plugins"]
 nyancat     = "led_ticker_flair.nyancat:register"
 pokeball    = "led_ticker_flair.pokeball:register"
 pacman      = "led_ticker_flair.pacman:register"
 sailor_moon = "led_ticker_flair.sailor_moon:register"
+flair       = "led_ticker_flair.flair:register"
 
 [project.optional-dependencies]
 dev = [
