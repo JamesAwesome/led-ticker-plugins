@@ -1,7 +1,7 @@
 [project]
 name = "led-ticker-flair"
 dynamic = ["version"]
-description = "Homage sprite-trail transitions for led-ticker: nyancat, pokeball, pacman, sailor_moon (+ :pokeball.ball:)."
+description = "Homage sprite-trail transitions and text animations for led-ticker: nyancat, pokeball, pacman, sailor_moon (+ :pokeball.ball:), and the flair.propeller spin-in animation."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

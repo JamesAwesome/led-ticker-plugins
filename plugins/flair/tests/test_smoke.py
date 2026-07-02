@@ -1,5 +1,6 @@
-"""One installed led-ticker-flair wheel registers all four homage namespaces
-via four entry points (the crux of the pack consolidation)."""
+"""One installed led-ticker-flair wheel registers all five namespaces via five
+entry points (the crux of the pack consolidation): four sprite-trail families
+plus the flair animation namespace."""
 
 import pytest
 from led_ticker import _plugin_loader as L
@@ -14,7 +15,7 @@ _TRANSITIONS = [
 ]
 
 
-def test_one_wheel_registers_all_four_namespaces():
+def test_one_wheel_registers_all_four_sprite_namespaces():
     L.reset_plugins()
     try:
         result = L.load_plugins(None, entry_points_enabled=True)
