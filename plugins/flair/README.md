@@ -24,7 +24,7 @@ Requires **led-ticker-core >= 4.3**.
 Shorthand (all defaults):
 
 ```toml
-[[section.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = "Hello!"
 animation = "flair.propeller"
@@ -33,7 +33,7 @@ animation = "flair.propeller"
 Inline table with overrides:
 
 ```toml
-[[section.widgets]]
+[[playlist.section.widget]]
 type = "message"
 text = "Hello!"
 animation = {style = "flair.propeller", revolutions = 3, spin_seconds = 1.5, direction = "ccw"}
