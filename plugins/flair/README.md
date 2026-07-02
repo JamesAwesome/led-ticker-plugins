@@ -49,9 +49,9 @@ animation = {style = "flair.propeller", revolutions = 3, spin_seconds = 1.5, dir
 
 ### Caveats
 
-- **Message widgets only.** `flair.propeller` works on `message`, `countdown`, and `countup` widgets. GIF / image text-overlay widgets don't rotate (the animation is ignored).
+- **Message widgets only.** `flair.propeller` works on `message` widgets (core rejects `animation` on other widget types at config load). GIF / image text-overlay widgets accept `animation` but ignore the rotation.
 - **BDF fonts only for now.** Hi-res fonts display normally but the rotation effect is skipped. `led-ticker validate` warns (rule 63) when a propeller widget uses a hi-res font.
-- **Short-hold warning.** If `spin_seconds` outlasts `hold_seconds` the spin is truncated and the text appears only briefly. `led-ticker validate` warns (rule 62). Either raise `hold_seconds` or lower `spin_seconds` / `revolutions`.
+- **Short-hold warning.** If `spin_seconds` outlasts `hold_time` the spin is truncated and the text appears only briefly. `led-ticker validate` warns (rule 62). Either raise `hold_time` or lower `spin_seconds` / `revolutions`.
 - **Phase resets each visit.** The spin restarts from the beginning every time the widget enters the rotation — it does not continue mid-spin across section cycles.
 
 ## Install

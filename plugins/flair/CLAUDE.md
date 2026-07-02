@@ -11,3 +11,7 @@ One wheel, five plugin namespaces: four sprite-trail families (`nyancat`, `pokeb
 - **No `from __future__ import annotations`** (PEP 649 / Python 3.14 rule).
 - Dep: `led-ticker` only.
 - Lint/test from the monorepo root: `make lint` / `uv run pytest plugins/flair`. CI is the root path-filtered matrix.
+- **Co-dev against an unreleased core:** the `led-ticker-core>=4.3` floor won't
+  resolve against an editable pre-release core (hatch-vcs reports e.g.
+  `4.2.2.devN`); install with `uv pip install --no-deps -e plugins/flair` and
+  run everything via `uv run --no-sync ...` until core 4.3.0 ships.
