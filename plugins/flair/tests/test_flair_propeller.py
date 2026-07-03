@@ -55,7 +55,15 @@ def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
     import types
 
     stub = types.ModuleType("led_ticker.plugin")
-    # Do NOT set make_rotation_surface — simulates a pre-4.6 core.
+    # PROVIDE the pre-4.6 symbols (a real 4.3-4.5 core has these) and
+    # withhold ONLY make_rotation_surface — so this test FAILS if the
+    # guard's probe ever regresses to a pre-4.6 symbol like
+    # ENGINE_TICK_MS (the reviewer-flagged no-op-guard mutation).
+    stub.ENGINE_TICK_MS = 50
+    from led_ticker.plugin import Animation, AnimationFrame  # real symbols
+
+    stub.Animation = Animation
+    stub.AnimationFrame = AnimationFrame
     monkeypatch.setitem(sys.modules, "led_ticker.plugin", stub)
 
     with pytest.raises(ImportError, match=r">= 4\.6"):

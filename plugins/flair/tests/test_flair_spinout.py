@@ -513,3 +513,22 @@ class TestReturnsCanvas:
         canvas = _StubCanvas()
         result = s.frame_at(1.0, canvas, _make_widget(), _make_widget())
         assert result is canvas
+
+
+class TestRule53Contract:
+    def test_unknown_kwarg_raises_type_error(self) -> None:
+        """The two-param __init__ signature is rule-53 LOAD-BEARING:
+        _build_plugin_style validates config kwargs against
+        inspect.signature(cls), so a **kwargs catch-all would silently
+        swallow config typos like revolution=3. This tripwire fails if
+        anyone adds **kwargs to __init__."""
+        import inspect
+
+        import pytest
+
+        from led_ticker_flair.flair.spinout import Spinout
+
+        with pytest.raises(TypeError):
+            Spinout(revolution=3)  # typo'd kwarg must NOT be swallowed
+        params = inspect.signature(Spinout).parameters.values()
+        assert not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params)
