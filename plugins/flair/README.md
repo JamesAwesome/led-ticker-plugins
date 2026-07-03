@@ -17,7 +17,9 @@ Homage sprite-trail transitions and text animations for [led-ticker](https://git
 
 `flair.propeller` spins a message widget's text in-plane on visit entry — a full-rotation ease-out that settles flat — then holds the text readable for the rest of the configured hold time. Transitions wait for the spin to finish before starting.
 
-Requires **led-ticker-core >= 4.3**.
+Requires **led-ticker-core >= 4.3**; with **core >= 4.5** the spin runs at
+physical resolution on scaled displays (bigsign) — hi-res fonts and emoji
+spin too.
 
 ### Config
 
@@ -50,7 +52,7 @@ animation = {style = "flair.propeller", revolutions = 3, spin_seconds = 1.5, dir
 ### Caveats
 
 - **Message widgets only.** `flair.propeller` works on `message` widgets (core rejects `animation` on other widget types at config load). GIF / image text-overlay widgets accept `animation` but ignore the rotation.
-- **BDF fonts only for now.** Hi-res fonts display normally but the rotation effect is skipped. `led-ticker validate` warns (rule 63) when a propeller widget uses a hi-res font.
+- **Hi-res fonts spin on scaled displays (core >= 4.5).** Mid-spin renders at half detail and sharpens at settle; animated `font_color` providers (rainbow, color_cycle, shimmer) freeze during the spin and resume at settle. On scale-1 displays hi-res fonts still display unrotated — `led-ticker validate` warns (rule 63) for that case only.
 - **Short-hold warning.** If `spin_seconds` outlasts `hold_time` the spin is truncated and the text appears only briefly. `led-ticker validate` warns (rule 62). Either raise `hold_time` or lower `spin_seconds` / `revolutions`.
 - **Phase resets each visit.** The spin restarts from the beginning every time the widget enters the rotation — it does not continue mid-spin across section cycles.
 
