@@ -56,6 +56,41 @@ animation = {style = "flair.propeller", revolutions = 3, spin_seconds = 1.5, dir
 - **Short-hold warning.** If `spin_seconds` outlasts `hold_time` the spin is truncated and the text appears only briefly. `led-ticker validate` warns (rule 62). Either raise `hold_time` or lower `spin_seconds` / `revolutions`.
 - **Phase resets each visit.** The spin restarts from the beginning every time the widget enters the rotation — it does not continue mid-spin across section cycles.
 
+## Spinout transition
+
+`flair.spinout` spins the outgoing widget's on-screen content like a propeller — starting at rest and accelerating — then cuts to the incoming widget. The outgoing section's background color holds through the entire spin.
+
+Requires **led-ticker-core >= 4.6**.
+
+### Config
+
+```toml
+[[playlist.section]]
+transition = "flair.spinout"
+```
+
+With knobs:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.spinout", revolutions = 3, direction = "ccw"}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `revolutions` | `2` | Full turns over the transition window (int >= 1). No landing constraint — the cut replaces the content mid-whirl. |
+| `direction` | `"cw"` | `"cw"` or `"ccw"`. |
+
+### Notes
+
+- Spin duration comes from the standard `[transitions] duration` — no separate timing knob.
+- Pairs with the propeller animation for a full cycle: `animation = "flair.propeller"` spins the text in, it rests, then `transition = "flair.spinout"` spins it out.
+- The outgoing content is snapshotted at its final position (scrolled text spins from where it stopped); colors freeze during the spin, same as the propeller animation.
+- A propeller-animated widget cut off mid-spin (hold shorter than its spin — `led-ticker validate` rule 62 warns) enters the spinout with a residual angle and briefly compounds rotations; cosmetic and sub-second.
+
+
 ## Install
 
 Part of the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Install:
