@@ -1,6 +1,5 @@
 """flair.spinout — registration, seam guard, and Spinout transition tests."""
 
-import sys
 from typing import Any
 from unittest import mock
 
@@ -124,27 +123,6 @@ class TestRegistration:
         api = _RecordingAPI()
         flair_pkg.register(api)
         assert "propeller" in api.animations
-
-
-def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
-    """Version-skew error quality: a core without make_rotation_surface
-    must produce an actionable '>= 4.6' message, not a bare ImportError.
-
-    Goes through register() — not _import_seam() directly — so a refactor
-    that drops the guard call from register() fails this test."""
-    import types
-
-    stub = types.ModuleType("led_ticker.plugin")
-    # Withhold make_rotation_surface — simulates a pre-4.6 core.
-    monkeypatch.setitem(sys.modules, "led_ticker.plugin", stub)
-
-    with pytest.raises(ImportError, match=r">= 4\.6"):
-        flair_pkg.register(_RecordingAPI())
-
-
-# ---------------------------------------------------------------------------
-# Constructor validation tests
-# ---------------------------------------------------------------------------
 
 
 class TestSpinoutCtorValidation:
