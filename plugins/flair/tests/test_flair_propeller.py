@@ -10,16 +10,24 @@ from led_ticker_flair.flair.propeller import Propeller
 
 
 class _RecordingAPI:
-    """Minimal PluginAPI stand-in recording animation registrations
+    """Minimal PluginAPI stand-in recording animation + transition registrations
     (mirror the pattern in test_packaging.py / other family tests —
     check those files and reuse their helper if one exists)."""
 
     def __init__(self) -> None:
         self.animations: dict[str, type] = {}
+        self.transitions: dict[str, type] = {}
 
     def animation(self, style: str):
         def deco(cls):
             self.animations[style] = cls
+            return cls
+
+        return deco
+
+    def transition(self, name: str):
+        def deco(cls):
+            self.transitions[name] = cls
             return cls
 
         return deco
@@ -36,16 +44,29 @@ def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
     produce an actionable 'update core' message, not a bare ImportError.
 
     Goes through register() — not _import_seam() directly — so a refactor
-    that drops the guard call from register() fails this test."""
+    that drops the guard call from register() fails this test.
+
+    The stub withholds ``make_rotation_surface`` (the 4.6 seam symbol)
+    rather than ``ENGINE_TICK_MS`` (a 4.3 symbol): probing a 4.3 symbol
+    while claiming '>= 4.6' is a no-op guard that lets a 4.3–4.5 core
+    through to a raw ImportError inside registration."""
     # Replace the led_ticker.plugin module in sys.modules with a stub that
-    # lacks ENGINE_TICK_MS so the guarded import fails with the message.
+    # lacks make_rotation_surface so the guarded import fails with the message.
     import types
 
     stub = types.ModuleType("led_ticker.plugin")
-    # Do NOT set ENGINE_TICK_MS — simulates a pre-4.3 core.
+    # PROVIDE the pre-4.6 symbols (a real 4.3-4.5 core has these) and
+    # withhold ONLY make_rotation_surface — so this test FAILS if the
+    # guard's probe ever regresses to a pre-4.6 symbol like
+    # ENGINE_TICK_MS (the reviewer-flagged no-op-guard mutation).
+    stub.ENGINE_TICK_MS = 50
+    from led_ticker.plugin import Animation, AnimationFrame  # real symbols
+
+    stub.Animation = Animation
+    stub.AnimationFrame = AnimationFrame
     monkeypatch.setitem(sys.modules, "led_ticker.plugin", stub)
 
-    with pytest.raises(ImportError, match=r"led-ticker-core >= 4\.3"):
+    with pytest.raises(ImportError, match=r">= 4\.6"):
         flair_pkg.register(_RecordingAPI())
 
 
