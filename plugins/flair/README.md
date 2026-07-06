@@ -91,6 +91,46 @@ transition = {type = "flair.spinout", revolutions = 3, direction = "ccw"}
 - A propeller-animated widget cut off mid-spin (hold shorter than its spin — `led-ticker validate` rule 62 warns) enters the spinout with a residual angle and briefly compounds rotations; cosmetic and sub-second.
 
 
+## Fisheye animation
+
+`flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
+
+Requires **led-ticker-core >= 4.7**. Message widgets only (v0.4.0). On scaled displays (bigsign) the whole scroll renders at half detail; the lens distortion masks it.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "FISH EYE MARQUEE"
+animation = "flair.fisheye"
+```
+
+With knobs (a stronger lens):
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "FISH EYE MARQUEE"
+animation = {style = "flair.fisheye", magnify = 1.33, edge_squeeze = 0.45}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `magnify` | `1.3` | Center scale (both axes). Capped by the panel height: `magnify × font line-height ≤ content_height`, else the bulged text would clip and config-load raises. For the default 6×12 font in a 16-row band the ceiling is ~1.33. |
+| `edge_squeeze` | `0.6` | Edge scale (`0 < edge_squeeze ≤ 1`). Lower = more edge compression = a more dramatic lens. |
+| `profile` | `"cosine"` | The falloff curve from edge to center. |
+
+### Notes
+
+- The lens is stationary; the scroll provides all the motion — so the effect is continuous with no phase, and a section can cut away at any instant.
+- **Edges show more text by design.** The lens is width-preserving (total scroll traversal matches an unwarped scroll), but the compressed edges reveal ~8–9 extra characters per side — the squeeze fits more in.
+- Colors stay live through the lens: a `rainbow` / `color_cycle` `font_color` keeps sweeping as the text scrolls (no freeze).
+- Held (non-overflowing) text shows a static center bulge — a legitimate emphasis look.
+
+
 ## Install
 
 Part of the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Install:
