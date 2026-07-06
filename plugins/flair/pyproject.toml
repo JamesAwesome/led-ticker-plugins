@@ -29,7 +29,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=4.6",
+    "led-ticker-core>=4.7",
 ]
 
 # Each entry-point NAME is a plugin namespace -> e.g. transition = "nyancat.forward".

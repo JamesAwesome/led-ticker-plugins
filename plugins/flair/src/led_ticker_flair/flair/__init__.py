@@ -11,29 +11,32 @@ itself (documented exception to the namespace-per-sprite-family pattern).
 
 
 def _import_seam():
-    """Import the core rotation seam; raise an actionable error when the
+    """Import the core lens seam; raise an actionable error when the
     installed core predates it (version-skew guard, spec §9).
 
-    Probes ``make_rotation_surface`` — the actual 4.6 export — rather than
-    ``ENGINE_TICK_MS`` (a 4.3 symbol). Probing a 4.3 symbol while claiming
-    '>= 4.6' is a no-op guard that lets a 4.3–4.5 core through to a raw
-    ImportError inside registration. Since register() registers propeller
-    AND spinout together and the pyproject floor is >= 4.6 anyway, failing
-    the whole register() on < 4.6 is consistent with the versioning contract.
+    Probes ``LensSpec`` — the actual 4.7 export — rather than
+    ``make_rotation_surface`` (a 4.6 symbol). Probing a 4.6 symbol while
+    claiming '>= 4.7' is a no-op guard that lets a 4.6 core through to a
+    raw ImportError inside registration. Since register() registers
+    propeller, spinout, AND fisheye together and the pyproject floor is
+    >= 4.7 anyway, failing the whole register() on < 4.7 is consistent
+    with the versioning contract.
     """
     try:
-        from led_ticker.plugin import make_rotation_surface  # noqa: F401, PLC0415
+        from led_ticker.plugin import LensSpec  # noqa: F401, PLC0415
     except ImportError as exc:
         raise ImportError(
-            "flair requires led-ticker-core >= 4.6 (the RotationSurface "
-            "transition seam); update the core image, not the flair plugin."
+            "flair requires led-ticker-core >= 4.7 (the LensSpec animation "
+            "seam); update the core image, not the flair plugin."
         ) from exc
 
 
 def register(api):
     _import_seam()
+    from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
     from led_ticker_flair.flair.propeller import Propeller  # noqa: PLC0415
     from led_ticker_flair.flair.spinout import Spinout  # noqa: PLC0415
 
     api.animation("propeller")(Propeller)
+    api.animation("fisheye")(Fisheye)
     api.transition("spinout")(Spinout)
