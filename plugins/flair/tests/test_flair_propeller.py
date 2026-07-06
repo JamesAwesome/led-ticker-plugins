@@ -40,33 +40,41 @@ def test_register_registers_propeller() -> None:
 
 
 def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
-    """Version-skew error quality (spec §9): a core without the seam must
-    produce an actionable 'update core' message, not a bare ImportError.
+    """Version-skew error quality (spec §9): a core without the LensSpec
+    seam must produce an actionable 'update core' message, not a bare
+    ImportError.
 
     Goes through register() — not _import_seam() directly — so a refactor
     that drops the guard call from register() fails this test.
 
-    The stub withholds ``make_rotation_surface`` (the 4.6 seam symbol)
-    rather than ``ENGINE_TICK_MS`` (a 4.3 symbol): probing a 4.3 symbol
-    while claiming '>= 4.6' is a no-op guard that lets a 4.3–4.5 core
-    through to a raw ImportError inside registration."""
+    The stub PROVIDES ``make_rotation_surface`` (now a pre-4.7 symbol) and
+    withholds ONLY ``LensSpec`` — so this test FAILS if the guard's probe
+    ever regresses to a pre-4.7 symbol like ``make_rotation_surface`` (the
+    reviewer-flagged no-op-guard mutation: probing a 4.6 symbol while
+    claiming '>= 4.7' would let a 4.6 core through to a raw ImportError
+    inside registration)."""
     # Replace the led_ticker.plugin module in sys.modules with a stub that
-    # lacks make_rotation_surface so the guarded import fails with the message.
+    # lacks LensSpec so the guarded import fails with the actionable message.
     import types
 
     stub = types.ModuleType("led_ticker.plugin")
-    # PROVIDE the pre-4.6 symbols (a real 4.3-4.5 core has these) and
-    # withhold ONLY make_rotation_surface — so this test FAILS if the
-    # guard's probe ever regresses to a pre-4.6 symbol like
-    # ENGINE_TICK_MS (the reviewer-flagged no-op-guard mutation).
+    # PROVIDE the pre-4.7 symbols (a real 4.6 core has these) and
+    # withhold ONLY LensSpec — so this test FAILS if the guard's probe
+    # ever regresses to a pre-4.7 symbol like ENGINE_TICK_MS or
+    # make_rotation_surface (the reviewer-flagged no-op-guard mutation).
     stub.ENGINE_TICK_MS = 50
-    from led_ticker.plugin import Animation, AnimationFrame  # real symbols
+    from led_ticker.plugin import (  # real symbols  # noqa: PLC0415
+        Animation,
+        AnimationFrame,
+        make_rotation_surface,
+    )
 
     stub.Animation = Animation
     stub.AnimationFrame = AnimationFrame
+    stub.make_rotation_surface = make_rotation_surface
     monkeypatch.setitem(sys.modules, "led_ticker.plugin", stub)
 
-    with pytest.raises(ImportError, match=r">= 4\.6"):
+    with pytest.raises(ImportError, match=r">= 4\.7"):
         flair_pkg.register(_RecordingAPI())
 
 
