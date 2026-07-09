@@ -33,17 +33,21 @@ def test_horizontal_opaque_draws_in_top_right(real_canvas):
 
 
 def test_bottom_left_anchor(real_canvas):
+    # Explicit non-black background: the config default (opaque black,
+    # (0, 0, 0)) is indistinguishable from "unlit" on a HeadlessCanvas that
+    # starts all-black, which would only let us detect glyph ink — and BDF
+    # ascent/descent reserves unused headroom above the box bottom for
+    # all-caps text with no descenders, so ink-only detection can't tell a
+    # correctly bottom-anchored box from one placed several px too high. A
+    # visible fill color makes the opaque box itself (which DOES reach the
+    # panel's bottom edge) detectable, so the assertion can be tight.
     cfg = parse_config({"font_size": 16, "corner": "bottom_left",
+                        "background": [80, 80, 80],
                         "open": {"text": "OPEN"}})
     draw_badge(real_canvas, cfg, cfg.open, frame=0)
     lit = _lit(real_canvas)
-    assert min(x for x, _ in lit) <= 3
-    # anchored to the bottom half (mirrors the top-anchor test's looseness:
-    # BDF ascent/descent reserve unused headroom for all-caps text with no
-    # descenders, so ink sits a few px inset from the physical edge — a tight
-    # "within Npx of the edge" check is font-metric-fragile; "in the bottom
-    # half" is the geometry property that actually matters here)
-    assert max(y for _, y in lit) > real_canvas.height // 2
+    assert min(x for x, _ in lit) <= 3                       # left edge
+    assert max(y for _, y in lit) >= real_canvas.height - 2  # box reaches bottom edge
 
 
 def test_transparent_background_leaves_gaps(real_canvas):
