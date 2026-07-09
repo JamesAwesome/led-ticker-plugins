@@ -7,16 +7,29 @@
 # realistic content playlist — see config/config.bigsign.example.toml in the
 # core repo for that.
 #
-# [display] block copied verbatim from config/config.bigsign.example.toml
-# (core repo) — 8x P3 32x64 panels, 2x4 vertical-serpentine, 256x64 logical.
+# [display] block mirrors config/config.bigsign.example.toml (core repo) in
+# every RP1/render knob (brightness, default_scale, gpio_slowdown, pwm_bits).
+#
+# rows/cols/chain_length deliberately do NOT copy the real 8-panel
+# rows=32/cols=64/chain_length=8 + `Remap:256,64|...` pixel_mapper_config.
+# The headless render-demo backend does not interpret the Remap mapper
+# string (that reshaping only happens in the real rgbmatrix C library on
+# hardware) — special-cased only for the literal "U-mapper" string in
+# `led_ticker/backends/headless.py`. Feeding it the real chained values
+# yields a pre-remap 512x32 canvas in headless mode, which is too short for
+# default_scale=4 (content_height x scale must fit the real panel height).
+# Setting rows=64, cols=256, chain_length=1 gives headless the correct
+# final 256x64 logical canvas directly — the same pattern already used by
+# docs/site/demos-long/tutorial-*.toml for bigsign-shaped demo renders.
+# Real bigsign hardware deploys still use config.bigsign.example.toml's
+# 8-panel rows/cols/chain_length/pixel_mapper_config block; this file is a
+# render-demo smoke fixture, not a hardware wiring config.
 
 [display]
-rows = 32
-cols = 64
-chain_length = 8
+rows = 64
+cols = 256
+chain_length = 1
 parallel = 1
-
-pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
 
 brightness = 60
 default_scale = 4
@@ -38,12 +51,16 @@ between_sections = "dissolve"
 # --- Storefront overlay: always OPEN ---
 
 [storefront]
-font_size = 40
+font_size = 16
 corner = "top_right"
 
 [storefront.open]
 text = "OPEN"
-color = "shimmer"
+# Bare `color = "shimmer"` defaults to a dim gray-blue base — too subtle to
+# read as "green" in a smoke test. Pin an explicit green base with a white
+# shimmer sweep so the checklist's "green vertical OPEN, shimmering" is
+# unambiguous on the render.
+color = { style = "shimmer", base = [0, 255, 0], shimmer = "white" }
 orientation = "vertical"
 
 [storefront.closed]
