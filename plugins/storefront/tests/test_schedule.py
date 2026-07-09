@@ -62,6 +62,31 @@ def test_parse_day_rejects_malformed(bad):
         parse_day(bad)
 
 
+def test_parse_time_rejects_fullwidth_unicode_digits():
+    # "０９:００" — fullwidth digits are \d-matching under re.UNICODE (Python's
+    # default) but must be rejected; only ASCII 0-9 is a valid clock digit.
+    with pytest.raises(ValueError):
+        parse_time("０９:００")
+
+
+def test_parse_day_rejects_zero_length_range():
+    with pytest.raises(ValueError, match="closed|00:00-24:00"):
+        parse_day("00:00-00:00")
+
+
+def test_parse_day_rejects_zero_length_range_non_midnight():
+    with pytest.raises(ValueError, match="closed|00:00-24:00"):
+        parse_day("09:00-09:00")
+
+
+def test_parse_day_overnight_wrap_still_allowed():
+    assert parse_day("18:00-02:00") == [(1080, 120)]
+
+
+def test_parse_day_all_day_still_allowed():
+    assert parse_day("00:00-24:00") == [(0, 1440)]
+
+
 def test_parse_schedule_maps_days():
     sched = parse_schedule({"mon": "09:00-17:00", "sun": "closed"})
     assert sched["mon"] == [(540, 1020)]

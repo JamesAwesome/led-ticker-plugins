@@ -105,3 +105,24 @@ def test_bad_timezone_raises():
 def test_bad_schedule_raises():
     with pytest.raises(ValueError):
         parse_config({"schedule": {"mon": "9-5"}})
+
+
+def test_font_size_zero_raises():
+    with pytest.raises(ValueError, match="font_size"):
+        parse_config({"font_size": 0})
+
+
+def test_font_size_negative_raises():
+    with pytest.raises(ValueError, match="font_size"):
+        parse_config({"font_size": -4})
+
+
+def test_padding_negative_raises():
+    with pytest.raises(ValueError, match="padding"):
+        parse_config({"padding": -5})
+
+
+def test_defaults_still_pass_validation_floor():
+    cfg = parse_config({})
+    assert cfg.font_size == 16
+    assert cfg.padding == 2

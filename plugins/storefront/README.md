@@ -66,6 +66,7 @@ Two bigsign smoke fixtures (forced-OPEN and forced-CLOSED) live in [`examples/`]
 
 - **Timezone / NTP dependency** — a wrong clock (bad `timezone`, no NTP sync, a DST edge) shows the wrong badge; the startup log always states the time the plugin thinks it is.
 - **No `led-ticker validate` coverage** — overlay config isn't covered by the widget-only `validate` command. A malformed `[storefront]` block is caught at startup instead: logged, the badge disabled, the panel keeps running.
+- **Not covered by config hot-reload** — `[storefront]` is read once at startup, not on every reload. Editing the block (schedule, badge text/color, corner, font, etc.) while the display is running has no effect until the process restarts; core's hot-reload machinery flags this as a restart-required change. Restart (`docker compose restart`, or your process manager's equivalent) to apply.
 
 ## Development
 

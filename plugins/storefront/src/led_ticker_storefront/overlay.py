@@ -37,7 +37,10 @@ class StorefrontOverlay:
     async def _poll(self):
         while True:
             await asyncio.sleep(POLL_INTERVAL_S)
-            self.state.refresh(self._clock())
+            try:
+                self.state.refresh(self._clock())
+            except Exception:
+                _log.exception("storefront: poll refresh failed")
 
     def paint(self, canvas):
         if self.state is None:

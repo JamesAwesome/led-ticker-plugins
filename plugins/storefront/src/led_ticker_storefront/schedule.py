@@ -6,7 +6,7 @@ import re
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 Range = tuple[int, int]
 
-_TIME_RE = re.compile(r"^(\d{2}):(\d{2})$")
+_TIME_RE = re.compile(r"^(\d{2}):(\d{2})$", re.ASCII)
 
 
 def parse_time(s, *, allow_24=False):
@@ -32,6 +32,11 @@ def parse_day(value):
         start_s, _, end_s = part.strip().partition("-")
         start = parse_time(start_s)
         end = parse_time(end_s, allow_24=True)
+        if start == end:
+            raise ValueError(
+                f"bad range {part!r}: zero-length range is ambiguous; "
+                'write "closed" or "00:00-24:00" instead'
+            )
         ranges.append((start, end))
     return ranges
 

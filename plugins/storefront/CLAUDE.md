@@ -74,6 +74,8 @@ pattern as core's `busy_light`.
   (logged, badge disabled, panel keeps running) — this is by design, not a gap to "fix" by
   reaching for `validate`.
 
+- **Not covered by config hot-reload.** `StorefrontOverlay.startup` reads `[storefront]` exactly once, at process startup — there is no re-parse on a hot-reload. A user editing the schedule, badge text/color, corner, or font while the display is running sees no change until the process restarts; core reports this block as restart-required. Don't add a "the config reloaded, why didn't the badge change" bug report to the confusion pile — point at a restart.
+
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
 
 ## Commands

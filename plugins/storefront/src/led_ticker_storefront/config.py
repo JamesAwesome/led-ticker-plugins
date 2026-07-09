@@ -98,6 +98,11 @@ def parse_config(block):
     tz = ZoneInfo(tz_name) if tz_name else None
     font_name = block.get("font")
     font_size = int(block.get("font_size", 16))
+    if font_size < 1:
+        raise ValueError(f"storefront.font_size must be >= 1; got {font_size!r}")
+    padding = int(block.get("padding", 2))
+    if padding < 0:
+        raise ValueError(f"storefront.padding must be >= 0; got {padding!r}")
     font = FONT_DEFAULT if font_name is None else resolve_font(font_name, font_size)
     return StorefrontConfig(
         open=_badge(
@@ -109,7 +114,7 @@ def parse_config(block):
             shared_corner, shared_orient, "closed",
         ),
         background=_background(block.get("background")),
-        padding=int(block.get("padding", 2)),
+        padding=padding,
         font_name=font_name,
         font_size=font_size,
         font=font,
