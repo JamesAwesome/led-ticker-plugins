@@ -52,6 +52,31 @@ def test_background_color():
     assert cfg.background == (10, 20, 30)
 
 
+def test_background_too_short_raises():
+    with pytest.raises(ValueError):
+        parse_config({"background": [255, 0]})
+
+
+def test_background_too_long_raises():
+    with pytest.raises(ValueError):
+        parse_config({"background": [255, 0, 0, 1]})
+
+
+def test_background_out_of_range_raises():
+    with pytest.raises(ValueError):
+        parse_config({"background": [300, 0, 0]})
+
+
+def test_font_resolved_eagerly_default():
+    cfg = parse_config({})
+    assert cfg.font
+
+
+def test_bad_font_raises_at_parse_time():
+    with pytest.raises(Exception):  # noqa: B017 - UnknownFontError subclass
+        parse_config({"font": "NoSuchFontXYZ", "font_size": 16})
+
+
 def test_color_provider_shorthand():
     cfg = parse_config({"open": {"color": "shimmer"}})
     assert cfg.open.color.frame_invariant is False   # shimmer animates

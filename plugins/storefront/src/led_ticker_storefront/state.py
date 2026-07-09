@@ -19,7 +19,6 @@ class StorefrontState:
     is_open: bool = False
     frame: int = 0
     _initialized: bool = False
-    _last_reason: str = ""
 
     def refresh(self, now):
         reason = evaluate(self.config.schedule, now)
@@ -39,5 +38,4 @@ class StorefrontState:
                 _log.info(
                     "storefront: CLOSED (no matching range; now %s %s)", when, tz_str
                 )
-            self._last_reason = reason or ""
         return changed

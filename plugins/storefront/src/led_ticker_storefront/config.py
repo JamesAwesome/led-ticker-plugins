@@ -6,10 +6,12 @@ from zoneinfo import ZoneInfo
 
 import attrs
 from led_ticker.plugin import (
+    FONT_DEFAULT,
     ColorProvider,
     as_color_provider,
     coerce_color_provider,
     make_color,
+    resolve_font,
 )
 
 from led_ticker_storefront.schedule import parse_schedule
@@ -37,6 +39,7 @@ class StorefrontConfig:
     padding: int
     font_name: str | None
     font_size: int
+    font: object
     tz: object
     schedule: dict
 
@@ -72,7 +75,16 @@ def _background(value):
         return (0, 0, 0)
     if isinstance(value, str) and value.strip().lower() == "none":
         return None
-    return tuple(int(c) for c in value)
+    rgb = tuple(int(c) for c in value)
+    if len(rgb) != 3:
+        raise ValueError(
+            f"storefront.background must be exactly 3 ints (r, g, b); got {value!r}"
+        )
+    if not all(0 <= c <= 255 for c in rgb):
+        raise ValueError(
+            f"storefront.background values must each be 0-255; got {value!r}"
+        )
+    return rgb
 
 
 def parse_config(block):
@@ -84,6 +96,9 @@ def parse_config(block):
     )
     tz_name = block.get("timezone")
     tz = ZoneInfo(tz_name) if tz_name else None
+    font_name = block.get("font")
+    font_size = int(block.get("font_size", 16))
+    font = FONT_DEFAULT if font_name is None else resolve_font(font_name, font_size)
     return StorefrontConfig(
         open=_badge(
             block.get("open", {}), "OPEN", _DEFAULT_OPEN,
@@ -95,8 +110,9 @@ def parse_config(block):
         ),
         background=_background(block.get("background")),
         padding=int(block.get("padding", 2)),
-        font_name=block.get("font"),
-        font_size=int(block.get("font_size", 16)),
+        font_name=font_name,
+        font_size=font_size,
+        font=font,
         tz=tz,
         schedule=parse_schedule(block.get("schedule", {})),
     )

@@ -6,7 +6,6 @@ color providers."""
 import logging
 
 from led_ticker.plugin import (
-    FONT_DEFAULT,
     HiresFont,
     ScaledCanvas,
     compute_baseline_for_band,
@@ -14,17 +13,15 @@ from led_ticker.plugin import (
     draw_text_per_char,
     font_line_height_logical,
     get_text_width,
-    resolve_font,
     safe_scale,
 )
 
 _log = logging.getLogger("led_ticker_storefront")
 
-
-def _resolve(cfg):
-    if cfg.font_name is None:
-        return FONT_DEFAULT
-    return resolve_font(cfg.font_name, cfg.font_size)
+# One-shot latch so the oversized-badge warning logs once per distinct
+# oversized configuration instead of flooding the log every render tick
+# (~20/sec). Keyed on the values that determine "does it fit".
+_WARNED_OVERSIZED = set()
 
 
 def _target(real_canvas, font, cfg):
@@ -67,7 +64,7 @@ def draw_badge(real_canvas, cfg, badge, frame):
     text = badge.text
     if not text:
         return
-    font = _resolve(cfg)
+    font = cfg.font
     canvas = _target(real_canvas, font, cfg)
     scale = safe_scale(canvas)
     pad = cfg.padding
@@ -84,11 +81,15 @@ def draw_badge(real_canvas, cfg, badge, frame):
         box_h = line_h + 2 * pad
 
     if box_w > width or box_h > height:
-        _log.warning(
-            "storefront: badge %r (%dx%d) does not fit the %dx%d panel at "
-            "font_size=%d; skipping. Use a smaller font_size or a shorter label.",
-            text, box_w, box_h, width, height, cfg.font_size,
-        )
+        key = (text, cfg.font_size, badge.orientation, width, height)
+        if key not in _WARNED_OVERSIZED:
+            _WARNED_OVERSIZED.add(key)
+            _log.warning(
+                "storefront: badge %r (%dx%d) does not fit the %dx%d panel at "
+                "font_size=%d; skipping. Use a smaller font_size or a shorter "
+                "label.",
+                text, box_w, box_h, width, height, cfg.font_size,
+            )
         return
 
     x0 = 0 if "left" in badge.corner else width - box_w

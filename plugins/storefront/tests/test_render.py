@@ -110,3 +110,18 @@ def test_oversized_badge_skips_without_raising(small_canvas, caplog):
     with caplog.at_level(logging.WARNING, logger="led_ticker_storefront"):
         draw_badge(small_canvas, cfg, cfg.open, frame=0)   # must not raise
     assert not _lit(small_canvas)
+
+
+def test_oversized_badge_warning_latches_once(small_canvas, caplog):
+    import logging
+
+    from led_ticker_storefront import render as render_mod
+
+    render_mod._WARNED_OVERSIZED.clear()
+    cfg = parse_config({"font_size": 200, "open": {"text": "CLOSED"}})
+    with caplog.at_level(logging.WARNING, logger="led_ticker_storefront"):
+        draw_badge(small_canvas, cfg, cfg.open, frame=0)
+        draw_badge(small_canvas, cfg, cfg.open, frame=1)
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert not _lit(small_canvas)
