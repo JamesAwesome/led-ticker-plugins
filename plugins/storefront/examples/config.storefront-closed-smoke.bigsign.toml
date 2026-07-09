@@ -1,0 +1,73 @@
+# Smoke config: storefront plugin, ALWAYS CLOSED, on a realistic bigsign panel.
+#
+# Purpose: visual-validation gate for Task 10 (see docs/visual-validation.md
+# in the core repo). Renders an opaque red horizontal "CLOSED" badge in the
+# top-right corner, composited over a scrolling rainbow ticker message, so
+# the overlay-over-moving-content path is exercised for the other layout
+# branch (horizontal, non-animated color). Not meant to be a realistic
+# content playlist — see config/config.bigsign.example.toml in the core repo
+# for that.
+#
+# [display] block copied verbatim from config/config.bigsign.example.toml
+# (core repo) — 8x P3 32x64 panels, 2x4 vertical-serpentine, 256x64 logical.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+show_refresh_rate = true
+
+[title]
+delay = 5
+
+[transitions]
+default = "push_left"
+duration = 0.5
+easing = "ease_out"
+between_sections = "dissolve"
+
+# --- Storefront overlay: always CLOSED ---
+
+[storefront]
+font_size = 40
+corner = "top_right"
+
+[storefront.open]
+text = "OPEN"
+color = "shimmer"
+orientation = "vertical"
+
+[storefront.closed]
+text = "CLOSED"
+color = [255, 0, 0]
+orientation = "horizontal"
+
+[storefront.schedule]
+mon = "closed"
+tue = "closed"
+wed = "closed"
+thu = "closed"
+fri = "closed"
+sat = "closed"
+sun = "closed"
+
+# --- Playlist: one scrolling section so the badge composites over motion ---
+
+[[playlist.section]]
+mode = "ticker"
+loop_count = 0
+
+[[playlist.section.widget]]
+type = "message"
+text = "Fresh coffee and pastries all day - welcome in!"
+font_color = "rainbow"
