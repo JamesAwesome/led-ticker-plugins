@@ -7,6 +7,8 @@ later task; this stub registers the namespace for entry-point discovery."""
 
 
 def register(api):
-    # Overlay wiring (api.on_startup + api.overlay) is added in the wiring
-    # task once the overlay module exists. Namespace discovery only for now.
-    return
+    from led_ticker_storefront.overlay import StorefrontOverlay
+
+    overlay = StorefrontOverlay()
+    api.on_startup(overlay.startup)
+    api.overlay(overlay.paint)
