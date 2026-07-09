@@ -1,8 +1,12 @@
+from datetime import datetime
+
 import pytest
 
 from led_ticker_storefront.schedule import (
     DAYS,
+    evaluate,
     fmt_range,
+    is_open,
     parse_day,
     parse_schedule,
     parse_time,
@@ -73,3 +77,60 @@ def test_parse_schedule_rejects_unknown_day():
 def test_fmt_range():
     assert fmt_range((540, 1020)) == "09:00-17:00"
     assert fmt_range((0, 1440)) == "00:00-24:00"
+
+
+# Monday 2024-01-01 .. Sunday 2024-01-07 (weekday() Mon=0)
+MON_1000 = datetime(2024, 1, 1, 10, 0)
+MON_0800 = datetime(2024, 1, 1, 8, 0)
+MON_1700 = datetime(2024, 1, 1, 17, 0)   # exclusive end → closed
+MON_1230 = datetime(2024, 1, 1, 12, 30)  # lunch gap
+FRI_2300 = datetime(2024, 1, 5, 23, 0)   # inside 18:00-02:00 start day
+SAT_0030 = datetime(2024, 1, 6, 0, 30)   # inside Friday's wrap, next calendar day
+SAT_0230 = datetime(2024, 1, 6, 2, 30)   # after wrap end → closed
+SUN_1200 = datetime(2024, 1, 7, 12, 0)
+
+
+def _sched():
+    return parse_schedule({
+        "mon": "09:00-12:00,13:00-17:00",
+        "fri": "18:00-02:00",
+        "sun": "closed",
+    })
+
+
+def test_open_inside_range():
+    assert evaluate(_sched(), MON_1000) == "mon 09:00-12:00"
+    assert is_open(_sched(), MON_1000) is True
+
+
+def test_closed_before_open():
+    assert evaluate(_sched(), MON_0800) is None
+
+
+def test_end_is_exclusive():
+    assert is_open(_sched(), MON_1700) is False
+
+
+def test_closed_in_lunch_gap():
+    assert is_open(_sched(), MON_1230) is False
+
+
+def test_overnight_open_on_start_day():
+    assert evaluate(_sched(), FRI_2300) == "fri 18:00-02:00"
+
+
+def test_overnight_open_after_midnight_belongs_to_prev_day():
+    assert evaluate(_sched(), SAT_0030) == "fri 18:00-02:00"
+
+
+def test_overnight_closed_after_wrap_end():
+    assert is_open(_sched(), SAT_0230) is False
+
+
+def test_absent_day_is_closed():
+    # Saturday has no key and no inherited wrap after 02:00 → closed
+    assert is_open(_sched(), datetime(2024, 1, 6, 12, 0)) is False
+
+
+def test_explicit_closed_day():
+    assert is_open(_sched(), SUN_1200) is False

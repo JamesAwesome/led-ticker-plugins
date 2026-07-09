@@ -49,3 +49,30 @@ def parse_schedule(raw):
 def fmt_range(r):
     start, end = r
     return f"{start // 60:02d}:{start % 60:02d}-{end // 60:02d}:{end % 60:02d}"
+
+
+def evaluate(schedule, now):
+    """Return a reason string ("mon 09:00-17:00") if `now` is within business
+    hours, else None. A range whose end <= start wraps past midnight and belongs
+    to its START day, so a time early on day D can be covered by day D-1's wrap."""
+    minute = now.hour * 60 + now.minute
+    today = DAYS[now.weekday()]
+    yesterday = DAYS[(now.weekday() - 1) % 7]
+
+    for start, end in schedule.get(today, []):
+        if end > start:          # normal same-day range
+            if start <= minute < end:
+                return f"{today} {fmt_range((start, end))}"
+        else:                    # wrap: open from start until midnight
+            if minute >= start:
+                return f"{today} {fmt_range((start, end))}"
+
+    for start, end in schedule.get(yesterday, []):
+        if end <= start and minute < end:   # yesterday's wrap continuing past midnight
+            return f"{yesterday} {fmt_range((start, end))}"
+
+    return None
+
+
+def is_open(schedule, now):
+    return evaluate(schedule, now) is not None
