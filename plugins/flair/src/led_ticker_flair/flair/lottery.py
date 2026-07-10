@@ -1,29 +1,47 @@
-"""flair.lottery — lottery-ball roll animation: pure geometry + timeline.
+"""flair.lottery — lottery-ball roll animation.
 
 N labeled balls roll in from off-canvas left in a staggered relay (one ball
 after another, each on its own ``ticks_per_ball``-tick window) and settle
-flat into evenly spaced slots across the panel. The eventual widget (a
-later task) follows the same two-surface blit design as ``flair.propeller``
-/ ``flair.fisheye``: each ball is painted once onto a real-canvas surface
-and re-blitted every tick at the angle this module computes, until it
-settles exactly flat at 0 degrees — this module supplies ONLY that pure
-geometry/timeline math (layout, roll phase, font sizing); no painting, no
-widget class, no core imports beyond the public ``led_ticker.plugin``
-surface.
+flat into evenly spaced slots across the panel. The ``Lottery`` widget
+follows the same two-surface blit design as ``flair.propeller`` /
+``flair.fisheye``: each ball is painted ONCE onto its own
+``RotationSurface`` at its slot position, then re-blitted every tick at
+the angle/translation this module's geometry functions compute, until it
+settles exactly flat at 0 degrees onto a shared ``_rest_surface``
+composite. Everything above ``Lottery`` (``layout``, ``ball_phase``,
+``auto_font_size``, ``paint_face``) is pure geometry/paint math with no
+widget-lifecycle concerns; no core imports beyond the public
+``led_ticker.plugin`` surface.
+
+Blit-geometry finding (verified against core's ``rotate.rotate_blit``,
+whose forward map is ``dst = R(src - c) + c + t``): passing the ball's
+own painted SLOT center as ``cx_logical`` (the pivot) makes the face spin
+about itself, and ``dx_logical = current_cx - slot_cx`` (the ``RotationSurface.blit``
+seam's translation) slides that spinning face to the rolling position.
+Both are logical px; ``rotate_blit``'s ``t`` folds in cleanly because the
+pivot and the translation are independent terms in the same forward map.
 """
 
 import logging
 import math
 import types
+from typing import Any
 
+import attrs
 from led_ticker.plugin import (
     ENGINE_TICK_MS,
+    Canvas,
+    DrawResult,
+    FrameAwareBase,
     compute_baseline_for_band,
     draw_with_emoji,
     get_text_width,
+    is_scaled,
     make_color,
+    make_rotation_surface,
     paint_hires,
     resolve_font,
+    unwrap_to_real,
 )
 
 logger = logging.getLogger("led_ticker_flair")
@@ -194,6 +212,7 @@ def paint_face(
     word: str,
     font_name: str,
     scale: int,
+    warn_unfittable: bool = True,
 ) -> None:
     """Paint one lottery-ball face onto ``target``.
 
@@ -233,7 +252,10 @@ def paint_face(
     widget's config validation should already have caught this at
     preflight), the circle is still painted but the word is skipped;
     logs one WARNING via the ``"led_ticker_flair"`` logger as a
-    belt-and-braces render-time guard.
+    belt-and-braces render-time guard, unless ``warn_unfittable=False``
+    (the ``Lottery`` widget passes this after the first per-word warning
+    so a rebuild on every re-roll doesn't re-log the same word forever —
+    see its ``_warned_words`` latch).
     """
     if style not in ("classic", "solid"):
         raise ValueError(
@@ -273,13 +295,14 @@ def paint_face(
     diameter_px = 2 * r_px
     size = auto_font_size(word, diameter_px, font_name, scale)
     if size == 0:
-        logger.warning(
-            "flair.lottery: word %r does not fit a %dpx ball face (font=%s) "
-            "— painting the ball without a label",
-            word,
-            diameter_px,
-            font_name,
-        )
+        if warn_unfittable:
+            logger.warning(
+                "flair.lottery: word %r does not fit a %dpx ball face "
+                "(font=%s) — painting the ball without a label",
+                word,
+                diameter_px,
+                font_name,
+            )
         return
 
     font = resolve_font(font_name, size)
@@ -294,3 +317,274 @@ def paint_face(
     draw_with_emoji(
         target, font, x_logical, baseline_logical, make_color(*text_rgb), word
     )
+
+
+# ---------------------------------------------------------------------------
+# Lottery widget (Task 3)
+# ---------------------------------------------------------------------------
+
+# Inset (real px) between a ball's edge and the vertical content band —
+# tighter (1px) with no border since there's nothing else to clear; wider
+# (3px) with a border painted so the ball doesn't collide with the ring.
+_INSET_NO_BORDER = 1
+_INSET_WITH_BORDER = 3
+
+
+@attrs.define
+class Lottery(FrameAwareBase):
+    """N labeled balls roll in from off-canvas left, one at a time, and
+    settle flat into evenly spaced slots (a physical lottery-ball draw).
+
+    Requires a scaled display (``default_scale > 1`` — bigsign): the balls
+    paint at physical resolution via ``paint_hires``/``RotationSurface``,
+    the same hi-res-only design as inline hi-res emoji. On a scale-1
+    canvas (smallsign), ``draw`` logs once and paints nothing.
+
+    Render design: each ball owns a construct-once ``RotationSurface``
+    (spec R2/R3 lifecycle) painted ONCE per visit with its face at its
+    SLOT position; every tick the currently-rolling ball is re-blitted
+    with ``RotationSurface.blit(canvas, angle, slot_cx, dx_logical=...)``
+    — pivoting about its own painted slot center (so it spins about
+    itself) and translating by the remaining travel distance (so it
+    rolls). A ball settles by compositing its face into a second shared
+    ``_rest_surface`` (once per settle event, not per frame) so already-
+    settled balls cost one flat blit per tick regardless of ``n``.
+    """
+
+    words: list[str]
+    ball_style: str = "classic"
+    colors: Any = None
+    roll_ms: int = 800
+    font: str = "Inter-Bold"
+    border: Any | None = attrs.field(default=None, kw_only=True)
+    end_padding: int = 0
+
+    # Resolved per-ball ring/fill colors: `colors` verbatim (as tuples) when
+    # given, else the PALETTE cycled in ball order — computed once at
+    # construction so draw()/rebuilds never re-decide it.
+    _resolved_colors: list[tuple[int, int, int]] = attrs.field(init=False, factory=list)
+
+    # Per-ball construct-once rotation surfaces (one per word) + the shared
+    # "already settled" composite. Both are dropped (set to None) by
+    # `reset_frame` to force a from-scratch rebuild (= the re-roll) on the
+    # next visit; `_ensure_built` recreates them lazily.
+    _surfaces: list[Any] | None = attrs.field(init=False, default=None)
+    _rest_surface: Any = attrs.field(init=False, default=None)
+    # Cache key `_ensure_built` compares against to decide whether the
+    # existing surfaces still match the live canvas's geometry (a shared
+    # widget instance can be drawn under different scale/content_height
+    # across sections — same guard shape as `RotationSurface.matches()`).
+    _built_for: tuple[int, int, int, int] | None = attrs.field(init=False, default=None)
+    _settled: list[bool] = attrs.field(init=False, factory=list)
+    _slot_centers_px: list[int] = attrs.field(init=False, factory=list)
+    _slot_cx_logical: list[float] = attrs.field(init=False, factory=list)
+    _diameter_px: int = attrs.field(init=False, default=0)
+    _r_px: int = attrs.field(init=False, default=0)
+    _cy_logical: float = attrs.field(init=False, default=0.0)
+    _tpb: int = attrs.field(init=False, default=1)
+    # Scale-1 guard: latch so the "requires a scaled display" log fires
+    # once per instance, not once per tick.
+    _warned_scale: bool = attrs.field(init=False, default=False)
+    # Unfittable-word latch: `paint_face` would otherwise re-log the same
+    # word's WARNING on every re-roll rebuild (each visit rebuilds the
+    # surfaces from scratch). Persists across `reset_frame` (NOT dropped
+    # with the surfaces) since it's about the word/font/diameter
+    # combination, not about a specific surface generation.
+    _warned_words: set[str] = attrs.field(init=False, factory=set)
+
+    def __attrs_post_init__(self) -> None:
+        if self.colors is None:
+            n = len(self.words)
+            self._resolved_colors = [PALETTE[i % len(PALETTE)] for i in range(n)]
+        else:
+            self._resolved_colors = [tuple(c) for c in self.colors]
+
+    def reset_frame(self) -> None:
+        # Visit entry: drop the surfaces so `_ensure_built` rebuilds from
+        # scratch on the next draw — that rebuild IS the re-roll (fresh
+        # off-canvas start, `_settled` reset to all-False).
+        super().reset_frame()
+        self._surfaces = None
+        self._rest_surface = None
+        self._built_for = None
+
+    def _geometry_key(self, canvas: Any) -> tuple[int, int, int, int]:
+        return (canvas.scale, canvas.width, canvas.height, canvas.content_height)
+
+    def _ensure_built(self, canvas: Any) -> None:
+        key = self._geometry_key(canvas)
+        if self._surfaces is not None and self._built_for == key:
+            return
+
+        real = unwrap_to_real(canvas)
+        scale = canvas.scale
+        panel_w = real.width
+        # Real height of the CONTENT band (handles letterboxing — a
+        # section's content_height can be shorter than the full real
+        # panel height); `layout` needs the band the balls actually
+        # occupy, not the whole physical panel.
+        panel_h = canvas.height * scale
+        inset = _INSET_WITH_BORDER if self.border is not None else _INSET_NO_BORDER
+
+        diameter_px, slot_centers_px = layout(len(self.words), panel_w, panel_h, inset)
+        r_px = diameter_px // 2
+        cy_logical = canvas.height / 2.0
+        tpb = ticks_per_ball(self.roll_ms)
+
+        surfaces: list[Any] = []
+        slot_cx_logical: list[float] = []
+        for i, word in enumerate(self.words):
+            cx_logical = slot_centers_px[i] / scale
+            slot_cx_logical.append(cx_logical)
+
+            fits = auto_font_size(word, diameter_px, self.font, scale) != 0
+            warn = not fits and word not in self._warned_words
+            if not fits:
+                self._warned_words.add(word)
+
+            surface = make_rotation_surface(canvas)
+            surface.clear()
+            paint_face(
+                surface.target,
+                cx_logical=cx_logical,
+                cy_logical=cy_logical,
+                r_px=r_px,
+                style=self.ball_style,
+                color=self._resolved_colors[i],
+                word=word,
+                font_name=self.font,
+                scale=scale,
+                warn_unfittable=warn,
+            )
+            surface.snapshot()
+            surfaces.append(surface)
+
+        rest_surface = make_rotation_surface(canvas)
+        rest_surface.clear()
+        rest_surface.snapshot()
+
+        self._surfaces = surfaces
+        self._rest_surface = rest_surface
+        self._settled = [False] * len(self.words)
+        self._slot_centers_px = slot_centers_px
+        self._slot_cx_logical = slot_cx_logical
+        self._diameter_px = diameter_px
+        self._r_px = r_px
+        self._cy_logical = cy_logical
+        self._tpb = tpb
+        self._built_for = key
+
+    def _draw_settled_direct(self, canvas: Any, y_offset: int) -> None:
+        """Transition-composite fallback (``y_offset != 0``): `blit` has no
+        vertical-translation param, so paint every ball fully settled
+        (angle 0, at its slot) straight onto the live canvas at the
+        shifted cy. Frames are paused during transitions (constraint:
+        `run_transition` calls `pause_frame()`), so this is a single
+        still composite, not a lost tick of animation."""
+        shifted_cy = self._cy_logical + y_offset
+        for i, word in enumerate(self.words):
+            paint_face(
+                canvas,
+                cx_logical=self._slot_cx_logical[i],
+                cy_logical=shifted_cy,
+                r_px=self._r_px,
+                style=self.ball_style,
+                color=self._resolved_colors[i],
+                word=word,
+                font_name=self.font,
+                scale=canvas.scale,
+                warn_unfittable=False,
+            )
+
+    def draw(
+        self,
+        canvas: Canvas,
+        cursor_pos: int = 0,
+        *,
+        y_offset: int = 0,
+        font_color: Any = None,
+    ) -> DrawResult:
+        if not is_scaled(canvas):
+            if not self._warned_scale:
+                logger.warning(
+                    "flair.lottery requires a scaled display (bigsign); skipping"
+                )
+                self._warned_scale = True
+            return canvas, 0
+
+        # Border paints FIRST (frames the panel, not the balls) — same
+        # order as every other bordered widget in core.
+        if self.border is not None:
+            self.border.paint(canvas, self.frame_for("border"))
+
+        self._ensure_built(canvas)
+
+        if y_offset != 0:
+            self._draw_settled_direct(canvas, y_offset)
+            return canvas, 0
+
+        # `_ensure_built` just ran (unconditionally, above) and always
+        # populates both — narrow away the `| None` for the type checker.
+        assert self._surfaces is not None
+        surfaces = self._surfaces
+
+        frame = self._frame_count
+        # Angle/pivot are irrelevant at angle=0 — an identity copy of
+        # whichever balls have already settled this visit.
+        self._rest_surface.blit(canvas, 0.0, 0.0)
+
+        # Balls settle strictly in order (each owns a disjoint tick
+        # window). Under the normal per-tick cadence (advance_frame then
+        # draw, every tick — constraint #12) at most one ball crosses its
+        # settle boundary per call. But this loop doesn't assume that: it
+        # walks every not-yet-settled ball in order, composites any whose
+        # window has ALREADY fully elapsed (handles a multi-tick jump —
+        # e.g. a re-roll landing straight past several balls' windows in
+        # one call), and stops at the first ball that's still genuinely
+        # rolling (or still parked off-canvas, not yet due) — that one
+        # gets the per-tick rotate+translate blit; nothing past it is
+        # touched this tick.
+        for i in range(len(self.words)):
+            if self._settled[i]:
+                continue
+
+            slot_cx = self._slot_cx_logical[i]
+            cx_real, angle, settled = ball_phase(
+                frame, i, self._tpb, self._diameter_px, self._slot_centers_px[i]
+            )
+
+            if settled:
+                # Composite once into the rest surface so subsequent ticks
+                # render this ball via the cheap flat rest-blit instead of
+                # re-computing/re-blitting its own surface. `_rest_surface`
+                # was already blitted onto `canvas` above (top of this
+                # tick), BEFORE this composite — so without an explicit
+                # blit here, a ball settling on this exact tick wouldn't
+                # appear until the NEXT tick's rest-blit (a one-frame
+                # pop-in gap). `angle=0.0` / `dx_logical=0.0` (ball_phase's
+                # settled branch always returns cx == slot_cx, angle ==
+                # 0.0) paints it flat at its slot, same as the rest-blit
+                # would next tick.
+                paint_face(
+                    self._rest_surface.target,
+                    cx_logical=slot_cx,
+                    cy_logical=self._cy_logical,
+                    r_px=self._r_px,
+                    style=self.ball_style,
+                    color=self._resolved_colors[i],
+                    word=self.words[i],
+                    font_name=self.font,
+                    scale=canvas.scale,
+                    warn_unfittable=False,
+                )
+                self._rest_surface.snapshot()
+                self._settled[i] = True
+                surfaces[i].blit(canvas, 0.0, slot_cx)
+                continue
+
+            cx_logical = cx_real / canvas.scale
+            dx_logical = cx_logical - slot_cx
+            surfaces[i].blit(canvas, angle, slot_cx, dx_logical=dx_logical)
+            break
+
+        return canvas, 0

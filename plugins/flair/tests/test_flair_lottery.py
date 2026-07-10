@@ -10,10 +10,12 @@ from led_ticker.plugin import (
     HeadlessCanvas,
     ScaledCanvas,
     make_rotation_surface,
+    unwrap_to_real,
 )
 
 from led_ticker_flair.flair.lottery import (
     PALETTE,
+    Lottery,
     auto_font_size,
     ball_phase,
     layout,
@@ -388,3 +390,148 @@ class TestPaintFaceRejectsBadStyle:
                 font_name="Inter-Bold",
                 scale=_SCALE,
             )
+
+
+# ---------------------------------------------------------------------------
+# Lottery widget (Task 3)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingBorder:
+    """Test double for the ``border`` field: records the underlying real
+    canvas's lit-pixel count at the moment ``paint`` is called, so a test
+    can assert the border ran BEFORE any ball pixel landed (order via a
+    side-channel observation, not a mock call-order API)."""
+
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+
+    def paint(self, canvas, frame) -> None:
+        self.calls.append(unwrap_to_real(canvas).count_nonzero())
+
+
+class TestLotteryWidget:
+    WORDS = ["cat", "dog", "fox"]
+
+    def _widget(self, **kwargs) -> Lottery:
+        return Lottery(words=list(self.WORDS), **kwargs)
+
+    def test_scale_one_paints_nothing_and_logs_once(self, caplog) -> None:
+        real = HeadlessCanvas(width=_PANEL_W, height=_PANEL_H)  # unscaled
+        widget = self._widget()
+        with caplog.at_level(logging.WARNING, logger="led_ticker_flair"):
+            widget.draw(real)
+            widget.draw(real)  # second call must NOT re-log (latch)
+
+        assert real.count_nonzero() == 0
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "flair.lottery" in warnings[0].getMessage()
+        assert "scaled display" in warnings[0].getMessage()
+
+    def test_frame_zero_lights_pixels(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+        canvas.real.Clear()
+        widget.draw(canvas)
+        assert canvas.real.count_nonzero() > 0
+
+    def test_mid_roll_frame_differs_from_frame_zero(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        frame0_pixels = dict(canvas.real._pixels)
+
+        for _ in range(8):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+        mid_pixels = dict(canvas.real._pixels)
+
+        assert mid_pixels != frame0_pixels
+
+    def test_all_settled_output_stable_across_draws(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+        total_ticks = ticks_per_ball(widget.roll_ms) * len(self.WORDS)
+
+        # Drive frame-by-frame with a draw every tick (the real engine's
+        # cadence, constraint #12) well past the last ball's settle point.
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for _ in range(total_ticks + 5):
+            widget.advance_frame()
+            canvas.real.Clear()
+            widget.draw(canvas)
+
+        snap1 = dict(canvas.real._pixels)
+        canvas.real.Clear()
+        widget.draw(canvas)
+        snap2 = dict(canvas.real._pixels)
+
+        assert snap1, "expected all three settled balls to paint something"
+        assert snap1 == snap2
+
+    def test_reset_frame_rerolls(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        frame0_pixels = dict(canvas.real._pixels)
+
+        for _ in range(20):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)  # mid-roll draw, proves state advanced
+
+        widget.reset_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+        post_reset_pixels = dict(canvas.real._pixels)
+
+        assert post_reset_pixels == frame0_pixels
+
+    def test_border_paints_before_ball_pixels(self) -> None:
+        canvas = _make_wrapper()
+        border = _RecordingBorder()
+        widget = self._widget(border=border)
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+
+        assert border.calls == [0], "border must see the canvas before ball pixels"
+        assert canvas.real.count_nonzero() > 0
+
+    def test_returns_canvas_and_zero_cursor(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+        assert widget.draw(canvas) == (canvas, 0)
+        assert widget.draw(canvas, y_offset=3) == (canvas, 0)
+
+    def test_y_offset_direct_paints_settled_shifted(self) -> None:
+        canvas_a = _make_wrapper()
+        widget_a = self._widget()
+        canvas_a.real.Clear()
+        widget_a.draw(canvas_a, y_offset=2)
+        ys_a = [y for _x, y in canvas_a.real._pixels]
+
+        canvas_b = _make_wrapper()
+        widget_b = self._widget()
+        canvas_b.real.Clear()
+        widget_b.draw(canvas_b, y_offset=5)
+        ys_b = [y for _x, y in canvas_b.real._pixels]
+
+        assert ys_a and ys_b
+        # Same content (all 3 words fully settled), shifted by exactly
+        # (5 - 2) logical rows * scale real px — proves the y_offset
+        # branch direct-paints rather than rolling/animating. Compare the
+        # TOP edge only: these balls are near full-panel-height (3-word
+        # layout), so a downward shift clips the BOTTOM edge against the
+        # panel differently for each offset (verified: total nonzero
+        # counts differ, 8391 vs 6579, purely from that clipping) — the
+        # top edge is unclipped for both and shifts by exactly the
+        # expected real-pixel delta.
+        assert min(ys_b) - min(ys_a) == (5 - 2) * _SCALE
