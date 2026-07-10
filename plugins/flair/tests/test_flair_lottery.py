@@ -516,30 +516,118 @@ class TestLotteryWidget:
         assert widget.draw(canvas) == (canvas, 0)
         assert widget.draw(canvas, y_offset=3) == (canvas, 0)
 
-    def test_y_offset_direct_paints_settled_shifted(self) -> None:
+    def test_y_offset_all_settled_shows_settled_row_shifted(self) -> None:
+        """Once every ball has settled, a y_offset draw still shows that
+        settled row — just shifted — via the SAME two-surface blit path
+        (dy_logical) rather than a special-cased direct paint. This is the
+        old `test_y_offset_direct_paints_settled_shifted` assertion,
+        preserved because it's still a true statement about the settled
+        state; it's no longer the ONLY thing y_offset can render (see
+        `test_y_offset_renders_current_frame_shifted` below for the
+        mid-roll case the old code got wrong)."""
+        total_ticks = ticks_per_ball(800) * len(self.WORDS)
+
         canvas_a = _make_wrapper()
         widget_a = self._widget()
+        for _ in range(total_ticks + 5):
+            widget_a.advance_frame()
         canvas_a.real.Clear()
         widget_a.draw(canvas_a, y_offset=2)
         ys_a = [y for _x, y in canvas_a.real._pixels]
 
         canvas_b = _make_wrapper()
         widget_b = self._widget()
+        for _ in range(total_ticks + 5):
+            widget_b.advance_frame()
         canvas_b.real.Clear()
         widget_b.draw(canvas_b, y_offset=5)
         ys_b = [y for _x, y in canvas_b.real._pixels]
 
         assert ys_a and ys_b
         # Same content (all 3 words fully settled), shifted by exactly
-        # (5 - 2) logical rows * scale real px — proves the y_offset
-        # branch direct-paints rather than rolling/animating. Compare the
-        # TOP edge only: these balls are near full-panel-height (3-word
-        # layout), so a downward shift clips the BOTTOM edge against the
-        # panel differently for each offset (verified: total nonzero
-        # counts differ, 8391 vs 6579, purely from that clipping) — the
-        # top edge is unclipped for both and shifts by exactly the
-        # expected real-pixel delta.
+        # (5 - 2) logical rows * scale real px. Compare the TOP edge only:
+        # these balls are near full-panel-height (3-word layout), so a
+        # downward shift clips the BOTTOM edge against the panel
+        # differently for each offset — the top edge is unclipped for both
+        # and shifts by exactly the expected real-pixel delta.
         assert min(ys_b) - min(ys_a) == (5 - 2) * _SCALE
+
+    def test_y_offset_renders_current_frame_shifted(self) -> None:
+        """MAJOR-finding regression: a y_offset draw must render the SAME
+        roll-state content as a y_offset=0 draw at the same frame, just
+        translated — not substitute an all-settled composite. Uses an
+        8-word layout (small ball diameter) so the vertical shift used
+        here doesn't clip against the panel edge, keeping the pixel-set
+        comparison clean."""
+        words = ["ax", "by", "cz", "do", "eh", "fi", "gu", "hy"]
+        dy = 4  # logical rows
+
+        canvas_a = _make_wrapper()
+        widget_a = Lottery(words=list(words))
+        for _ in range(3):
+            widget_a.advance_frame()
+        canvas_a.real.Clear()
+        widget_a.draw(canvas_a)
+        pixels_a = set(canvas_a.real._pixels)
+
+        canvas_b = _make_wrapper()
+        widget_b = Lottery(words=list(words))
+        for _ in range(3):
+            widget_b.advance_frame()
+        canvas_b.real.Clear()
+        widget_b.draw(canvas_b, y_offset=dy)
+        pixels_b = set(canvas_b.real._pixels)
+
+        assert pixels_a and pixels_b
+        shifted_a = {(x, y + dy * _SCALE) for x, y in pixels_a}
+
+        # tolerance of 1 real row/col for blit rounding (rotate + half-res
+        # round-trip is not pixel-exact) — a lit pixel in one set must have
+        # a lit neighbor within Chebyshev distance 1 in the other.
+        def _unmatched(pixels, other) -> int:
+            count = 0
+            for x, y in pixels:
+                if any(
+                    (x + ddx, y + ddy) in other
+                    for ddx in (-1, 0, 1)
+                    for ddy in (-1, 0, 1)
+                ):
+                    continue
+                count += 1
+            return count
+
+        unmatched_b = _unmatched(pixels_b, shifted_a)
+        unmatched_a = _unmatched(shifted_a, pixels_b)
+        assert unmatched_b / len(pixels_b) < 0.05
+        assert unmatched_a / len(shifted_a) < 0.05
+
+    def test_y_offset_incoming_push_does_not_reveal_finished_row(self) -> None:
+        """Direct probe for the review's finding: an incoming push
+        transition resets the widget (fresh `reset_frame`, frame 0) and
+        then draws it across a range of y_offset values as it slides in.
+        The OLD `_draw_settled_direct` path painted every ball fully
+        settled regardless of frame — spoiling the reveal by sliding in
+        the FINISHED row. The fix must show, at most, the very start of
+        the roll (mostly/entirely off-canvas) — nowhere near the fully
+        settled pixel count."""
+        canvas = _make_wrapper()
+        widget = self._widget()
+        widget.reset_frame()
+        canvas.real.Clear()
+        widget.draw(canvas, y_offset=8)
+        frame0_lit = canvas.real.count_nonzero()
+
+        total_ticks = ticks_per_ball(800) * len(self.WORDS)
+        settled_canvas = _make_wrapper()
+        settled_widget = self._widget()
+        for _ in range(total_ticks + 5):
+            settled_widget.advance_frame()
+        settled_canvas.real.Clear()
+        settled_widget.draw(settled_canvas)
+        settled_lit = settled_canvas.real.count_nonzero()
+
+        assert settled_lit > 0
+        assert frame0_lit < 0.2 * settled_lit
 
 
 # ---------------------------------------------------------------------------

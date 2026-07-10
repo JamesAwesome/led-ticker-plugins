@@ -28,6 +28,14 @@ about itself, and ``dx_logical = current_cx - slot_cx`` (the ``RotationSurface.b
 seam's translation) slides that spinning face to the rolling position.
 Both are logical px; ``rotate_blit``'s ``t`` folds in cleanly because the
 pivot and the translation are independent terms in the same forward map.
+
+``draw()``'s ``y_offset`` renders the CURRENT roll frame shifted via
+``dy_logical`` (core ``>=4.10``, same seam as ``dx_logical``) — every
+``blit()`` call forwards ``dy_logical=float(y_offset)``, so a push
+transition (which draws this widget at a range of ``y_offset`` values)
+sees exactly the same content a plain ``y_offset=0`` draw at that frame
+would show, translated. There is no separate "paint everything settled"
+path for the transition case.
 """
 
 import logging
@@ -615,28 +623,6 @@ class Lottery(FrameAwareBase):
         self._tpb = tpb
         self._built_for = key
 
-    def _draw_settled_direct(self, canvas: Any, y_offset: int) -> None:
-        """Transition-composite fallback (``y_offset != 0``): `blit` has no
-        vertical-translation param, so paint every ball fully settled
-        (angle 0, at its slot) straight onto the live canvas at the
-        shifted cy. Frames are paused during transitions (constraint:
-        `run_transition` calls `pause_frame()`), so this is a single
-        still composite, not a lost tick of animation."""
-        shifted_cy = self._cy_logical + y_offset
-        for i, word in enumerate(self.words):
-            paint_face(
-                canvas,
-                cx_logical=self._slot_cx_logical[i],
-                cy_logical=shifted_cy,
-                r_px=self._r_px,
-                style=self.ball_style,
-                color=self._resolved_colors[i],
-                word=word,
-                font_name=self.font,
-                scale=canvas.scale,
-                warn_unfittable=False,
-            )
-
     def draw(
         self,
         canvas: Canvas,
@@ -660,19 +646,28 @@ class Lottery(FrameAwareBase):
 
         self._ensure_built(canvas)
 
-        if y_offset != 0:
-            self._draw_settled_direct(canvas, y_offset)
-            return canvas, 0
-
         # `_ensure_built` just ran (unconditionally, above) and always
         # populates both — narrow away the `| None` for the type checker.
         assert self._surfaces is not None
         surfaces = self._surfaces
 
+        # `y_offset` is LOGICAL units (the widget-draw contract), the same
+        # unit `RotationSurface.blit`'s `dy_logical` takes — every blit call
+        # below forwards it unchanged. This path is used for BOTH the
+        # normal y_offset=0 draw and any transition compositing that shifts
+        # the widget vertically (PushUp/PushDown): rendering the CURRENT
+        # roll frame shifted, rather than substituting an all-settled
+        # composite, is what keeps an incoming push from spoiling the
+        # reveal (it slides in whatever the frame-0 state actually is —
+        # empty/just-starting — and the roll plays out after the push) and
+        # keeps an outgoing mid-roll push from popping unrolled balls into
+        # existence (it shows the exact mid-roll state, shifted).
+        dy_logical = float(y_offset)
+
         frame = self._frame_count
         # Angle/pivot are irrelevant at angle=0 — an identity copy of
         # whichever balls have already settled this visit.
-        self._rest_surface.blit(canvas, 0.0, 0.0)
+        self._rest_surface.blit(canvas, 0.0, 0.0, dy_logical=dy_logical)
 
         # Rack-fill choreography: roll-order j (0-based, the TEMPORAL order
         # balls enter) carries word/slot index n-1-j — the first ball to
@@ -737,12 +732,14 @@ class Lottery(FrameAwareBase):
                 )
                 self._rest_surface.snapshot()
                 self._settled[i] = True
-                surfaces[i].blit(canvas, 0.0, slot_cx)
+                surfaces[i].blit(canvas, 0.0, slot_cx, dy_logical=dy_logical)
                 continue
 
             cx_logical = cx_real / canvas.scale
             dx_logical = cx_logical - slot_cx
-            surfaces[i].blit(canvas, angle, slot_cx, dx_logical=dx_logical)
+            surfaces[i].blit(
+                canvas, angle, slot_cx, dx_logical=dx_logical, dy_logical=dy_logical
+            )
             break
 
         return canvas, 0
