@@ -76,6 +76,41 @@ pattern as core's `busy_light`.
 
 - **Not covered by config hot-reload.** `StorefrontOverlay.startup` reads `[storefront]` exactly once, at process startup — there is no re-parse on a hot-reload. A user editing the schedule, badge text/color, corner, or font while the display is running sees no change until the process restarts; core reports this block as restart-required. Don't add a "the config reloaded, why didn't the badge change" bug report to the confusion pile — point at a restart.
 
+- **Exception precedence — specific > recurring > weekly; REPLACES, never merges.**
+  `schedule.py:ranges_for` checks `(year, month, day)` in `exceptions` first, then
+  `(None, month, day)`, then falls back to the weekly `schedule[DAYS[d.weekday()]]` lookup. A
+  matching exception's ranges (including `[]` for `"closed"`) replace the day's ranges outright
+  — there is no merge with the weekly schedule underneath a matched exception key.
+
+- **Wrap-belongs-to-start-day generalizes to exception days.** `evaluate` derives "yesterday"
+  by calendar date, not weekday — `ranges_for(schedule, exceptions, today - timedelta(days=1))`
+  — so a range that wraps past midnight still covers the early hours of the next calendar date
+  even when that next date is itself an exception (e.g. `"closed"`). This is the same
+  most-relitigated wrap rule from v1, now proven to hold across the exception boundary too.
+  Tripwires: `test_wrap_belongs_to_start_day_into_closed_exception` (a weekly Friday
+  `18:00-02:00` wrap carries into a `"closed"` Saturday exception) and
+  `test_exception_day_wrap_carries_into_next_day` (an NYE exception's wrap carries into a
+  `"closed"` Jan 1 exception). If you touch `ranges_for` or `evaluate`, re-run both before
+  assuming a "fix."
+
+- **`next_change` is a deliberate brute-force minute scan — do not "optimize" it.**
+  `schedule.py:next_change` calls `is_open` once per minute for up to 48 hours (2880 calls of
+  pure int arithmetic) until the open/closed state flips, then returns that instant. This is
+  intentional, not a placeholder: a minute scan matches `evaluate`'s semantics by construction,
+  with no separate boundary-derivation formula that can drift out of sync with `evaluate` as
+  the exception/wrap rules evolve. It only runs inside `state.refresh`'s `if changed:` branch —
+  i.e. once per real state flip, not once per 30s poll tick — so the cost is bounded. Resist
+  rewriting this as a closed-form "find the next range boundary" calculation unless it is
+  proven to produce byte-identical results to `evaluate` across every wrap/exception case in
+  `test_schedule.py`.
+
+- **`ExcKey` shape: `tuple[int | None, int, int]` = `(year, month, day)`.** `year=None` marks a
+  recurring `"MM-DD"` key; a concrete int marks a specific `"YYYY-MM-DD"` key. Both key shapes
+  are validated as real calendar dates at parse time (`_validate_calendar_date` in
+  `schedule.py`) — recurring `"02-29"` is allowed because the validation probes a hardcoded
+  leap year (2024); at evaluation time it then only matches during actual leap years
+  (`test_recurring_feb29_matches_leap_years_only`).
+
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
 
 ## Commands
