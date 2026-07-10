@@ -168,6 +168,7 @@ colors = [[255, 60, 60], [60, 220, 60], [255, 180, 0]]
 | `ball_style` | `"classic"` / `"solid"` | `"classic"` | See above. |
 | `colors` | list of `[r, g, b]` | auto-palette | Must match `words` length if given. Colors the ring (classic) or the fill (solid). |
 | `roll_ms` | int >= 100 | `800` | Wall-clock roll duration per ball (the staggered relay's per-ball window). |
+| `choreography` | `"rack_fill"` / `"roll_through"` | `"rack_fill"` | Entry order. `rack_fill`: first ball rolls to the RIGHTMOST slot, each next stops short — no ball ever crosses a settled one. `roll_through`: balls fill left-to-right in word order, later balls visibly rolling in front of the settled ones they pass. Both end reading `words` left-to-right. |
 | `font` | str | `"Inter-Bold"` | Hi-res font used for each ball's label. |
 | `border` | any core border spec | none | Same `border` field as `message`/`countdown`/`two_row`/etc — paints the panel perimeter, not the balls. |
 
