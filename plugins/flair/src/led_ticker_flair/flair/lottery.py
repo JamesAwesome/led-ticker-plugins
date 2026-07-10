@@ -176,18 +176,31 @@ def ball_phase(
     return cx, angle, False
 
 
-def roll_order_for_slot(slot_index: int, n: int) -> int:
-    """Map a slot index to its rack-fill roll order (temporal entry order),
-    or vice versa — the mapping ``j = n - 1 - i`` is self-inverse, so this
-    one function converts in either direction.
+CHOREOGRAPHIES = ("rack_fill", "roll_through")
 
-    Rack-fill choreography: the FIRST ball to roll (roll order 0) targets
+
+def roll_order_for_slot(
+    slot_index: int, n: int, choreography: str = "rack_fill"
+) -> int:
+    """Map a slot index to its roll order (temporal entry order), or vice
+    versa — BOTH mappings are self-inverse (``n - 1 - i`` and identity), so
+    this one function converts in either direction for either mode.
+
+    ``"rack_fill"`` (default): the FIRST ball to roll (roll order 0) targets
     the RIGHTMOST slot (``n - 1``); the next stops one slot short; and so
-    on, so no ball ever rolls through an already-settled one. Word index
-    always equals slot index (the final display reads the config's
-    ``words`` left-to-right, unchanged) — only the TIMING of which slot's
-    ball rolls first is remapped.
+    on, so no ball ever rolls through an already-settled one.
+
+    ``"roll_through"``: roll order == slot index — balls fill left-to-right
+    in config order, and a later ball visibly rolls in front of (over) the
+    already-settled balls it passes. The original v0.5.0-dev look, kept as
+    an opt-in.
+
+    In BOTH modes word index always equals slot index (the final display
+    reads the config's ``words`` left-to-right, unchanged) — only the TIMING
+    of which slot's ball rolls first differs.
     """
+    if choreography == "roll_through":
+        return slot_index
     return n - 1 - slot_index
 
 
@@ -391,6 +404,10 @@ class Lottery(FrameAwareBase):
     colors: Any = None
     roll_ms: int = 800
     font: str = "Inter-Bold"
+    # Entry order: "rack_fill" (first entrant lands rightmost, no crossings)
+    # or "roll_through" (left-to-right fill; later balls roll over settled
+    # ones). See roll_order_for_slot.
+    choreography: str = "rack_fill"
     border: Any | None = attrs.field(default=None, kw_only=True)
     # Layout-contract field; inert for a held full-panel widget — the engine
     # never scrolls this widget (draw() always returns cursor_pos == 0).
@@ -479,6 +496,12 @@ class Lottery(FrameAwareBase):
         ball_style = cfg.get("ball_style", "classic")
         if ball_style not in ("classic", "solid"):
             errors.append(f"ball_style {ball_style!r} must be 'classic' or 'solid'")
+
+        choreography = cfg.get("choreography", "rack_fill")
+        if choreography not in CHOREOGRAPHIES:
+            errors.append(
+                f"choreography {choreography!r} must be one of {CHOREOGRAPHIES}"
+            )
 
         roll_ms = cfg.get("roll_ms", 800)
         if isinstance(roll_ms, bool) or not isinstance(roll_ms, int) or roll_ms < 100:
@@ -692,12 +715,16 @@ class Lottery(FrameAwareBase):
         # yet due) — that one gets the per-tick rotate+translate blit;
         # nothing past it (in roll order) is touched this tick.
         n = len(self.words)
-        for i in reversed(range(n)):
+        # Walk slots in ROLL order (the self-inverse mapping yields the slot
+        # for each roll-order j): rack_fill walks right-to-left, roll_through
+        # left-to-right. The rolling ball is blitted last either way, so in
+        # roll_through it naturally paints OVER settled balls it passes.
+        for i in (roll_order_for_slot(j, n, self.choreography) for j in range(n)):
             if self._settled[i]:
                 continue
 
             slot_cx = self._slot_cx_logical[i]
-            roll_order = roll_order_for_slot(i, n)
+            roll_order = roll_order_for_slot(i, n, self.choreography)
             cx_real, angle, settled = ball_phase(
                 frame,
                 roll_order,

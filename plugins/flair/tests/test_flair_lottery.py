@@ -781,6 +781,97 @@ class TestRackFillChoreography:
         assert set(settled_snapshots) == {0, 1, 2}
 
 
+class TestChoreographyKnob:
+    """`choreography` selects the entry order: "rack_fill" (default, v0.5.0
+    behavior — first entrant lands rightmost, no crossings) or "roll_through"
+    (the original look — balls fill left-to-right in word order, later balls
+    visibly rolling in front of settled ones)."""
+
+    WORDS = ["cat", "dog", "fox"]
+
+    def test_default_is_rack_fill(self) -> None:
+        assert Lottery(words=list(self.WORDS)).choreography == "rack_fill"
+
+    def test_roll_through_first_entrant_settles_leftmost(self) -> None:
+        canvas = _make_wrapper()
+        widget = Lottery(words=list(self.WORDS), choreography="roll_through")
+        tpb = ticks_per_ball(widget.roll_ms)
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for _ in range(tpb):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+
+        # Slot 0 ("cat", leftmost) settles FIRST under roll_through.
+        assert widget._settled == [True, False, False]
+
+    def test_roll_through_later_ball_crosses_a_settled_one(self) -> None:
+        """The signature roll-through look: ball 1's path to slot 1 sweeps
+        THROUGH settled slot 0's face — its region must change on at least
+        one frame while ball 1 rolls (the exact opposite of rack_fill's
+        byte-stability invariant)."""
+        canvas = _make_wrapper()
+        widget = Lottery(words=list(self.WORDS), choreography="roll_through")
+        diameter, slots = layout(3, _PANEL_W, _PANEL_H, _INSET_NO_BORDER)
+        r = diameter // 2
+        tpb = ticks_per_ball(widget.roll_ms)
+
+        def region_snapshot(pixels: dict, cx: int) -> dict:
+            return {
+                (x, y): rgb
+                for (x, y), rgb in pixels.items()
+                if (x - cx) ** 2 + (y - _CY_P) ** 2 <= r * r
+            }
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        # Roll ball 0 (slot 0) to rest.
+        for _ in range(tpb):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+        assert widget._settled[0] is True
+        baseline = region_snapshot(canvas.real._pixels, slots[0])
+
+        # During ball 1's window, slot 0's region must change at least once.
+        changed = False
+        for _ in range(tpb):
+            widget.advance_frame()
+            canvas.real.Clear()
+            widget.draw(canvas)
+            if region_snapshot(canvas.real._pixels, slots[0]) != baseline:
+                changed = True
+                break
+        assert changed, "roll_through ball never crossed the settled slot-0 face"
+
+    def test_roll_through_final_display_reads_config_order(self) -> None:
+        canvas = _make_wrapper()
+        widget = Lottery(words=list(self.WORDS), choreography="roll_through")
+        tpb = ticks_per_ball(widget.roll_ms)
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for _ in range(tpb * 3 + 2):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+        assert widget._settled == [True, True, True]
+        # ring colors pair with words: slot i rim sample == PALETTE[i]
+        diameter, slots = layout(3, _PANEL_W, _PANEL_H, _INSET_NO_BORDER)
+        r = diameter // 2
+        for i in range(3):
+            assert canvas.real.get_pixel(slots[i], _CY_P - r + 1) == PALETTE[i]
+
+    def test_validate_config_rejects_unknown_choreography(self) -> None:
+        errs = Lottery.validate_config({"words": ["a"], "choreography": "spiral"})
+        assert any("choreography" in e for e in errs)
+
+    def test_validate_config_accepts_both_modes(self) -> None:
+        for mode in ("rack_fill", "roll_through"):
+            assert Lottery.validate_config({"words": ["a"], "choreography": mode}) == []
+
+
 # ---------------------------------------------------------------------------
 # Config validation (Task 4)
 # ---------------------------------------------------------------------------
