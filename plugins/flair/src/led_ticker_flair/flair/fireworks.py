@@ -256,6 +256,18 @@ class Fireworks:
         colors: Any = None,
         seed: int | None = None,
     ) -> None:
+        """``seed``: explicit seed = reproducible across fresh instances; a
+        re-fire of the SAME instance continues the rng (bursts vary per
+        firing). Two fresh instances constructed with the same explicit
+        ``seed`` plan an IDENTICAL first firing (the rng starts from the
+        same state); firing either instance a second time draws further
+        from that same rng stream, so the second firing's plan differs from
+        the first even though the seed never changes -- reproducibility is
+        per-instance-per-firing, not "this seed always plans this exact
+        sequence forever". ``seed=None`` (default) seeds from OS entropy
+        per instance AND reseeds on every re-fire (see the re-fire branch in
+        ``frame_at``), so repeated firings vary at runtime either way.
+        """
         if bursts is not None:
             bad_bursts = not isinstance(bursts, int) or isinstance(bursts, bool)
             if bad_bursts or not (
@@ -446,8 +458,25 @@ class Fireworks:
         per-pixel-per-circle test), then does a SINGLE full-panel pass
         painting black where the mask is unset -- O(sum of bounding boxes
         + w*h), not O(bursts * w*h).
+
+        Late-bloom perf short-circuit: deep in the "bloom" phase every
+        burst's radius grows toward ``hypot(w, h)`` (see ``burst_state``),
+        so late frames commonly have EVERY burst's clamped bbox spanning
+        the whole panel -- the naive stamp-then-scan degrades to
+        O(bursts * w * h) precisely when it matters most (measured ~9.7ms
+        dev / ~68ms projected Pi-5 at 512x64, blowing the ~50ms/20fps
+        frame budget). Before stamping a burst, check whether its radius
+        alone already proves TOTAL coverage: a circle covers a whole
+        rectangle iff its radius reaches the rectangle's farthest corner
+        from the circle's center (the max-distance point from any fixed
+        center to a convex rectangle is always a corner). When that holds,
+        the union of ALL bursts (this one plus any others) is provably
+        total -- every pixel is revealed -- so we skip the mask (and any
+        remaining bursts) entirely and paint no complement black this
+        frame, rather than building a full-panel mask just to discover
+        every pixel is set.
         """
-        mask = bytearray(w * h)
+        mask: bytearray | None = None
         for b in self._plan or ():
             radius, _phase = burst_state(b, t, w, h)
             if radius <= 0:
@@ -458,6 +487,18 @@ class Fireworks:
             x1 = min(w - 1, math.ceil(cx + radius))
             y0 = max(0, math.floor(cy - radius))
             y1 = min(h - 1, math.ceil(cy + radius))
+
+            if x0 == 0 and y0 == 0 and x1 == w - 1 and y1 == h - 1:
+                dx = max(cx, (w - 1) - cx)
+                dy = max(cy, (h - 1) - cy)
+                if r2 >= dx * dx + dy * dy:
+                    # This single burst's circle already covers the entire
+                    # panel -- the union is total. Nothing to blacken, and
+                    # no point examining the remaining bursts.
+                    return
+
+            if mask is None:
+                mask = bytearray(w * h)
             for y in range(y0, y1 + 1):
                 dy2 = (y - cy) ** 2
                 row = y * w
@@ -465,6 +506,12 @@ class Fireworks:
                     dx2 = (x - cx) ** 2
                     if dx2 + dy2 <= r2:
                         mask[row + x] = 1
+
+        if mask is None:
+            # No burst has opened at all this frame -- the complement is
+            # the whole panel (same result the all-zero mask below would
+            # have produced; skips allocating it).
+            mask = bytearray(w * h)
 
         for y in range(h):
             row = y * w

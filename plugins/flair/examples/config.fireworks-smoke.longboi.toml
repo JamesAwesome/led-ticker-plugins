@@ -1,0 +1,67 @@
+# Longboi SMOKE TEST — flair.fireworks transition (plugins#34, on branch)
+#
+# Purpose: headless render-demo smoke fixture for the fireworks transition on
+# a 512x64 (default_scale = 4) canvas — the widest panel shape, and the
+# geometry this transition's late-bloom perf short-circuit is tuned against
+# (worst-frame measurements were taken at this exact 512x64 size). rows=64/
+# cols=512/chain_length=1 gives the headless backend the final logical
+# canvas directly, same rationale as the bigsign fixture in this directory.
+# This is a render-demo fixture, not a hardware wiring config; real longboi
+# deploys use config/config.longboi.toml in the core repo (4-panel
+# horizontal chain, no pixel_mapper_config needed).
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.fireworks-smoke.longboi.toml
+#   -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   Section 1 (GOLD "LAUNCH")  holds 3s, then the default 6-burst plan (auto
+#     burst_count for 512x64, the maximum of the spec's 3-6 clamp — the
+#     widest panel gets the most bursts) launches, opens, and blooms to full
+#     panel coverage revealing section 2.
+#   Section 2 (CYAN "BLOOM")  holds 3s, then fires back the same way.
+#   Watch specifically for a smooth late-bloom sweep with no visible stall —
+#     this is the panel size the perf short-circuit in `_blackout_complement`
+#     targets (6 bursts x 512x64 is the worst-case union-mask shape).
+#
+# If anything looks wrong: docs/visual-validation.md (core repo).
+
+[display]
+rows = 64
+cols = 512
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+
+[transitions]
+between_sections = "flair.fireworks"
+duration = 1.2
+
+# --- Section 1: gold text, launches fireworks into section 2 -----------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+
+[[playlist.section.widget]]
+type = "message"
+text = "LAUNCH"
+center = true
+font_color = [255, 200, 0]
+
+# --- Section 2: cyan text, fires back into section 1 --------------------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+
+[[playlist.section.widget]]
+type = "message"
+text = "BLOOM"
+center = true
+font_color = [0, 220, 255]

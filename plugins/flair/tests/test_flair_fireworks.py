@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 from led_ticker.plugin import ScaledCanvas
 
+from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.fireworks import (
     PALETTE,
     Burst,
@@ -581,3 +582,166 @@ class TestScaledCanvasEffectPixels:
         # the code mistakenly used `wrapped.SetPixel` instead of
         # `real.SetPixel`) must be untouched.
         assert (58, 20) not in real._pixels
+
+
+# ---------------------------------------------------------------------------
+# Registration (Task 3) -- _RecordingAPI idiom copied per this repo's
+# per-file-duplication convention (see test_flair_spinout.py / test_flair_fisheye.py).
+# ---------------------------------------------------------------------------
+
+
+class _RecordingAPI:
+    """Minimal PluginAPI stand-in recording animation + transition registrations."""
+
+    def __init__(self) -> None:
+        self.animations: dict[str, type] = {}
+        self.transitions: dict[str, type] = {}
+        self.widgets: dict[str, type] = {}
+
+    def animation(self, style: str):
+        def deco(cls):
+            self.animations[style] = cls
+            return cls
+
+        return deco
+
+    def transition(self, name: str):
+        def deco(cls):
+            self.transitions[name] = cls
+            return cls
+
+        return deco
+
+    def widget(self, name: str):
+        def deco(cls):
+            self.widgets[name] = cls
+            return cls
+
+        return deco
+
+
+class TestRegistration:
+    def test_fireworks_registered(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert "fireworks" in api.transitions
+        assert api.transitions["fireworks"] is Fireworks
+
+    def test_spinout_still_registered(self) -> None:
+        """Fireworks registration must not displace the existing spinout."""
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert "spinout" in api.transitions
+
+    def test_other_namespaces_unaffected(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert "propeller" in api.animations
+        assert "fisheye" in api.animations
+        assert "lottery" in api.widgets
+
+
+# ---------------------------------------------------------------------------
+# Mandatory fold-in 2 (Task-2 review) -- explicit-seed refire semantics
+# ---------------------------------------------------------------------------
+
+
+class TestSeedRefireSemantics:
+    """Pins the docstring contract on `seed`: an explicit seed reproduces
+    the FIRST firing identically across fresh instances, but a re-fire of
+    the SAME instance continues the rng (so the second firing's plan
+    varies) -- reproducibility is per-instance-per-firing, not a promise
+    that the same seed always plans the same sequence forever.
+    """
+
+    @staticmethod
+    def _fire_full_sweep(fw: Fireworks, w: int = 160, h: int = 16) -> list[Burst]:
+        canvas = _StubCanvas(width=w, height=h)
+        outgoing = _make_widget(draw_pixel=True)
+        incoming = _make_widget(draw_pixel=True)
+        for t in (i / 20 for i in range(21)):  # 0.0, 0.05, ..., 1.0
+            fw.frame_at(t, canvas, outgoing, incoming)
+        assert fw._plan is not None
+        return fw._plan
+
+    def test_same_instance_two_firings_differ(self) -> None:
+        fw = Fireworks(seed=7)
+        first_plan = self._fire_full_sweep(fw)
+        second_plan = self._fire_full_sweep(fw)
+        assert second_plan != first_plan
+
+    def test_fresh_instances_same_seed_first_firing_identical(self) -> None:
+        first_plan = self._fire_full_sweep(Fireworks(seed=7))
+        second_plan = self._fire_full_sweep(Fireworks(seed=7))
+        assert second_plan == first_plan
+
+
+# ---------------------------------------------------------------------------
+# Mandatory fold-in 1 (Task-2 review) -- late-bloom perf short-circuit
+# ---------------------------------------------------------------------------
+
+
+class TestLateBloomPerfShortCircuit:
+    """A burst whose radius alone already covers the panel's farthest
+    corner proves the union of ALL bursts is total -- `_blackout_complement`
+    must skip painting any complement black that frame (and skip building
+    the mask at all) rather than degrading to an O(bursts * w * h)
+    stamp-then-scan on every late-bloom frame.
+    """
+
+    def test_full_cover_burst_paints_zero_black_complement_pixels(self) -> None:
+        fw = Fireworks(seed=1)
+        w, h = 512, 64
+        canvas = _StubCanvas(width=w, height=h)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_fill_widget((0, 255, 0))
+
+        # Centered burst; radius_max is irrelevant here since bloom-phase
+        # radius (see burst_state) grows toward hypot(w, h) regardless --
+        # by t=0.9 it comfortably exceeds the farthest-corner distance from
+        # panel center for ANY spec-valid radius_max.
+        burst = Burst(
+            cx=w / 2.0,
+            cy=h / 2.0,
+            radius_max=40.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        fw._plan = [burst]
+        fw._plan_dims = (w, h)
+        fw._last_t = 0.5
+
+        canvas.calls.clear()
+        fw.frame_at(0.9, canvas, outgoing, incoming)
+
+        black_calls = [c for c in canvas.calls if c[2:] == (0, 0, 0)]
+        assert black_calls == []
+
+    def test_non_covering_burst_still_blacks_the_far_corner(self) -> None:
+        """Sanity control: a burst that has NOT yet grown to cover the
+        panel still produces the ordinary complement-blackout behavior
+        (the short-circuit must not fire early)."""
+        fw = Fireworks(seed=1)
+        w, h = 256, 64
+        canvas = _StubCanvas(width=w, height=h)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_fill_widget((0, 255, 0))
+
+        burst = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=20.0,
+            t_start=0.2,
+            t_burst_dur=0.3,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        fw._plan = [burst]
+        fw._plan_dims = (w, h)
+        fw._last_t = 0.5
+
+        fw.frame_at(0.51, canvas, outgoing, incoming)
+
+        assert canvas._pixels[(250, 60)] == (0, 0, 0)

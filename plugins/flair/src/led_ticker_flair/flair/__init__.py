@@ -33,6 +33,7 @@ def _import_seam():
 
 def register(api):
     _import_seam()
+    from led_ticker_flair.flair.fireworks import Fireworks  # noqa: PLC0415
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
     from led_ticker_flair.flair.lottery import Lottery  # noqa: PLC0415
     from led_ticker_flair.flair.propeller import Propeller  # noqa: PLC0415
@@ -41,4 +42,5 @@ def register(api):
     api.animation("propeller")(Propeller)
     api.animation("fisheye")(Fisheye)
     api.transition("spinout")(Spinout)
+    api.transition("fireworks")(Fireworks)
     api.widget("lottery")(Lottery)

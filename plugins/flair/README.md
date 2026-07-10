@@ -91,6 +91,43 @@ transition = {type = "flair.spinout", revolutions = 3, direction = "ccw"}
 - A propeller-animated widget cut off mid-spin (hold shorter than its spin — `led-ticker validate` rule 62 warns) enters the spinout with a residual angle and briefly compounds rotations; cosmetic and sub-second.
 
 
+## Fireworks transition
+
+`flair.fireworks` holds the outgoing widget while staggered firework bursts launch from the bottom edge, open, and fade over it; every burst's radius then blooms in lockstep toward full-panel coverage, revealing the incoming widget through the expanding circles until the whole panel is covered.
+
+Requires **led-ticker-core >= 4.10**.
+
+### Config
+
+```toml
+[[playlist.section]]
+transition = "flair.fireworks"
+```
+
+With knobs:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.fireworks", bursts = 3, colors = [[255, 60, 60], [0, 220, 220]]}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `bursts` | size-adaptive (3-6) | Number of firework bursts. Auto-picked from the panel's width-to-height ratio when omitted — wider panels get more bursts (smallsign: 5, bigsign: 4, longboi: 6) — or set explicitly in `[2, 8]`. |
+| `colors` | 8-color built-in palette | List of `[r, g, b]` triples, cycled across bursts in order. **Note:** this is `colors`, NOT `transition_colors` — core's `transition_colors` config field does not reach plugin transitions (a known gap); `colors` is this transition's own constructor kwarg. |
+| `seed` | `None` (OS entropy) | Fixes the RNG for reproducible bursts. See "Determinism and re-fire" below — this is NOT a promise that the same seed always plans the same sequence forever. |
+
+### Notes
+
+- **Size-adaptive by default.** Burst count, radius, and stagger timing are all derived from the panel's actual width/height at draw time — the same `transition = "flair.fireworks"` line looks right on smallsign, bigsign, and longboi without per-sign tuning.
+- **Two-phase design, painted through black.** Phase one (`t < 0.5`) plays over the outgoing widget: bursts launch as a rising streak, open into a black "burn-through" hole with a spark rim, while the rest of the panel still shows the outgoing widget. Phase two (`t >= 0.5`) switches to the incoming widget underneath and blacks out everything OUTSIDE the union of the (now still-growing) burst circles — so the incoming widget is revealed exactly where a burst has reached, and the transition guarantees full coverage by `t == 1.0` regardless of how any individual burst was staggered. This two-phase-through-black shape exists because there is no way to read back what's already on the panel (see the no-`GetPixel` rationale below) — every frame is drawn from scratch from the widgets + burst geometry, never composited from a previous frame's pixels.
+- **No `GetPixel`.** Like every core transition, `flair.fireworks` only ever calls `SetPixel` — the real hardware framebuffer stores pre-computed GPIO bitplane data, not readable RGB, so there is no way to sample "what's currently on the panel" and erase around it. The complement-blackout in phase two is the same idea worked the other direction: instead of reading what's painted and subtracting, it computes the union of burst circles as pure geometry and paints black everywhere outside it.
+- **Determinism and re-fire.** With an explicit `seed`, two FRESH `Fireworks` instances plan an identical first firing — useful for regression tests and reproducible demo GIFs. But the same instance firing a SECOND time (a real display looping through its playlist) continues drawing from that same RNG stream rather than restarting it, so consecutive firings on one running sign still look different from each other, even with a pinned seed. Leave `seed` unset (the default) for a real deploy — every firing draws fresh OS entropy and varies at runtime regardless of instance lifetime.
+- **Late-bloom perf short-circuit.** Deep in phase two, burst radii grow toward the panel's full diagonal — once a single burst's radius alone reaches the panel's farthest corner from that burst's center, the union of ALL bursts is provably total (every pixel revealed), so the complement-blackout pass is skipped entirely for that frame rather than stamping a full-panel mask just to discover it's all set. This keeps the widest late-bloom frames (the point where the naive approach would otherwise degrade toward an `O(bursts x panel_width x panel_height)` scan) inside the render loop's frame budget.
+
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
