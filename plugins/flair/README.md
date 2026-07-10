@@ -135,7 +135,7 @@ animation = {style = "flair.fisheye", magnify = 1.33, edge_squeeze = 0.45}
 
 `flair.lottery` rolls N labeled balls in from off-canvas left, one at a time, in a staggered relay — each ball tumbles as it rolls (the word visibly spins with the face) and settles flat, upright, into an evenly spaced slot across the panel. A physical lottery-ball draw, rendered as a held widget.
 
-Requires **led-ticker-core >= 4.7** and a **scaled display (bigsign only)** — the balls paint at physical resolution via the same hi-res machinery as inline emoji and hi-res fonts. On an unscaled display (smallsign, `default_scale = 1`) the widget logs a warning once and paints nothing; `led-ticker validate` also warns at config-load time so this shows up before deploy, not after.
+Requires **led-ticker-core >= 4.10** (the rotation-translation seam the roll-in uses) and a **scaled display (bigsign only)** — the balls paint at physical resolution via the same hi-res machinery as inline emoji and hi-res fonts. On an unscaled display (smallsign, `default_scale = 1`) the widget logs a warning once and paints nothing; `led-ticker validate` also warns at config-load time so this shows up before deploy, not after.
 
 ### Config
 
