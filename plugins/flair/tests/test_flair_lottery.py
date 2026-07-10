@@ -543,6 +543,129 @@ class TestLotteryWidget:
 
 
 # ---------------------------------------------------------------------------
+# Rack-fill choreography (roll-order j carries word/slot index n-1-j)
+# ---------------------------------------------------------------------------
+
+
+class TestRackFillChoreography:
+    """New choreography: the FIRST ball entering rolls to the RIGHTMOST slot,
+    the next stops one slot short, etc. — a rack fills, no ball ever rolls
+    through an already-settled one. Reveal order is right-to-left (last
+    config word lands first); the FINAL display still reads config order
+    left-to-right (word i always ends up at slot i — unchanged)."""
+
+    WORDS = ["cat", "dog", "fox"]  # colors: red, green, amber (PALETTE[0:3])
+
+    def _widget(self, **kwargs) -> Lottery:
+        return Lottery(words=list(self.WORDS), **kwargs)
+
+    def test_first_entrant_settles_into_rightmost_slot_only(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+        tpb = ticks_per_ball(widget.roll_ms)
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for _ in range(tpb):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+
+        # Only the rightmost slot (index 2, "fox") has settled — the first
+        # ball to roll targets the rightmost slot, not slot 0.
+        assert widget._settled == [False, False, True]
+
+        diameter, slots = layout(3, _PANEL_W, _PANEL_H, _INSET_NO_BORDER)
+        r = diameter // 2
+        rightmost_cx = slots[2]
+        fox_color = PALETTE[2]
+
+        # Rim sample at the settled (rightmost) ball matches fox's color —
+        # color travels with its word/slot, unaffected by roll order.
+        assert canvas.real.get_pixel(rightmost_cx + r - 1, _CY_P) == fox_color
+
+        # No lit pixels anywhere near the other two slot regions — the
+        # newly-launched next ball is still off-canvas, nothing was ever
+        # drawn there this tick.
+        for slot_cx in (slots[0], slots[1]):
+            region = [
+                (x, y)
+                for (x, y), rgb in canvas.real._pixels.items()
+                if rgb != (0, 0, 0) and (x - slot_cx) ** 2 + (y - _CY_P) ** 2 <= r * r
+            ]
+            assert region == []
+
+    def test_final_settled_order_matches_config_left_to_right(self) -> None:
+        canvas = _make_wrapper()
+        widget = self._widget()
+        total_ticks = ticks_per_ball(widget.roll_ms) * len(self.WORDS)
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for _ in range(total_ticks + 5):
+            widget.advance_frame()
+        canvas.real.Clear()
+        widget.draw(canvas)
+
+        assert widget._settled == [True, True, True]
+
+        diameter, slots = layout(3, _PANEL_W, _PANEL_H, _INSET_NO_BORDER)
+        r = diameter // 2
+        # Each slot's rim color pairs with its config-order word/color —
+        # slot i == colors[i] == PALETTE[i], read left-to-right.
+        for i, slot_cx in enumerate(slots):
+            assert canvas.real.get_pixel(slot_cx + r - 1, _CY_P) == PALETTE[i]
+
+    def test_no_ball_ever_crosses_a_settled_one(self) -> None:
+        """The regression this task fixes: under the OLD (left-to-right
+        entry) choreography, a later ball rolling toward a slot further
+        right than an already-settled one would sweep straight through the
+        settled ball's painted face, temporarily overwriting its pixels.
+        Rack-fill makes every later-rolling ball's entire path (and its
+        target slot) strictly LEFT of every already-settled ball, so a
+        settled ball's face region must be byte-identical on every frame
+        after it settles, no matter what any other ball is doing."""
+        canvas = _make_wrapper()
+        widget = self._widget()
+        diameter, slots = layout(3, _PANEL_W, _PANEL_H, _INSET_NO_BORDER)
+        r = diameter // 2
+        tpb = ticks_per_ball(widget.roll_ms)
+        total = tpb * 3
+
+        def region_snapshot(pixels: dict, cx: int) -> dict:
+            return {
+                (x, y): rgb
+                for (x, y), rgb in pixels.items()
+                if (x - cx) ** 2 + (y - _CY_P) ** 2 <= r * r
+            }
+
+        settled_snapshots: dict[int, dict] = {}
+
+        canvas.real.Clear()
+        widget.draw(canvas)
+        for frame in range(1, total + 5):
+            widget.advance_frame()
+            canvas.real.Clear()
+            widget.draw(canvas)
+            pixels = canvas.real._pixels
+
+            for i in range(3):
+                if not widget._settled[i]:
+                    continue
+                snap = region_snapshot(pixels, slots[i])
+                if i in settled_snapshots:
+                    assert snap == settled_snapshots[i], (
+                        f"slot {i} ('{self.WORDS[i]}') changed at frame "
+                        f"{frame} while another ball was still rolling — "
+                        "a ball crossed a settled one"
+                    )
+                settled_snapshots[i] = snap
+
+        # Sanity: all three actually settled and were checked at least once.
+        assert set(settled_snapshots) == {0, 1, 2}
+
+
+# ---------------------------------------------------------------------------
 # Config validation (Task 4)
 # ---------------------------------------------------------------------------
 

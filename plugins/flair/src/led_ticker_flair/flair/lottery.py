@@ -2,16 +2,24 @@
 
 N labeled balls roll in from off-canvas left in a staggered relay (one ball
 after another, each on its own ``ticks_per_ball``-tick window) and settle
-flat into evenly spaced slots across the panel. The ``Lottery`` widget
-follows the same two-surface blit design as ``flair.propeller`` /
+flat into evenly spaced slots across the panel. Entry order is RACK-FILL,
+not left-to-right: the first ball to roll lands in the RIGHTMOST slot, the
+next stops one slot short, and so on — so no ball ever rolls through an
+already-settled one. Reveal order is therefore right-to-left (the last
+config word lands first), but word index always equals slot index, so the
+FINAL display still reads the config's ``words`` left-to-right unchanged.
+``roll_order_for_slot`` is the (self-inverse) mapping between a slot's
+index and its temporal roll order; ``ball_phase`` itself stays pure
+per-ball math, agnostic to which slot owns which window. The ``Lottery``
+widget follows the same two-surface blit design as ``flair.propeller`` /
 ``flair.fisheye``: each ball is painted ONCE onto its own
 ``RotationSurface`` at its slot position, then re-blitted every tick at
 the angle/translation this module's geometry functions compute, until it
 settles exactly flat at 0 degrees onto a shared ``_rest_surface``
 composite. Everything above ``Lottery`` (``layout``, ``ball_phase``,
-``auto_font_size``, ``paint_face``) is pure geometry/paint math with no
-widget-lifecycle concerns; no core imports beyond the public
-``led_ticker.plugin`` surface.
+``roll_order_for_slot``, ``auto_font_size``, ``paint_face``) is pure
+geometry/paint math with no widget-lifecycle concerns; no core imports
+beyond the public ``led_ticker.plugin`` surface.
 
 Blit-geometry finding (verified against core's ``rotate.rotate_blit``,
 whose forward map is ``dst = R(src - c) + c + t``): passing the ball's
@@ -158,6 +166,21 @@ def ball_phase(
     remaining = slot_cx - cx
     angle = -math.degrees(remaining / radius) if radius else 0.0
     return cx, angle, False
+
+
+def roll_order_for_slot(slot_index: int, n: int) -> int:
+    """Map a slot index to its rack-fill roll order (temporal entry order),
+    or vice versa — the mapping ``j = n - 1 - i`` is self-inverse, so this
+    one function converts in either direction.
+
+    Rack-fill choreography: the FIRST ball to roll (roll order 0) targets
+    the RIGHTMOST slot (``n - 1``); the next stops one slot short; and so
+    on, so no ball ever rolls through an already-settled one. Word index
+    always equals slot index (the final display reads the config's
+    ``words`` left-to-right, unchanged) — only the TIMING of which slot's
+    ball rolls first is remapped.
+    """
+    return n - 1 - slot_index
 
 
 def auto_font_size(word: str, diameter_px: int, font_name: str, scale: int) -> int:
@@ -333,8 +356,11 @@ _INSET_WITH_BORDER = 3
 
 @attrs.define
 class Lottery(FrameAwareBase):
-    """N labeled balls roll in from off-canvas left, one at a time, and
-    settle flat into evenly spaced slots (a physical lottery-ball draw).
+    """N labeled balls roll in from off-canvas left, one at a time in
+    rack-fill order (first entrant lands rightmost, no ball ever crosses a
+    settled one), and settle flat into evenly spaced slots (a physical
+    lottery-ball draw). Reveal is right-to-left; the final display still
+    reads ``words`` left-to-right.
 
     Requires a scaled display (``default_scale > 1`` — bigsign): the balls
     paint at physical resolution via ``paint_hires``/``RotationSurface``,
@@ -648,24 +674,41 @@ class Lottery(FrameAwareBase):
         # whichever balls have already settled this visit.
         self._rest_surface.blit(canvas, 0.0, 0.0)
 
-        # Balls settle strictly in order (each owns a disjoint tick
+        # Rack-fill choreography: roll-order j (0-based, the TEMPORAL order
+        # balls enter) carries word/slot index n-1-j — the first ball to
+        # roll targets the RIGHTMOST slot, the next stops one slot short,
+        # and so on. `ball_phase`'s tick-window arg is the roll order, not
+        # the slot index; `roll_order_for_slot` (self-inverse — the same
+        # formula converts either direction) recovers it from `i`. Word
+        # index == slot index throughout (word i always ends up at slot
+        # i — unchanged config-order reading), so only the WINDOW a slot's
+        # ball owns is remapped here; `colors[i]` still pairs with
+        # `words[i]` and slot `i` exactly as before.
+        #
+        # Balls settle strictly in roll order (each owns a disjoint tick
         # window). Under the normal per-tick cadence (advance_frame then
         # draw, every tick — constraint #12) at most one ball crosses its
         # settle boundary per call. But this loop doesn't assume that: it
-        # walks every not-yet-settled ball in order, composites any whose
-        # window has ALREADY fully elapsed (handles a multi-tick jump —
-        # e.g. a re-roll landing straight past several balls' windows in
-        # one call), and stops at the first ball that's still genuinely
-        # rolling (or still parked off-canvas, not yet due) — that one
-        # gets the per-tick rotate+translate blit; nothing past it is
-        # touched this tick.
-        for i in range(len(self.words)):
+        # walks every not-yet-settled ball IN ROLL ORDER (rightmost slot
+        # first), composites any whose window has ALREADY fully elapsed
+        # (handles a multi-tick jump — e.g. a re-roll landing straight past
+        # several balls' windows in one call), and stops at the first ball
+        # that's still genuinely rolling (or still parked off-canvas, not
+        # yet due) — that one gets the per-tick rotate+translate blit;
+        # nothing past it (in roll order) is touched this tick.
+        n = len(self.words)
+        for i in reversed(range(n)):
             if self._settled[i]:
                 continue
 
             slot_cx = self._slot_cx_logical[i]
+            roll_order = roll_order_for_slot(i, n)
             cx_real, angle, settled = ball_phase(
-                frame, i, self._tpb, self._diameter_px, self._slot_centers_px[i]
+                frame,
+                roll_order,
+                self._tpb,
+                self._diameter_px,
+                self._slot_centers_px[i],
             )
 
             if settled:
