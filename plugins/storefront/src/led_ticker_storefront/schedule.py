@@ -2,9 +2,11 @@
 and evaluate open/closed against a clock. Pure logic, no rendering."""
 
 import re
+from datetime import date
 
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 Range = tuple[int, int]
+ExcKey = tuple[int | None, int, int]
 
 _TIME_RE = re.compile(r"^(\d{2}):(\d{2})$", re.ASCII)
 
@@ -49,6 +51,44 @@ def parse_schedule(raw):
             raise ValueError(f"unknown schedule day {key!r}: expected one of {DAYS}")
         sched[day] = parse_day(str(value))
     return sched
+
+
+_EXC_SPECIFIC_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$", re.ASCII)
+_EXC_RECURRING_RE = re.compile(r"^(\d{2})-(\d{2})$", re.ASCII)
+
+
+def parse_exceptions(raw):
+    """Parse the [storefront.exceptions] table: "YYYY-MM-DD" (specific) or
+    "MM-DD" (recurring annually) keys -> the same day-string grammar as the
+    weekly schedule. Keys are validated as real calendar dates; "02-29"
+    recurring is allowed (matches only in leap years)."""
+    out = {}
+    for key, value in raw.items():
+        k = str(key).strip()
+        if m := _EXC_SPECIFIC_RE.match(k):
+            y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            try:
+                date(y, mo, dd)
+            except ValueError:
+                raise ValueError(
+                    f"bad exception date {key!r}: not a real calendar date"
+                ) from None
+            out[(y, mo, dd)] = parse_day(str(value))
+        elif m := _EXC_RECURRING_RE.match(k):
+            mo, dd = int(m.group(1)), int(m.group(2))
+            try:
+                date(2024, mo, dd)  # 2024 is a leap year, so "02-29" validates
+            except ValueError:
+                raise ValueError(
+                    f"bad recurring exception {key!r}: not a real calendar date"
+                ) from None
+            out[(None, mo, dd)] = parse_day(str(value))
+        else:
+            raise ValueError(
+                f'bad exception key {key!r}: expected "MM-DD" (recurring) '
+                'or "YYYY-MM-DD" (specific), zero-padded'
+            )
+    return out
 
 
 def fmt_range(r):

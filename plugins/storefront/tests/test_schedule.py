@@ -8,6 +8,7 @@ from led_ticker_storefront.schedule import (
     fmt_range,
     is_open,
     parse_day,
+    parse_exceptions,
     parse_schedule,
     parse_time,
 )
@@ -161,3 +162,52 @@ def test_absent_day_is_closed():
 
 def test_explicit_closed_day():
     assert is_open(_sched(), SUN_1200) is False
+
+
+def test_parse_exceptions_specific_and_recurring():
+    exc = parse_exceptions(
+        {
+            "2026-11-26": "closed",
+            "12-25": "closed",
+            "12-24": "09:00-13:00",
+        }
+    )
+    assert exc[(2026, 11, 26)] == []
+    assert exc[(None, 12, 25)] == []
+    assert exc[(None, 12, 24)] == [(540, 780)]
+
+
+def test_parse_exceptions_values_reuse_day_grammar():
+    exc = parse_exceptions({"2026-12-31": "20:00-02:00,09:00-12:00"})
+    assert exc[(2026, 12, 31)] == [(1200, 120), (540, 720)]
+
+
+def test_parse_exceptions_feb29_recurring_allowed():
+    assert (None, 2, 29) in parse_exceptions({"02-29": "closed"})
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "02-30",  # not a real date
+        "13-01",  # bad month
+        "2026-02-30",  # not a real date (specific)
+        "12/25",  # wrong separator
+        "Dec-25",  # not numeric
+        "2-5",  # not zero-padded
+        "2026-1-5",  # not zero-padded (specific)
+        "",  # empty
+    ],
+)
+def test_parse_exceptions_rejects_malformed_keys(bad):
+    with pytest.raises(ValueError):
+        parse_exceptions({bad: "closed"})
+
+
+def test_parse_exceptions_bad_value_raises():
+    with pytest.raises(ValueError):
+        parse_exceptions({"12-25": "9-5"})
+
+
+def test_parse_exceptions_empty_dict():
+    assert parse_exceptions({}) == {}
