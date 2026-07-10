@@ -21,6 +21,7 @@ PUBLISHABLE_PLUGINS = {
     "weather",
     "flair",
     "telnet",
+    "storefront",
 }
 
 

@@ -25,8 +25,8 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
     "Framework :: AsyncIO",
 ]
-# bump to the seam's real release before publishing
-dependencies = ["led-ticker-core>=4.8"]
+# 4.9 ships the plugin_config_block seam + the overlay-plugin reconcile guard.
+dependencies = ["led-ticker-core>=4.9"]
 
 [project.entry-points."led_ticker.plugins"]
 storefront = "led_ticker_storefront:register"
