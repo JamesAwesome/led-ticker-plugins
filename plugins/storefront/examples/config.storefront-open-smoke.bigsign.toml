@@ -1,0 +1,89 @@
+# Smoke config: storefront plugin, ALWAYS OPEN, on a realistic bigsign panel.
+#
+# Purpose: visual-validation gate for Task 10 (see docs/visual-validation.md
+# in the core repo). Renders a shimmering green vertical "OPEN" badge in the
+# top-right corner, composited over a scrolling rainbow ticker message, so
+# the overlay-over-moving-content path is exercised. Not meant to be a
+# realistic content playlist — see config/config.bigsign.example.toml in the
+# core repo for that.
+#
+# [display] block mirrors config/config.bigsign.example.toml (core repo) in
+# every RP1/render knob (brightness, default_scale, gpio_slowdown, pwm_bits).
+#
+# rows/cols/chain_length deliberately do NOT copy the real 8-panel
+# rows=32/cols=64/chain_length=8 + `Remap:256,64|...` pixel_mapper_config.
+# The headless render-demo backend does not interpret the Remap mapper
+# string (that reshaping only happens in the real rgbmatrix C library on
+# hardware) — special-cased only for the literal "U-mapper" string in
+# `led_ticker/backends/headless.py`. Feeding it the real chained values
+# yields a pre-remap 512x32 canvas in headless mode, which is too short for
+# default_scale=4 (content_height x scale must fit the real panel height).
+# Setting rows=64, cols=256, chain_length=1 gives headless the correct
+# final 256x64 logical canvas directly — the same pattern already used by
+# docs/site/demos-long/tutorial-*.toml for bigsign-shaped demo renders.
+# Real bigsign hardware deploys still use config.bigsign.example.toml's
+# 8-panel rows/cols/chain_length/pixel_mapper_config block; this file is a
+# render-demo smoke fixture, not a hardware wiring config.
+
+[display]
+rows = 64
+cols = 256
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+show_refresh_rate = true
+
+[title]
+delay = 5
+
+[transitions]
+default = "push_left"
+duration = 0.5
+easing = "ease_out"
+between_sections = "dissolve"
+
+# --- Storefront overlay: always OPEN ---
+
+[storefront]
+font_size = 16
+corner = "top_right"
+
+[storefront.open]
+text = "OPEN"
+# Bare `color = "shimmer"` defaults to a dim gray-blue base — too subtle to
+# read as "green" in a smoke test. Pin an explicit green base with a white
+# shimmer sweep so the checklist's "green vertical OPEN, shimmering" is
+# unambiguous on the render.
+color = { style = "shimmer", base = [0, 255, 0], shimmer = "white" }
+orientation = "vertical"
+
+[storefront.closed]
+text = "CLOSED"
+color = [255, 0, 0]
+orientation = "horizontal"
+
+[storefront.schedule]
+mon = "00:00-24:00"
+tue = "00:00-24:00"
+wed = "00:00-24:00"
+thu = "00:00-24:00"
+fri = "00:00-24:00"
+sat = "00:00-24:00"
+sun = "00:00-24:00"
+
+# --- Playlist: one scrolling section so the badge composites over motion ---
+
+[[playlist.section]]
+mode = "ticker"
+loop_count = 0
+
+[[playlist.section.widget]]
+type = "message"
+text = "Fresh coffee and pastries all day - welcome in!"
+font_color = "rainbow"

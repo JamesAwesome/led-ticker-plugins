@@ -12,8 +12,9 @@ approval.
 
 ## Publishable plugins
 
-`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `flair`, `telnet`
-(the allowlist in `scripts/check_release.py`). A tag for anything else is rejected.
+`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `flair`, `telnet`,
+`storefront` (the allowlist in `scripts/check_release.py`). A tag for anything
+else is rejected.
 
 ## Cut a release
 
