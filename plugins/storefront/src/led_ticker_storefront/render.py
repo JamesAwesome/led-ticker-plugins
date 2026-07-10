@@ -75,6 +75,7 @@ def draw_badge(real_canvas, cfg, badge, frame):
     line_h = font_line_height_logical(font, scale)
     width, height = canvas.width, canvas.height
 
+    col_w = 0  # set on the vertical branch; read only by the vertical draw below
     if badge.orientation == "vertical":
         col_w = max(get_text_width(font, ch, padding=0, canvas=canvas) for ch in text)
         box_w = col_w + 2 * pad

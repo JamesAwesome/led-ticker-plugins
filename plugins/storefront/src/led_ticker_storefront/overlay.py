@@ -17,9 +17,10 @@ _log = logging.getLogger("led_ticker_storefront")
 
 class StorefrontOverlay:
     def __init__(self):
-        self.state = None
+        self.state: StorefrontState | None = None
 
     def _clock(self):
+        assert self.state is not None  # only called after startup sets state
         return datetime.now(self.state.config.tz)
 
     def startup(self, ctx):
@@ -35,6 +36,7 @@ class StorefrontOverlay:
         spawn_tracked(self._poll())
 
     async def _poll(self):
+        assert self.state is not None  # spawned only after startup sets state
         while True:
             await asyncio.sleep(POLL_INTERVAL_S)
             try:

@@ -26,6 +26,7 @@ def test_paint_draws_open_badge(real_canvas, monkeypatch):
     monkeypatch.setattr(ov, "_spawn_poller", lambda: None)
     ov._clock = lambda: datetime(2024, 1, 1, 10, 0)
     ov.startup(_ctx({"schedule": {"mon": "09:00-17:00"}, "open": {"text": "OPEN"}}))
+    assert ov.state is not None
     assert ov.state.is_open is True
     ov.paint(real_canvas)
     lit = any(
@@ -43,6 +44,7 @@ def test_paint_advances_frame(real_canvas, monkeypatch):
     ov.startup(_ctx({"schedule": {"mon": "09:00-17:00"}}))
     ov.paint(real_canvas)
     ov.paint(real_canvas)
+    assert ov.state is not None
     assert ov.state.frame == 2
 
 

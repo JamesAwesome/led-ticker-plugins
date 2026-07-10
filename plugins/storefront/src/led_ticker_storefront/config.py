@@ -40,7 +40,7 @@ class StorefrontConfig:
     font_name: str | None
     font_size: int
     font: object
-    tz: object
+    tz: ZoneInfo | None
     schedule: dict
 
 
