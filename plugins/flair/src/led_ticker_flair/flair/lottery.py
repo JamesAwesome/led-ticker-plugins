@@ -12,10 +12,21 @@ widget class, no core imports beyond the public ``led_ticker.plugin``
 surface.
 """
 
+import logging
 import math
 import types
 
-from led_ticker.plugin import ENGINE_TICK_MS, get_text_width, resolve_font
+from led_ticker.plugin import (
+    ENGINE_TICK_MS,
+    compute_baseline_for_band,
+    draw_with_emoji,
+    get_text_width,
+    make_color,
+    paint_hires,
+    resolve_font,
+)
+
+logger = logging.getLogger("led_ticker_flair")
 
 # The 8 spec auto-palette colors, in spec order (red, green, amber, blue,
 # magenta, cyan, orange, violet) — assigned to balls in order when
@@ -44,6 +55,18 @@ _MAX_FONT_FACTOR = 0.45
 # Floor below which glyphs are unreadable (also the HiresFont size floor
 # enforced by ``resolve_font``).
 _MIN_FONT_SIZE = 8
+
+# Style constants (spec, verbatim) — classic face is white with a dark
+# label; solid face is color-filled with a white label.
+_CLASSIC_FACE_RGB = (255, 255, 255)
+_CLASSIC_TEXT_RGB = (10, 10, 10)
+_SOLID_TEXT_RGB = (255, 255, 255)
+
+# `get_text_width`'s scale divisor only matters for its logical-width
+# conversion; a scale=1 stub makes it return the raw real-pixel width
+# (see `auto_font_size`'s docstring for why that's what we need here).
+# Shared by `auto_font_size` and `paint_face` so both measure the same way.
+_REAL_SCALE1_STUB = types.SimpleNamespace(scale=1)
 
 
 def layout(n: int, panel_w: int, panel_h: int, inset: int) -> tuple[int, list[int]]:
@@ -152,10 +175,122 @@ def auto_font_size(word: str, diameter_px: int, font_name: str, scale: int) -> i
         raise ValueError(f"scale must be an int >= 1; got {scale!r}")
 
     threshold = diameter_px * _CHORD_FACTOR
-    real_canvas = types.SimpleNamespace(scale=1)
     for size in range(int(diameter_px * _MAX_FONT_FACTOR), _MIN_FONT_SIZE - 1, -1):
         font = resolve_font(font_name, size)
-        width = get_text_width(font, word, padding=0, canvas=real_canvas)
+        width = get_text_width(font, word, padding=0, canvas=_REAL_SCALE1_STUB)
         if width <= threshold:
             return size
     return 0
+
+
+def paint_face(
+    target,
+    *,
+    cx_logical: float,
+    cy_logical: float,
+    r_px: int,
+    style: str,
+    color: tuple[int, int, int],
+    word: str,
+    font_name: str,
+    scale: int,
+) -> None:
+    """Paint one lottery-ball face onto ``target``.
+
+    ``target`` is a rotation-surface's ``.target`` (a full-canvas
+    ``ScaledCanvas``, per ``led_ticker.rotate.RotationSurface`` — draw
+    into it in logical coordinates, then ``snapshot()`` + ``blit()`` it)
+    or any other canvas-alike; ``paint_hires``/``draw_with_emoji`` work
+    on either.
+
+    MIXED UNITS, deliberately (the same split hi-res emoji/fonts already
+    straddle): ``cx_logical``/``cy_logical`` are LOGICAL coordinates —
+    the widget's own drawing space. ``r_px`` is the ball radius in REAL
+    (physical) pixels — the circle paints directly to the real canvas
+    via ``paint_hires`` (bypassing the ``ScaledCanvas`` block expansion,
+    same as hi-res emoji/fonts), so its geometry must be in real-pixel
+    units to render a crisp circle rather than a blocky
+    ``scale``-sized-square approximation. ``scale`` is the canvas's
+    real/logical ratio, needed to convert the real-pixel measurements
+    (radius, text width) back to the logical coordinates ``target``
+    draws in.
+
+    Style ``"classic"``: white ``(255,255,255)`` face, a ``color``
+    ring band ``max(1, r_px // 8)`` px wide at the rim, dark
+    ``(10,10,10)`` text. Style ``"solid"``: ``color``-filled face,
+    white ``(255,255,255)`` text. Any other ``style`` raises
+    ``ValueError``.
+
+    The word is centered on the face: horizontally by measuring its
+    REAL-pixel width (the same scale=1 measurement ``auto_font_size``
+    uses — see its docstring) and centering that on ``cx_logical``;
+    vertically via ``compute_baseline_for_band``, treating the ball's
+    real diameter (converted to a logical band height) as the text
+    band — this accounts for the resolved font's actual ascent/descent
+    rather than a hardcoded midpoint guess.
+
+    If ``auto_font_size`` reports the word doesn't fit (returns 0 — the
+    widget's config validation should already have caught this at
+    preflight), the circle is still painted but the word is skipped;
+    logs one WARNING via the ``"led_ticker_flair"`` logger as a
+    belt-and-braces render-time guard.
+    """
+    if style not in ("classic", "solid"):
+        raise ValueError(
+            f"paint_face: style must be 'classic' or 'solid'; got {style!r}"
+        )
+
+    is_classic = style == "classic"
+    ring_w = max(1, r_px // 8)
+    face_rgb = _CLASSIC_FACE_RGB if is_classic else color
+    text_rgb = _CLASSIC_TEXT_RGB if is_classic else _SOLID_TEXT_RGB
+
+    def _paint_circle(real, real_scale, y_offset_real):
+        cx_p = cx_logical * real_scale
+        cy_p = cy_logical * real_scale + y_offset_real
+        r2 = r_px * r_px
+        ring_r2 = max(0, r_px - ring_w) ** 2
+
+        x0 = max(0, math.floor(cx_p - r_px))
+        x1 = min(real.width - 1, math.ceil(cx_p + r_px))
+        y0 = max(0, math.floor(cy_p - r_px))
+        y1 = min(real.height - 1, math.ceil(cy_p + r_px))
+
+        for py in range(y0, y1 + 1):
+            dy2 = (py - cy_p) ** 2
+            for px in range(x0, x1 + 1):
+                d2 = (px - cx_p) ** 2 + dy2
+                if d2 > r2:
+                    continue
+                if is_classic and d2 >= ring_r2:
+                    r, g, b = color
+                else:
+                    r, g, b = face_rgb
+                real.SetPixel(px, py, r, g, b)
+
+    paint_hires(target, _paint_circle)
+
+    diameter_px = 2 * r_px
+    size = auto_font_size(word, diameter_px, font_name, scale)
+    if size == 0:
+        logger.warning(
+            "flair.lottery: word %r does not fit a %dpx ball face (font=%s) "
+            "— painting the ball without a label",
+            word,
+            diameter_px,
+            font_name,
+        )
+        return
+
+    font = resolve_font(font_name, size)
+    real_width = get_text_width(font, word, padding=0, canvas=_REAL_SCALE1_STUB)
+    x_logical = round(cx_logical - real_width / (2 * scale))
+
+    diameter_logical = round(diameter_px / scale)
+    band_top_logical = cy_logical - diameter_logical / 2
+    baseline_offset = compute_baseline_for_band(font, diameter_logical, scale, "center")
+    baseline_logical = round(band_top_logical + baseline_offset)
+
+    draw_with_emoji(
+        target, font, x_logical, baseline_logical, make_color(*text_rgb), word
+    )

@@ -1,15 +1,23 @@
-"""flair.lottery — pure geometry + roll-timeline math (Task 1, no widget)."""
+"""flair.lottery — pure geometry + roll-timeline math (Task 1, no widget) and
+the ball-face painter (Task 2)."""
 
+import logging
 import math
 
 import pytest
-from led_ticker.plugin import ENGINE_TICK_MS
+from led_ticker.plugin import (
+    ENGINE_TICK_MS,
+    HeadlessCanvas,
+    ScaledCanvas,
+    make_rotation_surface,
+)
 
 from led_ticker_flair.flair.lottery import (
     PALETTE,
     auto_font_size,
     ball_phase,
     layout,
+    paint_face,
     ticks_per_ball,
 )
 
@@ -212,3 +220,171 @@ class TestAutoFontSize:
             auto_font_size("hi", 56, "Inter-Bold", True)
         with pytest.raises(ValueError):
             auto_font_size("hi", 56, "Inter-Bold", 1.5)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# paint_face (Task 2)
+# ---------------------------------------------------------------------------
+
+# Panel geometry mirrors the bigsign: 256x64 real, scale=4, content_height=16
+# (full-height content band -> y_offset_real == 0, no letterboxing).
+_PANEL_W, _PANEL_H = 256, 64
+_SCALE = 4
+_CONTENT_HEIGHT = 16
+_CX_LOGICAL = 32.0  # panel-center in logical coords (real cx == 128)
+_CY_LOGICAL = 8.0  # panel-center in logical coords (real cy == 32)
+_CX_P, _CY_P = 128, 32  # the same center, in real pixels
+_R_P = 31  # ball radius, real px (diameter 62 -- matches layout()'s 3-word case)
+
+
+def _make_wrapper() -> ScaledCanvas:
+    real = HeadlessCanvas(width=_PANEL_W, height=_PANEL_H)
+    return ScaledCanvas(real, scale=_SCALE, content_height=_CONTENT_HEIGHT)
+
+
+def _paint_and_blit(**paint_kwargs) -> HeadlessCanvas:
+    """Paint a face onto a fresh rotation surface, snapshot it, and blit it
+    (angle=0, no rotation) onto a second fresh real canvas -- the brief's
+    prescribed round-trip so assertions run on ordinary real-canvas pixels
+    rather than reaching into the surface's internal buffer."""
+    surface = make_rotation_surface(_make_wrapper())
+    paint_face(surface.target, **paint_kwargs)
+    surface.snapshot()
+
+    live_real = HeadlessCanvas(width=_PANEL_W, height=_PANEL_H)
+    live = ScaledCanvas(live_real, scale=_SCALE, content_height=_CONTENT_HEIGHT)
+    surface.blit(live, angle_deg=0.0, cx_logical=paint_kwargs["cx_logical"])
+    return live_real
+
+
+class TestPaintFaceClassic:
+    def test_face_is_white(self) -> None:
+        real = _paint_and_blit(
+            cx_logical=_CX_LOGICAL,
+            cy_logical=_CY_LOGICAL,
+            r_px=_R_P,
+            style="classic",
+            color=(255, 60, 60),
+            word="kebab",
+            font_name="Inter-Bold",
+            scale=_SCALE,
+        )
+        ring_w = max(1, _R_P // 8)
+        # Sample well inside the face, clear of the ring band and (for a
+        # 62px ball) clear of the vertically-centered text.
+        assert real.get_pixel(_CX_P, _CY_P - _R_P + ring_w + 4) == (255, 255, 255)
+
+    def test_ring_is_the_configured_color(self) -> None:
+        ring_color = (255, 60, 60)
+        real = _paint_and_blit(
+            cx_logical=_CX_LOGICAL,
+            cy_logical=_CY_LOGICAL,
+            r_px=_R_P,
+            style="classic",
+            color=ring_color,
+            word="kebab",
+            font_name="Inter-Bold",
+            scale=_SCALE,
+        )
+        # Rim samples, left and right of center.
+        assert real.get_pixel(_CX_P + _R_P - 1, _CY_P) == ring_color
+        assert real.get_pixel(_CX_P - _R_P + 1, _CY_P) == ring_color
+
+    def test_dark_text_pixels_present(self) -> None:
+        real = _paint_and_blit(
+            cx_logical=_CX_LOGICAL,
+            cy_logical=_CY_LOGICAL,
+            r_px=_R_P,
+            style="classic",
+            color=(255, 60, 60),
+            word="kebab",
+            font_name="Inter-Bold",
+            scale=_SCALE,
+        )
+        dark_pixels = [xy for xy, rgb in real._pixels.items() if rgb == (10, 10, 10)]
+        assert dark_pixels, "expected dark (10,10,10) text pixels inside the face"
+
+    def test_nothing_painted_outside_circle_bounding_box(self) -> None:
+        real = _paint_and_blit(
+            cx_logical=_CX_LOGICAL,
+            cy_logical=_CY_LOGICAL,
+            r_px=_R_P,
+            style="classic",
+            color=(255, 60, 60),
+            word="kebab",
+            font_name="Inter-Bold",
+            scale=_SCALE,
+        )
+        tol = 1  # blit is a rotate + half-res round-trip, not pixel-exact
+        for (x, y), rgb in real._pixels.items():
+            if rgb == (0, 0, 0):
+                continue
+            assert _CX_P - _R_P - tol <= x <= _CX_P + _R_P + tol, (x, y, rgb)
+            assert _CY_P - _R_P - tol <= y <= _CY_P + _R_P + tol, (x, y, rgb)
+
+
+class TestPaintFaceSolid:
+    def test_fill_and_white_text(self) -> None:
+        fill_color = (80, 140, 255)
+        real = _paint_and_blit(
+            cx_logical=_CX_LOGICAL,
+            cy_logical=_CY_LOGICAL,
+            r_px=_R_P,
+            style="solid",
+            color=fill_color,
+            word="kebab",
+            font_name="Inter-Bold",
+            scale=_SCALE,
+        )
+        # Sample well inside the face, clear of the text.
+        assert real.get_pixel(_CX_P, _CY_P - _R_P + 4) == fill_color
+
+        white_pixels = [
+            xy for xy, rgb in real._pixels.items() if rgb == (255, 255, 255)
+        ]
+        assert white_pixels, "expected white text pixels on the solid face"
+
+        # No dark classic-style text color should appear.
+        dark_pixels = [xy for xy, rgb in real._pixels.items() if rgb == (10, 10, 10)]
+        assert not dark_pixels
+
+
+class TestPaintFaceUnfittableWord:
+    def test_circle_paints_without_text_and_logs_once(self, caplog) -> None:
+        long_word = "abcdefghijklmnopqrst"  # pinned in TestAutoFontSize as a 0-fit
+        small_r_px = 14  # diameter 28, matches the pinned auto_font_size case
+        with caplog.at_level(logging.WARNING, logger="led_ticker_flair"):
+            real = _paint_and_blit(
+                cx_logical=_CX_LOGICAL,
+                cy_logical=_CY_LOGICAL,
+                r_px=small_r_px,
+                style="classic",
+                color=(60, 220, 60),
+                word=long_word,
+                font_name="Inter-Bold",
+                scale=_SCALE,
+            )
+
+        assert real.count_nonzero() > 0, "the circle itself must still be painted"
+        dark_pixels = [xy for xy, rgb in real._pixels.items() if rgb == (10, 10, 10)]
+        assert not dark_pixels, "no text should have been drawn"
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+
+
+class TestPaintFaceRejectsBadStyle:
+    def test_unknown_style_raises(self) -> None:
+        surface = make_rotation_surface(_make_wrapper())
+        with pytest.raises(ValueError):
+            paint_face(
+                surface.target,
+                cx_logical=_CX_LOGICAL,
+                cy_logical=_CY_LOGICAL,
+                r_px=_R_P,
+                style="not-a-style",
+                color=(255, 60, 60),
+                word="kebab",
+                font_name="Inter-Bold",
+                scale=_SCALE,
+            )
