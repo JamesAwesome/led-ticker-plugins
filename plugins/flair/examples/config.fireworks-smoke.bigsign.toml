@@ -18,10 +18,12 @@
 #     text, and blooms to full panel coverage revealing section 2 at
 #     PHYSICAL resolution (bursts paint straight to the real canvas, not a
 #     blocky 4x4-per-logical-pixel expansion).
-#   Section 2 (dict-form "BLOOM")  holds 3s, then fires back using the
-#     `transition = {type = "flair.fireworks", bursts = 3, colors = [...]}`
-#     kwargs form — exactly 3 red/cyan bursts instead of the auto-palette
-#     default, exercising the plugin transition kwargs channel end-to-end.
+#   Section 2 ("BLOOM") declares the dict form
+#     `transition = {type = "flair.fireworks", bursts = 3, colors = [...]}`,
+#     which governs ENTERING it: the LAUNCH->BLOOM firing shows exactly 3
+#     red/cyan bursts (kwargs channel end-to-end). The loop-back BLOOM->LAUNCH
+#     firing uses the plain between_sections default (auto count/palette) —
+#     so the two firings you see are intentionally DIFFERENT.
 #   duration=1.2s per firing; loop the render to see >= 2 firings.
 #
 # If anything looks wrong: docs/visual-validation.md (core repo).
