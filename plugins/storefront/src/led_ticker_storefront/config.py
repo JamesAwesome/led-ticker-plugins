@@ -14,7 +14,7 @@ from led_ticker.plugin import (
     resolve_font,
 )
 
-from led_ticker_storefront.schedule import parse_schedule
+from led_ticker_storefront.schedule import parse_exceptions, parse_schedule
 
 CORNERS = ("top_left", "top_right", "bottom_left", "bottom_right")
 ORIENTATIONS = ("horizontal", "vertical")
@@ -42,6 +42,7 @@ class StorefrontConfig:
     font: object
     tz: ZoneInfo | None
     schedule: dict
+    exceptions: dict = attrs.field(factory=dict)
 
 
 def enabled(block):
@@ -128,4 +129,5 @@ def parse_config(block):
         font=font,
         tz=tz,
         schedule=parse_schedule(block.get("schedule", {})),
+        exceptions=parse_exceptions(block.get("exceptions", {}) or {}),
     )

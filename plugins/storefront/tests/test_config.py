@@ -128,3 +128,18 @@ def test_defaults_still_pass_validation_floor():
     cfg = parse_config({})
     assert cfg.font_size == 16
     assert cfg.padding == 2
+
+
+def test_exceptions_parsed():
+    cfg = parse_config({"exceptions": {"12-25": "closed", "2026-12-24": "09:00-13:00"}})
+    assert cfg.exceptions[(None, 12, 25)] == []
+    assert cfg.exceptions[(2026, 12, 24)] == [(540, 780)]
+
+
+def test_exceptions_default_empty():
+    assert parse_config({}).exceptions == {}
+
+
+def test_bad_exception_raises_at_parse():
+    with pytest.raises(ValueError):
+        parse_config({"exceptions": {"12/25": "closed"}})

@@ -2,9 +2,11 @@
 and evaluate open/closed against a clock. Pure logic, no rendering."""
 
 import re
+from datetime import date, timedelta
 
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 Range = tuple[int, int]
+ExcKey = tuple[int | None, int, int]
 
 _TIME_RE = re.compile(r"^(\d{2}):(\d{2})$", re.ASCII)
 
@@ -51,33 +53,105 @@ def parse_schedule(raw):
     return sched
 
 
+_EXC_SPECIFIC_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$", re.ASCII)
+_EXC_RECURRING_RE = re.compile(r"^(\d{2})-(\d{2})$", re.ASCII)
+
+
+def _validate_calendar_date(year, month, day, key, label):
+    """Raise a ValueError naming `key`/`label` if (year, month, day) isn't a
+    real calendar date. Shared by the specific and recurring exception-key
+    branches in parse_exceptions."""
+    try:
+        date(year, month, day)
+    except ValueError:
+        raise ValueError(f"bad {label} {key!r}: not a real calendar date") from None
+
+
+def parse_exceptions(raw):
+    """Parse the [storefront.exceptions] table: "YYYY-MM-DD" (specific) or
+    "MM-DD" (recurring annually) keys -> the same day-string grammar as the
+    weekly schedule. Keys are validated as real calendar dates; "02-29"
+    recurring is allowed (matches only in leap years)."""
+    out = {}
+    for key, value in raw.items():
+        k = str(key).strip()
+        if m := _EXC_SPECIFIC_RE.match(k):
+            y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            _validate_calendar_date(y, mo, dd, key, "exception date")
+            out[(y, mo, dd)] = parse_day(str(value))
+        elif m := _EXC_RECURRING_RE.match(k):
+            mo, dd = int(m.group(1)), int(m.group(2))
+            # 2024 is a leap year, so "02-29" validates
+            _validate_calendar_date(2024, mo, dd, key, "recurring exception")
+            out[(None, mo, dd)] = parse_day(str(value))
+        else:
+            raise ValueError(
+                f'bad exception key {key!r}: expected "MM-DD" (recurring) '
+                'or "YYYY-MM-DD" (specific), zero-padded'
+            )
+    return out
+
+
 def fmt_range(r):
     start, end = r
     return f"{start // 60:02d}:{start % 60:02d}-{end // 60:02d}:{end % 60:02d}"
 
 
-def evaluate(schedule, now):
-    """Return a reason string ("mon 09:00-17:00") if `now` is within business
-    hours, else None. A range whose end <= start wraps past midnight and belongs
-    to its START day, so a time early on day D can be covered by day D-1's wrap."""
-    minute = now.hour * 60 + now.minute
-    today = DAYS[now.weekday()]
-    yesterday = DAYS[(now.weekday() - 1) % 7]
+def ranges_for(schedule, exceptions, d):
+    """Effective (ranges, source_label) for calendar date `d`. Precedence:
+    specific YYYY-MM-DD exception > recurring MM-DD exception > weekly day.
+    An exception REPLACES the day's ranges (no merging)."""
+    if exceptions:
+        spec = (d.year, d.month, d.day)
+        if spec in exceptions:
+            return exceptions[spec], f"exception {d.year:04d}-{d.month:02d}-{d.day:02d}"
+        rec = (None, d.month, d.day)
+        if rec in exceptions:
+            return exceptions[rec], f"exception {d.month:02d}-{d.day:02d}"
+    day = DAYS[d.weekday()]
+    return schedule.get(day, []), day
 
-    for start, end in schedule.get(today, []):
+
+def evaluate(schedule, now, exceptions=None):
+    """Return a reason string ("mon 09:00-17:00", "exception 12-25 ...") if
+    `now` is within business hours, else None. A range whose end <= start
+    wraps past midnight and BELONGS TO ITS START DAY — so a wrap that starts
+    on day D-1 (weekly or exception) still covers early hours of day D, even
+    when day D is an exception day."""
+    minute = now.hour * 60 + now.minute
+    today = now.date()
+
+    ranges, label = ranges_for(schedule, exceptions, today)
+    for start, end in ranges:
         if end > start:  # normal same-day range
             if start <= minute < end:
-                return f"{today} {fmt_range((start, end))}"
+                return f"{label} {fmt_range((start, end))}"
         else:  # wrap: open from start until midnight
             if minute >= start:
-                return f"{today} {fmt_range((start, end))}"
+                return f"{label} {fmt_range((start, end))}"
 
-    for start, end in schedule.get(yesterday, []):
-        if end <= start and minute < end:  # yesterday's wrap continuing past midnight
-            return f"{yesterday} {fmt_range((start, end))}"
+    y_ranges, y_label = ranges_for(schedule, exceptions, today - timedelta(days=1))
+    for start, end in y_ranges:
+        if end <= start and minute < end:  # yesterday's wrap past midnight
+            return f"{y_label} {fmt_range((start, end))}"
 
     return None
 
 
-def is_open(schedule, now):
-    return evaluate(schedule, now) is not None
+def is_open(schedule, now, exceptions=None):
+    return evaluate(schedule, now, exceptions) is not None
+
+
+def next_change(schedule, now, exceptions=None):
+    """First instant (minute resolution) within 48 hours where the open/closed
+    state flips, else None. Brute-force minute scan: 2880 evaluate() calls of
+    pure int arithmetic, and it only runs when a state-change log line is being
+    emitted — simplicity over cleverness, and it matches evaluate's semantics
+    by construction (no separate boundary-derivation logic to drift)."""
+    current = is_open(schedule, now, exceptions)
+    probe = now.replace(second=0, microsecond=0)
+    for _ in range(48 * 60):
+        probe = probe + timedelta(minutes=1)
+        if is_open(schedule, probe, exceptions) != current:
+            return probe
+    return None

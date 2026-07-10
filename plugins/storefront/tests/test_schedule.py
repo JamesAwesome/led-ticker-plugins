@@ -1,3 +1,4 @@
+from datetime import date as _date
 from datetime import datetime
 
 import pytest
@@ -7,9 +8,12 @@ from led_ticker_storefront.schedule import (
     evaluate,
     fmt_range,
     is_open,
+    next_change,
     parse_day,
+    parse_exceptions,
     parse_schedule,
     parse_time,
+    ranges_for,
 )
 
 
@@ -161,3 +165,129 @@ def test_absent_day_is_closed():
 
 def test_explicit_closed_day():
     assert is_open(_sched(), SUN_1200) is False
+
+
+def test_parse_exceptions_specific_and_recurring():
+    exc = parse_exceptions(
+        {
+            "2026-11-26": "closed",
+            "12-25": "closed",
+            "12-24": "09:00-13:00",
+        }
+    )
+    assert exc[(2026, 11, 26)] == []
+    assert exc[(None, 12, 25)] == []
+    assert exc[(None, 12, 24)] == [(540, 780)]
+
+
+def test_parse_exceptions_values_reuse_day_grammar():
+    exc = parse_exceptions({"2026-12-31": "20:00-02:00,09:00-12:00"})
+    assert exc[(2026, 12, 31)] == [(1200, 120), (540, 720)]
+
+
+def test_parse_exceptions_feb29_recurring_allowed():
+    assert (None, 2, 29) in parse_exceptions({"02-29": "closed"})
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "02-30",  # not a real date
+        "13-01",  # bad month
+        "2026-02-30",  # not a real date (specific)
+        "12/25",  # wrong separator
+        "Dec-25",  # not numeric
+        "2-5",  # not zero-padded
+        "2026-1-5",  # not zero-padded (specific)
+        "",  # empty
+    ],
+)
+def test_parse_exceptions_rejects_malformed_keys(bad):
+    with pytest.raises(ValueError):
+        parse_exceptions({bad: "closed"})
+
+
+def test_parse_exceptions_bad_value_raises():
+    with pytest.raises(ValueError):
+        parse_exceptions({"12-25": "9-5"})
+
+
+def test_parse_exceptions_empty_dict():
+    assert parse_exceptions({}) == {}
+
+
+def _wk():
+    return parse_schedule({"mon": "09:00-17:00", "fri": "18:00-02:00"})
+
+
+def test_ranges_for_precedence_specific_beats_recurring_beats_weekly():
+    exc = parse_exceptions({"2024-01-01": "10:00-12:00", "01-01": "closed"})
+    ranges, label = ranges_for(_wk(), exc, _date(2024, 1, 1))
+    assert ranges == [(600, 720)]
+    assert label == "exception 2024-01-01"
+    # recurring only:
+    exc2 = parse_exceptions({"01-01": "closed"})
+    ranges2, label2 = ranges_for(_wk(), exc2, _date(2024, 1, 1))
+    assert ranges2 == [] and label2 == "exception 01-01"
+    # no exception -> weekly
+    ranges3, label3 = ranges_for(_wk(), {}, _date(2024, 1, 1))
+    assert ranges3 == [(540, 1020)] and label3 == "mon"
+
+
+def test_exception_replaces_not_merges():
+    exc = parse_exceptions({"01-01": "10:00-12:00"})  # Monday
+    assert is_open(_wk(), datetime(2024, 1, 1, 9, 30), exc) is False  # weekly 9-5 gone
+    assert is_open(_wk(), datetime(2024, 1, 1, 11, 0), exc) is True
+
+
+def test_wrap_belongs_to_start_day_into_closed_exception():
+    # Friday 18:00-02:00; Saturday 2024-01-06 exception "closed"
+    exc = parse_exceptions({"2024-01-06": "closed"})
+    assert evaluate(_wk(), datetime(2024, 1, 6, 0, 30), exc) == "fri 18:00-02:00"
+    assert is_open(_wk(), datetime(2024, 1, 6, 2, 30), exc) is False
+    assert is_open(_wk(), datetime(2024, 1, 6, 12, 0), exc) is False
+
+
+def test_exception_day_wrap_carries_into_next_day():
+    # NYE special hours wrap into Jan 1, even when Jan 1 is itself closed
+    exc = parse_exceptions({"2023-12-31": "20:00-02:00", "2024-01-01": "closed"})
+    got = evaluate(_wk(), datetime(2024, 1, 1, 1, 0), exc)
+    assert got == "exception 2023-12-31 20:00-02:00"
+    assert is_open(_wk(), datetime(2024, 1, 1, 2, 30), exc) is False
+
+
+def test_recurring_feb29_matches_leap_years_only():
+    exc = parse_exceptions({"02-29": "10:00-12:00"})
+    sched = parse_schedule({})  # closed all week otherwise
+    assert is_open(sched, datetime(2024, 2, 29, 11, 0), exc) is True  # leap year
+    assert is_open(sched, datetime(2026, 3, 1, 11, 0), exc) is False  # no feb 29
+
+
+def test_evaluate_two_arg_backcompat():
+    # existing call shape (no exceptions) still works and returns weekly labels
+    assert evaluate(_wk(), datetime(2024, 1, 1, 10, 0)) == "mon 09:00-17:00"
+
+
+def test_next_change_closes_today():
+    nc = next_change(_wk(), datetime(2024, 1, 1, 10, 0))
+    assert nc == datetime(2024, 1, 1, 17, 0)
+
+
+def test_next_change_opens_next_open_day():
+    # Monday 18:00 -> next open is Friday 18:00 (within 48h? no -> None);
+    # use Thursday 12:00 -> Friday 18:00 IS within 48h
+    nc = next_change(_wk(), datetime(2024, 1, 4, 12, 0))
+    assert nc == datetime(2024, 1, 5, 18, 0)
+
+
+def test_next_change_none_beyond_horizon():
+    always = parse_schedule(
+        {d: "00:00-24:00" for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
+    )
+    assert next_change(always, datetime(2024, 1, 1, 10, 0)) is None
+
+
+def test_next_change_respects_exceptions():
+    exc = parse_exceptions({"2024-01-01": "10:00-12:00"})
+    nc = next_change(_wk(), datetime(2024, 1, 1, 10, 30), exc)
+    assert nc == datetime(2024, 1, 1, 12, 0)

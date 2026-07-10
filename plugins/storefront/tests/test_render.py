@@ -160,3 +160,36 @@ def test_oversized_badge_warning_latches_once(small_canvas, caplog):
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
     assert not _lit(small_canvas)
+
+
+def test_hires_badge_renders_on_large_panel(caplog):
+    """A mega-sign (512x128) with a 64px hi-res badge must render, not skip."""
+    import logging
+
+    from led_ticker.plugin import HeadlessCanvas
+
+    canvas = HeadlessCanvas(512, 128)
+    cfg = parse_config(
+        {"font": "Inter-Regular", "font_size": 64, "open": {"text": "OPEN"}}
+    )
+    with caplog.at_level(logging.WARNING, logger="led_ticker_storefront"):
+        draw_badge(canvas, cfg, cfg.open, frame=0)
+    assert _lit(canvas), "hi-res badge did not render on a large panel"
+    assert not caplog.records, "oversize skip fired on a badge that fits"
+
+
+def test_bdf_block_scale_badge_on_large_panel():
+    """BDF block-scales up on a large panel; taller font_size -> taller badge."""
+    from led_ticker.plugin import HeadlessCanvas
+
+    small, big = HeadlessCanvas(512, 128), HeadlessCanvas(512, 128)
+    cfg_s = parse_config({"font_size": 24, "open": {"text": "OPEN"}})
+    cfg_b = parse_config({"font_size": 96, "open": {"text": "OPEN"}})
+    draw_badge(small, cfg_s, cfg_s.open, frame=0)
+    draw_badge(big, cfg_b, cfg_b.open, frame=0)
+
+    def _height(lit):
+        return max(y for _, y in lit) - min(y for _, y in lit)
+
+    assert _lit(small) and _lit(big)
+    assert _height(_lit(big)) > _height(_lit(small))
