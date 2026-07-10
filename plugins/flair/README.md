@@ -131,6 +131,58 @@ animation = {style = "flair.fisheye", magnify = 1.33, edge_squeeze = 0.45}
 - Held (non-overflowing) text shows a static center bulge — a legitimate emphasis look.
 
 
+## Lottery widget
+
+`flair.lottery` rolls N labeled balls in from off-canvas left, one at a time, in a staggered relay — each ball tumbles as it rolls (the word visibly spins with the face) and settles flat, upright, into an evenly spaced slot across the panel. A physical lottery-ball draw, rendered as a held widget.
+
+Requires **led-ticker-core >= 4.7** and a **scaled display (bigsign only)** — the balls paint at physical resolution via the same hi-res machinery as inline emoji and hi-res fonts. On an unscaled display (smallsign, `default_scale = 1`) the widget logs a warning once and paints nothing; `led-ticker validate` also warns at config-load time so this shows up before deploy, not after.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "flair.lottery"
+words = ["fresh", "hot", "kebab"]
+ball_style = "classic"
+border = "rainbow"
+```
+
+### Both styles
+
+- **`ball_style = "classic"`** (default) — a white face with a colored rim ring and dark text, like a real lottery ball.
+- **`ball_style = "solid"`** — a solid color-filled face with white text.
+
+```toml
+[[playlist.section.widget]]
+type = "flair.lottery"
+words = ["fresh", "hot", "kebab"]
+ball_style = "solid"
+colors = [[255, 60, 60], [60, 220, 60], [255, 180, 0]]
+```
+
+### Knobs
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `words` | list[str], 1-8 | required | One ball per word. |
+| `ball_style` | `"classic"` / `"solid"` | `"classic"` | See above. |
+| `colors` | list of `[r, g, b]` | auto-palette | Must match `words` length if given. Colors the ring (classic) or the fill (solid). |
+| `roll_ms` | int >= 100 | `800` | Wall-clock roll duration per ball (the staggered relay's per-ball window). |
+| `font` | str | `"Inter-Bold"` | Hi-res font used for each ball's label. |
+| `border` | any core border spec | none | Same `border` field as `message`/`countdown`/`two_row`/etc — paints the panel perimeter, not the balls. |
+
+### Auto-palette when `colors` is omitted
+
+Omitting `colors` cycles the balls through an 8-color built-in palette in order (red, green, amber, blue, magenta, cyan, orange, violet), repeating if there are more than 8 words. Set `colors` explicitly to override any or all of them — the list must be the same length as `words`.
+
+### Derived sizing — no size knobs
+
+There is no `ball_size` / `diameter` field: ball diameter, slot spacing, and font size are all derived from the panel geometry and word count (`layout()` fits `n` evenly-spaced slots across the panel width, capped by the content-band height; `auto_font_size()` picks the largest label size that fits the ball's circular face). Fewer/shorter words get bigger balls; more/longer words get smaller ones. If a word genuinely can't fit any legible label size, `led-ticker validate` warns at config-load and the ball still renders (unlabeled) at render time — check the warning rather than trying to tune around it with a size knob that doesn't exist.
+
+### Bigsign-only, and border support
+
+Same physical-resolution requirement as inline hi-res emoji — see the requirement note above. `border` composes normally: it paints the panel perimeter before the balls (same order as every other bordered widget), and the smoke config in `examples/config.lottery-smoke.bigsign.toml` demonstrates a `rainbow` border alongside classic-style balls.
+
 ## Install
 
 Part of the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Install:

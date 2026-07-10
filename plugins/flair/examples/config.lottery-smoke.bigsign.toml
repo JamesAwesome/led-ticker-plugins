@@ -1,0 +1,64 @@
+# Smoke config: flair.lottery widget, on a realistic bigsign panel.
+#
+# Purpose: visual-validation gate for the Phase-A GIF acceptance check (see
+# docs/visual-validation.md in the core repo). Two sections: classic-style
+# balls with a rainbow border, then solid-style balls with explicit colors
+# and a dissolve entry — so both ball styles and the border/no-border paths
+# render for the demo GIF. Not meant to be a realistic content playlist —
+# see config/config.bigsign.example.toml in the core repo for that.
+#
+# [display] block mirrors config/config.bigsign.example.toml (core repo) in
+# every RP1/render knob (brightness, default_scale, gpio_slowdown, pwm_bits).
+#
+# rows/cols/chain_length deliberately do NOT copy the real 8-panel
+# rows=32/cols=64/chain_length=8 + `Remap:256,64|...` pixel_mapper_config.
+# The headless render-demo backend does not interpret the Remap mapper
+# string (that reshaping only happens in the real rgbmatrix C library on
+# hardware) — special-cased only for the literal "U-mapper" string in
+# `led_ticker/backends/headless.py`. Feeding it the real chained values
+# yields a pre-remap 512x32 canvas in headless mode, which is too short for
+# default_scale=4 (content_height x scale must fit the real panel height).
+# Setting rows=64, cols=256, chain_length=1 gives headless the correct
+# final 256x64 logical canvas directly — the same pattern already used by
+# plugins/storefront/examples/*.toml for bigsign-shaped demo renders.
+# Real bigsign hardware deploys still use config.bigsign.example.toml's
+# 8-panel rows/cols/chain_length/pixel_mapper_config block; this file is a
+# render-demo smoke fixture, not a hardware wiring config.
+
+[display]
+rows = 64
+cols = 256
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+
+# --- Section 1: classic-style balls, auto-palette, rainbow border -----------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 15
+
+[[playlist.section.widget]]
+type = "flair.lottery"
+words = ["fresh", "hot", "kebab"]
+ball_style = "classic"
+border = "rainbow"
+
+# --- Section 2: solid-style balls, explicit colors, dissolve entry ----------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 15
+transition = "dissolve"
+
+[[playlist.section.widget]]
+type = "flair.lottery"
+words = ["fresh", "hot", "kebab"]
+ball_style = "solid"
+colors = [[255, 60, 60], [60, 220, 60], [255, 180, 0]]
