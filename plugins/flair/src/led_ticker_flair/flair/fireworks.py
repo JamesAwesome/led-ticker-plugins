@@ -60,9 +60,12 @@ _BLOOM_AT = 0.5
 # open/bloom hole-radius test pins the exact boundary value).
 _LAUNCH_OPEN_BOUNDARY = 0.35
 
-# Sparks-per-rim range (spec, verbatim): "rims 16-32 sparks, seeded jitter".
-_MIN_SPARKS = 16
-_MAX_SPARKS = 32
+# Spokes-per-burst range (spec, verbatim, asterisk rework): "10-14 spokes at
+# seeded angles". Narrower and sparser than the old 16-32 rim-spark count --
+# fewer, longer, individually-visible radial trails read as an exploding
+# point; a denser count of 1-2px specks read as a ring/haze instead.
+_MIN_SPOKES = 10
+_MAX_SPOKES = 14
 
 
 def burst_count(w: int, h: int) -> int:
@@ -102,12 +105,16 @@ class Burst:
     begins at ``t == 0.5`` — the two phases hand off continuously with no
     radius jump.
 
-    ``color``: this burst's spark/fill color, an ``(r, g, b)`` triple.
+    ``color``: this burst's spoke/fill color, an ``(r, g, b)`` triple.
 
-    ``spark_angles``: seeded rim geometry — a tuple of
-    ``(angle_deg, jitter_deg)`` pairs, one per spark, evenly spaced around
-    the circle (``360 / n``) with a per-spark random jitter so the rim
-    doesn't look mechanically uniform. Count is seeded in ``[16, 32]``.
+    ``spoke_angles``: seeded asterisk geometry — a tuple of
+    ``(angle_deg, jitter_deg)`` pairs, one per spoke, evenly spaced around
+    the circle (``360 / n``) with a per-spoke random jitter so the star
+    doesn't look mechanically uniform. Count is seeded in ``[10, 14]``.
+    Renders as radial trails (``_draw_spokes``), not a rim/ring — the field
+    name predates that rework (was ``spark_angles``, one point per rim
+    spark) but the seeded-angle geometry itself is unchanged and directly
+    reused as spoke direction.
     """
 
     cx: float
@@ -116,11 +123,11 @@ class Burst:
     t_start: float
     t_burst_dur: float
     color: tuple[int, int, int]
-    spark_angles: tuple[tuple[float, float], ...]
+    spoke_angles: tuple[tuple[float, float], ...]
 
 
-def _spark_angles(rng: random.Random) -> tuple[tuple[float, float], ...]:
-    n = rng.randint(_MIN_SPARKS, _MAX_SPARKS)
+def _spoke_angles(rng: random.Random) -> tuple[tuple[float, float], ...]:
+    n = rng.randint(_MIN_SPOKES, _MAX_SPOKES)
     step = 360.0 / n
     return tuple((i * step, rng.uniform(-step / 4.0, step / 4.0)) for i in range(n))
 
@@ -135,8 +142,8 @@ def plan_bursts(
     """Plan ``count`` (default: ``burst_count(w, h)``) bursts.
 
     Determinism: all randomness is drawn from ``rng`` in a fixed order (per
-    burst: x-jitter, y, radius_max, t_start, spark count, then one jitter
-    per spark) — the same ``random.Random`` seed reproduces an identical
+    burst: x-jitter, y, radius_max, t_start, spoke count, then one jitter
+    per spoke) — the same ``random.Random`` seed reproduces an identical
     plan.
 
     Centers: the panel width is divided into ``count`` equal horizontal
@@ -175,7 +182,7 @@ def plan_bursts(
                 t_start=t_start,
                 t_burst_dur=t_burst_dur,
                 color=color,
-                spark_angles=_spark_angles(rng),
+                spoke_angles=_spoke_angles(rng),
             )
         )
     return bursts
@@ -239,49 +246,49 @@ _MAX_BURSTS_OVERRIDE = 8
 _LAUNCH_HEAD_LEN = 2
 _LAUNCH_TAIL_LEN = 4
 
-# --- Visual-punch tuning (rim ring / sparks) -------------------------------
-# Root cause of the failed visual gate: rim brightness used to scale by
-# ``1 - p``, so by the time a hole is visually large (high local progress
-# ``p``, i.e. late "open") its sparks were already down to 10-20%
-# brightness; combined with 1px, sparse (16-32 count) points at
-# 256x64+ physical resolution, the rim read as near-invisible dim specks
-# rather than a firework. The fix adds a SEPARATE, always-bright
-# continuous ring outline (the primary "this is a burst" read) and keeps
-# the seeded points as brighter, bigger, later-fading sparks OUTSIDE that
-# ring.
+# --- Asterisk-burst tuning (spoke geometry / brightness) -------------------
+# Design (James's PR #39 feedback): the expanding-ring-outline decoration
+# read as a ripple, not an explosion. Replaced entirely with radial spoke
+# trails flying outward from each burst's center -- a line of pixels per
+# seeded angle, running from a tail (near the center) out to a head that
+# rides just ahead of the black hole's current edge. `_draw_ring` and
+# `_draw_sparks` (and their brightness-curve helper `_ease_brightness`) are
+# gone; `_draw_spokes` is the sole decoration painter for the open/bloom
+# phases now. Hole/complement mechanics (`_fill_burst_black`,
+# `_blackout_complement`, `burst_state`'s radius formulas) are untouched --
+# this is purely the decorative layer painted on top of them.
 
-# Spark ease-down boundary/floor (spec: "full brightness until p > 0.7,
-# then ease down"). ``_ease_brightness`` is shared by both the open-phase
-# (keyed on local progress ``p``) and bloom-phase (keyed on bloom-local
-# progress ``frac``) spark brightness -- both are a 0->1 "how far through
-# this burst's current visible phase" measure.
-_SPARK_EASE_START = 0.7
-_SPARK_EASE_FLOOR = 0.3
+# Head offset ahead of the current hole radius, in px (spec: "r_head =
+# current hole radius + 1..2px" -- heads ride just ahead of the black
+# edge). The per-spoke value within this band is derived from that spoke's
+# own already-seeded `jitter_deg` (see `_draw_spokes`), not a fresh rng
+# draw, so the whole decoration stays a pure function of the plan.
+_SPOKE_HEAD_OFFSET_MIN = 1.0
+_SPOKE_HEAD_OFFSET_MAX = 2.0
 
-# Ring brightness floor during bloom (spec, verbatim): stays this bright
-# even as bloom nears the snap threshold, rather than fading to black.
-_RING_BLOOM_FLOOR = 0.25
+# Trail length as a fraction of the spoke's own head radius (spec: "trail_len
+# ~= 0.45 x r_head" -- short dense star early when r_head is small, long
+# trails late as r_head grows with the hole).
+_TRAIL_LEN_FRAC = 0.45
 
-# Sparks sit just outside the ring, radius + a per-spark jitter in this
-# band (spec: "radius + 1..3px jitter"). The jitter is derived from each
-# spark's own seeded `jitter_deg` (no new rng draws -- see `_draw_sparks`),
-# so it stays a pure function of the already-deterministic plan.
-_SPARK_RADIUS_JITTER_MIN = 1.0
-_SPARK_RADIUS_JITTER_MAX = 3.0
+# Per-spoke trail-length variance, +/-15% (spec, verbatim) so the star
+# isn't perfectly geometric. Derived from the same seeded `jitter_deg` as
+# the head offset above (no new rng draws).
+_TRAIL_LEN_VARIANCE = 0.15
 
-# Sparks are drawn as a 2x2 physical-pixel block (spec: "make them 2px").
-_SPARK_SIZE = 2
-
-# Roughly 1/4 of a burst's sparks render white-hot instead of the burst's
-# own color (spec: "add a WHITE-hot variant for ~1/4 of sparks").
-_SPARK_WHITE_HOT_EVERY = 4
+# Outermost span of a spoke that renders white-hot regardless of the
+# burst's own color (spec: "head = white-hot for the outermost 1-2px").
+_SPOKE_WHITE_HOT_PX = 1.5
 _WHITE_HOT = (255, 255, 255)
 
-# Ring outline angle-step target, in physical pixels of arc length between
-# consecutive sampled points -- keeps the outline gap-free even at the
-# largest radii (bloom phase, up to `hypot(w, h)`) without oversampling
-# small/early rings.
-_RING_ARC_STEP_PX = 0.75
+# Along-spoke brightness floor at the tail end (spec: "dimming linearly to
+# ~25% at the tail").
+_TAIL_BRIGHTNESS_FLOOR = 0.25
+
+# Bloom-phase global dimming floor (spec, verbatim): "scale everything
+# additionally by max(0.25, 1 - (t - 0.5) x 2)" -- applied on top of the
+# along-spoke gradient above, not in place of it.
+_BLOOM_FADE_FLOOR = 0.25
 
 
 class Fireworks:
@@ -415,20 +422,16 @@ class Fireworks:
                 else:
                     radius, _phase = burst_state(b, t, w, h)
                     self._fill_burst_black(real, b, radius, w, h)
-                    # Ring: FULL brightness for the whole open phase (spec)
-                    # -- the primary "this is a burst" read.
-                    self._draw_ring(real, b, radius, 1.0, w, h)
-                    self._draw_sparks(real, b, radius, self._ease_brightness(p), w, h)
+                    # No bloom-fade multiplier yet (t < 0.5) -- the
+                    # along-spoke gradient alone carries the open phase.
+                    self._draw_spokes(real, b, radius, 1.0, w, h)
         else:
             incoming.draw(canvas, cursor_pos=0)
             self._blackout_complement(real, w, h, t)
-            bloom_frac = (t - _BLOOM_AT) / (1.0 - _BLOOM_AT)
-            ring_brightness = max(_RING_BLOOM_FLOOR, 1.0 - bloom_frac * 2.0)
-            spark_brightness = self._ease_brightness(bloom_frac)
+            bloom_mult = self._bloom_multiplier(t)
             for b in self._plan:
                 radius, _phase = burst_state(b, t, w, h)
-                self._draw_ring(real, b, radius, ring_brightness, w, h)
-                self._draw_sparks(real, b, radius, spark_brightness, w, h)
+                self._draw_spokes(real, b, radius, bloom_mult, w, h)
 
         return canvas
 
@@ -497,104 +500,111 @@ class Fireworks:
                     real.SetPixel(x, y, 0, 0, 0)
 
     @staticmethod
-    def _ease_brightness(value: float) -> float:
-        """Shared spark brightness curve: full (1.0) until ``value``
-        (a 0->1 "how far through this burst's current visible phase"
-        measure -- local progress ``p`` while opening, bloom-local
-        ``frac`` during bloom) passes ``_SPARK_EASE_START`` (0.7), then
-        eases linearly down to ``_SPARK_EASE_FLOOR`` (0.3) by
-        ``value == 1.0``. Unlike the OLD rim formula (brightness scaled
-        by ``1 - p`` from the moment a burst opened), sparks now stay at
-        full brightness through most of the open/bloom phase and only
-        fade near the very end -- see the "Visual-punch tuning" comment
-        block above for the root-cause rationale.
+    def _bloom_multiplier(t: float) -> float:
+        """Global bloom-phase dimming multiplier (spec, verbatim):
+        ``max(0.25, 1 - (t - 0.5) * 2)``. ``1.0`` for any ``t`` before the
+        bloom handoff (``_BLOOM_AT``) -- the open phase carries its own
+        brightness entirely via the along-spoke gradient in
+        ``_draw_spokes``, with no additional time-based dimming. Once
+        bloom starts this multiplier is applied ON TOP of that gradient
+        (scaling the whole spoke, head included) so spokes fade out
+        together as the bloom races toward full-panel coverage, floored at
+        ``_BLOOM_FADE_FLOOR`` rather than fading to black before the snap.
         """
-        value = max(0.0, value)
-        if value <= _SPARK_EASE_START:
+        if t < _BLOOM_AT:
             return 1.0
-        span = 1.0 - _SPARK_EASE_START
-        q = min(1.0, (value - _SPARK_EASE_START) / span)
-        return max(_SPARK_EASE_FLOOR, 1.0 - q * (1.0 - _SPARK_EASE_FLOOR))
+        return max(_BLOOM_FADE_FLOOR, 1.0 - (t - _BLOOM_AT) * 2.0)
 
     @staticmethod
-    def _draw_ring(
-        real: Any, b: Burst, radius: float, brightness: float, w: int, h: int
+    def _draw_spokes(
+        real: Any, b: Burst, radius: float, brightness_mult: float, w: int, h: int
     ) -> None:
-        """Paint a continuous 1px circle OUTLINE at ``b``'s current
-        ``radius`` in the burst's color, scaled by ``brightness`` -- the
-        primary "this is a burst" read (the old rim was ONLY the sparse
-        seeded spark points, which at 256x64+ physical resolution read as
-        near-invisible dim specks rather than a firework).
+        """Paint ``b``'s asterisk: one radial trail per seeded
+        ``(angle_deg, jitter_deg)`` pair in ``b.spoke_angles``, each a line
+        of pixels from a tail near the center out to a head riding just
+        ahead of the current hole edge -- the "point exploding outward"
+        read (PR #39 feedback replaced the old expanding-ring-outline
+        decoration, which read as a ripple, with this).
 
-        Angle-stepped rather than a midpoint-circle algorithm: the step
-        count is derived from the radius so consecutive sampled points
-        are at most ``_RING_ARC_STEP_PX`` physical pixels of arc length
-        apart -- gap-free at the largest bloom-phase radii (up to
-        ``hypot(w, h)``) without oversampling small/early rings. Pure
-        function of ``radius``/``b`` -- no rng, so determinism across
-        identical-seed sweeps is unaffected.
+        Per spoke: ``r_head = radius + head_offset`` (``head_offset`` in
+        ``[_SPOKE_HEAD_OFFSET_MIN, _SPOKE_HEAD_OFFSET_MAX]``, i.e. 1-2px
+        ahead of the black hole's own edge) and
+        ``r_tail = max(0, r_head - trail_len)`` where
+        ``trail_len = _TRAIL_LEN_FRAC * r_head * variance`` (``variance``
+        in ``[1 - _TRAIL_LEN_VARIANCE, 1 + _TRAIL_LEN_VARIANCE]``) -- since
+        ``trail_len`` scales with ``r_head``, spokes are short near the
+        center early (small hole -> short trail -> reads as a dense little
+        star) and long once the hole has grown (large hole -> long trail).
+        Both ``head_offset`` and ``variance`` are derived from that
+        spoke's own already-seeded ``jitter_deg`` (normalized against its
+        angular slice, same trick ``_draw_sparks`` used to use for its
+        radius jitter) -- no fresh rng draws, so the whole decoration stays
+        a pure function of the already-committed plan and same-seed
+        determinism is unaffected.
+
+        Iteration is radial, 1px steps, angle computed once per spoke
+        (``cos``/``sin``) then just stepping the radius -- cost is
+        ``O(spokes * trail_len)`` per burst, trivially cheap at panel
+        scale; off-panel pixels are skipped, never specially computed
+        around.
+
+        Brightness: the outermost ``_SPOKE_WHITE_HOT_PX`` px of a spoke
+        render ``_WHITE_HOT`` regardless of ``b.color`` (the bright
+        particle head); every pixel below that fades LINEARLY in the
+        burst's own color from full brightness (just inside the white-hot
+        span) down to ``_TAIL_BRIGHTNESS_FLOOR`` (25%) at the tail. The
+        caller-supplied ``brightness_mult`` (1.0 during the open phase,
+        ``_bloom_multiplier(t)`` during bloom) scales the WHOLE spoke,
+        head included, on top of that gradient.
         """
-        if brightness <= 0.0 or radius <= 0.0:
+        if radius <= 0.0 or brightness_mult <= 0.0:
             return
-        r0, g0, bl0 = b.color
-        r, g, bl = int(r0 * brightness), int(g0 * brightness), int(bl0 * brightness)
-        circumference = 2.0 * math.pi * radius
-        steps = max(32, math.ceil(circumference / _RING_ARC_STEP_PX))
-        cx, cy = b.cx, b.cy
-        for i in range(steps):
-            theta = (2.0 * math.pi * i) / steps
-            x = round(cx + radius * math.cos(theta))
-            y = round(cy + radius * math.sin(theta))
-            if 0 <= x < w and 0 <= y < h:
-                real.SetPixel(x, y, r, g, bl)
-
-    @staticmethod
-    def _draw_sparks(
-        real: Any, b: Burst, radius: float, brightness: float, w: int, h: int
-    ) -> None:
-        """Paint ``b``'s seeded spark points: one 2x2 physical-pixel block
-        per ``(angle_deg, jitter_deg)`` pair in ``b.spark_angles``,
-        positioned just OUTSIDE the rim ring (``radius`` plus a per-spark
-        ``_SPARK_RADIUS_JITTER_MIN.._MAX`` px offset), color scaled by
-        ``brightness``. Roughly 1 in ``_SPARK_WHITE_HOT_EVERY`` sparks
-        (by seeded-plan index, so deterministic) render white-hot instead
-        of the burst's own color.
-
-        The radius jitter is derived from each spark's own already-seeded
-        ``jitter_deg`` (normalized against that spark's angular slice) --
-        NOT a fresh `rng` draw. This keeps the whole render path a pure
-        function of the plan `plan_bursts` already committed to, so the
-        same-seed determinism tests need no changes: a spark's outward
-        jitter is reproducible from the identical seeded plan alone.
-        """
-        if brightness <= 0.0 or radius <= 0.0:
-            return
-        n = len(b.spark_angles)
+        n = len(b.spoke_angles)
         if n == 0:
             return
         step = 360.0 / n
+        cx, cy = b.cx, b.cy
         r0, g0, bl0 = b.color
-        jitter_span = _SPARK_RADIUS_JITTER_MAX - _SPARK_RADIUS_JITTER_MIN
-        for idx, (angle_deg, jitter_deg) in enumerate(b.spark_angles):
-            # jitter_deg in [-step/4, step/4] (see `_spark_angles`) ->
-            # normalize to [0, 1] to derive a deterministic radius jitter.
-            frac = (jitter_deg + step / 4.0) / (step / 2.0) if step else 0.5
-            frac = min(1.0, max(0.0, frac))
-            spark_radius = radius + _SPARK_RADIUS_JITTER_MIN + frac * jitter_span
 
-            base = _WHITE_HOT if idx % _SPARK_WHITE_HOT_EVERY == 0 else (r0, g0, bl0)
-            r = int(base[0] * brightness)
-            g = int(base[1] * brightness)
-            bl = int(base[2] * brightness)
+        for angle_deg, jitter_deg in b.spoke_angles:
+            # jitter_deg in [-step/4, step/4] (see `_spoke_angles`) ->
+            # normalize to [0, 1] to derive this spoke's deterministic
+            # head-offset/trail-variance (no new rng draws).
+            frac = min(1.0, max(0.0, (jitter_deg + step / 4.0) / (step / 2.0)))
+
+            head_offset = _SPOKE_HEAD_OFFSET_MIN + frac * (
+                _SPOKE_HEAD_OFFSET_MAX - _SPOKE_HEAD_OFFSET_MIN
+            )
+            r_head = radius + head_offset
+            variance = 1.0 + (frac * 2.0 - 1.0) * _TRAIL_LEN_VARIANCE
+            trail_len = max(0.5, _TRAIL_LEN_FRAC * r_head * variance)
+            r_tail = max(0.0, r_head - trail_len)
+            span = r_head - r_tail
 
             theta = math.radians(angle_deg + jitter_deg)
-            cx0 = round(b.cx + spark_radius * math.cos(theta))
-            cy0 = round(b.cy + spark_radius * math.sin(theta))
-            for dx in range(_SPARK_SIZE):
-                for dy in range(_SPARK_SIZE):
-                    x, y = cx0 + dx, cy0 + dy
-                    if 0 <= x < w and 0 <= y < h:
-                        real.SetPixel(x, y, r, g, bl)
+            cos_t, sin_t = math.cos(theta), math.sin(theta)
+
+            steps = max(1, math.ceil(span))
+            for i in range(steps + 1):
+                r = min(r_head, r_tail + i)
+                x = round(cx + r * cos_t)
+                y = round(cy + r * sin_t)
+                if not (0 <= x < w and 0 <= y < h):
+                    continue
+
+                if r_head - r <= _SPOKE_WHITE_HOT_PX:
+                    base = _WHITE_HOT
+                else:
+                    along = (r - r_tail) / span if span > 0 else 1.0
+                    fade = (
+                        _TAIL_BRIGHTNESS_FLOOR + (1.0 - _TAIL_BRIGHTNESS_FLOOR) * along
+                    )
+                    base = (r0 * fade, g0 * fade, bl0 * fade)
+
+                mult = brightness_mult
+                real.SetPixel(
+                    x, y, int(base[0] * mult), int(base[1] * mult), int(base[2] * mult)
+                )
 
     def _blackout_complement(self, real: Any, w: int, h: int, t: float) -> None:
         """Blacken every pixel OUTSIDE the union of all bursts' current

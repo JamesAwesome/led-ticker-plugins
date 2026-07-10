@@ -12,6 +12,9 @@ from led_ticker.plugin import ScaledCanvas
 from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.fireworks import (
     _LAUNCH_OPEN_BOUNDARY,
+    _SPOKE_HEAD_OFFSET_MAX,
+    _SPOKE_HEAD_OFFSET_MIN,
+    _TRAIL_LEN_FRAC,
     PALETTE,
     Burst,
     Fireworks,
@@ -94,10 +97,10 @@ class TestPlanBurstsBounds:
         for b in plan:
             assert 0.05 <= b.t_start <= 0.45
 
-    def test_spark_angle_count_in_bounds(self) -> None:
+    def test_spoke_angle_count_in_bounds(self) -> None:
         plan = plan_bursts(256, 64, random.Random(42))
         for b in plan:
-            assert 16 <= len(b.spark_angles) <= 32
+            assert 10 <= len(b.spoke_angles) <= 14
 
     def test_centers_spread_across_horizontal_bands(self) -> None:
         # With 4 bursts across w=256, each burst should land in its own
@@ -131,7 +134,7 @@ class TestBurstState:
         t_start: float = 0.2,
         t_burst_dur: float = 0.3,
         color: tuple[int, int, int] = (255, 0, 0),
-        spark_angles: tuple[tuple[float, float], ...] = (),
+        spoke_angles: tuple[tuple[float, float], ...] = (),
     ) -> Burst:
         return Burst(
             cx=cx,
@@ -140,7 +143,7 @@ class TestBurstState:
             t_start=t_start,
             t_burst_dur=t_burst_dur,
             color=color,
-            spark_angles=spark_angles,
+            spoke_angles=spoke_angles,
         )
 
     def test_waiting_before_t_start(self) -> None:
@@ -417,7 +420,7 @@ class TestPhaseOnePixelSemantics:
             t_start=0.0,
             t_burst_dur=0.5,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         fw._plan = [burst]
         fw._plan_dims = (160, 16)
@@ -446,7 +449,7 @@ class TestPhaseTwoPixelSemantics:
             t_start=0.2,
             t_burst_dur=0.3,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         fw._plan = [burst]
         fw._plan_dims = (256, 64)
@@ -565,7 +568,7 @@ class TestScaledCanvasEffectPixels:
             t_start=0.0,
             t_burst_dur=0.5,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         fw._plan = [burst]
         fw._plan_dims = (256, 64)
@@ -586,165 +589,163 @@ class TestScaledCanvasEffectPixels:
 
 
 # ---------------------------------------------------------------------------
-# Visual-punch fix (rim ring / sparks / launch-streak head) -- root cause
-# was rim brightness scaling by `1 - p` (dim by the time a hole reads as
-# large) plus sparse 1px spark points reading as specks at 256x64+
-# physical resolution. These tests pin the NEW curve/geometry; there was
-# no prior test pinning the old `1 - p` formula to update.
+# Asterisk-burst rework (PR #39 visual feedback) -- the expanding-ring-outline
+# decoration read as a ripple, not an explosion. `_draw_ring`/`_draw_sparks`/
+# `_ease_brightness` are gone; `_draw_spokes` (radial trails from a tail near
+# the center out to a head riding just ahead of the black hole's edge) is the
+# sole decoration painter now, with `_bloom_multiplier` supplying the global
+# bloom-phase dimming factor these tests pin.
 # ---------------------------------------------------------------------------
 
 
-class TestEaseBrightness:
-    def test_full_brightness_below_start(self) -> None:
-        assert Fireworks._ease_brightness(0.0) == 1.0
-        assert Fireworks._ease_brightness(0.7) == 1.0
+class TestBloomMultiplier:
+    def test_full_brightness_before_bloom(self) -> None:
+        assert Fireworks._bloom_multiplier(0.0) == 1.0
+        assert Fireworks._bloom_multiplier(0.49) == 1.0
 
-    def test_eases_down_after_start(self) -> None:
-        mid = Fireworks._ease_brightness(0.85)
-        assert 0.3 < mid < 1.0
+    def test_full_brightness_at_bloom_start(self) -> None:
+        assert Fireworks._bloom_multiplier(0.5) == pytest.approx(1.0)
 
-    def test_floors_at_one(self) -> None:
-        assert Fireworks._ease_brightness(1.0) == pytest.approx(0.3)
+    def test_eases_down_during_bloom(self) -> None:
+        mid = Fireworks._bloom_multiplier(0.75)
+        assert 0.25 < mid < 1.0
+
+    def test_floors_at_quarter(self) -> None:
+        assert Fireworks._bloom_multiplier(1.0) == pytest.approx(0.25)
 
     def test_never_below_floor_past_one(self) -> None:
         # Defensive: a caller passing a slightly-over-1.0 value (rounding)
         # must not fall below the documented floor.
-        assert Fireworks._ease_brightness(1.5) == pytest.approx(0.3)
+        assert Fireworks._bloom_multiplier(1.5) == pytest.approx(0.25)
 
 
-class TestDrawRing:
-    def test_ring_is_gap_free_circle_at_radius(self) -> None:
-        real = _StubCanvas(width=200, height=200)
-        b = Burst(
-            cx=100.0,
-            cy=100.0,
+class TestDrawSpokes:
+    @staticmethod
+    def _burst(
+        spoke_angles: tuple[tuple[float, float], ...],
+        *,
+        color: tuple[int, int, int] = (10, 20, 30),
+        cx: float = 100.0,
+        cy: float = 100.0,
+    ) -> Burst:
+        return Burst(
+            cx=cx,
+            cy=cy,
             radius_max=40.0,
             t_start=0.0,
             t_burst_dur=0.5,
-            color=(200, 50, 50),
-            spark_angles=(),
+            color=color,
+            spoke_angles=spoke_angles,
         )
-        Fireworks._draw_ring(real, b, radius=40.0, brightness=1.0, w=200, h=200)
 
-        # Full brightness -> exact burst color, no dimming.
-        painted = {xy: rgb for xy, rgb in real._pixels.items() if rgb != (0, 0, 0)}
-        assert painted
-        assert all(rgb == (200, 50, 50) for rgb in painted.values())
-
-        # Every pixel actually sits (within 1px rounding) on the circle.
-        for x, y in painted:
-            dist = math.hypot(x - 100.0, y - 100.0)
-            assert abs(dist - 40.0) <= 1.5
-
-        # Gap-free: no missing angular sector wider than a couple of
-        # degrees (proxy -- every 5-degree wedge around the circle has at
-        # least one painted pixel).
-        buckets: set[int] = set()
-        for x, y in painted:
-            angle = math.degrees(math.atan2(y - 100.0, x - 100.0)) % 360
-            buckets.add(int(angle // 5))
-        assert len(buckets) >= 360 // 5 - 2  # allow a couple of rounding gaps
-
-    def test_brightness_scales_color(self) -> None:
-        real = _StubCanvas(width=60, height=60)
-        b = Burst(
-            cx=30.0,
-            cy=30.0,
-            radius_max=10.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(200, 100, 50),
-            spark_angles=(),
+    def test_pixels_land_along_seeded_spoke_angles(self) -> None:
+        # A seeded plan (zero jitter_deg on every angle) so this test's own
+        # geometry (below) can mirror `_draw_spokes`'s formulas exactly
+        # rather than depending on its internals.
+        real = _StubCanvas(width=200, height=200)
+        angles = ((0.0, 0.0), (90.0, 0.0), (180.0, 0.0))
+        b = self._burst(angles)
+        radius = 40.0
+        Fireworks._draw_spokes(
+            real, b, radius=radius, brightness_mult=1.0, w=200, h=200
         )
-        Fireworks._draw_ring(real, b, radius=10.0, brightness=0.25, w=60, h=60)
-        painted = [rgb for rgb in real._pixels.values() if rgb != (0, 0, 0)]
+
+        painted = {xy for xy, rgb in real._pixels.items() if rgb != (0, 0, 0)}
         assert painted
-        assert all(rgb == (50, 25, 12) for rgb in painted)
+
+        # jitter_deg == 0 normalizes to frac == 0.5 for ANY spoke count (see
+        # `_draw_spokes`'s `frac` formula) -- identical head/trail geometry
+        # for all three angles here.
+        head_offset = _SPOKE_HEAD_OFFSET_MIN + 0.5 * (
+            _SPOKE_HEAD_OFFSET_MAX - _SPOKE_HEAD_OFFSET_MIN
+        )
+        r_head = radius + head_offset
+        trail_len = _TRAIL_LEN_FRAC * r_head  # variance factor is 1.0 at frac=0.5
+        r_tail = r_head - trail_len
+        r_mid = (r_head + r_tail) / 2.0
+
+        matched = 0
+        for angle_deg, _jitter in angles:
+            theta = math.radians(angle_deg)
+            expect_x = b.cx + r_mid * math.cos(theta)
+            expect_y = b.cy + r_mid * math.sin(theta)
+            if any(math.hypot(x - expect_x, y - expect_y) <= 1.0 for x, y in painted):
+                matched += 1
+        assert matched >= 3
+
+    def test_head_pixel_is_white_hot(self) -> None:
+        real = _StubCanvas(width=200, height=200)
+        b = self._burst(((0.0, 0.0),))
+        radius = 40.0
+        Fireworks._draw_spokes(
+            real, b, radius=radius, brightness_mult=1.0, w=200, h=200
+        )
+
+        head_offset = _SPOKE_HEAD_OFFSET_MIN + 0.5 * (
+            _SPOKE_HEAD_OFFSET_MAX - _SPOKE_HEAD_OFFSET_MIN
+        )
+        r_head = radius + head_offset
+        x = round(b.cx + r_head * math.cos(0.0))
+        y = round(b.cy + r_head * math.sin(0.0))
+        assert real._pixels[(x, y)] == (255, 255, 255)
+
+    def test_tail_dimmer_than_head(self) -> None:
+        real = _StubCanvas(width=200, height=200)
+        b = self._burst(((0.0, 0.0),), color=(200, 100, 40))
+        Fireworks._draw_spokes(real, b, radius=40.0, brightness_mult=1.0, w=200, h=200)
+
+        painted = [
+            (x, y, rgb) for (x, y), rgb in real._pixels.items() if rgb != (0, 0, 0)
+        ]
+        assert len(painted) >= 2
+        # Along a straight ray, painted-pixel distance from center tracks
+        # the spoke's own radius directly -- nearest is the tail, farthest
+        # is the head.
+        by_dist = sorted(
+            painted, key=lambda item: math.hypot(item[0] - b.cx, item[1] - b.cy)
+        )
+        tail_rgb = by_dist[0][2]
+        head_rgb = by_dist[-1][2]
+        assert head_rgb == (255, 255, 255)
+        assert sum(tail_rgb) < sum(head_rgb)
+
+    def test_bloom_fade_dims_the_whole_spoke_including_the_head(self) -> None:
+        real_full = _StubCanvas(width=200, height=200)
+        real_dim = _StubCanvas(width=200, height=200)
+        b = self._burst(((0.0, 0.0),), color=(200, 100, 40))
+
+        Fireworks._draw_spokes(
+            real_full, b, radius=40.0, brightness_mult=1.0, w=200, h=200
+        )
+        Fireworks._draw_spokes(
+            real_dim, b, radius=40.0, brightness_mult=0.25, w=200, h=200
+        )
+
+        full_head = max(real_full._pixels.values(), key=sum)
+        dim_head = max(real_dim._pixels.values(), key=sum)
+        assert full_head == (255, 255, 255)
+        # White-hot itself is scaled too -- bloom fade is not exempted.
+        assert dim_head == (63, 63, 63)
+        assert sum(dim_head) < sum(full_head)
 
     def test_zero_brightness_paints_nothing(self) -> None:
         real = _StubCanvas(width=60, height=60)
-        b = Burst(
-            cx=30.0,
-            cy=30.0,
-            radius_max=10.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(200, 100, 50),
-            spark_angles=(),
+        b = self._burst(
+            ((0.0, 0.0), (90.0, 0.0)), color=(200, 100, 50), cx=30.0, cy=30.0
         )
-        Fireworks._draw_ring(real, b, radius=10.0, brightness=0.0, w=60, h=60)
+        Fireworks._draw_spokes(real, b, radius=10.0, brightness_mult=0.0, w=60, h=60)
         assert real._pixels == {}
 
-
-class TestDrawSparks:
-    def test_sparks_land_outside_ring_radius(self) -> None:
-        real = _StubCanvas(width=200, height=200)
-        spark_angles = tuple((i * 30.0, 0.0) for i in range(12))
-        b = Burst(
-            cx=100.0,
-            cy=100.0,
-            radius_max=40.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(10, 20, 30),
-            spark_angles=spark_angles,
-        )
-        Fireworks._draw_sparks(real, b, radius=40.0, brightness=1.0, w=200, h=200)
-
-        painted = [xy for xy, rgb in real._pixels.items() if rgb != (0, 0, 0)]
-        assert painted
-        for x, y in painted:
-            dist = math.hypot(x - 100.0, y - 100.0)
-            # radius (40) + jitter band (1..3) -- always strictly outside
-            # the ring, never on or inside it.
-            assert dist > 40.0
-
-    def test_every_fourth_spark_is_white_hot(self) -> None:
-        real = _StubCanvas(width=200, height=200)
-        # Zero jitter_deg for every spark -> deterministic non-overlapping
-        # placement, and predictable idx-based white-hot selection.
-        spark_angles = tuple((i * 30.0, 0.0) for i in range(12))
-        b = Burst(
-            cx=100.0,
-            cy=100.0,
-            radius_max=40.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(10, 20, 30),
-            spark_angles=spark_angles,
-        )
-        Fireworks._draw_sparks(real, b, radius=40.0, brightness=1.0, w=200, h=200)
-
-        colors = {rgb for rgb in real._pixels.values() if rgb != (0, 0, 0)}
-        assert (255, 255, 255) in colors  # at least one white-hot spark
-        assert (10, 20, 30) in colors  # and at least one burst-color spark
-
-    def test_zero_brightness_paints_nothing(self) -> None:
+    def test_zero_radius_paints_nothing(self) -> None:
         real = _StubCanvas(width=60, height=60)
-        b = Burst(
-            cx=30.0,
-            cy=30.0,
-            radius_max=10.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(200, 100, 50),
-            spark_angles=((0.0, 0.0), (90.0, 0.0)),
-        )
-        Fireworks._draw_sparks(real, b, radius=10.0, brightness=0.0, w=60, h=60)
+        b = self._burst(((0.0, 0.0),), color=(200, 100, 50), cx=30.0, cy=30.0)
+        Fireworks._draw_spokes(real, b, radius=0.0, brightness_mult=1.0, w=60, h=60)
         assert real._pixels == {}
 
-    def test_no_sparks_is_a_noop(self) -> None:
+    def test_no_spokes_is_a_noop(self) -> None:
         real = _StubCanvas(width=60, height=60)
-        b = Burst(
-            cx=30.0,
-            cy=30.0,
-            radius_max=10.0,
-            t_start=0.0,
-            t_burst_dur=0.5,
-            color=(200, 100, 50),
-            spark_angles=(),
-        )
-        Fireworks._draw_sparks(real, b, radius=10.0, brightness=1.0, w=60, h=60)
+        b = self._burst((), color=(200, 100, 50), cx=30.0, cy=30.0)
+        Fireworks._draw_spokes(real, b, radius=10.0, brightness_mult=1.0, w=60, h=60)
         assert real._pixels == {}
 
 
@@ -758,7 +759,7 @@ class TestLaunchStreakWhiteHotHead:
             t_start=0.0,
             t_burst_dur=0.5,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         # p slightly above 0 -> head is a couple of rows off the very
         # bottom edge, so both head rows land in-bounds (at p=0 exactly
@@ -902,7 +903,7 @@ class TestLateBloomPerfShortCircuit:
             t_start=0.0,
             t_burst_dur=0.5,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         fw._plan = [burst]
         fw._plan_dims = (w, h)
@@ -931,7 +932,7 @@ class TestLateBloomPerfShortCircuit:
             t_start=0.2,
             t_burst_dur=0.3,
             color=(200, 50, 50),
-            spark_angles=(),
+            spoke_angles=(),
         )
         fw._plan = [burst]
         fw._plan_dims = (w, h)
