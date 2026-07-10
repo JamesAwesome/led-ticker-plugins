@@ -72,6 +72,7 @@ class _RecordingAPI:
     def __init__(self) -> None:
         self.animations: dict[str, type] = {}
         self.transitions: dict[str, type] = {}
+        self.widgets: dict[str, type] = {}
 
     def animation(self, style: str):
         def deco(cls):
@@ -83,6 +84,13 @@ class _RecordingAPI:
     def transition(self, name: str):
         def deco(cls):
             self.transitions[name] = cls
+            return cls
+
+        return deco
+
+    def widget(self, name: str):
+        def deco(cls):
+            self.widgets[name] = cls
             return cls
 
         return deco
