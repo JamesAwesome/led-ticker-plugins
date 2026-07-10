@@ -1,14 +1,18 @@
-"""flair.fireworks — pure burst plan + geometry (Task 1, no widget/transition
-class yet). Later tasks extend this file with the transition-class TDD."""
+"""flair.fireworks — pure burst plan + geometry (Task 1) and the
+``Fireworks`` transition class (Task 2)."""
 
 import math
 import random
+from typing import Any
+from unittest import mock
 
 import pytest
+from led_ticker.plugin import ScaledCanvas
 
 from led_ticker_flair.flair.fireworks import (
     PALETTE,
     Burst,
+    Fireworks,
     burst_count,
     burst_state,
     plan_bursts,
@@ -200,3 +204,380 @@ class TestBurstState:
         radii = [burst_state(b, t, 100, 100)[0] for t in ts]
         for a, c in zip(radii, radii[1:], strict=False):
             assert c >= a - 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Fireworks transition (Task 2)
+# ---------------------------------------------------------------------------
+#
+# Stub canvas / widget fixture shapes copied from test_flair_spinout.py (the
+# per-file duplication is this repo's convention -- see that module's own
+# comment). Extended here with an ordered SetPixel call log (`.calls`) for
+# the determinism test, and a `Fill` method (spinout's fixture never needed
+# one; `snap_reset` calls `canvas.Fill(*bg)` when an `incoming_bg_color` is
+# given).
+
+
+class _StubCanvas:
+    """Minimal scale=1 real-canvas stub."""
+
+    def __init__(self, width: int = 160, height: int = 16) -> None:
+        self.width = width
+        self.height = height
+        self._pixels: dict[tuple[int, int], tuple[int, int, int]] = {}
+        # Ordered log of every SetPixel call (x, y, r, g, b) -- the
+        # determinism test compares this between two independent instances.
+        self.calls: list[tuple[int, int, int, int, int]] = []
+
+    def SetPixel(self, x: int, y: int, r: int, g: int, b: int) -> None:  # noqa: N802
+        self._pixels[(x, y)] = (r, g, b)
+        self.calls.append((x, y, r, g, b))
+
+    def SubFill(  # noqa: N802
+        self, x: int, y: int, w: int, h: int, r: int, g: int, b: int
+    ) -> None:
+        for yy in range(y, y + h):
+            for xx in range(x, x + w):
+                self.SetPixel(xx, yy, r, g, b)
+
+    def Clear(self) -> None:  # noqa: N802
+        self._pixels.clear()
+
+    def Fill(self, r: int, g: int, b: int) -> None:  # noqa: N802
+        for y in range(self.height):
+            for x in range(self.width):
+                self.SetPixel(x, y, r, g, b)
+
+
+def _make_widget(draw_pixel: bool = True) -> Any:
+    """Widget stub whose draw() optionally lights one pixel at (0, 0)."""
+    widget = mock.Mock()
+    widget.hold_time = 0.0
+
+    def _draw(canvas: Any, cursor_pos: int = 0, **kw: Any) -> tuple[Any, int]:
+        if draw_pixel:
+            canvas.SetPixel(0, 0, 255, 0, 0)
+        return (canvas, cursor_pos)
+
+    widget.draw.side_effect = _draw
+    return widget
+
+
+def _make_fill_widget(color: tuple[int, int, int]) -> Any:
+    """Widget stub whose draw() paints its ENTIRE canvas `color` -- used by
+    the pixel-semantics tests so "shows outgoing/incoming's pixel" and
+    "still black" are unambiguous at any coordinate not touched by the
+    transition's own effect painting.
+    """
+    widget = mock.Mock()
+    widget.hold_time = 0.0
+
+    def _draw(canvas: Any, cursor_pos: int = 0, **kw: Any) -> tuple[Any, int]:
+        canvas.Fill(*color)
+        return (canvas, cursor_pos)
+
+    widget.draw.side_effect = _draw
+    return widget
+
+
+class TestFireworksCtorValidation:
+    def test_bursts_below_minimum_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bursts"):
+            Fireworks(bursts=1)
+
+    def test_bursts_above_maximum_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bursts"):
+            Fireworks(bursts=9)
+
+    def test_bool_bursts_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bursts"):
+            Fireworks(bursts=True)  # type: ignore[arg-type]
+
+    def test_colors_out_of_range_rejected(self) -> None:
+        with pytest.raises(ValueError, match="colors"):
+            Fireworks(colors=[[300, 0, 0]])
+
+    def test_colors_wrong_shape_rejected(self) -> None:
+        with pytest.raises(ValueError, match="colors"):
+            Fireworks(colors=[[1, 2]])
+
+    def test_valid_bounds_construct(self) -> None:
+        Fireworks(bursts=2)
+        Fireworks(bursts=8)
+
+    def test_defaults_construct(self) -> None:
+        fw = Fireworks()
+        assert fw.bursts is None
+        assert fw.colors is None
+        assert fw.seed is None
+
+    def test_valid_colors_construct(self) -> None:
+        fw = Fireworks(colors=[[1, 2, 3], [4, 5, 6]])
+        assert fw.colors == [(1, 2, 3), (4, 5, 6)]
+
+
+class TestT0PureOutgoing:
+    def test_t0_draws_only_outgoing(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        outgoing = _make_widget(draw_pixel=True)
+        incoming = _make_widget(draw_pixel=False)
+
+        result = fw.frame_at(0.0, canvas, outgoing, incoming)
+
+        outgoing.draw.assert_called_once()
+        incoming.draw.assert_not_called()
+        assert result is canvas
+
+    def test_negative_t_also_draws_only_outgoing(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        outgoing = _make_widget()
+        incoming = _make_widget()
+
+        fw.frame_at(-0.1, canvas, outgoing, incoming)
+        incoming.draw.assert_not_called()
+
+    def test_outgoing_scroll_pos_forwarded(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        incoming = _make_widget(draw_pixel=False)
+        received: list[int] = []
+
+        outgoing = mock.Mock()
+
+        def _spy(c: Any, cursor_pos: int = 0, **kw: Any) -> tuple[Any, int]:
+            received.append(cursor_pos)
+            return (c, cursor_pos)
+
+        outgoing.draw.side_effect = _spy
+
+        fw.frame_at(0.0, canvas, outgoing, incoming, outgoing_scroll_pos=-7)
+        assert received == [-7]
+
+
+class TestSnap:
+    def test_threshold_snaps_and_draws_incoming(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        outgoing = _make_widget()
+        incoming = _make_widget(draw_pixel=True)
+
+        result = fw.frame_at(
+            0.95, canvas, outgoing, incoming, incoming_bg_color=(9, 9, 9)
+        )
+
+        outgoing.draw.assert_not_called()
+        incoming.draw.assert_called_once_with(canvas, cursor_pos=0)
+        # incoming drew its own pixel at (0, 0) AFTER the bg fill -> wins there.
+        assert canvas._pixels[(0, 0)] == (255, 0, 0)
+        # Elsewhere the snap_reset bg fill is observable.
+        assert canvas._pixels[(5, 5)] == (9, 9, 9)
+        assert result is canvas
+
+    def test_no_bg_color_clears_instead_of_fills(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        canvas._pixels[(5, 5)] = (1, 2, 3)  # pre-existing content
+        outgoing = _make_widget()
+        incoming = _make_widget(draw_pixel=False)
+
+        fw.frame_at(0.95, canvas, outgoing, incoming)
+
+        # snap_reset with no bg color Clears() -- prior content is gone.
+        assert (5, 5) not in canvas._pixels
+
+    def test_t_above_1_also_snaps(self) -> None:
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas()
+        outgoing = _make_widget()
+        incoming = _make_widget(draw_pixel=True)
+
+        result = fw.frame_at(1.5, canvas, outgoing, incoming)
+        incoming.draw.assert_called_once_with(canvas, cursor_pos=0)
+        assert result is canvas
+
+
+class TestPhaseOnePixelSemantics:
+    def test_burst_center_black_once_open_far_corner_shows_outgoing(self) -> None:
+        fw = Fireworks(seed=1)
+        canvas = _StubCanvas(width=160, height=16)
+        outgoing = _make_fill_widget((10, 20, 30))
+        incoming = _make_widget(draw_pixel=False)
+
+        # Force a known, deterministic plan (bypass the seeded rng) so the
+        # burst geometry is exact rather than depending on plan_bursts'
+        # random placement.
+        burst = Burst(
+            cx=140.0,
+            cy=8.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        fw._plan = [burst]
+        fw._plan_dims = (160, 16)
+        fw._last_t = 0.0  # prevent the refire guard from clobbering the plan
+
+        # p = (0.4 - 0.0) / 0.5 = 0.8 -> well into "open".
+        fw.frame_at(0.4, canvas, outgoing, incoming)
+
+        assert canvas._pixels[(140, 8)] == (0, 0, 0)
+        # Far corner is nowhere near the burst's bounding box.
+        assert canvas._pixels[(0, 0)] == (10, 20, 30)
+        assert canvas._pixels[(159, 15)] == (10, 20, 30)
+
+
+class TestPhaseTwoPixelSemantics:
+    def test_far_pixel_black_burst_center_shows_incoming(self) -> None:
+        fw = Fireworks(seed=1)
+        canvas = _StubCanvas(width=256, height=64)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_fill_widget((0, 255, 0))
+
+        burst = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=20.0,
+            t_start=0.2,
+            t_burst_dur=0.3,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        fw._plan = [burst]
+        fw._plan_dims = (256, 64)
+        fw._last_t = 0.5
+
+        # Just past the bloom boundary -- radius has barely grown past
+        # radius_max (20), nowhere near covering the panel.
+        fw.frame_at(0.51, canvas, outgoing, incoming)
+
+        assert canvas._pixels[(30, 30)] == (0, 255, 0)  # burst center: revealed
+        assert canvas._pixels[(250, 60)] == (0, 0, 0)  # far corner: blacked out
+
+
+class TestRadiusMonotonicity:
+    def test_planned_burst_radius_grows_across_full_sweep(self) -> None:
+        fw = Fireworks(seed=1)
+        canvas = _StubCanvas(width=160, height=16)
+        outgoing = _make_widget(draw_pixel=True)
+        incoming = _make_widget(draw_pixel=False)
+
+        # Warm up: force a plan build via one early frame.
+        fw.frame_at(0.01, canvas, outgoing, incoming)
+        assert fw._plan
+        b = fw._plan[0]
+
+        ts = [i / 100 for i in range(1, 100)]
+        radii = [burst_state(b, t, 160, 16)[0] for t in ts]
+        for a, c in zip(radii, radii[1:], strict=False):
+            assert c >= a - 1e-9
+        assert radii[-1] > radii[0]
+
+
+class TestRefire:
+    def test_refire_rebuilds_plan(self) -> None:
+        fw = Fireworks()  # seed=None -> entropy reseed on every re-fire
+        canvas = _StubCanvas()
+        outgoing = _make_widget()
+        incoming = _make_widget()
+
+        for t in (0.0, 0.3, 0.6, 1.0):
+            fw.frame_at(t, canvas, outgoing, incoming)
+        first_plan = fw._plan
+        assert first_plan is not None
+
+        for t in (0.0, 0.1):
+            fw.frame_at(t, canvas, outgoing, incoming)
+        second_plan = fw._plan
+        assert second_plan is not None
+        assert second_plan is not first_plan
+
+    def test_refire_with_explicit_seed_still_rebuilds_a_plan(self) -> None:
+        """Even with an explicit seed (no reseed on re-fire), a new firing
+        still gets a freshly-BUILT plan object (the stale one is dropped) --
+        only the underlying rng continuation is exempted from reseeding."""
+        fw = Fireworks(seed=7)
+        canvas = _StubCanvas()
+        outgoing = _make_widget()
+        incoming = _make_widget()
+
+        for t in (0.0, 0.3, 0.6, 1.0):
+            fw.frame_at(t, canvas, outgoing, incoming)
+        first_plan = fw._plan
+
+        for t in (0.0, 0.1):
+            fw.frame_at(t, canvas, outgoing, incoming)
+        second_plan = fw._plan
+        assert second_plan is not first_plan
+
+
+class TestDeterminism:
+    def test_same_seed_two_full_sweeps_identical_pixel_logs(self) -> None:
+        ts = [i / 20 for i in range(21)]  # 0.0, 0.05, ..., 1.0
+
+        def _sweep() -> list[tuple[int, int, int, int, int]]:
+            fw = Fireworks(seed=7)
+            canvas = _StubCanvas(width=160, height=16)
+            outgoing = _make_widget(draw_pixel=True)
+            incoming = _make_widget(draw_pixel=True)
+            for t in ts:
+                fw.frame_at(t, canvas, outgoing, incoming)
+            return canvas.calls
+
+        log_a = _sweep()
+        log_b = _sweep()
+        assert log_a == log_b
+        assert log_a  # sanity: the sweep actually painted something
+
+    def test_different_seed_diverges(self) -> None:
+        ts = [i / 20 for i in range(21)]
+
+        def _sweep(seed: int) -> list[tuple[int, int, int, int, int]]:
+            fw = Fireworks(seed=seed)
+            canvas = _StubCanvas(width=160, height=16)
+            outgoing = _make_widget(draw_pixel=True)
+            incoming = _make_widget(draw_pixel=True)
+            for t in ts:
+                fw.frame_at(t, canvas, outgoing, incoming)
+            return canvas.calls
+
+        assert _sweep(7) != _sweep(8)
+
+
+class TestScaledCanvasEffectPixels:
+    def test_effect_pixels_land_on_real(self) -> None:
+        real = _StubCanvas(width=256, height=64)
+        wrapped = ScaledCanvas(real, scale=4, content_height=16)
+
+        fw = Fireworks(seed=1)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_widget(draw_pixel=False)
+
+        burst = Burst(
+            cx=50.0,
+            cy=20.0,
+            radius_max=3.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        fw._plan = [burst]
+        fw._plan_dims = (256, 64)
+        fw._last_t = 0.0
+
+        # p = (0.45 - 0.0) / 0.5 = 0.9 -> "open"; radius close to
+        # radius_max (3.0), definitely open (past the 0.3 launch boundary).
+        fw.frame_at(0.45, wrapped, outgoing, incoming)
+
+        # The burst center lands on `real` at its OWN real-pixel
+        # coordinates -- not scaled by 4x, not block-expanded.
+        assert real._pixels[(50, 20)] == (0, 0, 0)
+        # A neighbor 8 real px away (well outside radius_max=3, but well
+        # INSIDE where a 4x logical block-expansion would have painted had
+        # the code mistakenly used `wrapped.SetPixel` instead of
+        # `real.SetPixel`) must be untouched.
+        assert (58, 20) not in real._pixels
