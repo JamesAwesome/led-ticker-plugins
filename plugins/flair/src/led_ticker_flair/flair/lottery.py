@@ -33,6 +33,7 @@ from led_ticker.plugin import (
     Canvas,
     DrawResult,
     FrameAwareBase,
+    ValidationContext,
     compute_baseline_for_band,
     draw_with_emoji,
     get_text_width,
@@ -357,6 +358,8 @@ class Lottery(FrameAwareBase):
     roll_ms: int = 800
     font: str = "Inter-Bold"
     border: Any | None = attrs.field(default=None, kw_only=True)
+    # Layout-contract field; inert for a held full-panel widget — the engine
+    # never scrolls this widget (draw() always returns cursor_pos == 0).
     end_padding: int = 0
 
     # Resolved per-ball ring/fill colors: `colors` verbatim (as tuples) when
@@ -391,6 +394,118 @@ class Lottery(FrameAwareBase):
     # with the surfaces) since it's about the word/font/diameter
     # combination, not about a specific surface generation.
     _warned_words: set[str] = attrs.field(init=False, factory=set)
+
+    @classmethod
+    def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
+        """Preflight (error-severity) checks, run before widget construction.
+
+        ``cfg`` is the raw per-widget TOML dict (not yet attrs-coerced) —
+        see core's ``validate_widget_cfg``. Returns error strings; an empty
+        list means the config is constructible.
+        """
+        errors: list[str] = []
+        words = cfg.get("words")
+        if not isinstance(words, list) or not words:
+            errors.append("words is required and must be a non-empty list of strings")
+        else:
+            if len(words) > 8:
+                errors.append(f"words supports at most 8 balls, got {len(words)}")
+            if not all(isinstance(w, str) and w for w in words):
+                errors.append("words must contain only non-empty strings")
+
+        colors = cfg.get("colors")
+        if colors is not None:
+            if not isinstance(colors, list):
+                errors.append(
+                    "colors must be a list of [r, g, b] triples, "
+                    f"got {type(colors).__name__}"
+                )
+            else:
+                if isinstance(words, list) and len(colors) != len(words):
+                    errors.append(
+                        f"colors has {len(colors)} entries but words has "
+                        f"{len(words)} — they must be the same length"
+                    )
+                for entry in colors:
+                    if not (
+                        isinstance(entry, list | tuple)
+                        and len(entry) == 3
+                        and all(
+                            isinstance(v, int)
+                            and not isinstance(v, bool)
+                            and 0 <= v <= 255
+                            for v in entry
+                        )
+                    ):
+                        errors.append(
+                            f"colors entry {entry!r} must be an [r, g, b] triple "
+                            "of ints 0-255"
+                        )
+
+        ball_style = cfg.get("ball_style", "classic")
+        if ball_style not in ("classic", "solid"):
+            errors.append(f"ball_style {ball_style!r} must be 'classic' or 'solid'")
+
+        roll_ms = cfg.get("roll_ms", 800)
+        if isinstance(roll_ms, bool) or not isinstance(roll_ms, int) or roll_ms < 100:
+            errors.append(f"roll_ms must be an integer >= 100, got {roll_ms!r}")
+
+        return errors
+
+    @classmethod
+    def validate_config_warnings(
+        cls, cfg: dict[str, Any], ctx: ValidationContext
+    ) -> list[str]:
+        """Advisory (warning-severity) preflight checks.
+
+        ``ctx.panel_width``/``ctx.panel_height`` are REAL (physical) pixels
+        (verified against core ``validate._check_plugin_validation_warnings``,
+        which builds ``ValidationContext`` from ``_panel_w_real``/
+        ``_panel_h_real``) — the same space ``layout``/``auto_font_size``
+        already compute in, so no unit conversion is needed here.
+
+        Never raises: a widget whose geometry/font inputs are already
+        malformed has those errors surfaced by ``validate_config`` instead;
+        this hook wraps its own geometry probe defensively so a bug here
+        degrades to "no warning" rather than breaking ``led-ticker validate``
+        (core also isolates the hook, but a polite hook doesn't rely on that).
+        """
+        if ctx.scale == 1:
+            # The widget no-ops entirely on an unscaled canvas (see `draw`) —
+            # a per-word fit warning would be noise once this fires.
+            return [
+                "flair.lottery requires a scaled display (bigsign); "
+                "the widget will be skipped"
+            ]
+
+        words = cfg.get("words")
+        if not isinstance(words, list) or not words:
+            return []  # required-field error surfaced by validate_config
+
+        warnings: list[str] = []
+        try:
+            font_name = cfg.get("font", "Inter-Bold")
+            inset = _INSET_WITH_BORDER if "border" in cfg else _INSET_NO_BORDER
+            diameter_px, _slots = layout(
+                len(words), ctx.panel_width, ctx.panel_height, inset
+            )
+            for word in words:
+                if not isinstance(word, str) or not word:
+                    continue  # non-string entry: surfaced as an error above
+                if auto_font_size(word, diameter_px, font_name, ctx.scale) == 0:
+                    warnings.append(
+                        f"word {word!r} does not fit a {diameter_px}px ball "
+                        f"face (font={font_name!r}) — it will render without "
+                        "a label"
+                    )
+        except Exception:
+            logger.warning(
+                "flair.lottery: validate_config_warnings geometry check failed",
+                exc_info=True,
+            )
+            return []
+
+        return warnings
 
     def __attrs_post_init__(self) -> None:
         if self.colors is None:

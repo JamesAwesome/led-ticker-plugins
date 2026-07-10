@@ -1,5 +1,6 @@
-"""flair.lottery — pure geometry + roll-timeline math (Task 1, no widget) and
-the ball-face painter (Task 2)."""
+"""flair.lottery — pure geometry + roll-timeline math (Task 1, no widget),
+the ball-face painter (Task 2), and widget config validation +
+registration (Task 4)."""
 
 import logging
 import math
@@ -9,11 +10,15 @@ from led_ticker.plugin import (
     ENGINE_TICK_MS,
     HeadlessCanvas,
     ScaledCanvas,
+    ValidationContext,
     make_rotation_surface,
     unwrap_to_real,
 )
 
+from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.lottery import (
+    _INSET_NO_BORDER,
+    _INSET_WITH_BORDER,
     PALETTE,
     Lottery,
     auto_font_size,
@@ -535,3 +540,221 @@ class TestLotteryWidget:
         # top edge is unclipped for both and shifts by exactly the
         # expected real-pixel delta.
         assert min(ys_b) - min(ys_a) == (5 - 2) * _SCALE
+
+
+# ---------------------------------------------------------------------------
+# Config validation (Task 4)
+# ---------------------------------------------------------------------------
+
+
+def _ctx(tmp_path, *, scale=4, content_height=16, panel_width=256, panel_height=64):
+    return ValidationContext(
+        scale=scale,
+        content_height=content_height,
+        panel_width=panel_width,
+        panel_height=panel_height,
+        config_dir=tmp_path,
+    )
+
+
+class TestValidateConfigHappyPath:
+    def test_minimal_config_is_valid(self) -> None:
+        assert Lottery.validate_config({"words": ["cat", "dog", "fox"]}) == []
+
+    def test_full_config_is_valid(self) -> None:
+        cfg = {
+            "words": ["cat", "dog", "fox"],
+            "colors": [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+            "ball_style": "solid",
+            "roll_ms": 500,
+        }
+        assert Lottery.validate_config(cfg) == []
+
+
+class TestValidateConfigWords:
+    def test_missing_words_is_an_error(self) -> None:
+        errors = Lottery.validate_config({})
+        assert any("words" in e and "non-empty" in e for e in errors)
+
+    def test_empty_words_list_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": []})
+        assert any("words" in e and "non-empty" in e for e in errors)
+
+    def test_words_not_a_list_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": "cat"})
+        assert any("words" in e and "non-empty" in e for e in errors)
+
+    def test_more_than_eight_words_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": [f"w{i}" for i in range(9)]})
+        assert any("at most 8" in e and "9" in e for e in errors)
+
+    def test_exactly_eight_words_is_valid(self) -> None:
+        errors = Lottery.validate_config({"words": [f"w{i}" for i in range(8)]})
+        assert errors == []
+
+    def test_non_string_word_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat", 5, "fox"]})
+        assert any("non-empty strings" in e for e in errors)
+
+    def test_empty_string_word_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat", "", "fox"]})
+        assert any("non-empty strings" in e for e in errors)
+
+
+class TestValidateConfigColors:
+    def test_colors_not_a_list_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat", "dog"], "colors": "red"})
+        assert any("colors" in e and "must be a list" in e for e in errors)
+
+    def test_colors_length_mismatch_names_both_lengths(self) -> None:
+        errors = Lottery.validate_config(
+            {"words": ["cat", "dog", "fox"], "colors": [[255, 0, 0], [0, 255, 0]]}
+        )
+        assert any("2" in e and "3" in e and "colors" in e for e in errors)
+
+    def test_colors_entry_wrong_arity_is_an_error(self) -> None:
+        errors = Lottery.validate_config(
+            {"words": ["cat", "dog"], "colors": [[255, 0], [0, 255, 0]]}
+        )
+        assert any("[r, g, b]" in e for e in errors)
+
+    def test_colors_entry_out_of_range_is_an_error(self) -> None:
+        errors = Lottery.validate_config(
+            {"words": ["cat", "dog"], "colors": [[300, 0, 0], [0, 255, 0]]}
+        )
+        assert any("[r, g, b]" in e for e in errors)
+
+    def test_colors_entry_non_int_is_an_error(self) -> None:
+        errors = Lottery.validate_config(
+            {"words": ["cat", "dog"], "colors": [[1.5, 0, 0], [0, 255, 0]]}
+        )
+        assert any("[r, g, b]" in e for e in errors)
+
+    def test_colors_matching_length_is_valid(self) -> None:
+        errors = Lottery.validate_config(
+            {"words": ["cat", "dog"], "colors": [[255, 0, 0], [0, 255, 0]]}
+        )
+        assert errors == []
+
+    def test_colors_none_is_valid(self) -> None:
+        assert Lottery.validate_config({"words": ["cat", "dog"], "colors": None}) == []
+
+
+class TestValidateConfigBallStyle:
+    def test_invalid_ball_style_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat"], "ball_style": "sparkly"})
+        assert any("ball_style" in e and "sparkly" in e for e in errors)
+
+    def test_classic_and_solid_are_valid(self) -> None:
+        for style in ("classic", "solid"):
+            assert (
+                Lottery.validate_config({"words": ["cat"], "ball_style": style}) == []
+            )
+
+
+class TestValidateConfigRollMs:
+    def test_roll_ms_below_floor_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat"], "roll_ms": 99})
+        assert any("roll_ms" in e and ">= 100" in e for e in errors)
+
+    def test_roll_ms_non_int_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat"], "roll_ms": "fast"})
+        assert any("roll_ms" in e for e in errors)
+
+    def test_roll_ms_bool_is_an_error(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat"], "roll_ms": True})
+        assert any("roll_ms" in e for e in errors)
+
+    def test_roll_ms_at_floor_is_valid(self) -> None:
+        errors = Lottery.validate_config({"words": ["cat"], "roll_ms": 100})
+        assert errors == []
+
+
+class TestValidateConfigWarnings:
+    def test_scale_one_warns_bigsign_required(self, tmp_path) -> None:
+        ctx = _ctx(tmp_path, scale=1)
+        warnings = Lottery.validate_config_warnings({"words": ["cat"]}, ctx)
+        assert len(warnings) == 1
+        assert "flair.lottery" in warnings[0]
+        assert "scaled display" in warnings[0]
+
+    def test_unfittable_word_names_the_word_and_diameter(self, tmp_path) -> None:
+        ctx = _ctx(tmp_path, scale=4, panel_width=256, panel_height=64)
+        long_word = "abcdefghijklmnopqrst"  # pinned 0-fit case from TestAutoFontSize
+        cfg = {"words": [long_word], "font": "Inter-Bold"}
+        warnings = Lottery.validate_config_warnings(cfg, ctx)
+        assert len(warnings) == 1
+        assert long_word in warnings[0]
+        diameter, _slots = layout(1, 256, 64, _INSET_NO_BORDER)
+        assert str(diameter) in warnings[0]
+
+    def test_fittable_config_has_no_warnings(self, tmp_path) -> None:
+        ctx = _ctx(tmp_path, scale=4, panel_width=256, panel_height=64)
+        cfg = {"words": ["cat", "dog", "fox"], "font": "Inter-Bold"}
+        assert Lottery.validate_config_warnings(cfg, ctx) == []
+
+    def test_missing_words_returns_no_warnings(self, tmp_path) -> None:
+        # required-field error is validate_config's job; this hook is a no-op.
+        ctx = _ctx(tmp_path, scale=4)
+        assert Lottery.validate_config_warnings({}, ctx) == []
+
+    def test_border_widens_inset_used_for_the_fit_check(self, tmp_path) -> None:
+        # A single word at a small panel: with the wider border inset the
+        # diameter shrinks, which can flip a borderline word from fitting to
+        # not fitting — assert the reported diameter reflects the border
+        # inset, not the no-border one.
+        ctx = _ctx(tmp_path, scale=4, panel_width=256, panel_height=64)
+        cfg = {"words": ["cat", "dog", "fox"], "font": "Inter-Bold", "border": {}}
+        warnings = Lottery.validate_config_warnings(cfg, ctx)
+        no_border_diameter, _ = layout(3, 256, 64, _INSET_NO_BORDER)
+        with_border_diameter, _ = layout(3, 256, 64, _INSET_WITH_BORDER)
+        assert no_border_diameter != with_border_diameter
+        for w in warnings:
+            assert str(no_border_diameter) not in w
+
+
+# ---------------------------------------------------------------------------
+# Registration (Task 4 fold-in)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingAPI:
+    """Minimal PluginAPI stand-in recording widget registrations."""
+
+    def __init__(self) -> None:
+        self.animations: dict[str, type] = {}
+        self.transitions: dict[str, type] = {}
+        self.widgets: dict[str, type] = {}
+
+    def animation(self, style: str):
+        def deco(cls):
+            self.animations[style] = cls
+            return cls
+
+        return deco
+
+    def transition(self, name: str):
+        def deco(cls):
+            self.transitions[name] = cls
+            return cls
+
+        return deco
+
+    def widget(self, name: str):
+        def deco(cls):
+            self.widgets[name] = cls
+            return cls
+
+        return deco
+
+
+class TestRegistration:
+    def test_lottery_registered_by_name(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert "lottery" in api.widgets
+
+    def test_lottery_class_is_Lottery(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert api.widgets["lottery"] is Lottery
