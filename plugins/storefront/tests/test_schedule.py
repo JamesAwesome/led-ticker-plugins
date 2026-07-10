@@ -8,6 +8,7 @@ from led_ticker_storefront.schedule import (
     evaluate,
     fmt_range,
     is_open,
+    next_change,
     parse_day,
     parse_exceptions,
     parse_schedule,
@@ -265,3 +266,28 @@ def test_recurring_feb29_matches_leap_years_only():
 def test_evaluate_two_arg_backcompat():
     # existing call shape (no exceptions) still works and returns weekly labels
     assert evaluate(_wk(), datetime(2024, 1, 1, 10, 0)) == "mon 09:00-17:00"
+
+
+def test_next_change_closes_today():
+    nc = next_change(_wk(), datetime(2024, 1, 1, 10, 0))
+    assert nc == datetime(2024, 1, 1, 17, 0)
+
+
+def test_next_change_opens_next_open_day():
+    # Monday 18:00 -> next open is Friday 18:00 (within 48h? no -> None);
+    # use Thursday 12:00 -> Friday 18:00 IS within 48h
+    nc = next_change(_wk(), datetime(2024, 1, 4, 12, 0))
+    assert nc == datetime(2024, 1, 5, 18, 0)
+
+
+def test_next_change_none_beyond_horizon():
+    always = parse_schedule(
+        {d: "00:00-24:00" for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
+    )
+    assert next_change(always, datetime(2024, 1, 1, 10, 0)) is None
+
+
+def test_next_change_respects_exceptions():
+    exc = parse_exceptions({"2024-01-01": "10:00-12:00"})
+    nc = next_change(_wk(), datetime(2024, 1, 1, 10, 30), exc)
+    assert nc == datetime(2024, 1, 1, 12, 0)

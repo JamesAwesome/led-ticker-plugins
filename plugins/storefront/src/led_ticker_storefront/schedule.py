@@ -140,3 +140,18 @@ def evaluate(schedule, now, exceptions=None):
 
 def is_open(schedule, now, exceptions=None):
     return evaluate(schedule, now, exceptions) is not None
+
+
+def next_change(schedule, now, exceptions=None):
+    """First instant (minute resolution) within 48 hours where the open/closed
+    state flips, else None. Brute-force minute scan: 2880 evaluate() calls of
+    pure int arithmetic, and it only runs when a state-change log line is being
+    emitted — simplicity over cleverness, and it matches evaluate's semantics
+    by construction (no separate boundary-derivation logic to drift)."""
+    current = is_open(schedule, now, exceptions)
+    probe = now.replace(second=0, microsecond=0)
+    for _ in range(48 * 60):
+        probe = probe + timedelta(minutes=1)
+        if is_open(schedule, probe, exceptions) != current:
+            return probe
+    return None

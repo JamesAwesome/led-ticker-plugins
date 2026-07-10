@@ -39,3 +39,29 @@ def test_refresh_logs_on_change(caplog):
     assert any("OPEN" in m and "mon 09:00-17:00" in m for m in msgs)
     assert any("CLOSED" in m for m in msgs)
     assert sum(1 for m in msgs if "storefront:" in m) == 2  # only on changes
+
+
+def test_log_includes_next_change_clause(caplog):
+    st = _state()  # mon 09:00-17:00 fixture
+    with caplog.at_level(logging.INFO, logger="led_ticker_storefront"):
+        st.refresh(datetime(2024, 1, 1, 10, 0))  # OPEN, closes 17:00
+        st.refresh(datetime(2024, 1, 1, 18, 0))  # CLOSED, opens ... beyond?
+    msgs = [r.message for r in caplog.records]
+    assert any("OPEN" in m and "closes 17:00" in m for m in msgs)
+
+
+def test_log_omits_clause_beyond_horizon(caplog):
+    cfg = parse_config(
+        {
+            "schedule": {
+                d: "00:00-24:00"
+                for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+            }
+        }
+    )
+    st = StorefrontState(config=cfg)
+    with caplog.at_level(logging.INFO, logger="led_ticker_storefront"):
+        st.refresh(datetime(2024, 1, 1, 10, 0))
+    msgs = [r.message for r in caplog.records]
+    assert any("OPEN" in m for m in msgs)
+    assert not any("closes" in m or "opens" in m for m in msgs)
