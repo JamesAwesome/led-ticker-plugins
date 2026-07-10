@@ -453,68 +453,72 @@ class Fireworks:
         """Blacken every pixel OUTSIDE the union of all bursts' current
         circles (the "not yet burned through" area), leaving the incoming
         widget's own already-drawn pixels showing wherever a burst has
-        opened. Builds one per-frame ``bytearray(w*h)`` union mask by
-        stamping each burst's bounding box (cheap membership math, not a
-        per-pixel-per-circle test), then does a SINGLE full-panel pass
-        painting black where the mask is unset -- O(sum of bounding boxes
-        + w*h), not O(bursts * w*h).
+        opened.
 
-        Late-bloom perf short-circuit: deep in the "bloom" phase every
-        burst's radius grows toward ``hypot(w, h)`` (see ``burst_state``),
-        so late frames commonly have EVERY burst's clamped bbox spanning
-        the whole panel -- the naive stamp-then-scan degrades to
-        O(bursts * w * h) precisely when it matters most (measured ~9.7ms
-        dev / ~68ms projected Pi-5 at 512x64, blowing the ~50ms/20fps
-        frame budget). Before stamping a burst, check whether its radius
-        alone already proves TOTAL coverage: a circle covers a whole
-        rectangle iff its radius reaches the rectangle's farthest corner
-        from the circle's center (the max-distance point from any fixed
-        center to a convex rectangle is always a corner). When that holds,
-        the union of ALL bursts (this one plus any others) is provably
-        total -- every pixel is revealed -- so we skip the mask (and any
-        remaining bursts) entirely and paint no complement black this
-        frame, rather than building a full-panel mask just to discover
-        every pixel is set.
+        Per-row interval-union algorithm: a circle intersects any given
+        row ``y`` in AT MOST ONE contiguous x-interval --
+        ``half = sqrt(r**2 - (y - cy)**2)`` when ``|y - cy| <= r``, giving
+        ``[cx - half, cx + half]`` (clamped to ``[0, w)``). For each row,
+        every currently-open burst contributes at most one such interval;
+        sort them by start, merge overlaps, then ``SetPixel``-black only
+        the GAPS (before the first merged interval, between merged
+        intervals, after the last) -- ``O(h * n log n + black_pixels)``,
+        i.e. cost scales with the ACTUAL black area rather than with
+        bounding-box size. That area shrinks toward zero as bloom
+        completes, so the old bytearray-mask "does a single burst's
+        radius alone already cover the panel" short-circuit is no longer
+        a special case: a row whose merged interval already spans the
+        whole panel yields zero gap pixels for free out of the same loop
+        that handles every other row, at the same ``O(n log n)`` cost.
+        This also fixes the mask version's residual worst case -- several
+        bursts jointly (but not individually) covering the panel used to
+        still pay the full stamp-then-scan mask cost even though the
+        final result was zero or near-zero black pixels (measured ~8ms
+        dev / ~56ms projected Pi-5 at 512x64, mid-bloom, over the
+        50ms/20fps budget); the per-row scan never builds a mask at all,
+        so that case is now cheap too (measured ~1-2ms dev across the
+        full sweep at 512x64 -- see ``CLAUDE.md``).
         """
-        mask: bytearray | None = None
+        circles: list[tuple[float, float, float]] = []
         for b in self._plan or ():
             radius, _phase = burst_state(b, t, w, h)
-            if radius <= 0:
-                continue
-            cx, cy = b.cx, b.cy
-            r2 = radius * radius
-            x0 = max(0, math.floor(cx - radius))
-            x1 = min(w - 1, math.ceil(cx + radius))
-            y0 = max(0, math.floor(cy - radius))
-            y1 = min(h - 1, math.ceil(cy + radius))
-
-            if x0 == 0 and y0 == 0 and x1 == w - 1 and y1 == h - 1:
-                dx = max(cx, (w - 1) - cx)
-                dy = max(cy, (h - 1) - cy)
-                if r2 >= dx * dx + dy * dy:
-                    # This single burst's circle already covers the entire
-                    # panel -- the union is total. Nothing to blacken, and
-                    # no point examining the remaining bursts.
-                    return
-
-            if mask is None:
-                mask = bytearray(w * h)
-            for y in range(y0, y1 + 1):
-                dy2 = (y - cy) ** 2
-                row = y * w
-                for x in range(x0, x1 + 1):
-                    dx2 = (x - cx) ** 2
-                    if dx2 + dy2 <= r2:
-                        mask[row + x] = 1
-
-        if mask is None:
-            # No burst has opened at all this frame -- the complement is
-            # the whole panel (same result the all-zero mask below would
-            # have produced; skips allocating it).
-            mask = bytearray(w * h)
+            if radius > 0:
+                circles.append((b.cx, b.cy, radius))
 
         for y in range(h):
-            row = y * w
-            for x in range(w):
-                if mask[row + x] == 0:
+            intervals: list[tuple[float, float]] = []
+            for cx, cy, radius in circles:
+                dy = y - cy
+                if abs(dy) > radius:
+                    continue
+                half = math.sqrt(radius * radius - dy * dy)
+                start = max(0.0, cx - half)
+                end = min(float(w), cx + half)
+                if start <= end:
+                    intervals.append((start, end))
+
+            if not intervals:
+                # No open burst reaches this row at all -- the complement
+                # is the whole row.
+                for x in range(w):
+                    real.SetPixel(x, y, 0, 0, 0)
+                continue
+
+            intervals.sort()
+            merged: list[list[float]] = [list(intervals[0])]
+            for start, end in intervals[1:]:
+                if start <= merged[-1][1]:
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+
+            cursor = 0  # next pixel index that might still be a gap
+            for start, end in merged:
+                gap_hi = math.ceil(start) - 1
+                if gap_hi >= cursor:
+                    for x in range(cursor, min(gap_hi, w - 1) + 1):
+                        real.SetPixel(x, y, 0, 0, 0)
+                cursor = max(cursor, math.floor(end) + 1)
+            if cursor <= w - 1:
+                for x in range(cursor, w):
                     real.SetPixel(x, y, 0, 0, 0)

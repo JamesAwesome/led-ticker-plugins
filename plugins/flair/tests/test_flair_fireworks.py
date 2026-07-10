@@ -684,9 +684,13 @@ class TestSeedRefireSemantics:
 class TestLateBloomPerfShortCircuit:
     """A burst whose radius alone already covers the panel's farthest
     corner proves the union of ALL bursts is total -- `_blackout_complement`
-    must skip painting any complement black that frame (and skip building
-    the mask at all) rather than degrading to an O(bursts * w * h)
-    stamp-then-scan on every late-bloom frame.
+    must paint zero complement-black pixels that frame. Under the
+    per-row interval-union algorithm this isn't a special-cased branch
+    (there is no mask to skip building): a row whose merged interval
+    already spans the whole panel yields zero gap pixels out of the same
+    per-row loop every other row goes through, at the same O(n log n)
+    cost -- full coverage falls out of the general case for free rather
+    than needing its own short-circuit.
     """
 
     def test_full_cover_burst_paints_zero_black_complement_pixels(self) -> None:
@@ -745,3 +749,27 @@ class TestLateBloomPerfShortCircuit:
         fw.frame_at(0.51, canvas, outgoing, incoming)
 
         assert canvas._pixels[(250, 60)] == (0, 0, 0)
+
+    def test_mid_bloom_paints_far_fewer_than_half_the_panel(self) -> None:
+        """Mid-bloom cost sanity check (the specific regime that used to
+        be the mask version's worst frame -- several bursts jointly, but
+        not individually, covering the panel: cheap in black-pixel count
+        but the OLD bytearray-mask algorithm still paid a full
+        stamp-then-scan on every burst's bounding box here). The
+        per-row interval-union algorithm's cost tracks the actual black
+        area, so the number of complement paints at this seeded 6-burst
+        512x64 plan/frame stays far below a half-panel's worth of
+        pixels.
+        """
+        w, h = 512, 64
+        fw = Fireworks(seed=3)
+        canvas = _StubCanvas(width=w, height=h)
+        fw._plan = plan_bursts(w, h, random.Random(3), count=6)
+        fw._plan_dims = (w, h)
+        fw._last_t = 0.5
+
+        canvas.calls.clear()
+        fw._blackout_complement(canvas, w, h, 0.74)
+
+        black_calls = [c for c in canvas.calls if c[2:] == (0, 0, 0)]
+        assert len(black_calls) < (w * h) // 2
