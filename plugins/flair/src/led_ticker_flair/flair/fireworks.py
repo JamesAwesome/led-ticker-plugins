@@ -51,8 +51,14 @@ _BLOOM_AT = 0.5
 
 # Local-progress (p) boundary between "launch" (radius pinned at 0, a
 # traveling streak) and "open" (radius eases 0 -> radius_max) within a
-# burst's own [t_start, t_start + t_burst_dur) window (spec, verbatim).
-_LAUNCH_OPEN_BOUNDARY = 0.3
+# burst's own [t_start, t_start + t_burst_dur) window. Widened from the
+# original 0.3 to 0.35 (visual-punch fix, see CLAUDE.md) -- at ~5-7fps
+# render-demo capture cadence a 0.3-wide launch window landed between
+# rendered frames often enough that the traveling streak was invisible in
+# spot-checked gifs; 0.35 gives the streak more wall-clock window to land
+# on a captured tick without materially changing burst choreography (no
+# open/bloom hole-radius test pins the exact boundary value).
+_LAUNCH_OPEN_BOUNDARY = 0.35
 
 # Sparks-per-rim range (spec, verbatim): "rims 16-32 sparks, seeded jitter".
 _MIN_SPARKS = 16
@@ -182,10 +188,12 @@ def burst_state(b: Burst, t: float, w: int, h: int) -> tuple[float, str]:
 
     - ``"waiting"``: ``t < b.t_start`` — burst hasn't started; radius 0.
     - ``"launch"``: local progress ``p = (t - b.t_start) / b.t_burst_dur``
-      is in ``[0, 0.3)`` — a streak travels but hasn't opened; radius 0.
-    - ``"open"``: ``p`` in ``[0.3, 1]`` — radius eases
+      is in ``[0, _LAUNCH_OPEN_BOUNDARY)`` (0.35) — a streak travels but
+      hasn't opened; radius 0.
+    - ``"open"``: ``p`` in ``[_LAUNCH_OPEN_BOUNDARY, 1]`` — radius eases
       ``0 -> radius_max`` via ``1 - (1 - q) ** 2`` (ease-out), where ``q``
-      re-normalizes ``p``'s ``[0.3, 1]`` range to ``[0, 1]``.
+      re-normalizes ``p``'s ``[_LAUNCH_OPEN_BOUNDARY, 1]`` range to
+      ``[0, 1]``.
     - ``"bloom"``: ``t >= 0.5`` (GLOBAL, overrides the burst's own local
       phase for every burst at once) — radius grows LINEARLY from
       ``radius_max`` (guaranteed by ``t_burst_dur``'s construction: every
@@ -223,9 +231,57 @@ def burst_state(b: Burst, t: float, w: int, h: int) -> tuple[float, str]:
 _MIN_BURSTS_OVERRIDE = 2
 _MAX_BURSTS_OVERRIDE = 8
 
-# Launch-streak tail length, in rows, behind the traveling head (spec:
-# "bright head + fading tail").
-_LAUNCH_TAIL_LEN = 6
+# Launch-streak geometry (spec: "head pixel white-hot 2x2, tail 3-4px
+# fading in the burst color"). Head rows render `_WHITE_HOT` at full
+# brightness (no fade); tail rows below it fade the burst's own color to
+# black. Total streak length (6) is unchanged from the pre-fix single
+# fading-tail version -- only the head's color/brightness changed.
+_LAUNCH_HEAD_LEN = 2
+_LAUNCH_TAIL_LEN = 4
+
+# --- Visual-punch tuning (rim ring / sparks) -------------------------------
+# Root cause of the failed visual gate: rim brightness used to scale by
+# ``1 - p``, so by the time a hole is visually large (high local progress
+# ``p``, i.e. late "open") its sparks were already down to 10-20%
+# brightness; combined with 1px, sparse (16-32 count) points at
+# 256x64+ physical resolution, the rim read as near-invisible dim specks
+# rather than a firework. The fix adds a SEPARATE, always-bright
+# continuous ring outline (the primary "this is a burst" read) and keeps
+# the seeded points as brighter, bigger, later-fading sparks OUTSIDE that
+# ring.
+
+# Spark ease-down boundary/floor (spec: "full brightness until p > 0.7,
+# then ease down"). ``_ease_brightness`` is shared by both the open-phase
+# (keyed on local progress ``p``) and bloom-phase (keyed on bloom-local
+# progress ``frac``) spark brightness -- both are a 0->1 "how far through
+# this burst's current visible phase" measure.
+_SPARK_EASE_START = 0.7
+_SPARK_EASE_FLOOR = 0.3
+
+# Ring brightness floor during bloom (spec, verbatim): stays this bright
+# even as bloom nears the snap threshold, rather than fading to black.
+_RING_BLOOM_FLOOR = 0.25
+
+# Sparks sit just outside the ring, radius + a per-spark jitter in this
+# band (spec: "radius + 1..3px jitter"). The jitter is derived from each
+# spark's own seeded `jitter_deg` (no new rng draws -- see `_draw_sparks`),
+# so it stays a pure function of the already-deterministic plan.
+_SPARK_RADIUS_JITTER_MIN = 1.0
+_SPARK_RADIUS_JITTER_MAX = 3.0
+
+# Sparks are drawn as a 2x2 physical-pixel block (spec: "make them 2px").
+_SPARK_SIZE = 2
+
+# Roughly 1/4 of a burst's sparks render white-hot instead of the burst's
+# own color (spec: "add a WHITE-hot variant for ~1/4 of sparks").
+_SPARK_WHITE_HOT_EVERY = 4
+_WHITE_HOT = (255, 255, 255)
+
+# Ring outline angle-step target, in physical pixels of arc length between
+# consecutive sampled points -- keeps the outline gap-free even at the
+# largest radii (bloom phase, up to `hypot(w, h)`) without oversampling
+# small/early rings.
+_RING_ARC_STEP_PX = 0.75
 
 
 class Fireworks:
@@ -359,14 +415,20 @@ class Fireworks:
                 else:
                     radius, _phase = burst_state(b, t, w, h)
                     self._fill_burst_black(real, b, radius, w, h)
-                    self._draw_rim(real, b, radius, max(0.0, 1.0 - p), w, h)
+                    # Ring: FULL brightness for the whole open phase (spec)
+                    # -- the primary "this is a burst" read.
+                    self._draw_ring(real, b, radius, 1.0, w, h)
+                    self._draw_sparks(real, b, radius, self._ease_brightness(p), w, h)
         else:
             incoming.draw(canvas, cursor_pos=0)
             self._blackout_complement(real, w, h, t)
-            brightness = min(1.0, max(0.0, (1.0 - t) * 2.0))
+            bloom_frac = (t - _BLOOM_AT) / (1.0 - _BLOOM_AT)
+            ring_brightness = max(_RING_BLOOM_FLOOR, 1.0 - bloom_frac * 2.0)
+            spark_brightness = self._ease_brightness(bloom_frac)
             for b in self._plan:
                 radius, _phase = burst_state(b, t, w, h)
-                self._draw_rim(real, b, radius, brightness, w, h)
+                self._draw_ring(real, b, radius, ring_brightness, w, h)
+                self._draw_sparks(real, b, radius, spark_brightness, w, h)
 
         return canvas
 
@@ -387,20 +449,28 @@ class Fireworks:
     @staticmethod
     def _draw_launch_streak(real: Any, b: Burst, p: float, w: int, h: int) -> None:
         """A 2px-wide column rising from the bottom edge toward
-        ``(b.cx, b.cy)`` as ``p`` runs ``0 -> 0.3`` (the launch window) --
-        bright head at the leading (topmost) edge, a fading tail trailing
-        below it toward the bottom the streak launched from.
+        ``(b.cx, b.cy)`` as ``p`` runs ``0 -> _LAUNCH_OPEN_BOUNDARY`` (the
+        launch window) -- a white-hot ``_LAUNCH_HEAD_LEN``-row head at the
+        leading (topmost) edge, full brightness/no fade (the "this is the
+        hot tip of a rocket" read), followed by a ``_LAUNCH_TAIL_LEN``-row
+        tail in the burst's own color fading toward black, trailing below
+        it toward the bottom the streak launched from.
         """
         frac = min(1.0, max(0.0, p / _LAUNCH_OPEN_BOUNDARY))
         head_y = (h - 1) - frac * ((h - 1) - b.cy)
         x0 = int(b.cx)
         r0, g0, bl0 = b.color
-        for dy in range(_LAUNCH_TAIL_LEN):
+        total_len = _LAUNCH_HEAD_LEN + _LAUNCH_TAIL_LEN
+        for dy in range(total_len):
             y = round(head_y) + dy
             if y < 0 or y >= h:
                 continue
-            fade = max(0.0, 1.0 - dy / _LAUNCH_TAIL_LEN)
-            r, g, bl = int(r0 * fade), int(g0 * fade), int(bl0 * fade)
+            if dy < _LAUNCH_HEAD_LEN:
+                r, g, bl = _WHITE_HOT
+            else:
+                tail_idx = dy - _LAUNCH_HEAD_LEN
+                fade = max(0.0, 1.0 - tail_idx / _LAUNCH_TAIL_LEN)
+                r, g, bl = int(r0 * fade), int(g0 * fade), int(bl0 * fade)
             for x in (x0, x0 + 1):
                 if 0 <= x < w:
                     real.SetPixel(x, y, r, g, bl)
@@ -427,27 +497,104 @@ class Fireworks:
                     real.SetPixel(x, y, 0, 0, 0)
 
     @staticmethod
-    def _draw_rim(
+    def _ease_brightness(value: float) -> float:
+        """Shared spark brightness curve: full (1.0) until ``value``
+        (a 0->1 "how far through this burst's current visible phase"
+        measure -- local progress ``p`` while opening, bloom-local
+        ``frac`` during bloom) passes ``_SPARK_EASE_START`` (0.7), then
+        eases linearly down to ``_SPARK_EASE_FLOOR`` (0.3) by
+        ``value == 1.0``. Unlike the OLD rim formula (brightness scaled
+        by ``1 - p`` from the moment a burst opened), sparks now stay at
+        full brightness through most of the open/bloom phase and only
+        fade near the very end -- see the "Visual-punch tuning" comment
+        block above for the root-cause rationale.
+        """
+        value = max(0.0, value)
+        if value <= _SPARK_EASE_START:
+            return 1.0
+        span = 1.0 - _SPARK_EASE_START
+        q = min(1.0, (value - _SPARK_EASE_START) / span)
+        return max(_SPARK_EASE_FLOOR, 1.0 - q * (1.0 - _SPARK_EASE_FLOOR))
+
+    @staticmethod
+    def _draw_ring(
         real: Any, b: Burst, radius: float, brightness: float, w: int, h: int
     ) -> None:
-        """Paint ``b``'s spark rim: one pixel per ``(angle_deg,
-        jitter_deg)`` pair in ``b.spark_angles``, positioned at the
-        burst's current ``radius`` with the seeded per-spark jitter
-        applied as an angular offset (the rim geometry `plan_bursts`
-        already seeded -- see `Burst.spark_angles`), color scaled by
-        ``brightness`` (the caller picks the phase-appropriate formula:
-        ``1 - p`` while opening, ``(1 - t) * 2`` clamped during bloom).
+        """Paint a continuous 1px circle OUTLINE at ``b``'s current
+        ``radius`` in the burst's color, scaled by ``brightness`` -- the
+        primary "this is a burst" read (the old rim was ONLY the sparse
+        seeded spark points, which at 256x64+ physical resolution read as
+        near-invisible dim specks rather than a firework).
+
+        Angle-stepped rather than a midpoint-circle algorithm: the step
+        count is derived from the radius so consecutive sampled points
+        are at most ``_RING_ARC_STEP_PX`` physical pixels of arc length
+        apart -- gap-free at the largest bloom-phase radii (up to
+        ``hypot(w, h)``) without oversampling small/early rings. Pure
+        function of ``radius``/``b`` -- no rng, so determinism across
+        identical-seed sweeps is unaffected.
         """
         if brightness <= 0.0 or radius <= 0.0:
             return
         r0, g0, bl0 = b.color
         r, g, bl = int(r0 * brightness), int(g0 * brightness), int(bl0 * brightness)
-        for angle_deg, jitter_deg in b.spark_angles:
-            theta = math.radians(angle_deg + jitter_deg)
-            x = round(b.cx + radius * math.cos(theta))
-            y = round(b.cy + radius * math.sin(theta))
+        circumference = 2.0 * math.pi * radius
+        steps = max(32, math.ceil(circumference / _RING_ARC_STEP_PX))
+        cx, cy = b.cx, b.cy
+        for i in range(steps):
+            theta = (2.0 * math.pi * i) / steps
+            x = round(cx + radius * math.cos(theta))
+            y = round(cy + radius * math.sin(theta))
             if 0 <= x < w and 0 <= y < h:
                 real.SetPixel(x, y, r, g, bl)
+
+    @staticmethod
+    def _draw_sparks(
+        real: Any, b: Burst, radius: float, brightness: float, w: int, h: int
+    ) -> None:
+        """Paint ``b``'s seeded spark points: one 2x2 physical-pixel block
+        per ``(angle_deg, jitter_deg)`` pair in ``b.spark_angles``,
+        positioned just OUTSIDE the rim ring (``radius`` plus a per-spark
+        ``_SPARK_RADIUS_JITTER_MIN.._MAX`` px offset), color scaled by
+        ``brightness``. Roughly 1 in ``_SPARK_WHITE_HOT_EVERY`` sparks
+        (by seeded-plan index, so deterministic) render white-hot instead
+        of the burst's own color.
+
+        The radius jitter is derived from each spark's own already-seeded
+        ``jitter_deg`` (normalized against that spark's angular slice) --
+        NOT a fresh `rng` draw. This keeps the whole render path a pure
+        function of the plan `plan_bursts` already committed to, so the
+        same-seed determinism tests need no changes: a spark's outward
+        jitter is reproducible from the identical seeded plan alone.
+        """
+        if brightness <= 0.0 or radius <= 0.0:
+            return
+        n = len(b.spark_angles)
+        if n == 0:
+            return
+        step = 360.0 / n
+        r0, g0, bl0 = b.color
+        jitter_span = _SPARK_RADIUS_JITTER_MAX - _SPARK_RADIUS_JITTER_MIN
+        for idx, (angle_deg, jitter_deg) in enumerate(b.spark_angles):
+            # jitter_deg in [-step/4, step/4] (see `_spark_angles`) ->
+            # normalize to [0, 1] to derive a deterministic radius jitter.
+            frac = (jitter_deg + step / 4.0) / (step / 2.0) if step else 0.5
+            frac = min(1.0, max(0.0, frac))
+            spark_radius = radius + _SPARK_RADIUS_JITTER_MIN + frac * jitter_span
+
+            base = _WHITE_HOT if idx % _SPARK_WHITE_HOT_EVERY == 0 else (r0, g0, bl0)
+            r = int(base[0] * brightness)
+            g = int(base[1] * brightness)
+            bl = int(base[2] * brightness)
+
+            theta = math.radians(angle_deg + jitter_deg)
+            cx0 = round(b.cx + spark_radius * math.cos(theta))
+            cy0 = round(b.cy + spark_radius * math.sin(theta))
+            for dx in range(_SPARK_SIZE):
+                for dy in range(_SPARK_SIZE):
+                    x, y = cx0 + dx, cy0 + dy
+                    if 0 <= x < w and 0 <= y < h:
+                        real.SetPixel(x, y, r, g, bl)
 
     def _blackout_complement(self, real: Any, w: int, h: int, t: float) -> None:
         """Blacken every pixel OUTSIDE the union of all bursts' current

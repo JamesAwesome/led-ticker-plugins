@@ -11,6 +11,7 @@ from led_ticker.plugin import ScaledCanvas
 
 from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.fireworks import (
+    _LAUNCH_OPEN_BOUNDARY,
     PALETTE,
     Burst,
     Fireworks,
@@ -582,6 +583,196 @@ class TestScaledCanvasEffectPixels:
         # the code mistakenly used `wrapped.SetPixel` instead of
         # `real.SetPixel`) must be untouched.
         assert (58, 20) not in real._pixels
+
+
+# ---------------------------------------------------------------------------
+# Visual-punch fix (rim ring / sparks / launch-streak head) -- root cause
+# was rim brightness scaling by `1 - p` (dim by the time a hole reads as
+# large) plus sparse 1px spark points reading as specks at 256x64+
+# physical resolution. These tests pin the NEW curve/geometry; there was
+# no prior test pinning the old `1 - p` formula to update.
+# ---------------------------------------------------------------------------
+
+
+class TestEaseBrightness:
+    def test_full_brightness_below_start(self) -> None:
+        assert Fireworks._ease_brightness(0.0) == 1.0
+        assert Fireworks._ease_brightness(0.7) == 1.0
+
+    def test_eases_down_after_start(self) -> None:
+        mid = Fireworks._ease_brightness(0.85)
+        assert 0.3 < mid < 1.0
+
+    def test_floors_at_one(self) -> None:
+        assert Fireworks._ease_brightness(1.0) == pytest.approx(0.3)
+
+    def test_never_below_floor_past_one(self) -> None:
+        # Defensive: a caller passing a slightly-over-1.0 value (rounding)
+        # must not fall below the documented floor.
+        assert Fireworks._ease_brightness(1.5) == pytest.approx(0.3)
+
+
+class TestDrawRing:
+    def test_ring_is_gap_free_circle_at_radius(self) -> None:
+        real = _StubCanvas(width=200, height=200)
+        b = Burst(
+            cx=100.0,
+            cy=100.0,
+            radius_max=40.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        Fireworks._draw_ring(real, b, radius=40.0, brightness=1.0, w=200, h=200)
+
+        # Full brightness -> exact burst color, no dimming.
+        painted = {xy: rgb for xy, rgb in real._pixels.items() if rgb != (0, 0, 0)}
+        assert painted
+        assert all(rgb == (200, 50, 50) for rgb in painted.values())
+
+        # Every pixel actually sits (within 1px rounding) on the circle.
+        for x, y in painted:
+            dist = math.hypot(x - 100.0, y - 100.0)
+            assert abs(dist - 40.0) <= 1.5
+
+        # Gap-free: no missing angular sector wider than a couple of
+        # degrees (proxy -- every 5-degree wedge around the circle has at
+        # least one painted pixel).
+        buckets: set[int] = set()
+        for x, y in painted:
+            angle = math.degrees(math.atan2(y - 100.0, x - 100.0)) % 360
+            buckets.add(int(angle // 5))
+        assert len(buckets) >= 360 // 5 - 2  # allow a couple of rounding gaps
+
+    def test_brightness_scales_color(self) -> None:
+        real = _StubCanvas(width=60, height=60)
+        b = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 100, 50),
+            spark_angles=(),
+        )
+        Fireworks._draw_ring(real, b, radius=10.0, brightness=0.25, w=60, h=60)
+        painted = [rgb for rgb in real._pixels.values() if rgb != (0, 0, 0)]
+        assert painted
+        assert all(rgb == (50, 25, 12) for rgb in painted)
+
+    def test_zero_brightness_paints_nothing(self) -> None:
+        real = _StubCanvas(width=60, height=60)
+        b = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 100, 50),
+            spark_angles=(),
+        )
+        Fireworks._draw_ring(real, b, radius=10.0, brightness=0.0, w=60, h=60)
+        assert real._pixels == {}
+
+
+class TestDrawSparks:
+    def test_sparks_land_outside_ring_radius(self) -> None:
+        real = _StubCanvas(width=200, height=200)
+        spark_angles = tuple((i * 30.0, 0.0) for i in range(12))
+        b = Burst(
+            cx=100.0,
+            cy=100.0,
+            radius_max=40.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(10, 20, 30),
+            spark_angles=spark_angles,
+        )
+        Fireworks._draw_sparks(real, b, radius=40.0, brightness=1.0, w=200, h=200)
+
+        painted = [xy for xy, rgb in real._pixels.items() if rgb != (0, 0, 0)]
+        assert painted
+        for x, y in painted:
+            dist = math.hypot(x - 100.0, y - 100.0)
+            # radius (40) + jitter band (1..3) -- always strictly outside
+            # the ring, never on or inside it.
+            assert dist > 40.0
+
+    def test_every_fourth_spark_is_white_hot(self) -> None:
+        real = _StubCanvas(width=200, height=200)
+        # Zero jitter_deg for every spark -> deterministic non-overlapping
+        # placement, and predictable idx-based white-hot selection.
+        spark_angles = tuple((i * 30.0, 0.0) for i in range(12))
+        b = Burst(
+            cx=100.0,
+            cy=100.0,
+            radius_max=40.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(10, 20, 30),
+            spark_angles=spark_angles,
+        )
+        Fireworks._draw_sparks(real, b, radius=40.0, brightness=1.0, w=200, h=200)
+
+        colors = {rgb for rgb in real._pixels.values() if rgb != (0, 0, 0)}
+        assert (255, 255, 255) in colors  # at least one white-hot spark
+        assert (10, 20, 30) in colors  # and at least one burst-color spark
+
+    def test_zero_brightness_paints_nothing(self) -> None:
+        real = _StubCanvas(width=60, height=60)
+        b = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 100, 50),
+            spark_angles=((0.0, 0.0), (90.0, 0.0)),
+        )
+        Fireworks._draw_sparks(real, b, radius=10.0, brightness=0.0, w=60, h=60)
+        assert real._pixels == {}
+
+    def test_no_sparks_is_a_noop(self) -> None:
+        real = _StubCanvas(width=60, height=60)
+        b = Burst(
+            cx=30.0,
+            cy=30.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 100, 50),
+            spark_angles=(),
+        )
+        Fireworks._draw_sparks(real, b, radius=10.0, brightness=1.0, w=60, h=60)
+        assert real._pixels == {}
+
+
+class TestLaunchStreakWhiteHotHead:
+    def test_head_rows_are_white_hot(self) -> None:
+        real = _StubCanvas(width=60, height=60)
+        b = Burst(
+            cx=10.0,
+            cy=5.0,
+            radius_max=10.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spark_angles=(),
+        )
+        # p slightly above 0 -> head is a couple of rows off the very
+        # bottom edge, so both head rows land in-bounds (at p=0 exactly
+        # the head sits flush on the last row and its second row clips).
+        Fireworks._draw_launch_streak(real, b, p=0.05, w=60, h=60)
+
+        frac = 0.05 / _LAUNCH_OPEN_BOUNDARY
+        head_y = round((60 - 1) - frac * ((60 - 1) - b.cy))
+        assert real._pixels[(10, head_y)] == (255, 255, 255)
+        assert real._pixels[(10, head_y + 1)] == (255, 255, 255)
+        # Tail rows below the head fade in the burst's own color, not white.
+        tail_color = real._pixels[(10, head_y + 2)]
+        assert tail_color != (255, 255, 255)
+        assert tail_color[0] > tail_color[1] == tail_color[2]  # red-family fade
 
 
 # ---------------------------------------------------------------------------
