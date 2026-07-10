@@ -206,10 +206,38 @@ class TestAutoFontSize:
         size = auto_font_size("kebab", 56, "Inter-Bold", 4)
         assert size >= 8
 
-    def test_kebab_exact_size_pin(self) -> None:
-        """Regression tripwire: pins the actual largest fitting size so a
-        chord-factor / range-bound regression doesn't silently drift."""
-        assert auto_font_size("kebab", 56, "Inter-Bold", 4) == 13
+    def test_kebab_size_is_largest_that_fits(self) -> None:
+        """Regression tripwire for the chord-factor / range-bound math, pinned
+        as an INVARIANT rather than an exact integer: freetype glyph advances
+        differ by ~1px across platforms (13 on macOS vs 14 on Linux CI for this
+        exact input), so we assert the returned size fits the 0.72 chord and
+        the next size up does not."""
+        from led_ticker.plugin import get_text_width, resolve_font
+
+        diameter = 56
+        chord = diameter * 0.72
+        size = auto_font_size("kebab", diameter, "Inter-Bold", 4)
+        assert 12 <= size <= 15  # sane band; catches gross chord/range drift
+        from led_ticker_flair.flair.lottery import _REAL_SCALE1_STUB
+
+        assert (
+            get_text_width(
+                resolve_font("Inter-Bold", size),
+                "kebab",
+                padding=0,
+                canvas=_REAL_SCALE1_STUB,
+            )
+            <= chord
+        )
+        assert (
+            get_text_width(
+                resolve_font("Inter-Bold", size + 1),
+                "kebab",
+                padding=0,
+                canvas=_REAL_SCALE1_STUB,
+            )
+            > chord
+        )
 
     def test_long_word_does_not_fit_small_ball(self) -> None:
         word = "abcdefghijklmnopqrst"  # 20 chars
