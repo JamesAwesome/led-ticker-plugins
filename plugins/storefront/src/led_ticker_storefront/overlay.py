@@ -28,7 +28,7 @@ class StorefrontOverlay:
             _log.debug("storefront: no [storefront] block; overlay disabled")
             return
         self.state = StorefrontState(config=parse_config(block))
-        self.state.refresh(self._clock())   # eager first evaluation
+        self.state.refresh(self._clock())  # eager first evaluation
         self._spawn_poller()
 
     def _spawn_poller(self):

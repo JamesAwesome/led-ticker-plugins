@@ -17,9 +17,9 @@ def test_defaults():
     assert cfg.closed.text == "CLOSED"
     assert isinstance(cfg.open.color, ColorProviderBase)
     assert isinstance(cfg.closed.color, ColorProviderBase)
-    assert cfg.background == (0, 0, 0)          # opaque black default
+    assert cfg.background == (0, 0, 0)  # opaque black default
     assert cfg.font_size == 16
-    assert cfg.open.corner == "top_right"       # shared default
+    assert cfg.open.corner == "top_right"  # shared default
     assert cfg.open.orientation == "horizontal"
     assert cfg.tz is None
     assert cfg.schedule["mon"] == [(540, 1020)]
@@ -33,13 +33,15 @@ def test_shared_corner_orientation_fallback():
 
 
 def test_per_state_override():
-    cfg = parse_config({
-        "corner": "top_right",
-        "open": {"corner": "top_left", "orientation": "vertical"},
-    })
+    cfg = parse_config(
+        {
+            "corner": "top_right",
+            "open": {"corner": "top_left", "orientation": "vertical"},
+        }
+    )
     assert cfg.open.corner == "top_left"
     assert cfg.open.orientation == "vertical"
-    assert cfg.closed.corner == "top_right"     # inherits shared
+    assert cfg.closed.corner == "top_right"  # inherits shared
 
 
 def test_background_none_is_transparent():
@@ -79,7 +81,7 @@ def test_bad_font_raises_at_parse_time():
 
 def test_color_provider_shorthand():
     cfg = parse_config({"open": {"color": "shimmer"}})
-    assert cfg.open.color.frame_invariant is False   # shimmer animates
+    assert cfg.open.color.frame_invariant is False  # shimmer animates
 
 
 def test_timezone_parsed():

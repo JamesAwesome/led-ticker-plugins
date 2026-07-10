@@ -15,8 +15,8 @@ def _ctx(block):
 
 def test_disabled_when_block_absent(real_canvas):
     ov = StorefrontOverlay()
-    ov.startup(_ctx(None))          # must not spawn or raise
-    ov.paint(real_canvas)            # no state → paints nothing
+    ov.startup(_ctx(None))  # must not spawn or raise
+    ov.paint(real_canvas)  # no state → paints nothing
     assert ov.state is None
 
 
@@ -30,7 +30,8 @@ def test_paint_draws_open_badge(real_canvas, monkeypatch):
     ov.paint(real_canvas)
     lit = any(
         real_canvas.get_pixel(x, y) != (0, 0, 0)
-        for y in range(real_canvas.height) for x in range(real_canvas.width)
+        for y in range(real_canvas.height)
+        for x in range(real_canvas.width)
     )
     assert lit
 

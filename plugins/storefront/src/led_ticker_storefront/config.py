@@ -106,12 +106,20 @@ def parse_config(block):
     font = FONT_DEFAULT if font_name is None else resolve_font(font_name, font_size)
     return StorefrontConfig(
         open=_badge(
-            block.get("open", {}), "OPEN", _DEFAULT_OPEN,
-            shared_corner, shared_orient, "open",
+            block.get("open", {}),
+            "OPEN",
+            _DEFAULT_OPEN,
+            shared_corner,
+            shared_orient,
+            "open",
         ),
         closed=_badge(
-            block.get("closed", {}), "CLOSED", _DEFAULT_CLOSED,
-            shared_corner, shared_orient, "closed",
+            block.get("closed", {}),
+            "CLOSED",
+            _DEFAULT_CLOSED,
+            shared_corner,
+            shared_orient,
+            "closed",
         ),
         background=_background(block.get("background")),
         padding=padding,

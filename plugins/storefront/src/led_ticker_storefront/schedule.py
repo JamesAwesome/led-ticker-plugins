@@ -65,15 +65,15 @@ def evaluate(schedule, now):
     yesterday = DAYS[(now.weekday() - 1) % 7]
 
     for start, end in schedule.get(today, []):
-        if end > start:          # normal same-day range
+        if end > start:  # normal same-day range
             if start <= minute < end:
                 return f"{today} {fmt_range((start, end))}"
-        else:                    # wrap: open from start until midnight
+        else:  # wrap: open from start until midnight
             if minute >= start:
                 return f"{today} {fmt_range((start, end))}"
 
     for start, end in schedule.get(yesterday, []):
-        if end <= start and minute < end:   # yesterday's wrap continuing past midnight
+        if end <= start and minute < end:  # yesterday's wrap continuing past midnight
             return f"{yesterday} {fmt_range((start, end))}"
 
     return None

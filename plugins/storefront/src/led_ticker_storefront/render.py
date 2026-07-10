@@ -52,7 +52,11 @@ def _color(badge, frame, char_index, total):
 def _draw_text_run(canvas, font, text, x, baseline_y, badge, frame):
     if badge.color.per_char:
         draw_text_per_char(
-            canvas, font, x, baseline_y, text,
+            canvas,
+            font,
+            x,
+            baseline_y,
+            text,
             lambda idx, total: _color(badge, frame, idx, total),
         )
     else:
@@ -88,7 +92,12 @@ def draw_badge(real_canvas, cfg, badge, frame):
                 "storefront: badge %r (%dx%d) does not fit the %dx%d panel at "
                 "font_size=%d; skipping. Use a smaller font_size or a shorter "
                 "label.",
-                text, box_w, box_h, width, height, cfg.font_size,
+                text,
+                box_w,
+                box_h,
+                width,
+                height,
+                cfg.font_size,
             )
         return
 

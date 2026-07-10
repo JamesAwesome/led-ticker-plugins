@@ -107,20 +107,22 @@ def test_fmt_range():
 # Monday 2024-01-01 .. Sunday 2024-01-07 (weekday() Mon=0)
 MON_1000 = datetime(2024, 1, 1, 10, 0)
 MON_0800 = datetime(2024, 1, 1, 8, 0)
-MON_1700 = datetime(2024, 1, 1, 17, 0)   # exclusive end → closed
+MON_1700 = datetime(2024, 1, 1, 17, 0)  # exclusive end → closed
 MON_1230 = datetime(2024, 1, 1, 12, 30)  # lunch gap
-FRI_2300 = datetime(2024, 1, 5, 23, 0)   # inside 18:00-02:00 start day
-SAT_0030 = datetime(2024, 1, 6, 0, 30)   # inside Friday's wrap, next calendar day
-SAT_0230 = datetime(2024, 1, 6, 2, 30)   # after wrap end → closed
+FRI_2300 = datetime(2024, 1, 5, 23, 0)  # inside 18:00-02:00 start day
+SAT_0030 = datetime(2024, 1, 6, 0, 30)  # inside Friday's wrap, next calendar day
+SAT_0230 = datetime(2024, 1, 6, 2, 30)  # after wrap end → closed
 SUN_1200 = datetime(2024, 1, 7, 12, 0)
 
 
 def _sched():
-    return parse_schedule({
-        "mon": "09:00-12:00,13:00-17:00",
-        "fri": "18:00-02:00",
-        "sun": "closed",
-    })
+    return parse_schedule(
+        {
+            "mon": "09:00-12:00,13:00-17:00",
+            "fri": "18:00-02:00",
+            "sun": "closed",
+        }
+    )
 
 
 def test_open_inside_range():
