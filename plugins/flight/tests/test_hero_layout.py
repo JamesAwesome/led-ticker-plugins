@@ -2,7 +2,7 @@ from led_ticker.plugin import HeadlessCanvas, ScaledCanvas, unwrap_to_real
 
 from led_ticker_flight.data import SAMPLE_AIRCRAFT
 from led_ticker_flight.hero_layout import DWELL_MS, render_hero
-from led_ticker_flight.palette import AIRLINES, IDENT, LABEL
+from led_ticker_flight.palette import AIRLINES, DIST, IDENT, LABEL, TRACK
 
 
 def lit(canvas_or_real):
@@ -59,3 +59,17 @@ def test_vr_level_bar_for_level_flight(bigsign):
 def test_empty_state(bigsign):
     render_hero(bigsign, [], clock_ms=100)
     assert lit(bigsign)
+
+
+def test_metrics_line_dist_and_track_land_on_canvas(bigsign):
+    """Regression for task-10-adversarial finding #1: hires() used to return
+    the absolute end-x instead of the advance width, so the metrics-line
+    `x += hires(...) + gap` chain double-counted x — DIST was never painted
+    (walked off the 256-px canvas) and TRACK was clipped at the right edge."""
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=0)  # idx 0 = UA2341
+    pixels = lit(bigsign)
+    dist_xs = [x for (x, _), c in pixels.items() if c == DIST]
+    assert dist_xs, "DIST field never painted"
+    track_xs = [x for (x, _), c in pixels.items() if c == TRACK]
+    assert track_xs, "TRACK field never painted"
+    assert max(track_xs) < 256 - 8, "TRACK field clipped into/past the paging-dot zone"

@@ -48,3 +48,20 @@ def test_rotation_dwell_4800(longboi):
 def test_empty_state_wide_label(longboi):
     render_dashboard(longboi, [], clock_ms=500)
     assert lit(longboi)
+
+
+def test_alt_and_speed_columns_do_not_collide(longboi):
+    """Regression for task-10-adversarial finding #1: hires() used to return
+    the absolute end-x instead of the advance width, so `iw`/`vx` chains
+    double-counted x — the ALT value column overlapped the DIST column for
+    climbing/descending flights. Assert ALT stays strictly left of SPEED and
+    that DIST is actually painted."""
+    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=0)  # idx 0 = UA2341
+    pixels = lit(longboi)
+    alt_xs = [x for (x, _), c in pixels.items() if c == ALT]
+    speed_xs = [x for (x, _), c in pixels.items() if c == SPEED]
+    dist_xs = [x for (x, _), c in pixels.items() if c == DIST]
+    assert alt_xs, "ALT value never painted"
+    assert speed_xs, "SPEED value never painted"
+    assert dist_xs, "DIST value never painted"
+    assert max(alt_xs) < min(speed_xs), "ALT column overlaps/crowds SPEED column"

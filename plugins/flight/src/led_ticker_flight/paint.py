@@ -49,8 +49,13 @@ def hires(
     bold: bool = True,
     bright: float = 1.0,
 ) -> int:
+    """Draw hi-res text at physical (x, y_top) and return the ADVANCE width in
+    physical px (NOT the absolute end-x) — every call site does
+    `x += hires(...) + gap` / `nx += hires(...) + N`, so returning core's raw
+    `draw_text` end-x would double-count the running x (CRITICAL finding: see
+    task-10-adversarial.md)."""
     font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
-    return draw_text(shim, font, text, x, y_top + font.ascent, dim(rgb, bright))
+    return draw_text(shim, font, text, x, y_top + font.ascent, dim(rgb, bright)) - x
 
 
 def paging_dots(real, scale: int, n: int, cur: int, x: int, y: int) -> None:
