@@ -173,6 +173,13 @@ def render_ticker(
     if period > 0:
         off = (clock_ms / 1000 * PX_PER_SEC) % period
         x = canvas.width - off
+        # Back-fill: the JS reference only tiles rightward from x, leaving the
+        # region left of it blank — the screen blanked every wrap (off -> 0)
+        # and re-entered over seconds. The README's prose ("loops seamlessly")
+        # wins over that quirk: back up whole periods so tiling starts at or
+        # left of x=0 and the screen is fully covered at every clock value.
+        while x > 0:
+            x -= period
         y_top = (canvas.height - ROW_H) // 2 + y_offset
         baseline = compute_baseline(FONT_DEFAULT, canvas) + y_offset
 

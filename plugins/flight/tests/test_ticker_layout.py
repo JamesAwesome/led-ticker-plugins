@@ -13,11 +13,15 @@ def _colors(canvas):
     return set(lit(canvas).values())
 
 
-def test_stream_enters_from_right(smallsign):
+def test_full_coverage_at_t0(smallsign):
+    # back-filled tiling: the screen is fully covered from boot — there is no
+    # blank "entering" phase at t=0 (the wrap instant); the loop is seamless
     render_ticker(smallsign, SAMPLE_AIRCRAFT, clock_ms=0)
     pixels = lit(smallsign)
     assert pixels, "nothing drawn at t=0"
-    # at t=0 offset=0: stream starts at x=width -> only wraparound copy visible
+    xs = {x for (x, y) in pixels if (x, y) != (158, 1)}  # exclude live dot
+    assert any(x < 40 for x in xs), "left third empty at t=0"
+    assert any(x > 120 for x in xs), "right third empty at t=0"
 
 
 def test_stream_advances_between_ticks():
@@ -62,4 +66,5 @@ def test_seamless_loop_period(smallsign):
     render_ticker(b, SAMPLE_AIRCRAFT, clock_ms=period / 26 * 1000)
     la = {k: v for k, v in lit(a).items() if k != (158, 1)}  # live dot differs by phase
     lb = {k: v for k, v in lit(b).items() if k != (158, 1)}
+    assert la, "wrap instant rendered a blank frame (loop must never blank)"
     assert la == lb
