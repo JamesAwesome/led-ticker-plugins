@@ -90,9 +90,7 @@ def parse_point_response(
 
         # Guard track: treat non-numeric as 0.
         track_val = ac.get("track")
-        if isinstance(track_val, int | float) and not isinstance(
-            track_val, bool
-        ):
+        if isinstance(track_val, int | float) and not isinstance(track_val, bool):
             track: int | float = track_val
         else:
             track = 0
