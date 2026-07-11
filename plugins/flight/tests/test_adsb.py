@@ -96,3 +96,85 @@ def test_parse_geom_rate_fallback():
 
 def test_parse_empty_payload():
     assert parse_point_response({}, *NYC, 4) == []
+
+
+def test_parse_ac_list_none():
+    """{"ac": None} → [] instead of TypeError."""
+    out = parse_point_response({"ac": None}, *NYC, 4)
+    assert out == []
+
+
+def test_parse_ac_list_non_list():
+    """{"ac": "bogus"} → [] instead of AttributeError."""
+    out = parse_point_response({"ac": "bogus"}, *NYC, 4)
+    assert out == []
+
+
+def test_parse_ac_list_int():
+    """{"ac": 12345} → [] instead of error."""
+    out = parse_point_response({"ac": 12345}, *NYC, 4)
+    assert out == []
+
+
+def test_parse_entry_not_dict():
+    """Entry that is a string (not dict) → dropped."""
+    payload = {
+        "ac": [
+            "not_a_dict_string",
+            _ac(flight="VALID1"),
+        ]
+    }
+    out = parse_point_response(payload, *NYC, 4)
+    assert [a.flt for a in out] == ["VALID1"]
+
+
+def test_parse_flight_as_int():
+    """flight as int (not string) → entry dropped."""
+    payload = {"ac": [_ac(flight=12345)]}
+    out = parse_point_response(payload, *NYC, 4)
+    assert out == []
+
+
+def test_parse_gs_as_string():
+    """gs as string "fast" (not numeric) → parses with gs == 0."""
+    a = parse_point_response({"ac": [_ac(gs="fast")]}, *NYC, 4)[0]
+    assert a.gs == 0
+
+
+def test_parse_track_as_string():
+    """track as string (not numeric) → parses with trk == 0."""
+    a = parse_point_response({"ac": [_ac(track="north")]}, *NYC, 4)[0]
+    assert a.trk == 0
+
+
+def test_parse_lat_as_string():
+    """lat as string (not numeric) → entry dropped."""
+    payload = {"ac": [_ac(lat="north")]}
+    out = parse_point_response(payload, *NYC, 4)
+    assert out == []
+
+
+def test_parse_lon_as_bool():
+    """lon as bool (type-check rejects bool explicitly) → entry dropped."""
+    payload = {"ac": [_ac(lon=True)]}
+    out = parse_point_response(payload, *NYC, 4)
+    assert out == []
+
+
+def test_parse_alt_as_bool():
+    """alt_baro as bool (type-check rejects bool explicitly) → entry dropped."""
+    payload = {"ac": [_ac(alt_baro=True)]}
+    out = parse_point_response(payload, *NYC, 4)
+    assert out == []
+
+
+def test_parse_type_as_int():
+    """t (type) as int (not string) → parses with actype == ""."""
+    a = parse_point_response({"ac": [_ac(t=738)]}, *NYC, 4)[0]
+    assert a.actype == ""
+
+
+def test_parse_reg_as_int():
+    """r (reg) as int (not string) → parses with reg == ""."""
+    a = parse_point_response({"ac": [_ac(r=12345)]}, *NYC, 4)[0]
+    assert a.reg == ""
