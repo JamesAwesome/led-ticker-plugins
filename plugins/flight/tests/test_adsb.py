@@ -178,3 +178,54 @@ def test_parse_reg_as_int():
     """r (reg) as int (not string) → parses with reg == ""."""
     a = parse_point_response({"ac": [_ac(r=12345)]}, *NYC, 4)[0]
     assert a.reg == ""
+
+
+def test_parse_lat_nan_drops_entry_but_keeps_siblings():
+    """Regression for task-10-adversarial finding #2: NaN passed the old
+    `isinstance(x, int | float)` guard and then blew up `round()`/haversine,
+    crashing the WHOLE batch. A single bad aircraft must never discard the
+    rest of the feed."""
+    payload = {
+        "ac": [
+            _ac(flight="GOOD1", lat=40.1, lon=-74.1),
+            _ac(flight="BADNAN", lat=float("nan")),
+            _ac(flight="GOOD2", lat=40.2, lon=-74.2),
+        ]
+    }
+    out = parse_point_response(payload, *NYC, max_aircraft=8)
+    assert {a.flt for a in out} == {"GOOD1", "GOOD2"}
+
+
+def test_parse_lon_inf_drops_entry():
+    """lon=inf must not crash the batch (math.radians/asin raise on inf)."""
+    payload = {"ac": [_ac(flight="GOOD1"), _ac(flight="BADINF", lon=float("inf"))]}
+    out = parse_point_response(payload, *NYC, max_aircraft=8)
+    assert [a.flt for a in out] == ["GOOD1"]
+
+
+def test_parse_alt_baro_nan_drops_entry():
+    """alt_baro=NaN must not crash the batch (round() raises on NaN)."""
+    payload = {"ac": [_ac(flight="GOOD1"), _ac(flight="BADNAN", alt_baro=float("nan"))]}
+    out = parse_point_response(payload, *NYC, max_aircraft=8)
+    assert [a.flt for a in out] == ["GOOD1"]
+
+
+def test_parse_gs_inf_parses_with_zero():
+    """gs=inf is treated as absent (like the string-gs case) rather than
+    crashing on round(inf) -> OverflowError."""
+    a = parse_point_response({"ac": [_ac(gs=float("inf"))]}, *NYC, 4)[0]
+    assert a.gs == 0
+
+
+def test_parse_track_nan_parses_with_zero():
+    """track=NaN is treated as absent rather than crashing on round(nan)."""
+    a = parse_point_response({"ac": [_ac(track=float("nan"))]}, *NYC, 4)[0]
+    assert a.trk == 0
+
+
+def test_parse_baro_rate_inf_falls_back_to_geom_rate():
+    """baro_rate=inf is treated as absent, falling back to a finite geom_rate."""
+    a = parse_point_response(
+        {"ac": [_ac(baro_rate=float("inf"), geom_rate=-500)]}, *NYC, 4
+    )[0]
+    assert a.vr == -500

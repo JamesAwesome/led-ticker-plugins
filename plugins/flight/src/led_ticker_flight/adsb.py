@@ -1,6 +1,7 @@
 """adsb.lol /v2/point client + geo math (haversine, bearing, 8-wind compass)."""
 
 import math
+from typing import TypeIs
 
 import aiohttp
 
@@ -10,6 +11,17 @@ ADSB_URL = "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}"
 KM_PER_NM = 1.852
 _EARTH_RADIUS_KM = 6371.0
 _COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+
+def _finite(v: object) -> TypeIs[int | float]:
+    """True for a real, finite (non-NaN/non-inf) int/float, excluding bool.
+
+    `round()` and the haversine/bearing trig raise on NaN/inf, which would
+    otherwise crash `parse_point_response` for the WHOLE batch over one bad
+    aircraft (task-10-adversarial finding #2). `TypeIs` (not `bool`) so
+    pyright narrows `v` to `int | float` after `if not _finite(v): continue`,
+    matching the isinstance-based narrowing this replaced."""
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def radius_nm(radius_km: int) -> int:
@@ -57,43 +69,34 @@ def parse_point_response(
             continue
 
         ac_lat, ac_lon = ac.get("lat"), ac.get("lon")
-        # Ensure lat/lon are numeric (drop if non-numeric, bool excluded).
-        if not isinstance(ac_lat, int | float) or isinstance(ac_lat, bool):
+        # Ensure lat/lon are numeric AND finite (drop if non-numeric/NaN/inf).
+        if not _finite(ac_lat):
             continue
-        if not isinstance(ac_lon, int | float) or isinstance(ac_lon, bool):
+        if not _finite(ac_lon):
             continue
 
         alt = ac.get("alt_baro")
-        if not isinstance(alt, int | float) or isinstance(alt, bool):
-            continue  # "ground" or missing
+        if not _finite(alt):
+            continue  # "ground", missing, or NaN/inf
 
-        # Guard baro_rate: treat non-numeric as 0.
+        # Guard baro_rate: treat non-numeric/NaN/inf as absent, fall back to geom_rate.
         baro_rate = ac.get("baro_rate")
-        if isinstance(baro_rate, int | float) and not isinstance(baro_rate, bool):
+        if _finite(baro_rate):
             vr = baro_rate
         else:
             geom_rate = ac.get("geom_rate")
-            if isinstance(geom_rate, int | float) and not isinstance(geom_rate, bool):
-                vr = geom_rate
-            else:
-                vr = 0
+            vr = geom_rate if _finite(geom_rate) else 0
 
         km = haversine_km(lat, lon, ac_lat, ac_lon)
         wind = compass8(bearing_deg(lat, lon, ac_lat, ac_lon))
 
-        # Guard ground speed: treat non-numeric as 0.
+        # Guard ground speed: treat non-numeric/NaN/inf as 0.
         gs_val = ac.get("gs")
-        if isinstance(gs_val, int | float) and not isinstance(gs_val, bool):
-            gs: int | float = gs_val
-        else:
-            gs = 0
+        gs: int | float = gs_val if _finite(gs_val) else 0
 
-        # Guard track: treat non-numeric as 0.
+        # Guard track: treat non-numeric/NaN/inf as 0.
         track_val = ac.get("track")
-        if isinstance(track_val, int | float) and not isinstance(track_val, bool):
-            track: int | float = track_val
-        else:
-            track = 0
+        track: int | float = track_val if _finite(track_val) else 0
 
         # Guard type and registration: only call .strip() on actual strings.
         type_val = ac.get("t")
