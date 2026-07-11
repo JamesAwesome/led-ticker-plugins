@@ -37,9 +37,14 @@ def resolve_layout(name: str, scale: int, phys_w: int) -> str:
 class OverheadWidget(FrameAwareBase):
     latitude: float | None = None
     longitude: float | None = None
-    radius_km: int = 30
+    # converter=int: validate_config accepts integral floats (a plausible
+    # TOML spelling — radius_km = 30.0, max_aircraft = 4.0), so construction
+    # must coerce them or SAMPLE_AIRCRAFT[:4.0] / downstream int math crash.
+    # Non-integral floats never reach here (validate rejects them); bools
+    # are likewise validate-rejected before construction.
+    radius_km: int = attrs.field(default=30, converter=int)
     layout: str = "auto"
-    max_aircraft: int = 4
+    max_aircraft: int = attrs.field(default=4, converter=int)
     interval: float = 10.0
     demo: bool = False
     # The engine's SHARED aiohttp session — core's _build_widget calls

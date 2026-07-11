@@ -52,6 +52,16 @@ def test_max_aircraft_accepts_integral_float():
     assert _errs({"latitude": 0, "longitude": 0, "max_aircraft": 4.0}) == []
 
 
+def test_integral_float_max_aircraft_constructs_end_to_end():
+    """validate accepts max_aircraft = 4.0, so construction must coerce it —
+    without converter=int the widget passes validate then crashes at boot on
+    SAMPLE_AIRCRAFT[:4.0] (slice indices must be integers)."""
+    assert _errs({"demo": True, "max_aircraft": 4.0}) == []
+    w = OverheadWidget(demo=True, max_aircraft=4.0)
+    assert isinstance(w.max_aircraft, int)
+    assert len(w._flights) == 4
+
+
 def test_demo_rejects_non_bool():
     errs = _errs({"demo": "yes"})
     assert any("demo" in e for e in errs)
