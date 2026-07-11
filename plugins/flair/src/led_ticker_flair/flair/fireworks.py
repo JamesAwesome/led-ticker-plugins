@@ -285,10 +285,35 @@ _WHITE_HOT = (255, 255, 255)
 # ~25% at the tail").
 _TAIL_BRIGHTNESS_FLOOR = 0.25
 
-# Bloom-phase global dimming floor (spec, verbatim): "scale everything
-# additionally by max(0.25, 1 - (t - 0.5) x 2)" -- applied on top of the
-# along-spoke gradient above, not in place of it.
-_BLOOM_FADE_FLOOR = 0.25
+# --- Tail-fix tuning (PR #39 v3 review): decouple decoration from the hole
+# reveal during bloom -----------------------------------------------------
+# James's v3 feedback: chaining the spoke head to the hole radius (which
+# races LINEARLY toward `hypot(w, h)` across the whole bloom half, ~10x
+# growth by t=1.0 -- see `burst_state`'s "bloom" branch) made the decoration
+# itself accelerate off-panel at high speed, then get deleted outright by
+# the 0.95 snap: a visible "fly-off-then-cut". The hole/complement mechanics
+# that formula drives (`_fill_burst_black`, `_blackout_complement`) are
+# correct and untouched -- only the DECORATIVE spoke layer needed to stop
+# tracking it. Two independent knobs below: `_spoke_bloom_radius` decouples
+# spoke POSITION (heads ease out from `radius_max` and then coast, never
+# approaching hypot scale); `_bloom_multiplier` decouples spoke BRIGHTNESS
+# (fades to exactly zero well before the snap, so the snap changes nothing
+# visible). See `_spoke_bloom_radius`/`_bloom_multiplier` docstrings for the
+# exact curves.
+
+# `t`-window (in transition-t units, past `_BLOOM_AT`) over which a spoke's
+# head eases out to its final coasted radius before holding still.
+_SPOKE_COAST_WINDOW = 0.25
+
+# Fraction farther a spoke head coasts, past `radius_max`, over
+# `_SPOKE_COAST_WINDOW` (spec, verbatim: "coast ~35% farther").
+_SPOKE_COAST_GROWTH = 0.35
+
+# Brightness-fade window (in transition-t units): full brightness through
+# `_SPOKE_FADE_START`, fading LINEARLY to exactly zero by `_SPOKE_FADE_END`
+# (spec, verbatim: "fades to ZERO by t = 0.85 ... from t=0.6").
+_SPOKE_FADE_START = 0.6
+_SPOKE_FADE_END = 0.85
 
 
 class Fireworks:
@@ -427,11 +452,18 @@ class Fireworks:
                     self._draw_spokes(real, b, radius, 1.0, w, h)
         else:
             incoming.draw(canvas, cursor_pos=0)
+            # Hole/complement coverage still uses `burst_state`'s own
+            # hole-radius formula (racing toward `hypot(w, h)`) -- untouched.
             self._blackout_complement(real, w, h, t)
             bloom_mult = self._bloom_multiplier(t)
-            for b in self._plan:
-                radius, _phase = burst_state(b, t, w, h)
-                self._draw_spokes(real, b, radius, bloom_mult, w, h)
+            if bloom_mult > 0.0:
+                # Decoration is DECOUPLED from the hole radius during bloom
+                # (see `_spoke_bloom_radius`) -- heads coast to a fixed
+                # multiple of `radius_max` instead of racing toward
+                # full-panel coverage with the hole.
+                for b in self._plan:
+                    spoke_radius = self._spoke_bloom_radius(b.radius_max, t)
+                    self._draw_spokes(real, b, spoke_radius, bloom_mult, w, h)
 
         return canvas
 
@@ -501,19 +533,59 @@ class Fireworks:
 
     @staticmethod
     def _bloom_multiplier(t: float) -> float:
-        """Global bloom-phase dimming multiplier (spec, verbatim):
-        ``max(0.25, 1 - (t - 0.5) * 2)``. ``1.0`` for any ``t`` before the
-        bloom handoff (``_BLOOM_AT``) -- the open phase carries its own
-        brightness entirely via the along-spoke gradient in
-        ``_draw_spokes``, with no additional time-based dimming. Once
-        bloom starts this multiplier is applied ON TOP of that gradient
-        (scaling the whole spoke, head included) so spokes fade out
-        together as the bloom races toward full-panel coverage, floored at
-        ``_BLOOM_FADE_FLOOR`` rather than fading to black before the snap.
+        """Global bloom-phase spoke-brightness fade (tail-fix, PR #39 v3
+        review): full brightness (``1.0``) through ``_SPOKE_FADE_START``
+        (0.6), then fading LINEARLY to exactly ``0.0`` by
+        ``_SPOKE_FADE_END`` (0.85) -- and staying at ``0.0`` for the
+        remainder of the transition, including past ``t == 1.0``.
+
+        Replaces the earlier ``max(0.25, 1 - (t - 0.5) * 2)`` curve, which
+        floored at 25% and never reached zero -- spokes stayed visibly
+        present (dim, not gone) right up to the ``SNAP_THRESHOLD`` (0.95)
+        cut, which read as an abrupt pop on top of a hole radius that was
+        ALSO still racing outward. Reaching exactly zero by 0.85 means the
+        final ~0.1 of the transition, pre-snap, shows ONLY the incoming
+        widget finishing its own bloom -- the snap then changes nothing
+        visible. ``frame_at``'s bloom branch also skips the per-burst
+        ``_draw_spokes`` loop entirely once this returns ``0.0`` (paints
+        nothing, same as a zero multiplier reaching `_draw_spokes` would,
+        just without the wasted iteration).
+
+        ``1.0`` for any ``t`` before ``_SPOKE_FADE_START`` (which is itself
+        past ``_BLOOM_AT``) -- the open phase carries its own brightness
+        entirely via the along-spoke gradient in ``_draw_spokes``, with no
+        additional time-based dimming until the fade window begins.
         """
-        if t < _BLOOM_AT:
+        if t < _SPOKE_FADE_START:
             return 1.0
-        return max(_BLOOM_FADE_FLOOR, 1.0 - (t - _BLOOM_AT) * 2.0)
+        if t >= _SPOKE_FADE_END:
+            return 0.0
+        frac = (t - _SPOKE_FADE_START) / (_SPOKE_FADE_END - _SPOKE_FADE_START)
+        return 1.0 - frac
+
+    @staticmethod
+    def _spoke_bloom_radius(radius_max: float, t: float) -> float:
+        """Decorative-layer spoke POSITION radius during bloom (tail-fix,
+        PR #39 v3 review) -- DECOUPLED from the hole radius `burst_state`
+        computes for `_fill_burst_black`/`_blackout_complement` (which
+        keeps racing linearly toward ``hypot(w, h)``; that formula is
+        untouched by this method).
+
+        Heads ease OUT from ``radius_max`` (the value at ``t == _BLOOM_AT``,
+        continuous with the "open" phase's own final radius) via an
+        ease-out curve, coasting ``_SPOKE_COAST_GROWTH`` (35%) farther over
+        ``t`` in ``[_BLOOM_AT, _BLOOM_AT + _SPOKE_COAST_WINDOW]`` (i.e.
+        ``[0.5, 0.75]``), then HOLD that final radius for the remainder of
+        the transition -- ``q`` clamps at ``1.0`` past the coast window so
+        this is a flat plateau, not a continuation of the curve. Formula:
+        ``radius_max * (1 + _SPOKE_COAST_GROWTH * (1 - (1 - q) ** 2))``
+        where ``q = min(1, (t - _BLOOM_AT) / _SPOKE_COAST_WINDOW)``.
+
+        Only called from the bloom branch (``t >= _BLOOM_AT``); undefined
+        (and unused) for ``t`` before that.
+        """
+        q = min(1.0, (t - _BLOOM_AT) / _SPOKE_COAST_WINDOW)
+        return radius_max * (1.0 + _SPOKE_COAST_GROWTH * (1.0 - (1.0 - q) ** 2))
 
     @staticmethod
     def _draw_spokes(
@@ -522,13 +594,22 @@ class Fireworks:
         """Paint ``b``'s asterisk: one radial trail per seeded
         ``(angle_deg, jitter_deg)`` pair in ``b.spoke_angles``, each a line
         of pixels from a tail near the center out to a head riding just
-        ahead of the current hole edge -- the "point exploding outward"
-        read (PR #39 feedback replaced the old expanding-ring-outline
-        decoration, which read as a ripple, with this).
+        ahead of ``radius`` -- the "point exploding outward" read (PR #39
+        feedback replaced the old expanding-ring-outline decoration, which
+        read as a ripple, with this).
+
+        ``radius`` is caller-supplied and its SOURCE differs by phase (this
+        function itself is agnostic to that): during "open" (``t < 0.5``)
+        the caller passes ``burst_state``'s live hole radius, so heads ride
+        just ahead of the actual burn-through edge; during "bloom"
+        (``t >= 0.5``) the caller passes ``_spoke_bloom_radius``'s
+        DECOUPLED coast radius instead (tail-fix, PR #39 v3 review) -- the
+        hole itself keeps growing toward full-panel coverage underneath,
+        but the decoration no longer chases it off-panel.
 
         Per spoke: ``r_head = radius + head_offset`` (``head_offset`` in
         ``[_SPOKE_HEAD_OFFSET_MIN, _SPOKE_HEAD_OFFSET_MAX]``, i.e. 1-2px
-        ahead of the black hole's own edge) and
+        ahead of ``radius``) and
         ``r_tail = max(0, r_head - trail_len)`` where
         ``trail_len = _TRAIL_LEN_FRAC * r_head * variance`` (``variance``
         in ``[1 - _TRAIL_LEN_VARIANCE, 1 + _TRAIL_LEN_VARIANCE]``) -- since

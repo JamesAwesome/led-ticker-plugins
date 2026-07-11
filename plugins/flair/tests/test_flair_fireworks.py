@@ -11,7 +11,12 @@ from led_ticker.plugin import ScaledCanvas
 
 from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.fireworks import (
+    _BLOOM_AT,
     _LAUNCH_OPEN_BOUNDARY,
+    _SPOKE_COAST_GROWTH,
+    _SPOKE_COAST_WINDOW,
+    _SPOKE_FADE_END,
+    _SPOKE_FADE_START,
     _SPOKE_HEAD_OFFSET_MAX,
     _SPOKE_HEAD_OFFSET_MIN,
     _TRAIL_LEN_FRAC,
@@ -599,24 +604,156 @@ class TestScaledCanvasEffectPixels:
 
 
 class TestBloomMultiplier:
+    """Tail-fix (PR #39 v3): brightness fades to exactly ZERO by
+    `_SPOKE_FADE_END` (0.85), not the old quarter-brightness floor that
+    never reached black before the 0.95 snap.
+    """
+
     def test_full_brightness_before_bloom(self) -> None:
         assert Fireworks._bloom_multiplier(0.0) == 1.0
         assert Fireworks._bloom_multiplier(0.49) == 1.0
 
     def test_full_brightness_at_bloom_start(self) -> None:
-        assert Fireworks._bloom_multiplier(0.5) == pytest.approx(1.0)
+        assert Fireworks._bloom_multiplier(_BLOOM_AT) == pytest.approx(1.0)
 
-    def test_eases_down_during_bloom(self) -> None:
-        mid = Fireworks._bloom_multiplier(0.75)
-        assert 0.25 < mid < 1.0
+    def test_full_brightness_up_to_fade_start(self) -> None:
+        assert Fireworks._bloom_multiplier(_SPOKE_FADE_START - 1e-9) == pytest.approx(
+            1.0
+        )
 
-    def test_floors_at_quarter(self) -> None:
-        assert Fireworks._bloom_multiplier(1.0) == pytest.approx(0.25)
+    def test_eases_down_between_fade_start_and_end(self) -> None:
+        midpoint = (_SPOKE_FADE_START + _SPOKE_FADE_END) / 2.0
+        mid = Fireworks._bloom_multiplier(midpoint)
+        assert mid == pytest.approx(0.5)
+        assert 0.0 < mid < 1.0
 
-    def test_never_below_floor_past_one(self) -> None:
+    def test_zero_at_fade_end(self) -> None:
+        assert Fireworks._bloom_multiplier(_SPOKE_FADE_END) == pytest.approx(0.0)
+
+    def test_zero_past_fade_end(self) -> None:
+        assert Fireworks._bloom_multiplier(1.0) == 0.0
+
+    def test_never_above_zero_floor_past_one(self) -> None:
         # Defensive: a caller passing a slightly-over-1.0 value (rounding)
-        # must not fall below the documented floor.
-        assert Fireworks._bloom_multiplier(1.5) == pytest.approx(0.25)
+        # must stay at the documented zero floor, not climb back up.
+        assert Fireworks._bloom_multiplier(1.5) == 0.0
+
+
+class TestSpokeBloomRadius:
+    """Tail-fix (PR #39 v3): during bloom, decorative spoke POSITION is
+    decoupled from the hole radius (which keeps racing toward
+    `hypot(w, h)` for coverage purposes, unaffected). Heads ease out from
+    `radius_max` and then coast/hold -- never approach hypot scale.
+    """
+
+    def test_matches_radius_max_at_bloom_start(self) -> None:
+        assert Fireworks._spoke_bloom_radius(20.0, _BLOOM_AT) == pytest.approx(20.0)
+
+    def test_coasts_partway_at_midpoint_of_coast_window(self) -> None:
+        midpoint = _BLOOM_AT + _SPOKE_COAST_WINDOW / 2.0
+        r = Fireworks._spoke_bloom_radius(20.0, midpoint)
+        assert 20.0 < r < 20.0 * (1.0 + _SPOKE_COAST_GROWTH)
+
+    def test_coasts_to_final_radius_at_end_of_coast_window(self) -> None:
+        end = _BLOOM_AT + _SPOKE_COAST_WINDOW
+        r = Fireworks._spoke_bloom_radius(20.0, end)
+        assert r == pytest.approx(20.0 * (1.0 + _SPOKE_COAST_GROWTH))
+
+    def test_holds_position_past_the_coast_window(self) -> None:
+        # 0.75 is the end of the coast window (0.5 + 0.25); 0.9 and 1.0 are
+        # well past it. The old hole-chained design would have these three
+        # values diverge sharply (radius racing toward hypot(w, h)); the
+        # decoupled curve holds them equal -- coasted, not still climbing.
+        r_75 = Fireworks._spoke_bloom_radius(20.0, 0.75)
+        r_90 = Fireworks._spoke_bloom_radius(20.0, 0.9)
+        r_100 = Fireworks._spoke_bloom_radius(20.0, 1.0)
+        assert r_90 == pytest.approx(r_75)
+        assert r_100 == pytest.approx(r_75)
+
+    def test_does_not_approach_hypot_scale_on_a_large_panel(self) -> None:
+        # On a 512x64 longboi panel, `burst_state`'s hole radius at t=0.9
+        # for radius_max=20 races to roughly 20 + 0.8 * (hypot(512, 64) -
+        # 20) ~= 429 -- about 21x radius_max. The decoupled decoration
+        # radius must stay near the small coast plateau instead.
+        r = Fireworks._spoke_bloom_radius(20.0, 0.9)
+        assert r < 20.0 * 2.0
+
+    def test_pixel_position_at_point_nine_matches_coast_plateau_not_hole(self) -> None:
+        """Integration-flavored: feed the pure radii straight into
+        `_draw_spokes` (bypassing `_bloom_multiplier`'s brightness gate, so
+        this isolates POSITION) and confirm the farthest painted pixel at
+        t=0.9 lands at the same distance from center as the t=0.75
+        plateau -- not off chasing a hole radius many multiples of
+        radius_max.
+        """
+        b = Burst(
+            cx=100.0,
+            cy=100.0,
+            radius_max=20.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spoke_angles=((0.0, 0.0), (90.0, 0.0), (180.0, 0.0), (270.0, 0.0)),
+        )
+        real_75 = _StubCanvas(width=300, height=300)
+        real_90 = _StubCanvas(width=300, height=300)
+        r75 = Fireworks._spoke_bloom_radius(b.radius_max, 0.75)
+        r90 = Fireworks._spoke_bloom_radius(b.radius_max, 0.9)
+        Fireworks._draw_spokes(
+            real_75, b, radius=r75, brightness_mult=1.0, w=300, h=300
+        )
+        Fireworks._draw_spokes(
+            real_90, b, radius=r90, brightness_mult=1.0, w=300, h=300
+        )
+
+        def _farthest(real: Any) -> float:
+            return max(
+                math.hypot(x - b.cx, y - b.cy)
+                for (x, y), rgb in real._pixels.items()
+                if rgb != (0, 0, 0)
+            )
+
+        far_75 = _farthest(real_75)
+        far_90 = _farthest(real_90)
+        assert far_90 == pytest.approx(far_75, abs=0.6)
+        assert far_90 < b.radius_max * 2.0
+
+
+class TestNoDecorationBeforeSnap:
+    """Tail-fix (PR #39 v3): by `_SPOKE_FADE_END` (0.85) the decoration has
+    faded to nothing, so the pre-snap tail of the transition (t in
+    [0.86, 0.95)) shows ONLY the incoming widget's own fill -- the
+    `SNAP_THRESHOLD` (0.95) cut then changes nothing visible.
+    """
+
+    @pytest.mark.parametrize("t", [0.86, 0.9, 0.94])
+    def test_only_incoming_fill_or_black_appear(self, t: float) -> None:
+        w, h = 256, 64
+        fill_color = (0, 255, 0)
+        burst = Burst(
+            cx=w / 2.0,
+            cy=h / 2.0,
+            radius_max=25.0,
+            t_start=0.0,
+            t_burst_dur=0.5,
+            color=(200, 50, 50),
+            spoke_angles=((0.0, 0.0), (90.0, 0.0), (180.0, 0.0), (270.0, 0.0)),
+        )
+        fw = Fireworks(seed=1)
+        fw._plan = [burst]
+        fw._plan_dims = (w, h)
+        fw._last_t = 0.5
+
+        canvas = _StubCanvas(width=w, height=h)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_fill_widget(fill_color)
+        fw.frame_at(t, canvas, outgoing, incoming)
+
+        painted_colors = set(canvas._pixels.values())
+        # No white-hot spoke head, no burst-colored spoke trail -- only the
+        # incoming fill color (revealed area) and/or black (any residual
+        # complement-blackout gap) may appear.
+        assert painted_colors <= {fill_color, (0, 0, 0)}
 
 
 class TestDrawSpokes:
