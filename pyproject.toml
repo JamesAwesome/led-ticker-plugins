@@ -19,6 +19,13 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pyright]
 pythonPlatform = "All"
 pythonVersion = "3.14"
+# Plugin tests are intentionally un-typechecked PROJECT-WIDE: they deliberately
+# monkeypatch modules by assignment, access private attrs, and pass bad kwargs
+# to assert error paths — all pyright errors by design. CI and `make typecheck`
+# have only ever scoped pyright to plugins/*/src; this keeps a local
+# `pyright plugins/<x>` identical to CI (0 errors == 0 real errors). The
+# repo-root tests/ dir is NOT excluded and stays typechecked.
+exclude = ["plugins/*/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
