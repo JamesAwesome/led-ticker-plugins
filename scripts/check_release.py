@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 # Plugins published to PyPI on a `<plugin>-vX.Y.Z` release: the 6 data plugins,
-# `flair` (the consolidated homage sprite-trail pack), and `telnet`.
+# `flair` (the consolidated homage sprite-trail pack), `telnet`, `storefront`,
+# and `flight`.
 PUBLISHABLE_PLUGINS = {
     "pool",
     "baseball",
@@ -20,6 +21,7 @@ PUBLISHABLE_PLUGINS = {
     "rss",
     "weather",
     "flair",
+    "flight",
     "telnet",
     "storefront",
 }

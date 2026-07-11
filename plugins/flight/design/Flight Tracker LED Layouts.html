@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flight Tracker — LED Layouts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0c0e; --panel:#121418; --panel-2:#171a1f; --line:#23272e;
+    --ink:#e9edf2; --dim:#9aa4b2; --faint:#6b7480;
+    --ident:#fff; --alt:#ffb400; --speed:#3cdc3c; --track:#00dcff; --dist:#ff50ff; --type:#aa5aff; --climb:#00ff00; --descend:#ff3c3c;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+  a{color:var(--track)}
+  a:hover{color:#7fe9ff}
+
+  /* ---- header ---- */
+  header.masthead{padding:44px 40px 22px;border-bottom:1px solid var(--line);max-width:1120px;margin:0 auto}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+  h1{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:0 0 10px}
+  .lede{max-width:640px;color:var(--dim);font-size:15px;margin:0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  /* ---- legend ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:20px 0 0;padding:0;list-style:none}
+  .legend li{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.02em}
+  .dot{width:9px;height:9px;border-radius:2px;box-shadow:0 0 6px currentColor}
+  .fin{width:11px;height:11px;background:linear-gradient(135deg,#285fd2 0 45%,#eaf0ff 45% 60%,#285fd2 60%);clip-path:polygon(100% 0,100% 100%,0 100%);border-radius:1px}
+
+  /* ---- sticky control bar ---- */
+  .controls{position:sticky;top:0;z-index:20;background:rgba(11,12,14,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .controls-inner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:12px 40px}
+  .ctl{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .ctl select,.ctl input[type=range]{accent-color:var(--track)}
+  select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit;font-size:12px}
+  input[type=range]{width:110px}
+  .switch{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+  button#ctl-play{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;letter-spacing:.04em}
+  button#ctl-play:hover{border-color:#33baff;color:#fff}
+  .spacer{flex:1}
+  .tagline{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.1em}
+
+  /* ---- content ---- */
+  main{max-width:1120px;margin:0 auto;padding:8px 40px 90px}
+
+  section.sign{padding:40px 0 8px;border-bottom:1px solid var(--line)}
+  .sign-head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+  .sign-head h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+  .sign-head .res{font-family:var(--mono);font-size:12px;color:var(--track)}
+  .sign-head .meta{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.02em}
+  .sign-head .pick{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--bg);background:var(--speed);border-radius:4px;padding:3px 9px}
+  .sign-desc{color:var(--dim);font-size:14px;max-width:720px;margin:6px 0 22px}
+
+  .variant{margin:0 0 30px}
+  .variant-head{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+  .badge{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--bg);background:var(--track);border-radius:4px;padding:2px 7px}
+  .variant-head h3{font-size:15px;font-weight:600;margin:0}
+  .variant-head .behav{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.03em;margin-left:auto}
+
+  .panel{background:linear-gradient(180deg,#101216,#0c0d10);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.02),0 10px 30px rgba(0,0,0,.35)}
+  .bezel{background:#000;border-radius:7px;padding:8px;border:1px solid #1c1f25;overflow:hidden}
+  canvas{display:block;image-rendering:pixelated}
+
+  .spec{display:flex;flex-wrap:wrap;gap:6px 8px;margin:12px 2px 0}
+  .chip{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--dim);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:3px 8px}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:0 0 5px currentColor}
+  .chip .fin-sw{background:linear-gradient(135deg,#285fd2 0 45%,#eaf0ff 45% 60%,#285fd2 60%);clip-path:polygon(100% 0,100% 100%,0 100%);box-shadow:none}
+
+  footer{max-width:1120px;margin:0 auto;padding:0 40px 80px;color:var(--faint);font-size:13px}
+  footer code{font-family:var(--mono);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">led-ticker engine · planes overhead</p>
+  <h1>Flight Tracker — LED Layouts</h1>
+  <p class="lede">Live ADS-B aircraft near the sign, refreshed ~10s. Information design after <b>The Flight Wall</b> — data-forward, no filler — for the three chosen LED layouts, each at true logical resolution. Every dot below is an addressable LED. Each flight leads with a brand-colored <b>airline tail-fin</b> derived from its callsign; semantic color is consistent across all signs:</p>
+  <ul class="legend">
+    <li><span class="fin" aria-hidden="true"></span>airline tail</li>
+    <li><span class="dot" style="color:var(--ident)"></span>ident</li>
+    <li><span class="dot" style="color:var(--type)"></span>type</li>
+    <li><span class="dot" style="color:var(--alt)"></span>altitude</li>
+    <li><span class="dot" style="color:var(--climb)"></span>climb ↑</li>
+    <li><span class="dot" style="color:var(--descend)"></span>descent ↓</li>
+    <li><span class="dot" style="color:var(--speed)"></span>speed</li>
+    <li><span class="dot" style="color:var(--track)"></span>track</li>
+    <li><span class="dot" style="color:var(--dist)"></span>distance</li>
+  </ul>
+</header>
+
+<div class="controls">
+  <div class="controls-inner">
+    <label class="ctl">Traffic
+      <select id="ctl-traffic">
+        <option value="4">Busy · 4 overhead</option>
+        <option value="2">Moderate · 2</option>
+        <option value="1">Quiet · 1</option>
+        <option value="0">None · idle</option>
+      </select>
+    </label>
+    <label class="ctl">Speed
+      <input id="ctl-speed" type="range" min="0.25" max="2.5" step="0.25" value="1">
+      <span id="ctl-speed-val" style="color:var(--dim)">1.0×</span>
+    </label>
+    <label class="ctl switch">Glow
+      <input id="ctl-glow" type="checkbox" checked>
+    </label>
+    <button id="ctl-play" aria-pressed="false">❙❙ Pause</button>
+    <span class="spacer"></span>
+    <span class="tagline">20 FPS · SAMPLE FEED</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- ============================ SMALLSIGN ============================ -->
+  <section class="sign">
+    <div class="sign-head">
+      <h2>smallsign</h2>
+      <span class="res">160 × 16 logical</span>
+      <span class="meta">160×16 physical · scale 1 · BDF only</span>
+      <span class="pick">single-line ticker</span>
+    </div>
+    <p class="sign-desc">Long and short — 160 columns, only 16 rows, no hi-res. One continuous 6×12 stream carries every field of every plane overhead, each led by its airline tail-fin. No rotation, so it scales to any number of aircraft.</p>
+
+    <div class="variant">
+      <div class="panel"><div class="bezel"><canvas id="cv-smallB"></canvas></div>
+        <div class="spec">
+          <span class="chip"><span class="sw fin-sw"></span>airline tail-fin</span>
+          <span class="chip"><b>One row</b> BDF 6×12</span>
+          <span class="chip">every field, every plane, one stream</span>
+          <span class="chip">flights split by <b>/</b></span>
+          <span class="chip">no rotation — length is unlimited</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ BIGSIGN ============================ -->
+  <section class="sign">
+    <div class="sign-head">
+      <h2>bigsign</h2>
+      <span class="res">64 × 16 logical</span>
+      <span class="meta">256×64 physical · scale 4 · hi-res YES</span>
+      <span class="pick">hi-res hero ident</span>
+    </div>
+    <p class="sign-desc">The narrowest logical canvas but 256 hi-res pixels wide. A brand tail-fin and a hero callsign lead; airline name, type, and a colored metric line fill the rest. One flight held at a time, big and legible.</p>
+
+    <div class="variant">
+      <div class="panel"><div class="bezel"><canvas id="cv-bigA"></canvas></div>
+        <div class="spec">
+          <span class="chip"><span class="sw fin-sw"></span>brand tail-fin</span>
+          <span class="chip"><b>Ident</b> Inter Bold 26px</span>
+          <span class="chip">airline name + type</span>
+          <span class="chip"><b>Metrics</b> Inter 12px hi-res</span>
+          <span class="chip">▲/▼ climb/descent cue</span>
+          <span class="chip">paging dots ↘</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ LONGBOI ============================ -->
+  <section class="sign">
+    <div class="sign-head">
+      <h2>longboi</h2>
+      <span class="res">128 × 16 logical</span>
+      <span class="meta">512×64 physical · scale 4 · hi-res YES · ~1m wide</span>
+      <span class="pick">dashboard row</span>
+    </div>
+    <p class="sign-desc">The widescreen target and closest Flight Wall analog. Tail-fin + hero ident on the left, airline name and type beneath, then labelled metric columns fill the width. One flight held, rotating.</p>
+
+    <div class="variant">
+      <div class="panel"><div class="bezel"><canvas id="cv-longA"></canvas></div>
+        <div class="spec">
+          <span class="chip"><span class="sw fin-sw"></span>brand tail-fin</span>
+          <span class="chip"><b>Ident</b> Inter Bold 26px</span>
+          <span class="chip">airline name + type</span>
+          <span class="chip">labelled columns: ALT · SPD · TRK · DIST</span>
+          <span class="chip">labels 10px · values 16px</span>
+          <span class="chip">one flight held, rotates</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Fields per aircraft: <code>callsign</code> <code>type</code> <code>altitude+vertrate</code> <code>ground speed</code> <code>track</code> <code>distance/bearing</code>. Sample feed shown; production reads live ADS-B (adsb.lol / airplanes.live). <b>No traffic</b> → each sign idles with a slow radar scan.
+</footer>
+
+<script src="led-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
