@@ -6,6 +6,7 @@ import aiohttp
 import attrs
 from led_ticker.plugin import (
     ENGINE_TICK_MS,
+    Color,
     FrameAwareBase,
     run_monitor_loop,
     safe_scale,
@@ -46,6 +47,15 @@ class OverheadWidget(FrameAwareBase):
     # here. None (direct construction, tests) => update() opens a temporary
     # session per poll instead.
     session: aiohttp.ClientSession | None = None
+    # A section-level `bg_color` is injected into every widget's config by
+    # core (pre-coerced to a `graphics.Color`); without this field the build
+    # fails with "unknown field: 'bg_color'". Declared-only, like weather /
+    # crypto / core's TickerMessage: the ENGINE paints it (reset_canvas
+    # before each draw + the transition bg kwargs) — draw() must NOT Fill it
+    # itself, or push-transition compositing (outgoing + incoming drawn on
+    # the SAME canvas) would have this widget's Fill erase the other widget.
+    # None => engine Clear() = pure black, the design default.
+    bg_color: Color | None = attrs.field(default=None, kw_only=True)
     _flights: list[Aircraft] = attrs.field(factory=list, init=False)
 
     def __attrs_post_init__(self) -> None:

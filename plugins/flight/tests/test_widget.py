@@ -92,6 +92,35 @@ async def test_update_parses_via_monkeypatched_fetch(monkeypatch):
     assert [a.flt for a in w._flights] == ["UA1"]
 
 
+def test_bg_color_accepted_and_engine_contract_paints_it(smallsign):
+    # Core injects a SECTION-level bg_color into every widget's config
+    # (pre-coerced to graphics.Color). The widget declares the field only —
+    # the ENGINE paints it via reset_canvas(canvas, widget.bg_color) before
+    # each draw (weather/crypto precedent); draw() itself must not Fill (a
+    # full-canvas Fill inside draw erases the other widget during push-
+    # transition compositing). Simulate the engine tick here.
+    from led_ticker.plugin import make_color
+
+    w = OverheadWidget(demo=True, bg_color=make_color(0, 0, 40))
+    assert w.bg_color is not None  # what the engine reads via getattr
+    smallsign.Fill(0, 0, 40)  # reset_canvas's bg branch, pre-draw
+    out, cursor = w.draw(smallsign)
+    assert out is smallsign and cursor == 0
+    # Corner pixel away from content (the row band is y 2..13) keeps the bg.
+    assert lit(smallsign)[(0, 15)] == (0, 0, 40)
+
+
+def test_core_field_validation_accepts_bg_color():
+    # Regression tripwire for the original landmine: core's field validator
+    # rejected 'bg_color' as unknown before the field existed, so a section
+    # bg_color made the widget fail to build.
+    from led_ticker.app.factories import _validate_cfg_fields
+
+    _validate_cfg_fields(
+        {"demo": True, "bg_color": [0, 0, 40]}, OverheadWidget, "flight.overhead"
+    )
+
+
 @pytest.mark.asyncio
 async def test_start_demo_accepts_and_never_uses_engine_session():
     # Core's factory always calls cls.start(session=<shared session>, ...).
