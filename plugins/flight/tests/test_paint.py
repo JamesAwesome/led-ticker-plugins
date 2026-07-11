@@ -75,3 +75,28 @@ def test_draw_empty_radar_and_text(smallsign):
 def test_draw_empty_wide_label(longboi):
     paint.draw_empty(longboi, clock_ms=0, wide=True)
     assert lit(longboi), "wide empty state lit nothing"
+
+
+def test_draw_empty_bigsign_label_falls_back_to_fit(bigsign):
+    # wide=True (256 phys >= 200) picks the long label, but the bigsign has
+    # only 64 LOGICAL cells and "NO TRAFFIC OVERHEAD" measures ~95 — the
+    # fit-fallback must swap in the short "NO TRAFFIC" so nothing clips at
+    # either edge. clock_ms=1600 parks the radar sweep mid-canvas (real
+    # x=128) so the edge columns are text-only evidence.
+    paint.draw_empty(bigsign, clock_ms=1600, wide=True)
+    real = unwrap_to_real(bigsign)
+    text_xs = [x for (x, _y) in lit(real) if x != 128]  # exclude radar column
+    assert text_xs, "empty-state label lit nothing"
+    assert min(text_xs) > 0, "label clipped at the left edge"
+    assert max(text_xs) < real.width - 1, "label clipped at the right edge"
+
+
+def test_draw_empty_longboi_keeps_long_label(longboi):
+    # longboi's 128 logical cells fit the 19-char label (~95) — the fallback
+    # must NOT fire there. The long label spans ~380 real px; the short one
+    # would only span ~200.
+    paint.draw_empty(longboi, clock_ms=1600, wide=True)
+    real = unwrap_to_real(longboi)
+    xs = [x for (x, _y) in lit(real) if x != 256]  # exclude radar column
+    assert xs, "empty-state label lit nothing"
+    assert max(xs) - min(xs) > 300

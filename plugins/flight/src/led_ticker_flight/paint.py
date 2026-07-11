@@ -92,6 +92,16 @@ def draw_empty(canvas, clock_ms: float, wide: bool, *, y_offset: int = 0) -> Non
     pulse = 0.55 + 0.45 * math.sin(clock_ms / 600)
     label = "NO TRAFFIC OVERHEAD" if wide else "NO TRAFFIC"
     w = measure_width(FONT_SMALL, label, canvas)
+    # Design-bundle divergence (deliberate): the prototype picks the long
+    # label purely by PHYSICAL width (>= 200), but the text is drawn in
+    # LOGICAL cells — on the bigsign (256 phys / 64 logical) the 19-char
+    # label measures ~95 logical px and clips off both edges (a latent bug
+    # in the prototype's own drawEmpty). Fit-fallback to the short form
+    # when the chosen label cannot fit the logical canvas; longboi's 128
+    # logical cells still take the long label.
+    if w > canvas.width:
+        label = "NO TRAFFIC"
+        w = measure_width(FONT_SMALL, label, canvas)
     bx = max(0, (canvas.width - w) // 2)
     baseline = compute_baseline(FONT_SMALL, canvas) + y_offset
     draw_text(canvas, FONT_SMALL, label, bx, baseline, dim(IDLE, pulse))
