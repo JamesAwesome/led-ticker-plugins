@@ -1,8 +1,18 @@
 from led_ticker.plugin import unwrap_to_real
 
 from led_ticker_flight.dashboard_layout import DWELL_MS, render_dashboard
-from led_ticker_flight.data import SAMPLE_AIRCRAFT
-from led_ticker_flight.palette import AIRLINES, ALT, DIST, IDENT, LABEL, SPEED, TRACK
+from led_ticker_flight.data import SAMPLE_AIRCRAFT, Aircraft
+from led_ticker_flight.palette import (
+    AIRLINES,
+    ALT,
+    DEFAULT_AIRLINE,
+    DIST,
+    IDENT,
+    LABEL,
+    SPEED,
+    TRACK,
+    TYPE,
+)
 
 
 def lit(canvas_or_real):
@@ -48,6 +58,20 @@ def test_rotation_dwell_4800(longboi):
 def test_empty_state_wide_label(longboi):
     render_dashboard(longboi, [], clock_ms=500)
     assert lit(longboi)
+
+
+def test_unknown_airline_renders_default_grey_no_type_row(longboi):
+    """N-number callsigns (general aviation registrations, not airline
+    flight numbers) are the majority real-world case — airline_of() falls
+    back to DEFAULT_AIRLINE (name == ""). Must not raise, must fin in the
+    default grey, and must not draw a name/type row (al.name == "" and
+    actype == "" both gate their `hires(...)` calls off)."""
+    unknown = Aircraft("N12345", "", 3500, 0, 120, 180, "5KM N", 5.0, "N12345")
+    render_dashboard(longboi, [unknown], clock_ms=0)
+    pixels = lit(longboi)
+    assert DEFAULT_AIRLINE.name == ""
+    assert DEFAULT_AIRLINE.c1 in pixels.values(), "default grey fin not painted"
+    assert TYPE not in pixels.values(), "TYPE color painted with no actype"
 
 
 def test_alt_and_speed_columns_do_not_collide(longboi):

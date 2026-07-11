@@ -9,8 +9,8 @@
 
 [display]
 rows = 16
-cols = 160
-chain_length = 1
+cols = 32
+chain_length = 5
 parallel = 1
 default_scale = 1
 hardware_mapping = "adafruit-hat"

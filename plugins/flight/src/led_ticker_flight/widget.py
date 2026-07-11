@@ -134,14 +134,36 @@ class OverheadWidget(FrameAwareBase):
             elif not lo <= v <= hi:
                 errs.append(f"{name} must be between {lo} and {hi}, got {v}")
 
+        def _int(name, lo, hi, required=False):
+            v = cfg.get(name)
+            if v is None:
+                if required and not cfg.get("demo"):
+                    errs.append(f"{name} is required (or set demo = true)")
+                return
+            if isinstance(v, bool) or not isinstance(v, int | float):
+                errs.append(f"{name} must be a number, got {v!r}")
+                return
+            # int/max_aircraft feed straight into list slicing and API params;
+            # a plausible-looking float (e.g. max_aircraft = 2.5, radius_km =
+            # 30.5) passes a plain numeric-range check but crashes downstream
+            # (SAMPLE_AIRCRAFT[:2.5] raises TypeError at boot). Reject any
+            # non-integral float here instead of coercing silently.
+            if isinstance(v, float) and not v.is_integer():
+                errs.append(f"{name} must be a whole number, got {v!r}")
+            elif not lo <= v <= hi:
+                errs.append(f"{name} must be between {lo} and {hi}, got {v}")
+
         _num("latitude", -90, 90, required=True)
         _num("longitude", -180, 180, required=True)
-        _num("radius_km", 2, 460)
-        _num("max_aircraft", 1, 8)
+        _int("radius_km", 2, 460)
+        _int("max_aircraft", 1, 8)
         _num("interval", 5, 3600)
         layout = cfg.get("layout", "auto")
         if layout not in _LAYOUTS:
             errs.append(f"layout must be one of {_LAYOUTS}, got {layout!r}")
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            errs.append(f"demo must be a bool (true/false), got {demo!r}")
         return errs
 
     @classmethod

@@ -11,10 +11,10 @@ from led_ticker.plugin import safe_scale
 
 from led_ticker_flight.data import VR_COLOR, vr_state
 from led_ticker_flight.fins import draw_fin
-from led_ticker_flight.hero_layout import _level_bar
 from led_ticker_flight.paint import (
     draw_empty,
     hires,
+    level_bar,
     live_pulse,
     paging_dots,
     phys_wrap,
@@ -80,7 +80,7 @@ def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> 
         vx = cx
         if i == 0:
             if state == "level":
-                vx += _level_bar(real, cx, 29 + dy, vr_color) + 3
+                vx += level_bar(real, cx, 29 + dy, vr_color) + 3
             else:
                 glyph = "▲" if state == "climb" else "▼"
                 vx += hires(shim, glyph, cx, 26 + dy, vr_color, 11) + 3

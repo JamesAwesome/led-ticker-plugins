@@ -22,6 +22,9 @@ from led_ticker.plugin import (
 from led_ticker_flight.glyphs import draw_glyph
 from led_ticker_flight.palette import IDENT, IDLE, LABEL, LIVE, RGB
 
+LEVEL_BAR_W = 7
+LEVEL_BAR_H = 3
+
 
 def phys_wrap(canvas):
     real = unwrap_to_real(canvas)
@@ -80,6 +83,14 @@ def live_pulse(real, scale: int, clock_ms: float) -> None:
         bright=bright,
         expand=scale,
     )
+
+
+def level_bar(real, x: int, y_top: int, rgb: RGB) -> int:
+    """Procedural stand-in for the level (▬) glyph — not in the hires charset."""
+    for yy in range(LEVEL_BAR_H):
+        for xx in range(LEVEL_BAR_W):
+            px(real, x + xx, y_top + yy, rgb)
+    return LEVEL_BAR_W
 
 
 def draw_empty(canvas, clock_ms: float, wide: bool, *, y_offset: int = 0) -> None:

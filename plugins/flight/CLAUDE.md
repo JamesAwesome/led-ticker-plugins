@@ -75,6 +75,17 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   never calls `update()` or spawns the background poll task — so `demo = true` widgets have
   zero network dependency, useful for previewing layouts offline.
 
+- **`bg_color` is DECLARED ONLY — never `Fill()` it in `draw()`.** A section-level
+  `bg_color` is injected into every widget's config by core (pre-coerced to a
+  `graphics.Color`); `OverheadWidget` declares the `bg_color` attrs field purely so the
+  build doesn't fail with "unknown field: 'bg_color'" — the same pattern as core's
+  `weather`/`crypto` widgets. The ENGINE paints it (a `Clear()`/`Fill(bg_color)` reset
+  before each tick, plus the transition's `outgoing_bg_color`/`incoming_bg_color`
+  kwargs), not the widget. During a push-transition, outgoing and incoming widgets are
+  drawn onto the SAME canvas in one pass; if `draw()` called `canvas.Fill(...)` itself,
+  it would erase whatever the other side of the transition already painted. `draw()`
+  must stay paint-only against whatever the canvas already holds.
+
 - **Public surface only.** `widget.py` (and every module under `src/led_ticker_flight/`)
   imports ONLY from `led_ticker.plugin` (plus stdlib + `aiohttp` + `attrs`). Never reach
   into `led_ticker.<internal>`. Enforced by `tests/test_import_purity.py` (AST scan).
@@ -107,9 +118,14 @@ src/led_ticker_flight/
   data.py               # Aircraft model, vr_state/fmt_alt formatting, SAMPLE_AIRCRAFT demo feed
   palette.py            # semantic color palette + airline tail-fin color table
   fins.py               # js_round + airline tail-fin silhouette geometry/paint
-  glyphs.py             # BDF-space procedural glyphs (arrows, degree sign, separator dot)
+  glyphs.py             # BDF-space procedural glyphs (arrows, degree sign, dot); the
+                        #   "dot" glyph serves paging dots + the live pulse (paint.py) —
+                        #   the ticker's own field-separator pixel is painted directly
+                        #   in ticker_layout.py's _draw_row, not through this table
   paint.py              # shared paint helpers: dim, empty/idle state, live-refresh pulse,
-                        #   paging dots, hi-res physical-canvas wrap (phys_wrap/hires/px)
+                        #   paging dots, hi-res physical-canvas wrap (phys_wrap/hires/px),
+                        #   level_bar (procedural level-flight indicator, shared by hero
+                        #   + dashboard)
   ticker_layout.py       # render_ticker  — smallsign: single-line BDF crawl
   hero_layout.py         # render_hero    — bigsign: hi-res single-flight hero
   dashboard_layout.py    # render_dashboard — longboi: hi-res multi-column dashboard

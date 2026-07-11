@@ -186,7 +186,7 @@ def render_ticker(
         guard = 0
         while x < canvas.width and guard < 8:
             if x + period > 0:
-                _draw_row(canvas, tokens, int(round(x)), y_top, baseline)
+                _draw_row(canvas, tokens, js_round(x), y_top, baseline)
             x += period
             guard += 1
 
