@@ -63,6 +63,13 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   raising — the same fallback `validate_config_warnings` surfaces as an advisory warning at
   `led-ticker validate` time.
 
+- **`start()` receives the engine's SHARED aiohttp session.** Core's `_build_widget` calls
+  `cls.start(session=session, **widget_cfg)`; the `session` attrs field stores it and
+  `update()` polls through it — never close or reconfigure it, and apply the 8s budget as a
+  per-request `ClientTimeout` passed to `fetch_overhead` (not a session-level timeout, which
+  would mutate shared state). When `session is None` (direct construction, tests), `update()`
+  opens a short-lived session per poll instead.
+
 - **Demo mode bypasses the network entirely.** `demo = true` seeds `_flights` from
   `data.SAMPLE_AIRCRAFT` (sliced to `max_aircraft`) in `__attrs_post_init__` and `start()`
   never calls `update()` or spawns the background poll task — so `demo = true` widgets have

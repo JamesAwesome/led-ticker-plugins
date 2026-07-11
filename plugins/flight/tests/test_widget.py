@@ -83,10 +83,89 @@ async def test_update_parses_via_monkeypatched_fetch(monkeypatch):
         ]
     }
 
-    async def fake_fetch(session, lat, lon, radius):
+    async def fake_fetch(session, lat, lon, radius, timeout=None):
         return payload
 
     monkeypatch.setattr("led_ticker_flight.widget.fetch_overhead", fake_fetch)
     w = OverheadWidget(latitude=40.7, longitude=-74.0)
     await w.update()
     assert [a.flt for a in w._flights] == ["UA1"]
+
+
+@pytest.mark.asyncio
+async def test_start_demo_accepts_and_never_uses_engine_session():
+    # Core's factory always calls cls.start(session=<shared session>, ...).
+    # A bare object() has no session API at all, so any accidental use of it
+    # on the demo path would raise — constructing cleanly proves non-use.
+    sentinel = object()
+    w = await OverheadWidget.start(demo=True, session=sentinel)
+    assert w.session is sentinel
+    assert [a.flt for a in w._flights] == [a.flt for a in SAMPLE_AIRCRAFT]
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    async def json(self):
+        return self._payload
+
+
+class _FakeGet:
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def __aenter__(self):
+        return _FakeResponse(self._payload)
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    def __init__(self, payload):
+        self._payload = payload
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return _FakeGet(self._payload)
+
+
+@pytest.mark.asyncio
+async def test_update_uses_injected_shared_session(monkeypatch):
+    payload = {
+        "ac": [
+            {
+                "flight": "UA1 ",
+                "t": "B738",
+                "alt_baro": 30000,
+                "baro_rate": 0,
+                "gs": 400,
+                "track": 90,
+                "lat": 40.8,
+                "lon": -73.9,
+                "r": "N1",
+            }
+        ]
+    }
+    fake = _FakeSession(payload)
+
+    def _no_new_sessions(*args, **kwargs):
+        raise AssertionError(
+            "update() must not construct its own ClientSession "
+            "when the engine injected one"
+        )
+
+    monkeypatch.setattr(
+        "led_ticker_flight.widget.aiohttp.ClientSession", _no_new_sessions
+    )
+    w = OverheadWidget(latitude=40.7, longitude=-74.0, session=fake)
+    await w.update()
+    assert [a.flt for a in w._flights] == ["UA1"]
+    assert len(fake.calls) == 1
+    _url, kwargs = fake.calls[0]
+    assert "timeout" in kwargs  # the 8s budget rides per-request, not per-session

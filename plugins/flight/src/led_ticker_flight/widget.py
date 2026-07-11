@@ -41,6 +41,11 @@ class OverheadWidget(FrameAwareBase):
     max_aircraft: int = 4
     interval: float = 10.0
     demo: bool = False
+    # The engine's SHARED aiohttp session — core's _build_widget calls
+    # `cls.start(session=session, **widget_cfg)`, and start() forwards it
+    # here. None (direct construction, tests) => update() opens a temporary
+    # session per poll instead.
+    session: aiohttp.ClientSession | None = None
     _flights: list[Aircraft] = attrs.field(factory=list, init=False)
 
     def __attrs_post_init__(self) -> None:
@@ -72,10 +77,16 @@ class OverheadWidget(FrameAwareBase):
         assert self.longitude is not None
         radius = radius_nm(self.radius_km)
         timeout = aiohttp.ClientTimeout(total=8)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        if self.session is not None:
+            # Engine-shared session: never close it, apply timeout per-request.
             payload = await fetch_overhead(
-                session, self.latitude, self.longitude, radius
+                self.session, self.latitude, self.longitude, radius, timeout=timeout
             )
+        else:
+            async with aiohttp.ClientSession() as session:
+                payload = await fetch_overhead(
+                    session, self.latitude, self.longitude, radius, timeout=timeout
+                )
         self._flights = parse_point_response(
             payload, self.latitude, self.longitude, self.max_aircraft
         )

@@ -123,9 +123,17 @@ def parse_point_response(
 
 
 async def fetch_overhead(
-    session: aiohttp.ClientSession, lat: float, lon: float, radius_nm_val: int
+    session: aiohttp.ClientSession,
+    lat: float,
+    lon: float,
+    radius_nm_val: int,
+    timeout: aiohttp.ClientTimeout | None = None,
 ) -> dict:
     url = ADSB_URL.format(lat=lat, lon=lon, radius=radius_nm_val)
-    async with session.get(url) as response:
+    # Per-request timeout so a SHARED session (the engine's) isn't reconfigured.
+    # Only pass the kwarg when set: an explicit `timeout=None` to session.get
+    # means "no timeout at all" in aiohttp, not "use the session default".
+    ctx = session.get(url) if timeout is None else session.get(url, timeout=timeout)
+    async with ctx as response:
         response.raise_for_status()
         return await response.json()
