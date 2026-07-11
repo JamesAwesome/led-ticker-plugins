@@ -1,0 +1,71 @@
+# Bigsign SMOKE TEST — flair.fireworks transition (plugins#34, on branch)
+#
+# Purpose: headless render-demo smoke fixture for the fireworks transition on
+# a 256x64 (default_scale = 4) canvas. rows=64/cols=256/chain_length=1 gives
+# the headless backend the final logical canvas directly — see
+# config.lottery-smoke.bigsign.toml's comment for why this deliberately does
+# NOT copy the real 8-panel rows=32/cols=64/chain_length=8 +
+# pixel_mapper_config Remap string (the headless backend doesn't interpret
+# Remap). This is a render-demo fixture, not a hardware wiring config; real
+# bigsign deploys use config/config.bigsign.example.toml in the core repo.
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.fireworks-smoke.bigsign.toml
+#   -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   Section 1 (GOLD "LAUNCH")  holds 3s, then the default 4-burst plan (auto
+#     burst_count for 256x64) launches from the bottom, opens over the held
+#     text, and blooms to full panel coverage revealing section 2 at
+#     PHYSICAL resolution (bursts paint straight to the real canvas, not a
+#     blocky 4x4-per-logical-pixel expansion).
+#   Section 2 ("BLOOM") declares the dict form
+#     `transition = {type = "flair.fireworks", bursts = 3, colors = [...]}`,
+#     which governs ENTERING it: the LAUNCH->BLOOM firing shows exactly 3
+#     red/cyan bursts (kwargs channel end-to-end). The loop-back BLOOM->LAUNCH
+#     firing uses the plain between_sections default (auto count/palette) —
+#     so the two firings you see are intentionally DIFFERENT.
+#   duration=1.2s per firing; loop the render to see >= 2 firings.
+#
+# If anything looks wrong: docs/visual-validation.md (core repo).
+
+[display]
+rows = 64
+cols = 256
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+
+[transitions]
+between_sections = "flair.fireworks"
+duration = 1.2
+
+# --- Section 1: gold text, default auto-palette fireworks entry --------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+
+[[playlist.section.widget]]
+type = "message"
+text = "LAUNCH"
+center = true
+font_color = [255, 200, 0]
+
+# --- Section 2: cyan text, explicit kwargs (bursts + colors) entry -----------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.fireworks", bursts = 3, colors = [[255, 60, 60], [0, 220, 220]]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "BLOOM"
+center = true
+font_color = [0, 220, 255]

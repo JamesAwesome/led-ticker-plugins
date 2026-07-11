@@ -1,0 +1,64 @@
+# Smallsign SMOKE TEST — flair.fireworks transition (plugins#34, on branch)
+#
+# Purpose: headless render-demo smoke fixture for the fireworks transition on
+# a 160x16 (default_scale = 1) canvas. rows=16/cols=160/chain_length=1 gives
+# the headless backend the final logical canvas directly (same pattern used
+# by config.lottery-smoke.bigsign.toml — see that file's comment for why the
+# headless render-demo backend doesn't want the real per-panel
+# rows/cols/chain_length values). This is a render-demo fixture, not a
+# hardware wiring config; real smallsign deploys use
+# config/config.example.toml in the core repo.
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.fireworks-smoke.smallsign.toml
+#   -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   Section 1 (GOLD "LAUNCH")  holds 3s, then staggered firework bursts
+#     launch from the bottom, open over the held text, and bloom to full
+#     panel coverage revealing section 2 — at least two firings should be
+#     visible if you loop the render (hold_time=3, duration=1.2).
+#   Section 2 (CYAN "BLOOM")  holds 3s, then fires back into section 1 the
+#     same way (between_sections applies to every section boundary).
+#   On an unscaled (scale=1) canvas the effect paints at low grain (real ==
+#     logical pixels here — same renderer, no hi-res paint path) but the
+#     burst/rim/blackout geometry is identical to the scaled signs.
+#
+# If anything looks wrong: docs/visual-validation.md (core repo).
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+
+[transitions]
+between_sections = "flair.fireworks"
+duration = 1.2
+
+# --- Section 1: gold text, launches fireworks into section 2 -----------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+
+[[playlist.section.widget]]
+type = "message"
+text = "LAUNCH"
+center = true
+font_color = [255, 200, 0]
+
+# --- Section 2: cyan text, fires back into section 1 --------------------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+
+[[playlist.section.widget]]
+type = "message"
+text = "BLOOM"
+center = true
+font_color = [0, 220, 255]
