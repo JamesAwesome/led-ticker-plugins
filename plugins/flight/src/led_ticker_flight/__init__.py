@@ -4,7 +4,8 @@ The entry-point name ``flight`` is the plugin namespace, so the widget is
 referenced in config.toml as ``type = "flight.overhead"``.
 """
 
+from led_ticker_flight.widget import OverheadWidget
+
 
 def register(api):
-    # Widget wired in the widget task; keeping register importable from day one.
-    pass
+    api.widget("overhead")(OverheadWidget)

@@ -3,22 +3,38 @@
 Guidance for Claude Code when working in **led-ticker-flight**, an external plugin for
 [led-ticker](https://github.com/JamesAwesome/led-ticker).
 
-`README.md` (expanded once the widget lands) is the source of truth for the user-facing
-surface. This file keeps the **load-bearing invariants** a contributor must respect. This is
-a stub — it grows alongside the implementation tasks.
+`README.md` is the source of truth for the user-facing surface (config options, install,
+layouts, data source). This file keeps the **load-bearing invariants** a contributor must
+respect.
+
+## Overview
+
+This plugin contributes, via the `led_ticker.plugins` entry point, a single widget:
+
+- `flight.overhead` — a planes-overhead ADS-B tracker backed by `OverheadWidget`
+  (`src/led_ticker_flight/widget.py`). It polls [adsb.lol](https://adsb.lol/)'s
+  `/v2/point/{lat}/{lon}/{radius}` endpoint (no API key) and renders the tracked aircraft
+  in one of three layouts, chosen by `resolve_layout(name, scale, phys_w)` from the widget's
+  `layout` field and the canvas's scale/physical width.
+
+The entry-point name `flight` is the plugin namespace, so the config `type` is
+`flight.overhead`. `register()` in `__init__.py` calls `api.widget("overhead")(OverheadWidget)`.
 
 ## Load-bearing invariants
 
 - **The design handoff is normative.** `design/README.md` (plus `app.js`, `led-engine.js`,
   and `Flight Tracker LED Layouts.html`, all committed verbatim in `design/`) is the visual
-  spec for this widget — semantic palette, airline color table, and every layout number.
-  Copy those values as-is; do not "improve" or re-derive them.
+  spec for this widget — semantic palette, airline color table, and every layout number
+  (font sizes, gaps, dwell times, scroll speed). Copy those values as-is; do not "improve"
+  or re-derive them. There are deliberately **no font/color config knobs** — the handoff
+  pins the look, so the only widget-level config is data/behavior (location, radius, layout
+  choice, aircraft cap, poll interval, demo mode).
 
 - **The `js_round` rule.** All handoff geometry was authored against JavaScript's
   `Math.round` (half-up). Python's built-in `round()` is banker's-rounding (round-half-to-even)
   and will silently disagree with the handoff on `.5` boundaries. Every formula translated
-  from the handoff must go through `js_round(v) = math.floor(v + 0.5)` instead of bare
-  `round()`.
+  from the handoff must go through `fins.js_round(v) = math.floor(v + 0.5)` instead of bare
+  `round()`. Used throughout `fins.py` (tail-fin geometry) and the hero/dashboard layouts.
 
 - **Never exact-pin hi-res font pixel output in tests.** Freetype rasterization differs
   between macOS and Linux, so a test asserting an exact pixel coordinate or count for hi-res
@@ -26,3 +42,78 @@ a stub — it grows alongside the implementation tasks.
   led-ticker core memory). Assert "some pixels of color C exist in region R" for hi-res text.
   BDF glyphs and procedural bitmaps (fins, arrows, dots) render pixel-exact and may be pinned
   freely.
+
+- **All animation is a pure function of `clock_ms`.** Every layout renderer
+  (`render_ticker`/`render_hero`/`render_dashboard`) takes `clock_ms: float` and derives all
+  motion/rotation from it — scroll offset, dwell-rotation index, live-refresh pulse phase,
+  idle radar sweep — with no hidden internal counters. `OverheadWidget.draw()` is the only
+  place `clock_ms` is produced: `clock_ms = self._frame_count * ENGINE_TICK_MS`, where
+  `_frame_count` comes from `FrameAwareBase` and is advanced by the engine once per tick
+  (never by the widget itself — see core's constraint #12). This keeps rendering
+  deterministic and makes every layout trivially testable by calling it twice with
+  different `clock_ms` values and diffing the canvas.
+
+- **Layout dispatch is a pure function too.** `resolve_layout(name, scale, phys_w) -> str`
+  has no widget-instance state — `OverheadWidget.draw()` calls it fresh every tick with the
+  live canvas's `safe_scale(canvas)` and `unwrap_to_real(canvas).width`, so a hot-reloaded
+  `layout` config change or a canvas swap always resolves correctly without special-casing.
+  `"auto"` semantics: scale 1 -> `ticker`; scale > 1 and physical width < 400 -> `hero`;
+  scale > 1 and physical width >= 400 -> `dashboard`. An explicit `"hero"`/`"dashboard"` on a
+  scale-1 sign is coerced to `"ticker"` (hi-res drawing is impossible there) rather than
+  raising — the same fallback `validate_config_warnings` surfaces as an advisory warning at
+  `led-ticker validate` time.
+
+- **Demo mode bypasses the network entirely.** `demo = true` seeds `_flights` from
+  `data.SAMPLE_AIRCRAFT` (sliced to `max_aircraft`) in `__attrs_post_init__` and `start()`
+  never calls `update()` or spawns the background poll task — so `demo = true` widgets have
+  zero network dependency, useful for previewing layouts offline.
+
+- **Public surface only.** `widget.py` (and every module under `src/led_ticker_flight/`)
+  imports ONLY from `led_ticker.plugin` (plus stdlib + `aiohttp` + `attrs`). Never reach
+  into `led_ticker.<internal>`. Enforced by `tests/test_import_purity.py` (AST scan).
+
+- **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
+
+## Commands
+
+`led-ticker-core` resolves from PyPI (`>=4.8`); no sibling checkout or `[tool.uv.sources]`.
+Tests obtain canvases via `HeadlessCanvas`/`ScaledCanvas` from `led_ticker.plugin` — no
+rgbmatrix stub on the path. Run tooling from the repo root:
+
+```bash
+uv sync --extra dev
+uv run pytest plugins/flight
+uv run ruff check plugins/flight
+uv run ruff format --check plugins/flight
+uv run pyright plugins/flight/src
+```
+
+Python **3.14+** only.
+
+## Package layout
+
+```
+src/led_ticker_flight/
+  __init__.py          # register(api) -> api.widget("overhead")(OverheadWidget)
+  widget.py             # OverheadWidget (FrameAwareBase) + resolve_layout + validation
+  adsb.py               # adsb.lol client + haversine/bearing/compass8 + parse_point_response
+  data.py               # Aircraft model, vr_state/fmt_alt formatting, SAMPLE_AIRCRAFT demo feed
+  palette.py            # semantic color palette + airline tail-fin color table
+  fins.py               # js_round + airline tail-fin silhouette geometry/paint
+  glyphs.py             # BDF-space procedural glyphs (arrows, degree sign, separator dot)
+  paint.py              # shared paint helpers: dim, empty/idle state, live-refresh pulse,
+                        #   paging dots, hi-res physical-canvas wrap (phys_wrap/hires/px)
+  ticker_layout.py       # render_ticker  — smallsign: single-line BDF crawl
+  hero_layout.py         # render_hero    — bigsign: hi-res single-flight hero
+  dashboard_layout.py    # render_dashboard — longboi: hi-res multi-column dashboard
+tests/
+  test_widget.py          # OverheadWidget behavior + resolve_layout
+  test_validate.py         # validate_config / validate_config_warnings
+  test_adsb.py             # geo math + payload parsing
+  test_data.py              # Aircraft formatting helpers
+  test_palette.py / test_fins.py / test_glyphs.py / test_paint.py
+  test_ticker_layout.py / test_hero_layout.py / test_dashboard_layout.py
+  test_import_purity.py    # AST: only led_ticker.plugin imports
+  test_smoke.py             # entry-point registers flight.overhead
+  conftest.py                # smallsign/bigsign/longboi canvas fixtures
+```

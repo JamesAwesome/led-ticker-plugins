@@ -1,0 +1,53 @@
+# led-ticker-flight — planes-overhead ADS-B tracker.
+#
+# Minimal, runnable example: a smallsign-shaped config with a single
+# `flight.overhead` widget. Copy the [[playlist.section.widget]] block into
+# your own config.toml, or point --config at this file directly to try it.
+#
+# The widget auto-registers via the `led_ticker.plugins` entry point once
+# `led-ticker-flight` is installed — no [plugins] config change is needed.
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 2
+
+[[playlist.section]]
+
+[[playlist.section.widget]]
+type = "flight.overhead"
+
+# Your receiver's location. Required unless `demo = true`. Aircraft are
+# distance-sorted and reported as e.g. "12KM NE" from this point.
+latitude = 40.7128
+longitude = -74.0060
+
+# Search radius in kilometers, 2-460 (converted to nautical miles for the
+# adsb.lol API call). Default 30.
+radius_km = 30
+
+# "auto" | "ticker" | "hero" | "dashboard". auto picks by sign shape: scale 1
+# -> ticker (BDF crawl); scale > 1 and narrower than 400 physical px -> hero
+# (hi-res single-flight); scale > 1 and >= 400 physical px -> dashboard
+# (hi-res, wide). An explicit "hero"/"dashboard" on a scale-1 sign falls back
+# to ticker (hi-res is impossible there). Default "auto".
+layout = "auto"
+
+# Cap on aircraft tracked at once, 1-8. Default 4.
+max_aircraft = 4
+
+# Seconds between adsb.lol polls, 5-3600. Be a good API citizen — the
+# default of 10s is already frequent for a free, keyless public endpoint.
+interval = 10
+
+# Set true to render the bundled 4-flight sample feed instead of calling the
+# network — no coordinates, no API key, useful for previewing the layouts.
+# demo = true
+
+[transitions]
+default = "cut"
+duration = 0.5
