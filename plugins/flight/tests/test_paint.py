@@ -1,7 +1,7 @@
 from led_ticker.plugin import unwrap_to_real
 
 from led_ticker_flight import paint
-from led_ticker_flight.palette import IDENT, LABEL, LIVE
+from led_ticker_flight.palette import IDENT, LABEL
 
 
 def lit(canvas_or_real):
@@ -48,16 +48,6 @@ def test_paging_dots(bigsign):
     assert pixels[(108, 50)] == IDENT  # dot 1 (current), step = 2*scale = 8
     assert pixels[(116, 50)] == LABEL  # dot 2
     assert (100, 54) not in pixels  # dots are scale-tall (rows 50..53)
-
-
-def test_live_pulse_duty_cycle(smallsign):
-    paint.live_pulse(smallsign, 1, clock_ms=0)  # phase 0 < 0.12 -> full
-    on = lit(smallsign)[(158, 1)]
-    assert on == LIVE
-    smallsign2 = type(smallsign)(160, 16)
-    paint.live_pulse(smallsign2, 1, clock_ms=5000)  # phase 0.5 -> dim 0.18
-    dimmed = lit(smallsign2)[(158, 1)]
-    assert dimmed == (int(0 * 0.18), int(255 * 0.18), int(0 * 0.18))
 
 
 def test_draw_empty_radar_and_text(smallsign):

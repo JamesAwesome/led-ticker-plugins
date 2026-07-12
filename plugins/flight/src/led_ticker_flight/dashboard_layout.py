@@ -15,7 +15,6 @@ from led_ticker_flight.paint import (
     draw_empty,
     hires,
     level_bar,
-    live_pulse,
     paging_dots,
     phys_wrap,
     px,
@@ -42,7 +41,6 @@ def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> 
 
     if not flights:
         draw_empty(canvas, clock_ms, wide=real.width >= 200, y_offset=y_offset)
-        live_pulse(real, scale, clock_ms)
         return
 
     idx = int(clock_ms // DWELL_MS) % len(flights)
@@ -94,4 +92,3 @@ def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> 
         real.width - len(flights) * (2 * scale) - 6,
         real.height - scale * 2 - 3 + dy,
     )
-    live_pulse(real, scale, clock_ms)

@@ -30,6 +30,14 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   pins the look, so the only widget-level config is data/behavior (location, radius, layout
   choice, aircraft cap, poll interval, demo mode).
 
+- **Deliberate divergences from the handoff.** The handoff is normative (previous bullet),
+  but a few call sites intentionally depart from it — each documented at its call site and
+  in `README.md`'s divergences list. Notably: the prototype's blinking live-refresh pulse dot
+  (`live` color, top-right corner, ~10 s duty cycle) is dropped entirely — no other led-ticker
+  widget carries an unexplained status indicator, and poll health/staleness is already visible
+  in the web UI's Status tab. `palette.LIVE` stays defined (the palette module is a verbatim
+  port of the handoff's color table) but has no consumer in this package.
+
 - **The `js_round` rule.** All handoff geometry was authored against JavaScript's
   `Math.round` (half-up). Python's built-in `round()` is banker's-rounding (round-half-to-even)
   and will silently disagree with the handoff on `.5` boundaries. Every formula translated
@@ -45,8 +53,8 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
 
 - **All animation is a pure function of `clock_ms`.** Every layout renderer
   (`render_ticker`/`render_hero`/`render_dashboard`) takes `clock_ms: float` and derives all
-  motion/rotation from it — scroll offset, dwell-rotation index, live-refresh pulse phase,
-  idle radar sweep — with no hidden internal counters. `OverheadWidget.draw()` is the only
+  motion/rotation from it — scroll offset, dwell-rotation index, idle radar sweep — with no
+  hidden internal counters. `OverheadWidget.draw()` is the only
   place `clock_ms` is produced: `clock_ms = self._frame_count * ENGINE_TICK_MS`, where
   `_frame_count` comes from `FrameAwareBase` and is advanced by the engine once per tick
   (never by the widget itself — see core's constraint #12). This keeps rendering
@@ -119,13 +127,12 @@ src/led_ticker_flight/
   palette.py            # semantic color palette + airline tail-fin color table
   fins.py               # js_round + airline tail-fin silhouette geometry/paint
   glyphs.py             # BDF-space procedural glyphs (arrows, degree sign, dot); the
-                        #   "dot" glyph serves paging dots + the live pulse (paint.py) —
-                        #   the ticker's own field-separator pixel is painted directly
-                        #   in ticker_layout.py's _draw_row, not through this table
-  paint.py              # shared paint helpers: dim, empty/idle state, live-refresh pulse,
-                        #   paging dots, hi-res physical-canvas wrap (phys_wrap/hires/px),
-                        #   level_bar (procedural level-flight indicator, shared by hero
-                        #   + dashboard)
+                        #   "dot" glyph serves paging dots — the ticker's own
+                        #   field-separator pixel is painted directly in
+                        #   ticker_layout.py's _draw_row, not through this table
+  paint.py              # shared paint helpers: dim, empty/idle state, paging dots,
+                        #   hi-res physical-canvas wrap (phys_wrap/hires/px), level_bar
+                        #   (procedural level-flight indicator, shared by hero + dashboard)
   ticker_layout.py       # render_ticker  — smallsign: single-line BDF crawl
   hero_layout.py         # render_hero    — bigsign: hi-res single-flight hero
   dashboard_layout.py    # render_dashboard — longboi: hi-res multi-column dashboard

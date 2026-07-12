@@ -20,7 +20,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_flight.glyphs import draw_glyph
-from led_ticker_flight.palette import IDENT, IDLE, LABEL, LIVE, RGB
+from led_ticker_flight.palette import IDENT, IDLE, LABEL, RGB
 
 LEVEL_BAR_W = 7
 LEVEL_BAR_H = 3
@@ -69,20 +69,6 @@ def paging_dots(real, scale: int, n: int, cur: int, x: int, y: int) -> None:
     for i in range(n):
         color = IDENT if i == cur else LABEL
         draw_glyph(sink, "dot", x + i * step, y, color, expand=scale)
-
-
-def live_pulse(real, scale: int, clock_ms: float) -> None:
-    phase = (clock_ms % 10000) / 10000
-    bright = 1.0 if phase < 0.12 else 0.18
-    draw_glyph(
-        lambda gx, gy, rgb, b: px(real, gx, gy, rgb, b),
-        "dot",
-        real.width - scale * 2,
-        scale,
-        LIVE,
-        bright=bright,
-        expand=scale,
-    )
 
 
 def level_bar(real, x: int, y_top: int, rgb: RGB) -> int:

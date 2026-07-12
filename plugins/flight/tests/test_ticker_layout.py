@@ -19,7 +19,7 @@ def test_full_coverage_at_t0(smallsign):
     render_ticker(smallsign, SAMPLE_AIRCRAFT, clock_ms=0)
     pixels = lit(smallsign)
     assert pixels, "nothing drawn at t=0"
-    xs = {x for (x, y) in pixels if (x, y) != (158, 1)}  # exclude live dot
+    xs = {x for (x, _y) in pixels}
     assert any(x < 40 for x in xs), "left third empty at t=0"
     assert any(x > 120 for x in xs), "right third empty at t=0"
 
@@ -44,7 +44,7 @@ def test_semantic_colors_present_mid_crawl(smallsign):
 
 def test_row_vertically_centered(smallsign):
     render_ticker(smallsign, SAMPLE_AIRCRAFT, clock_ms=20000)
-    ys = {y for (_, y) in lit(smallsign) if (_, y) != (159, 1)}  # exclude live dot
+    ys = {y for (_x, y) in lit(smallsign)}
     assert min(ys) >= 1 and max(ys) <= 14
 
 
@@ -64,7 +64,7 @@ def test_seamless_loop_period(smallsign):
     b = HeadlessCanvas(160, 16)
     render_ticker(a, SAMPLE_AIRCRAFT, clock_ms=0)
     render_ticker(b, SAMPLE_AIRCRAFT, clock_ms=period / 26 * 1000)
-    la = {k: v for k, v in lit(a).items() if k != (158, 1)}  # live dot differs by phase
-    lb = {k: v for k, v in lit(b).items() if k != (158, 1)}
+    la = lit(a)
+    lb = lit(b)
     assert la, "wrap instant rendered a blank frame (loop must never blank)"
     assert la == lb

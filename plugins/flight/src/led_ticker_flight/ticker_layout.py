@@ -2,8 +2,8 @@
 
 Everything is drawn through the LOGICAL canvas passed in — on smallsign
 (scale=1) logical == physical, so no ScaledCanvas unwrap is needed for the
-token drawing itself. The empty-state radar + live-pulse dot still paint at
-physical resolution via `paint.draw_empty` / `paint.live_pulse`.
+token drawing itself. The empty-state radar still paints at physical
+resolution via `paint.draw_empty`.
 """
 
 import attrs
@@ -13,13 +13,12 @@ from led_ticker.plugin import (
     draw_text,
     measure_width,
     safe_scale,
-    unwrap_to_real,
 )
 
 from led_ticker_flight.data import VR_COLOR, VR_GLYPH, Aircraft, fmt_alt, vr_state
 from led_ticker_flight.fins import draw_fin, fin_width, js_round
 from led_ticker_flight.glyphs import draw_glyph, glyph_size
-from led_ticker_flight.paint import dim, draw_empty, live_pulse
+from led_ticker_flight.paint import dim, draw_empty
 from led_ticker_flight.palette import (
     ALT,
     DIST,
@@ -158,13 +157,11 @@ def _draw_row(
 def render_ticker(
     canvas, flights: list[Aircraft], clock_ms: float, *, y_offset: int = 0
 ) -> None:
-    real = unwrap_to_real(canvas)
     scale = safe_scale(canvas)
 
     if not flights:
         wide = canvas.width * scale >= 200
         draw_empty(canvas, clock_ms, wide, y_offset=y_offset)
-        live_pulse(real, scale, clock_ms)
         return
 
     tokens = _build_stream(canvas, flights)
@@ -189,5 +186,3 @@ def render_ticker(
                 _draw_row(canvas, tokens, js_round(x), y_top, baseline)
             x += period
             guard += 1
-
-    live_pulse(real, scale, clock_ms)

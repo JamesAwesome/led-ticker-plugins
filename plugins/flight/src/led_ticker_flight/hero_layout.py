@@ -4,9 +4,8 @@ One flight is shown large at a time, rotating on a fixed schedule
 (`idx = floor(clock_ms / DWELL_MS) % len(flights)`): a swept tail-fin,
 a huge hi-res callsign, an airline-name/type line underneath, then a
 metrics line (vertical-rate cue, altitude, ground speed, track,
-distance), paging dots, and the live-refresh pulse. All positions are
-physical pixels — `dy = y_offset * scale` shifts the whole layout for
-push transitions.
+distance), and paging dots. All positions are physical pixels —
+`dy = y_offset * scale` shifts the whole layout for push transitions.
 """
 
 from led_ticker.plugin import safe_scale
@@ -17,7 +16,6 @@ from led_ticker_flight.paint import (
     draw_empty,
     hires,
     level_bar,
-    live_pulse,
     paging_dots,
     phys_wrap,
     px,
@@ -43,7 +41,6 @@ def render_hero(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> None:
 
     if not flights:
         draw_empty(canvas, clock_ms, wide=real.width >= 200, y_offset=y_offset)
-        live_pulse(real, scale, clock_ms)
         return
 
     idx = int(clock_ms // DWELL_MS) % len(flights)
@@ -83,4 +80,3 @@ def render_hero(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> None:
         real.width - len(flights) * (2 * scale) - 4,
         real.height - scale * 2 - 2 + dy,
     )
-    live_pulse(real, scale, clock_ms)
