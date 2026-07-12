@@ -79,6 +79,17 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   hero/dashboard dwell index) survives a section re-entry instead of snapping back to flight 0
   mid-dwell. This keeps rendering deterministic and makes every layout trivially testable by
   calling it twice with different `clock_ms` values and diffing the canvas.
+  **Settle hook:** `frames_to_transition_ready()` (core's settle-to-rest seam, #305/#343)
+  returns the ticks to the next dwell boundary — `dwell_ticks - (_clock_ticks % dwell_ticks)`,
+  0 when already on one — whenever the last-drawn layout is `hero`/`dashboard` with 2+
+  flights; otherwise it defers to `super()`. The layout comes from `_last_layout` (stashed by
+  `draw()`, default `"ticker"`) because the hook runs canvas-less at the hold->transition
+  handoff. The ENGINE applies its own 1s budget (`0 < extra <= MAX_SETTLE_TICKS = 20`,
+  all-or-nothing) — the widget must NOT clamp to 20 itself, and must NEVER raise (any
+  exception -> 0, per the base contract). Effect: the section transition lands exactly on the
+  fade's black frame whenever the hold ends within 1s of a dwell boundary; combined with a
+  `hold_time` that's a multiple of the dwell, the section cut is always invisible instead of
+  chopping the last flight mid-display.
 
 - **Layout dispatch is a pure function too.** `resolve_layout(name, scale, phys_w) -> str`
   has no widget-instance state — `OverheadWidget.draw()` calls it fresh every tick with the

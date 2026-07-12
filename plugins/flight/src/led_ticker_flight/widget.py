@@ -15,8 +15,10 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_flight.adsb import fetch_overhead, parse_point_response, radius_nm
+from led_ticker_flight.dashboard_layout import DWELL_MS as _DASHBOARD_DWELL_MS
 from led_ticker_flight.dashboard_layout import render_dashboard
 from led_ticker_flight.data import SAMPLE_AIRCRAFT, Aircraft
+from led_ticker_flight.hero_layout import DWELL_MS as _HERO_DWELL_MS
 from led_ticker_flight.hero_layout import render_hero
 from led_ticker_flight.ticker_layout import render_ticker
 
@@ -71,6 +73,11 @@ class OverheadWidget(FrameAwareBase):
     # counting across visits and the rotation index continues from wherever
     # it left off.
     _clock_ticks: int = attrs.field(init=False, default=0)
+    # Last layout resolved by draw() — frames_to_transition_ready() runs at
+    # the hold->transition handoff with no canvas in hand, so it reads this
+    # stash instead of re-resolving. Defaults to "ticker" (no dwell rotation)
+    # so the settle hook stays inert on a widget that has never drawn.
+    _last_layout: str = attrs.field(init=False, default="ticker")
 
     def __attrs_post_init__(self) -> None:
         if self.demo:
@@ -134,6 +141,7 @@ class OverheadWidget(FrameAwareBase):
         scale = safe_scale(canvas)
         real = unwrap_to_real(canvas)
         layout = resolve_layout(self.layout, scale, real.width)
+        self._last_layout = layout
         if layout == "ticker":
             render_ticker(canvas, self._flights, clock_ms, y_offset=y_offset)
         elif layout == "hero":
@@ -141,6 +149,37 @@ class OverheadWidget(FrameAwareBase):
         else:
             render_dashboard(canvas, self._flights, clock_ms, y_offset=y_offset)
         return canvas, 0
+
+    def frames_to_transition_ready(self) -> int:
+        """Settle the section transition onto the fade's black frame.
+
+        The engine consults this at the hold->transition handoff (core
+        #305/#343) and extends the hold by the returned tick count when
+        0 < extra <= MAX_SETTLE_TICKS (1s) — all-or-nothing, the ENGINE
+        does the budget check, so we return the raw remaining-ticks value
+        unclamped. On hero/dashboard with 2+ flights, that lands the
+        transition exactly on a dwell boundary, where the fade has taken
+        the card to black — the section cut is invisible instead of
+        chopping the last flight mid-display. Ticker layout / single
+        flight / never-drawn widgets defer to the base (no dwell to
+        settle onto).
+
+        Contract (base method docstring): must NEVER raise — any
+        exception -> 0 (ready now).
+        """
+        try:
+            if self._last_layout not in ("hero", "dashboard") or len(self._flights) < 2:
+                return super().frames_to_transition_ready()
+            dwell_ms = (
+                _HERO_DWELL_MS if self._last_layout == "hero" else _DASHBOARD_DWELL_MS
+            )
+            dwell_ticks = int(dwell_ms) // ENGINE_TICK_MS
+            pos_ticks = self._clock_ticks % dwell_ticks
+            if pos_ticks == 0:
+                return 0  # already at the boundary (black frame)
+            return dwell_ticks - pos_ticks
+        except Exception:
+            return 0
 
     @classmethod
     def validate_config(cls, cfg: dict) -> list[str]:

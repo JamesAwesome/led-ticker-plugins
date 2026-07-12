@@ -106,6 +106,53 @@ def test_advance_frame_paused_does_not_advance_clock():
     assert w._clock_ticks == 2
 
 
+class TestFramesToTransitionReady:
+    """Settle hook (core #305/#343): section transitions land on the fade's
+    black frame at a dwell boundary instead of chopping the last flight
+    mid-display. The ENGINE enforces the <= MAX_SETTLE_TICKS (1s) budget;
+    the widget returns raw remaining ticks, unclamped."""
+
+    HERO_DWELL_TICKS = 4200 // 50  # hero DWELL_MS // ENGINE_TICK_MS = 84
+
+    def test_hero_ten_ticks_before_boundary(self, bigsign):
+        w = OverheadWidget(demo=True)  # 4 demo flights
+        w.draw(bigsign)  # stashes _last_layout = "hero"
+        assert w._last_layout == "hero"
+        w._clock_ticks = self.HERO_DWELL_TICKS - 10
+        assert w.frames_to_transition_ready() == 10
+
+    def test_hero_exactly_at_boundary(self, bigsign):
+        w = OverheadWidget(demo=True)
+        w.draw(bigsign)
+        w._clock_ticks = 2 * self.HERO_DWELL_TICKS  # pos == 0 -> already black
+        assert w.frames_to_transition_ready() == 0
+
+    def test_single_flight_never_settles(self, bigsign):
+        # One held flight never fades, so there is no black frame to settle
+        # onto — the guard mirrors the fade's len(flights) >= 2 gate.
+        w = OverheadWidget(demo=True, max_aircraft=1)
+        w.draw(bigsign)
+        assert w._last_layout == "hero"
+        w._clock_ticks = self.HERO_DWELL_TICKS - 10
+        assert w.frames_to_transition_ready() == 0
+
+    def test_ticker_layout_never_settles(self, smallsign):
+        w = OverheadWidget(demo=True)
+        w.draw(smallsign)  # stashes _last_layout = "ticker"
+        assert w._last_layout == "ticker"
+        w._clock_ticks = 37
+        assert w.frames_to_transition_ready() == 0
+
+    def test_never_raises_fresh_widget_no_flights(self):
+        # Fresh widget: never drawn (stash defaults to "ticker") and the
+        # empty-flights state forced on top — must return 0, never raise
+        # (base-method contract: a readiness check may never crash the
+        # render loop).
+        w = OverheadWidget(demo=True)
+        w._flights = []
+        assert w.frames_to_transition_ready() == 0
+
+
 @pytest.mark.asyncio
 async def test_update_parses_via_monkeypatched_fetch(monkeypatch):
     payload = {
