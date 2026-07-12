@@ -62,6 +62,15 @@ class OverheadWidget(FrameAwareBase):
     # None => engine Clear() = pure black, the design default.
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     _flights: list[Aircraft] = attrs.field(factory=list, init=False)
+    # Rotation clock, separate from FrameAwareBase's `_frame_count` — core's
+    # `reset_frame()` (ticker._show_one, at every section visit) zeroes
+    # `_frame_count` unconditionally, which would otherwise snap the hero/
+    # dashboard rotation back to flight 0 mid-dwell every time this section
+    # cycles back into view. `_clock_ticks` only ever increments (via the
+    # advance_frame override below) and is never reset, so `clock_ms` keeps
+    # counting across visits and the rotation index continues from wherever
+    # it left off.
+    _clock_ticks: int = attrs.field(init=False, default=0)
 
     def __attrs_post_init__(self) -> None:
         if self.demo:
@@ -111,8 +120,17 @@ class OverheadWidget(FrameAwareBase):
             self.radius_km,
         )
 
+    def advance_frame(self, *, visit_id: int | None = None) -> None:
+        super().advance_frame(visit_id=visit_id)
+        # Mirror the base's own pause gate: advance_frame() no-ops while
+        # paused (transition compositing), so _clock_ticks must too, or the
+        # rotation clock would drift ahead of the visible frame during a
+        # dissolve/push.
+        if not self._frame_paused:
+            self._clock_ticks += 1
+
     def draw(self, canvas, cursor_pos=0, *, y_offset: int = 0, font_color=None):
-        clock_ms = self._frame_count * ENGINE_TICK_MS
+        clock_ms = self._clock_ticks * ENGINE_TICK_MS
         scale = safe_scale(canvas)
         real = unwrap_to_real(canvas)
         layout = resolve_layout(self.layout, scale, real.width)

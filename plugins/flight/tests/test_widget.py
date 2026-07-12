@@ -65,6 +65,47 @@ def test_frame_clock_moves_the_render(smallsign):
     assert lit(a) != lit(b)
 
 
+def test_reset_frame_does_not_rewind_rotation_clock():
+    # Regression: OverheadWidget.draw() used to derive clock_ms from
+    # FrameAwareBase._frame_count, which core's reset_frame() (called at
+    # every section visit) zeroes unconditionally — snapping the hero/
+    # dashboard rotation back to flight 0 mid-dwell whenever the section
+    # cycled back into view. _clock_ticks must survive reset_frame().
+    w = OverheadWidget(demo=True)
+    for _ in range(100):
+        w.advance_frame()
+    assert w._clock_ticks == 100
+    assert w._frame_count == 100
+
+    w.reset_frame()
+
+    assert w._frame_count == 0, "reset_frame should still zero the base counter"
+    assert w._clock_ticks == 100, "reset_frame must not rewind the rotation clock"
+
+
+def test_reset_frame_then_advance_continues_clock():
+    w = OverheadWidget(demo=True)
+    for _ in range(40):
+        w.advance_frame()
+    w.reset_frame()
+    for _ in range(10):
+        w.advance_frame()
+    assert w._clock_ticks == 50
+    assert w._frame_count == 10
+
+
+def test_advance_frame_paused_does_not_advance_clock():
+    w = OverheadWidget(demo=True)
+    w.advance_frame()
+    w.pause_frame()
+    for _ in range(5):
+        w.advance_frame()
+    assert w._clock_ticks == 1, "paused advance_frame must not move the clock either"
+    w.resume_frame()
+    w.advance_frame()
+    assert w._clock_ticks == 2
+
+
 @pytest.mark.asyncio
 async def test_update_parses_via_monkeypatched_fetch(monkeypatch):
     payload = {

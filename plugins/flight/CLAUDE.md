@@ -54,12 +54,16 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
 - **All animation is a pure function of `clock_ms`.** Every layout renderer
   (`render_ticker`/`render_hero`/`render_dashboard`) takes `clock_ms: float` and derives all
   motion/rotation from it — scroll offset, dwell-rotation index, idle radar sweep — with no
-  hidden internal counters. `OverheadWidget.draw()` is the only
-  place `clock_ms` is produced: `clock_ms = self._frame_count * ENGINE_TICK_MS`, where
-  `_frame_count` comes from `FrameAwareBase` and is advanced by the engine once per tick
-  (never by the widget itself — see core's constraint #12). This keeps rendering
-  deterministic and makes every layout trivially testable by calling it twice with
-  different `clock_ms` values and diffing the canvas.
+  hidden internal counters. `OverheadWidget.draw()` is the only place `clock_ms` is produced:
+  `clock_ms = self._clock_ticks * ENGINE_TICK_MS`. `_clock_ticks` is a widget-owned counter
+  (NOT `FrameAwareBase._frame_count`) advanced by an `advance_frame()` override that calls
+  `super().advance_frame(visit_id=visit_id)` and then increments `_clock_ticks` (skipped while
+  `_frame_paused`, mirroring the base's own pause gate). `reset_frame()` is NOT overridden —
+  core's `ticker._show_one` calls it at every section visit and it zeroes `_frame_count`
+  unconditionally, but `_clock_ticks` is untouched by it, so the rotation clock (and hence the
+  hero/dashboard dwell index) survives a section re-entry instead of snapping back to flight 0
+  mid-dwell. This keeps rendering deterministic and makes every layout trivially testable by
+  calling it twice with different `clock_ms` values and diffing the canvas.
 
 - **Layout dispatch is a pure function too.** `resolve_layout(name, scale, phys_w) -> str`
   has no widget-instance state — `OverheadWidget.draw()` calls it fresh every tick with the
