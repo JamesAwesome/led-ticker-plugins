@@ -113,6 +113,7 @@ class TestFramesToTransitionReady:
     the widget returns raw remaining ticks, unclamped."""
 
     HERO_DWELL_TICKS = 4200 // 50  # hero DWELL_MS // ENGINE_TICK_MS = 84
+    DASHBOARD_DWELL_TICKS = 4800 // 50  # dashboard DWELL_MS // ENGINE_TICK_MS = 96
 
     def test_hero_ten_ticks_before_boundary(self, bigsign):
         w = OverheadWidget(demo=True)  # 4 demo flights
@@ -125,6 +126,23 @@ class TestFramesToTransitionReady:
         w = OverheadWidget(demo=True)
         w.draw(bigsign)
         w._clock_ticks = 2 * self.HERO_DWELL_TICKS  # pos == 0 -> already black
+        assert w.frames_to_transition_ready() == 0
+
+    def test_dashboard_ten_ticks_before_boundary(self, longboi):
+        # The dashboard dwell (4800ms / 96 ticks) differs from hero's
+        # (4200ms / 84): a swapped branch would return 10 only against the
+        # WRONG dwell here. 96-tick boundary minus 10 is NOT 10 ticks from
+        # any 84-tick multiple (86 % 84 = 2 -> hero math would say 82).
+        w = OverheadWidget(demo=True)
+        w.draw(longboi)  # 512px wide -> stashes _last_layout = "dashboard"
+        assert w._last_layout == "dashboard"
+        w._clock_ticks = self.DASHBOARD_DWELL_TICKS - 10
+        assert w.frames_to_transition_ready() == 10
+
+    def test_dashboard_exactly_at_boundary(self, longboi):
+        w = OverheadWidget(demo=True)
+        w.draw(longboi)
+        w._clock_ticks = 3 * self.DASHBOARD_DWELL_TICKS  # pos == 0 -> black
         assert w.frames_to_transition_ready() == 0
 
     def test_single_flight_never_settles(self, bigsign):
@@ -143,13 +161,14 @@ class TestFramesToTransitionReady:
         w._clock_ticks = 37
         assert w.frames_to_transition_ready() == 0
 
-    def test_never_raises_fresh_widget_no_flights(self):
-        # Fresh widget: never drawn (stash defaults to "ticker") and the
-        # empty-flights state forced on top — must return 0, never raise
-        # (base-method contract: a readiness check may never crash the
-        # render loop).
+    def test_fresh_widget_defers_to_ticker_default(self):
+        # Never-drawn widget: _last_layout defaults to "ticker", so the hook
+        # defers to the base and returns 0 even with the empty-flights state
+        # forced on top — and per the base-method contract it must never
+        # raise (a readiness check may never crash the render loop).
         w = OverheadWidget(demo=True)
         w._flights = []
+        assert w._last_layout == "ticker"
         assert w.frames_to_transition_ready() == 0
 
 
