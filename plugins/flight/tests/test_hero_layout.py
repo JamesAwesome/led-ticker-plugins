@@ -12,13 +12,19 @@ from led_ticker_flight.palette import (
     TYPE,
 )
 
+# Mid-dwell offset: with 2+ flights the fade-through-black zeroes brightness
+# at both dwell-window edges (see test_fade_layout.py), so tests that just
+# want a stable, fully-bright frame for a given flight index anchor here
+# instead of at the dwell boundary (clock_ms=0 / DWELL_MS, etc).
+MID = DWELL_MS // 2
+
 
 def lit(canvas_or_real):
     return dict(unwrap_to_real(canvas_or_real)._pixels)
 
 
 def test_fin_at_pinned_position(bigsign):
-    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=0)  # idx 0 = UA2341
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=MID)  # idx 0 = UA2341
     pixels = lit(bigsign)
     ua = AIRLINES["UA"]
     # fin bottom-left: r=27 -> leftX=0 -> pixel at (4, 3+27) in c1
@@ -28,7 +34,7 @@ def test_fin_at_pinned_position(bigsign):
 
 
 def test_hero_ident_is_white_hires_band(bigsign):
-    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=0)
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=MID)
     white = [(x, y) for (x, y), c in lit(bigsign).items() if c == IDENT]
     in_band = [p for p in white if 35 <= p[0] <= 200 and 1 <= p[1] <= 30]
     assert len(in_band) > 50, "hero callsign not present as hires white pixels"
@@ -37,13 +43,13 @@ def test_hero_ident_is_white_hires_band(bigsign):
 def test_rotation_advances_at_dwell(bigsign):
     a = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
     b = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
-    render_hero(a, SAMPLE_AIRCRAFT, clock_ms=0)  # UA2341
-    render_hero(b, SAMPLE_AIRCRAFT, clock_ms=DWELL_MS + 1)  # DL815
+    render_hero(a, SAMPLE_AIRCRAFT, clock_ms=MID)  # UA2341
+    render_hero(b, SAMPLE_AIRCRAFT, clock_ms=DWELL_MS + MID)  # DL815
     assert lit(a) != lit(b)
 
 
 def test_paging_dots_current_index(bigsign):
-    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=0)
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=MID)
     pixels = lit(bigsign)
     n = 4
     x0 = 256 - n * 8 - 4
@@ -54,7 +60,7 @@ def test_paging_dots_current_index(bigsign):
 
 def test_vr_level_bar_for_level_flight(bigsign):
     # WN88 (idx 2) has vr=0 -> level bar, amber
-    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=2 * DWELL_MS + 1)
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=2 * DWELL_MS + MID)
     pixels = lit(bigsign)
     amber_low = [
         (x, y)
@@ -88,7 +94,7 @@ def test_metrics_line_dist_and_track_land_on_canvas(bigsign):
     the absolute end-x instead of the advance width, so the metrics-line
     `x += hires(...) + gap` chain double-counted x — DIST was never painted
     (walked off the 256-px canvas) and TRACK was clipped at the right edge."""
-    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=0)  # idx 0 = UA2341
+    render_hero(bigsign, SAMPLE_AIRCRAFT, clock_ms=MID)  # idx 0 = UA2341
     pixels = lit(bigsign)
     dist_xs = [x for (x, _), c in pixels.items() if c == DIST]
     assert dist_xs, "DIST field never painted"

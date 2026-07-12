@@ -2,7 +2,7 @@
 
 A planes-overhead ADS-B flight tracker **plugin** for [led-ticker](https://github.com/JamesAwesome/led-ticker). It contributes a single `flight.overhead` widget that shows nearby aircraft — callsign, aircraft type, altitude + climb/descend cue, ground speed, track, and distance/bearing — pulled from the free, keyless [adsb.lol](https://adsb.lol/) API, in the visual language of an airport departures board.
 
-The widget renders in one of three layouts depending on sign shape — a scrolling single-line crawl on a scale-1 sign, or a hi-res single-flight hero / wide multi-column dashboard on a scale-4 sign — chosen automatically or pinned explicitly. See `design/README.md` for the normative visual spec (palette, airline tail-fin marks, exact layout geometry) this widget faithfully reproduces. Several deliberate divergences from the prototype are documented in code: ticker back-fill for seamless looping, the empty-state label's fit-fallback, and a procedural 7×3 level bar in place of a glyph (each chosen where the prototype's own behavior contradicted its design prose or the hi-res charset it draws from); and the prototype's blinking live-refresh pulse dot is dropped entirely (no other led-ticker widget carries an unexplained status indicator, and poll health is already visible in the web UI's Status tab).
+The widget renders in one of three layouts depending on sign shape — a scrolling single-line crawl on a scale-1 sign, or a hi-res single-flight hero / wide multi-column dashboard on a scale-4 sign — chosen automatically or pinned explicitly. See `design/README.md` for the normative visual spec (palette, airline tail-fin marks, exact layout geometry) this widget faithfully reproduces. Several deliberate divergences from the prototype are documented in code: ticker back-fill for seamless looping, the empty-state label's fit-fallback, and a procedural 7×3 level bar in place of a glyph (each chosen where the prototype's own behavior contradicted its design prose or the hi-res charset it draws from); the prototype's blinking live-refresh pulse dot is dropped entirely (no other led-ticker widget carries an unexplained status indicator, and poll health is already visible in the web UI's Status tab); and `hero`/`dashboard` fade the whole card through black for 200ms at each end of a flight's dwell window when 2+ flights are tracked (a hardware-review finding — a hard cut between rotating flights read as a glitch on the physical panel; see Layouts below).
 
 ## Prerequisites
 
@@ -67,6 +67,8 @@ No font/color knobs — the design handoff pins them (see `design/README.md`); t
 - **`dashboard`** — the widescreen layout: hero ident on the left, four labelled metric columns (altitude, speed, track, distance) filling the rest of the width. Targets wide hi-res signs (scale > 1, >= 400 physical px — e.g. longboi).
 
 `layout = "auto"` (the default) resolves at draw time from the canvas's scale and physical width, so the same config works unmodified across smallsign/bigsign/longboi deploys.
+
+With 2 or more tracked flights, `hero`/`dashboard` fade the entire card through black for 200ms at the start and end of each flight's dwell window (0.4s total spent near/at black per rotation) instead of cutting straight to the next flight. A single tracked flight is just held — it never fades.
 
 ## Data source
 

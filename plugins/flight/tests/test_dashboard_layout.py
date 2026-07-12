@@ -14,13 +14,16 @@ from led_ticker_flight.palette import (
     TYPE,
 )
 
+MID = DWELL_MS // 2  # see test_hero_layout.py's MID for why: avoids the
+# fade-through-black at dwell-window edges.
+
 
 def lit(canvas_or_real):
     return dict(unwrap_to_real(canvas_or_real)._pixels)
 
 
 def test_fin_and_hero(longboi):
-    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=0)
+    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=MID)
     pixels = lit(longboi)
     ua = AIRLINES["UA"]
     assert pixels[(6, 37)] == ua.c1  # fin bottom-left: y = 6 + 31
@@ -31,14 +34,14 @@ def test_fin_and_hero(longboi):
 
 
 def test_all_four_column_value_colors_present(longboi):
-    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=0)
+    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=MID)
     cols = set(lit(longboi).values())
     for semantic in (ALT, SPEED, TRACK, DIST, LABEL):
         assert semantic in cols, f"missing column color {semantic}"
 
 
 def test_columns_start_at_or_after_190(longboi):
-    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=0)
+    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=MID)
     label_px = [(x, y) for (x, y), c in lit(longboi).items() if c == LABEL]
     # labels at y8..18; paging dots are lower
     col_labels = [p for p in label_px if p[1] < 20]
@@ -50,8 +53,8 @@ def test_rotation_dwell_4800(longboi):
 
     a = ScaledCanvas(HeadlessCanvas(512, 64), scale=4, content_height=16)
     b = ScaledCanvas(HeadlessCanvas(512, 64), scale=4, content_height=16)
-    render_dashboard(a, SAMPLE_AIRCRAFT, clock_ms=DWELL_MS - 1)
-    render_dashboard(b, SAMPLE_AIRCRAFT, clock_ms=DWELL_MS + 1)
+    render_dashboard(a, SAMPLE_AIRCRAFT, clock_ms=MID)
+    render_dashboard(b, SAMPLE_AIRCRAFT, clock_ms=DWELL_MS + MID)
     assert lit(a) != lit(b)
 
 
@@ -80,7 +83,7 @@ def test_alt_and_speed_columns_do_not_collide(longboi):
     double-counted x — the ALT value column overlapped the DIST column for
     climbing/descending flights. Assert ALT stays strictly left of SPEED and
     that DIST is actually painted."""
-    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=0)  # idx 0 = UA2341
+    render_dashboard(longboi, SAMPLE_AIRCRAFT, clock_ms=MID)  # idx 0 = UA2341
     pixels = lit(longboi)
     alt_xs = [x for (x, _), c in pixels.items() if c == ALT]
     speed_xs = [x for (x, _), c in pixels.items() if c == SPEED]

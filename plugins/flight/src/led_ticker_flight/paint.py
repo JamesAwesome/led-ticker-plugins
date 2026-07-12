@@ -25,6 +25,12 @@ from led_ticker_flight.palette import IDENT, IDLE, LABEL, RGB
 LEVEL_BAR_W = 7
 LEVEL_BAR_H = 3
 
+# Fade-through-black between rotating flights on hero/dashboard (hardware
+# review: a hard cut between flights read as a glitch on the physical panel).
+# See hero_layout.render_hero / dashboard_layout.render_dashboard for the
+# brightness formula this feeds.
+FADE_MS = 200.0
+
 
 def phys_wrap(canvas):
     real = unwrap_to_real(canvas)
@@ -61,21 +67,23 @@ def hires(
     return draw_text(shim, font, text, x, y_top + font.ascent, dim(rgb, bright)) - x
 
 
-def paging_dots(real, scale: int, n: int, cur: int, x: int, y: int) -> None:
+def paging_dots(
+    real, scale: int, n: int, cur: int, x: int, y: int, bright: float = 1.0
+) -> None:
     def sink(gx, gy, rgb, b):
         px(real, gx, gy, rgb, b)
 
     step = 2 * scale
     for i in range(n):
         color = IDENT if i == cur else LABEL
-        draw_glyph(sink, "dot", x + i * step, y, color, expand=scale)
+        draw_glyph(sink, "dot", x + i * step, y, color, bright=bright, expand=scale)
 
 
-def level_bar(real, x: int, y_top: int, rgb: RGB) -> int:
+def level_bar(real, x: int, y_top: int, rgb: RGB, bright: float = 1.0) -> int:
     """Procedural stand-in for the level (▬) glyph — not in the hires charset."""
     for yy in range(LEVEL_BAR_H):
         for xx in range(LEVEL_BAR_W):
-            px(real, x + xx, y_top + yy, rgb)
+            px(real, x + xx, y_top + yy, rgb, bright)
     return LEVEL_BAR_W
 
 

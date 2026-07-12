@@ -36,7 +36,22 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   (`live` color, top-right corner, ~10 s duty cycle) is dropped entirely — no other led-ticker
   widget carries an unexplained status indicator, and poll health/staleness is already visible
   in the web UI's Status tab. `palette.LIVE` stays defined (the palette module is a verbatim
-  port of the handoff's color table) but has no consumer in this package.
+  port of the handoff's color table) but has no consumer in this package. Also: `hero`/
+  `dashboard` fade the whole card through black between rotating flights (below) — a
+  hardware-review addition with no handoff counterpart.
+
+- **Fade-through-black between rotating flights (`hero`/`dashboard` only).** Guarded by
+  `len(flights) >= 2` — a single held flight is never dimmed, and the empty state never
+  fades. Both `render_hero` and `render_dashboard` compute `pos = clock_ms % DWELL_MS` then
+  `b = max(0.0, min(1.0, pos / FADE_MS, (DWELL_MS - pos) / FADE_MS))` (`paint.FADE_MS = 200.0`):
+  a 200ms ramp up from black at the start of each dwell window and a 200ms ramp down to black
+  at its end (0.4s total near/at black per rotation, `b == 0.0` exactly at the dwell boundary).
+  `b` is threaded through every paint call for the card: `draw_fin(..., bright=b)`, every
+  `hires(..., bright=b)` call, `level_bar(..., bright=b)`, and `paging_dots(..., bright=b)` —
+  miss one and that element pops to full brightness through the fade, which is the kind of
+  thing only a hardware/GIF check catches (see `feedback_visual_validation_gifs` in led-ticker
+  core memory). `ticker_layout.render_ticker` intentionally has no fade — a continuous crawl
+  has no dwell boundaries to fade across.
 
 - **The `js_round` rule.** All handoff geometry was authored against JavaScript's
   `Math.round` (half-up). Python's built-in `round()` is banker's-rounding (round-half-to-even)
