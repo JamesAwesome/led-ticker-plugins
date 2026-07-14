@@ -60,9 +60,8 @@ async def test_demo_start_builds_stories_without_token():
 
 @pytest.mark.asyncio
 async def test_update_live_updates_shared_quotes(monkeypatch):
-    widget = await StocksTicker.start(
-        symbols=["AAPL"], session=mock.Mock(), demo=False, token="tok"
-    )
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    widget = await StocksTicker.start(symbols=["AAPL"], session=mock.Mock(), demo=False)
 
     async def fake_quote(sym):
         return {"c": 200.0, "d": 5.0, "dp": 2.5, "pc": 195.0}
@@ -75,3 +74,39 @@ async def test_update_live_updates_shared_quotes(monkeypatch):
     await widget.update()
     assert widget.feed_stories[0].quotes["AAPL"].price == 200.0
     assert widget._state_ref[0] is MarketState.OPEN
+
+
+@pytest.mark.asyncio
+async def test_config_token_is_ignored(monkeypatch):
+    """A config-supplied `token` kwarg (simulating `token = "..."` in
+    config.toml, which core's factory would bind from `start()`'s
+    signature if the parameter still existed) must never reach the
+    Finnhub client. The token comes from env (FINNHUB_API_TOKEN) only.
+    """
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "real-env-token")
+    widget = await StocksTicker.start(
+        symbols=["AAPL"],
+        session=mock.Mock(),
+        demo=False,
+        token="LEAK",
+    )
+    assert widget.token != "LEAK"
+    assert widget.token == "real-env-token"
+    assert widget._client is not None
+    assert widget._client._token != "LEAK"
+    assert widget._client._token == "real-env-token"
+
+
+@pytest.mark.asyncio
+async def test_config_token_is_ignored_no_env(monkeypatch):
+    """Same invariant with no env token set: routes to demo, never 'LEAK'."""
+    monkeypatch.delenv("FINNHUB_API_TOKEN", raising=False)
+    widget = await StocksTicker.start(
+        symbols=["AAPL"],
+        session=mock.Mock(),
+        demo=False,
+        token="LEAK",
+    )
+    assert widget.token != "LEAK"
+    assert widget.token == ""
+    assert widget._client is None  # empty token routes to the demo feed

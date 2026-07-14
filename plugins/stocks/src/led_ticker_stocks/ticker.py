@@ -138,24 +138,30 @@ class StocksTicker:
         padding: int = 6,
         demo: bool = False,
         update_interval: int = 60,
-        token: str | None = None,
         **kwargs: Any,
     ) -> Self:
-        # `token` may be injected explicitly (tests, alternate call sites);
-        # otherwise resolved from the env — never from config (secrets
-        # convention, see CLAUDE.md "Secrets belong in .env, not config.toml").
-        resolved_token = token if token else os.getenv("FINNHUB_API_TOKEN", "")
+        # `token` is NOT a `start()` parameter — core's widget factory
+        # unions `start()`'s signature into the allowed config keys, so a
+        # parameter here would let `token = "..."` in config.toml override
+        # the env secret and get bound straight into HTTP requests. The
+        # Finnhub token comes from env ONLY (see CLAUDE.md "Secrets belong
+        # in .env, not config.toml"). Defense in depth: even if a config-
+        # supplied `token` arrives via **kwargs, it's filtered out below
+        # (mirrors crypto.coingecko's `api_key` handling).
+        resolved_token = os.getenv("FINNHUB_API_TOKEN", "")
         # Rate discipline: N quote calls + 1 status call must stay under 60/min.
         effective = max(update_interval, len(symbols) + 1)
+        valid = {f.name for f in attrs.fields(cls)}
         widget = cls(
             symbols=list(symbols),
             session=session,
-            token=resolved_token,
             demo=demo,
             layout=layout,
             green_up=green_up,
             padding=padding,
             update_interval=effective,
+            **{k: v for k, v in kwargs.items() if k in valid and k != "token"},
+            token=resolved_token,
         )
         # Tolerate a failed INITIAL fetch (e.g. a rate-limited or unreachable
         # Finnhub at boot) so the widget still constructs and the monitor
