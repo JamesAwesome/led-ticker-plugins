@@ -1,0 +1,67 @@
+# Longboi SMOKE TEST — stocks.ticker equity crawl at scale 4 (pre-merge branch)
+#
+# Phase 1 ships the CRAWL only; the hi-res trading DASHBOARD for the longboi is
+# Phase 2. So this smoke forces `layout = "crawl"` — chunky scale-4 BDF text
+# scrolling across the full 512px width, NOT the dashboard yet. Expected for P1.
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.9
+#   - stocks plugin (NOT yet released — Phase 1 PR #42). Add to
+#     config/requirements-plugins.txt the git ref:
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase1#subdirectory=plugins/stocks
+#   - Section 1 (demo) needs NO token. Section 2 (live) needs:
+#       FINNHUB_API_TOKEN=xxxxx   in .env  (secrets are env-only, never here)
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR, section by section:
+#   1 DEMO FEED   — AAPL / MSFT / NVDA / TSLA crawl right->left across the full
+#                   512px width at scale 4, vertically centered, looping
+#                   seamlessly. Per symbol: WHITE ticker -> AMBER price -> GREEN ▲
+#                   / RED ▼ change block. FULL brightness (demo=OPEN); more
+#                   symbols fit on-canvas at once than the smaller signs.
+#   2 LIVE FEED   — real prices; global brightness tracks market state (LIVE full /
+#                   PRE·AH ~0.85 / CLOSED ~0.45 + prices frozen at last close).
+#                   Bad symbol -> "SYM —". Prices refresh ~once a minute when open.
+#
+# NOTE (longboi color wiring): these panels wire HUB75 G→Red, R→Blue, B→Green,
+# so led_rgb_sequence = "BRG" is REQUIRED or the up/down green/red will look
+# wrong. If green reads as blue or red as green, that line is the first suspect.
+#
+# NOT here yet (Phase 2/3): hi-res dashboard, sparkline, watch column, state chip,
+# brand chips, price-flash. Phase 2 will auto-select the dashboard on this
+# geometry (drop the `layout` line) — for now the crawl override is intentional.
+#
+# If anything looks wrong: docs/visual-validation.md.
+
+[display]
+rows = 64
+cols = 128
+chain_length = 4
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+panel_type = "FM6126A"
+# Muen P2 panels wire HUB75 G-pin → Red LED, R-pin → Blue LED, B-pin → Green LED.
+led_rgb_sequence = "BRG"
+
+# --- 1: demo feed (offline, no token) -----------------------------------------
+[[playlist.section]]
+mode = "ticker"
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
+demo = true
+layout = "crawl"   # Phase 1: dashboard is Phase 2, so force the crawl on longboi
+
+# --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
+[[playlist.section]]
+mode = "ticker"
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD"]
+layout = "crawl"
+update_interval = 60

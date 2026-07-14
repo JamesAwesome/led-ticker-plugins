@@ -11,6 +11,7 @@ members = [
     "led-ticker-flight",
     "led-ticker-pool",
     "led-ticker-rss",
+    "led-ticker-stocks",
     "led-ticker-storefront",
     "led-ticker-telnet",
     "led-ticker-weather",
@@ -512,6 +513,37 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "feedparser", specifier = ">=6.0" },
     { name = "led-ticker-core", specifier = ">=2.1" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "led-ticker-stocks"
+source = { editable = "plugins/stocks" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "led-ticker-core" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp" },
+    { name = "led-ticker-core", specifier = ">=4.9" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
