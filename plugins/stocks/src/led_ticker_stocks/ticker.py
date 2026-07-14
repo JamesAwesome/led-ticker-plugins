@@ -17,7 +17,13 @@ from led_ticker_stocks.demo import DemoFeed
 from led_ticker_stocks.finnhub import FinnhubClient, parse_quote
 from led_ticker_stocks.layouts import LAYOUTS, resolve_layout
 from led_ticker_stocks.model import SymbolQuote
-from led_ticker_stocks.state import MarketState, state_from_status
+from led_ticker_stocks.state import MarketState, state_from_status, state_now_from_clock
+
+# Soft cap on configured symbols: each update() costs len(symbols) + 1
+# Finnhub requests, and the free tier is 60 req/min per token. Above this,
+# a short update_interval risks the per-token budget (see the rate rule in
+# CLAUDE.md); start() logs one warning rather than enforcing a hard limit.
+SYMBOL_SOFT_CAP = 20
 
 
 @attrs.define
@@ -150,6 +156,15 @@ class StocksTicker:
         # supplied `token` arrives via **kwargs, it's filtered out below
         # (mirrors crypto.coingecko's `api_key` handling).
         resolved_token = os.getenv("FINNHUB_API_TOKEN", "")
+        if len(symbols) > SYMBOL_SOFT_CAP:
+            logging.warning(
+                "stocks.ticker: %d symbols configured (soft cap %d) — Finnhub's "
+                "free tier is 60 req/min per token; cadence is bounded by "
+                "max(update_interval, len(symbols) + 1) so a large symbol list "
+                "may exceed the per-token budget",
+                len(symbols),
+                SYMBOL_SOFT_CAP,
+            )
         # Rate discipline: N quote calls + 1 status call must stay under 60/min.
         effective = max(update_interval, len(symbols) + 1)
         valid = {f.name for f in attrs.fields(cls)}
@@ -192,8 +207,16 @@ class StocksTicker:
         # suppression.
         assert self._client is not None, "stocks.ticker: live mode requires a client"
 
-        status = await self._client.fetch_market_status()
-        self._state_ref[0] = state_from_status(status)
+        try:
+            status = await self._client.fetch_market_status()
+            self._state_ref[0] = state_from_status(status)
+        except Exception as e:
+            logging.warning(
+                "stocks.ticker: market-status request failed (%s); "
+                "falling back to the US/Eastern clock",
+                e,
+            )
+            self._state_ref[0] = state_now_from_clock()
         if self._state_ref[0] is MarketState.CLOSED:
             logging.info("stocks.ticker: market closed — holding last prices")
             return  # frozen when closed (no quote calls)
@@ -203,9 +226,14 @@ class StocksTicker:
             payload = await self._client.fetch_quote(sym)
             fresh = parse_quote(sym, payload)
             existing = self._quotes[sym]
-            existing.price, existing.prev = fresh.price, fresh.prev
-            existing.d, existing.dp = fresh.d, fresh.dp
             if fresh.has_data:
+                existing.price, existing.prev = fresh.price, fresh.prev
+                existing.d, existing.dp = fresh.d, fresh.dp
                 existing.spark.append(fresh.price)
+            else:
+                logging.debug(
+                    "stocks.ticker: %s returned no data this tick — holding last price",
+                    sym,
+                )
             updated += 1
         logging.info("stocks.ticker updated: %d/%d symbols", updated, len(self.symbols))

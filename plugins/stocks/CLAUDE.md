@@ -49,8 +49,9 @@ src/led_ticker_stocks/
   finnhub.py           # FinnhubClient (quote + market-status GETs); parse_quote()
   model.py             # SymbolQuote + format_price/format_change/format_pct
   state.py             # MarketState enum + STATE_META (dim/label/color/pulses) +
-                       #   state_from_status() (Finnhub) + state_from_clock() (fallback, unused
-                       #   by the live path today — kept for a future no-status-endpoint path)
+                       #   state_from_status() (Finnhub) + state_from_clock()/
+                       #   state_now_from_clock() (US/Eastern wall-clock fallback, wired
+                       #   into update()'s market-status except branch)
   demo.py              # DemoFeed: seeded offline random-walk feed for demo=true / no-token
   _palette.py           # Semantic RGB palette (SYM/PRICE/UP/DOWN/FLAT/LABEL) + dim()
   layouts/
@@ -112,7 +113,9 @@ in `start()` before construction and stored as `self.update_interval` (passed to
 calls-when-closed rule below). Finnhub's free tier is 60 req/min **per API key**, not per
 widget instance — the README's rate-limit section documents that two signs or two
 Finnhub-backed widgets sharing one token divide the same budget; this code cannot see or
-enforce that cross-widget sharing, only the single-widget floor.
+enforce that cross-widget sharing, only the single-widget floor. `start()` also logs ONE
+`logging.warning` when `len(symbols) > SYMBOL_SOFT_CAP` (20) noting the free-tier 60/min
+budget and the `max(update_interval, N+1)` cadence — advisory only, does not clamp or reject.
 
 **No quote calls while the market is closed** — `update()` always fetches market status
 first; if `state_from_status(...)` resolves to `MarketState.CLOSED` it returns immediately
@@ -132,17 +135,31 @@ before touching `format_price`/`format_change`/`format_pct` — do not reorder t
 check to run after any arithmetic on `price`/`prev`. Tripwire:
 `test_no_data_placeholder_renders_without_raising` (`tests/test_render_smoke.py`).
 
+**A no-data tick never clobbers a good last-known quote** — in `update()`'s per-symbol loop,
+`existing.price/prev/d/dp` (and the spark append) are only overwritten when the FRESH parsed
+quote has `has_data`. A transient zeroed payload (e.g. Finnhub briefly returning `{"c": 0,
+"pc": 0}` mid-session for a normally-valid symbol) is logged at DEBUG and skipped — the
+symbol keeps rendering its last-known price for that tick instead of flashing the em-dash
+placeholder. This is orthogonal to the closed-market freeze above (that skips the whole
+per-symbol loop; this skips one symbol's write within it).
+
 **Market-state mapping: `closed = not isOpen`, else map `session`** —
 `state_from_status(payload)` treats ANY falsy `isOpen` (including a missing key) as
 `MarketState.CLOSED` — this correctly covers holidays and weekends where Finnhub's `session`
 key may be null or absent, without a separate holiday calendar. Only when `isOpen` is truthy
 does the code look at `session` (`"pre-market"` → `PRE`, `"regular"` → `OPEN`,
 `"post-market"` → `AFTER`; an unrecognized/missing session string while `isOpen` is true
-defaults to `OPEN`, not `CLOSED` — don't flip that default). `state_from_clock()` is a
-US/Eastern wall-clock fallback that exists in `state.py` but has **no live call site** today
-(`update()` always calls the Finnhub status endpoint) — it's retained for a future
-"status endpoint unreachable" fallback path; don't delete it as dead code without checking
-for that use case first.
+defaults to `OPEN`, not `CLOSED` — don't flip that default). `state_from_clock()` /
+`state_now_from_clock()` are the US/Eastern wall-clock fallback: `update()` wraps
+`fetch_market_status()` in try/except, and on ANY exception (timeout, non-2xx, malformed
+JSON) it logs a warning and sets `self._state_ref[0] = state_now_from_clock()` instead of
+propagating — the CLOSED-skip logic below then applies to the clock-derived state exactly
+as it would to a status-derived one. `state_from_clock(now_eastern)` is the pure/testable
+half (weekday + regular-session-window check); `state_now_from_clock()` is the thin runtime
+wrapper that supplies the real `datetime.now(zoneinfo.ZoneInfo("America/New_York"))`. Quote
+fetches (`fetch_quote`) are NOT wrapped this way — a per-symbol quote failure is expected to
+propagate (see the initial-fetch tolerance note in `start()` above); only the status call has
+a clock fallback.
 
 **`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.45` CLSD /
 `0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in

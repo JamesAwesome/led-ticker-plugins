@@ -2,6 +2,7 @@
 
 import datetime
 import enum
+import zoneinfo
 
 import attrs
 
@@ -57,3 +58,13 @@ def state_from_clock(now_eastern: datetime.datetime) -> MarketState:
     if 16 * 60 <= minutes < 20 * 60:
         return MarketState.AFTER
     return MarketState.CLOSED
+
+
+def state_now_from_clock() -> MarketState:
+    """`state_from_clock` against the real current US/Eastern wall-clock time.
+
+    Live call site: `StocksTicker.update()`'s market-status-fetch except
+    branch (status endpoint unreachable → fall back to the clock).
+    """
+    now_eastern = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    return state_from_clock(now_eastern)

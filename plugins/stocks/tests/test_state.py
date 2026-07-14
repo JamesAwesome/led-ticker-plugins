@@ -6,6 +6,7 @@ from led_ticker_stocks.state import (
     MarketState,
     state_from_clock,
     state_from_status,
+    state_now_from_clock,
 )
 
 ET = zoneinfo.ZoneInfo("America/New_York")
@@ -46,6 +47,17 @@ def test_clock_boundaries():
 def test_clock_weekend_is_closed():
     sat = datetime.datetime(2026, 7, 11, 11, 0, tzinfo=ET)
     assert state_from_clock(sat) is MarketState.CLOSED
+
+
+def test_state_now_from_clock_matches_explicit_now():
+    """state_now_from_clock() is just state_from_clock() supplied with the
+    real US/Eastern now — cross-check against an independently-computed
+    call (tiny race window at the exact minute boundary is negligible).
+    """
+    result = state_now_from_clock()
+    expected = state_from_clock(datetime.datetime.now(ET))
+    assert result in MarketState
+    assert result is expected
 
 
 def test_state_meta_dims_and_labels():
