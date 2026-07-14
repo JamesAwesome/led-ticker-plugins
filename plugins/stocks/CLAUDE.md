@@ -161,11 +161,13 @@ inside `_StockStory.draw()` on first draw (cached to `self._resolved` so it only
 once per story, not once per frame). Do not try to move the width check into
 `validate_config` — there's nothing to check it against yet.
 
-**`green_up` is plumbed but currently a no-op** — `StocksTicker.green_up` /
-`_StockStory.green_up` are threaded from config through construction, but
-`draw_crawl_story` does not read it (colors are hardcoded green-for-positive /
-red-for-negative). It's reserved for a future "invert colors" knob. Don't document it as a
-working option in the README until `crawl.py` actually consumes it.
+**`green_up` is wired end-to-end** — `StocksTicker.green_up` / `_StockStory.green_up` are
+threaded from config through construction and into `draw_crawl_story(..., green_up=...)`,
+which picks `up_color`/`down_color` from `pal.UP`/`pal.DOWN` (swapped when `green_up=False`)
+before applying `pal.dim(...)`. Flat/no-data rendering is unaffected. Tripwire:
+`test_green_up_false_flips_up_quote_color` (`tests/test_render_smoke.py`) — a pixel-level
+test proving the SAME up-quote renders green-dominant at `green_up=True` and red-dominant at
+`green_up=False`.
 
 **`_StockStory` is `FrameAwareBase`** — it calls `self.frame_for("crawl")` and passes the
 result to `draw_crawl_story` as `frame=`, but Phase 1's renderer doesn't yet do anything

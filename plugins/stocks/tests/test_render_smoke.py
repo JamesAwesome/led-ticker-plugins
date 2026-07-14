@@ -131,6 +131,50 @@ def test_up_vs_down_change_color_flips():
     )
 
 
+def test_green_up_false_flips_up_quote_color():
+    """`green_up=False` must flip the UP-quote's change color from green to
+    red — proving the flag actually reaches the color choice rather than
+    being threaded through and ignored (the Phase-1 review finding this
+    closes).
+    """
+    canvas_default = _canvas()
+    canvas_flipped = _canvas()
+    quote = _up_quote()
+
+    draw_crawl_story(canvas_default, quote, MarketState.OPEN, 0, frame=0, green_up=True)
+    draw_crawl_story(
+        canvas_flipped, quote, MarketState.OPEN, 0, frame=0, green_up=False
+    )
+
+    assert canvas_default._pixels != canvas_flipped._pixels
+
+    lit_default = _lit_pixels(canvas_default)
+    lit_flipped = _lit_pixels(canvas_flipped)
+
+    # NOTE: PRICE is amber (255, 180, 0) — R>G — so it's expected to
+    # contribute red-dominant pixels in BOTH renders. We only assert on
+    # green-dominant presence/absence, since UP (60, 220, 60) is the one
+    # color with G>R and no other field in the segment produces that.
+    green_dominant_default = any(rgb[1] > rgb[0] for rgb in lit_default.values())
+    assert green_dominant_default, (
+        "expected green_up=True (default) to render the up-quote change as "
+        "green-dominant (UP color)"
+    )
+
+    red_dominant_flipped = any(rgb[0] > rgb[1] for rgb in lit_flipped.values())
+    green_dominant_flipped = any(rgb[1] > rgb[0] for rgb in lit_flipped.values())
+    assert red_dominant_flipped, (
+        "expected green_up=False to render the SAME up-quote change as "
+        "red-dominant (DOWN color) — the flag should invert the up/down "
+        "colors"
+    )
+    assert not green_dominant_flipped, (
+        "green_up=False render should have no green-dominant pixels — found "
+        "some, meaning the flag isn't actually flipping the change color "
+        "(the UP color leaked through)"
+    )
+
+
 def test_no_data_placeholder_renders_without_raising():
     canvas = _canvas()
     quote = SymbolQuote(sym="ZZZZ", price=0.0, prev=0.0)

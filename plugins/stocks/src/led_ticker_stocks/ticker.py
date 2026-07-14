@@ -52,6 +52,7 @@ class _StockStory(FrameAwareBase):
             frame=self.frame_for("crawl"),
             y_offset=y_offset,
             end_padding=self.padding,
+            green_up=self.green_up,
         )
         return canvas, end
 

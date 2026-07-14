@@ -60,7 +60,8 @@ New to led-ticker configs? The [first-config tutorial](https://docs.ledticker.de
 | `layout` | string | auto | Force a specific render layout. Phase 1 registers only `"crawl"` — omit this field and let the widget auto-select (it currently always resolves to `crawl` on a ≤160px-wide canvas and raises `NotImplementedError` on anything wider, since `card`/`dashboard` aren't shipped yet). |
 | `demo` | bool | `false` | Run against a seeded, offline random-walk feed instead of Finnhub — no token, no network call. See [Demo mode](#demo-mode-no-token-required). |
 | `update_interval` | int | `60` | Seconds between Finnhub polls. The widget silently raises this to `len(symbols) + 1` if you set it lower — see [Rate limits](#rate-limits--api-token) below. |
-| `padding` | int | `6` | Horizontal spacing (logical px) between the symbol/price/change fields and between symbols in the crawl. |
+| `padding` | int | `6` | Horizontal spacing (logical px) after each symbol's segment, before the next symbol. |
+| `green_up` | bool | `true` | Set `false` to flip the up/down colors (green-down/red-up) for non-US market conventions. |
 
 At least `symbols` must be a non-empty list — the widget fails at config validation otherwise (`led-ticker validate` catches this before boot).
 

@@ -24,6 +24,7 @@ def draw_crawl_story(
     frame: int,
     y_offset: int = 0,
     end_padding: int = 6,
+    green_up: bool = True,
 ) -> int:
     dim = STATE_META[state].dim
     baseline = compute_baseline(FONT_DEFAULT, canvas) + y_offset
@@ -50,10 +51,12 @@ def draw_crawl_story(
     )
     cursor += _GAP
 
-    # arrow + change + pct (green/red)
+    # arrow + change + pct (green/red, or flipped for non-US markets)
     chg = quote.change
+    up_color = pal.UP if green_up else pal.DOWN
+    down_color = pal.DOWN if green_up else pal.UP
     chg_color = pal.dim(
-        pal.UP if (chg or 0) > 0 else pal.DOWN if (chg or 0) < 0 else pal.FLAT, dim
+        up_color if (chg or 0) > 0 else down_color if (chg or 0) < 0 else pal.FLAT, dim
     )
     cursor = draw_text(canvas, FONT_DEFAULT, _arrow(chg), cursor, baseline, chg_color)
     cursor += 2
