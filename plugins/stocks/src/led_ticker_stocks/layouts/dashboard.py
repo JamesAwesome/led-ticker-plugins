@@ -124,7 +124,8 @@ def draw_dashboard_story(
         total,
         focus_index,
         434,
-        58 + yoff,
+        real.height - scale - 1 + yoff,
+        scale=scale,
         dim_color=pal.dim(pal.LABEL, dim),
         active_color=pal.dim(pal.SYM, dim),
     )

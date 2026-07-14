@@ -48,9 +48,26 @@ def test_px_bounds_checked():
 
 def test_paging_dots_marks_current():
     real = HeadlessBackend(64, 16).create_canvas()
-    paging_dots(real, 4, 1, 0, 0, dim_color=pal.LABEL, active_color=pal.SYM)
+    paging_dots(real, 4, 1, 0, 0, scale=2, dim_color=pal.LABEL, active_color=pal.SYM)
     # 4 dots drawn; the current (index 1) uses the brighter active color
     assert any(v == (255, 255, 255) for v in real._pixels.values())
+
+
+def test_paging_dots_are_scale_sized_blocks_like_flight():
+    # Each dot is a scale x scale block spaced 2*scale apart (matches the
+    # flight tracker's paging-dot size/shape), not a single pixel.
+    real = HeadlessBackend(64, 16).create_canvas()
+    scale = 4
+    paging_dots(
+        real, 3, 0, 0, 0, scale=scale, dim_color=pal.LABEL, active_color=pal.SYM
+    )
+    active = {xy for xy, v in real._pixels.items() if v == (255, 255, 255)}
+    # dot 0 (active) fills the full scale x scale block at the origin
+    assert active == {(dx, dy) for dx in range(scale) for dy in range(scale)}
+    # dot 1 starts one 2*scale step over (a gap between blocks)
+    lit_x = {x for (x, y) in real._pixels}
+    assert scale not in lit_x  # column `scale` is the gap before the next dot
+    assert 2 * scale in lit_x  # dot 1 begins at 2*scale
 
 
 def test_hires_substitutes_inter_missing_minus():

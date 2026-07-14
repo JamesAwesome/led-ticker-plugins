@@ -92,8 +92,22 @@ def px(real, x: int, y: int, color: Color) -> None:
 
 
 def paging_dots(
-    real, n: int, cur: int, x: int, y: int, *, dim_color: Color, active_color: Color
+    real,
+    n: int,
+    cur: int,
+    x: int,
+    y: int,
+    *,
+    scale: int,
+    dim_color: Color,
+    active_color: Color,
 ) -> None:
+    """Draw n paging dots, each a scale×scale block spaced 2·scale apart —
+    the same size/shape as the flight tracker's dots (flight paint.paging_dots).
+    Current dot = active_color, the rest dim_color."""
+    step = 2 * scale
     for i in range(n):
         c = active_color if i == cur else dim_color
-        px(real, x + i * 2, y, c)
+        for dy in range(scale):
+            for dx in range(scale):
+                px(real, x + i * step + dx, y + dy, c)

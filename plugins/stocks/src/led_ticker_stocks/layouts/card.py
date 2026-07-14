@@ -90,18 +90,24 @@ def draw_card_story(
             bold=True,
         )
 
-    # state chip label + paging dots (static; chip pulse is Phase 3)
+    # Right-hand state zone, stacked top->bottom so nothing overlaps:
+    #   [state label]   (+ "AT CLOSE" below it when closed)
+    #   [paging dots]   flight-shaped, bottom-right corner
+    # (static; the chip pulse is Phase 3)
     meta = STATE_META[state]
     state_color = pal.dim(make_color(*meta.chip_rgb), dim)
-    hires(shim, meta.chip_label, 192, 42 + yoff, state_color, 9, bold=False)
+    if state is MarketState.CLOSED:
+        hires(shim, meta.chip_label, 192, 37 + yoff, state_color, 9, bold=False)
+        hires(shim, "AT CLOSE", 192, 47 + yoff, pal.dim(pal.LABEL, dim), 8, bold=False)
+    else:
+        hires(shim, meta.chip_label, 192, 47 + yoff, state_color, 9, bold=False)
     paging_dots(
         real,
         total,
         focus_index,
-        w - total * 8 - 4,
-        real.height - 6 + yoff,
+        w - total * (2 * scale) - 4,
+        real.height - scale - 1 + yoff,
+        scale=scale,
         dim_color=pal.dim(pal.LABEL, dim),
         active_color=pal.dim(pal.SYM, dim),
     )
-    if state is MarketState.CLOSED:
-        hires(shim, "AT CLOSE", 192, 53 + yoff, pal.dim(pal.LABEL, dim), 8, bold=False)
