@@ -69,6 +69,18 @@ At least `symbols` must be a non-empty list — the widget fails at config valid
 
 Set `demo = true` (or simply omit `FINNHUB_API_TOKEN` from the environment — an unset token silently routes to the same demo feed, it is not an error) to drive the widget from a deterministic, seeded random-walk price generator instead of live Finnhub data. Useful for previewing the widget, `render-demo` GIFs, or a sign that doesn't have a Finnhub token yet. See [`docs/demo.toml`](docs/demo.toml) for a runnable example.
 
+### Smoke-test configs (per sign)
+
+Ready-to-run hardware smoke configs live in [`examples/`](examples/), one per sign form factor — each with a token-free demo section plus a live section, and a "what to look for" header:
+
+| File | Sign | Notes |
+|---|---|---|
+| [`config.stocks-smoke.smallsign.toml`](examples/config.stocks-smoke.smallsign.toml) | 160×16 | crawl auto-selected (native Phase-1 target) |
+| [`config.stocks-smoke.bigsign.toml`](examples/config.stocks-smoke.bigsign.toml) | 256×64 | `layout = "crawl"` forced (card is Phase 2) |
+| [`config.stocks-smoke.longboi.toml`](examples/config.stocks-smoke.longboi.toml) | 512×64 | `layout = "crawl"` forced (dashboard is Phase 2) |
+
+Copy one to `config/config.toml` on the sign, `led-ticker validate` it, then `make restart`.
+
 ### Rate limits & API token
 
 Get a free API token at [finnhub.io/register](https://finnhub.io/register) and supply it via the `FINNHUB_API_TOKEN` environment variable — **never** put it in `config.toml`; secrets are env-only in led-ticker (see the [Plugins docs](https://docs.ledticker.dev/plugins/)):

@@ -1,0 +1,59 @@
+# Smallsign SMOKE TEST — stocks.ticker equity crawl (pre-merge branch)
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.9 (already running everywhere)
+#   - stocks plugin (NOT yet released — Phase 1 PR #42). Add to
+#     config/requirements-plugins.txt (constraint-based install), the git ref:
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase1#subdirectory=plugins/stocks
+#   - Section 1 (demo) needs NO token. Section 2 (live) needs a Finnhub free
+#     token in .env:  FINNHUB_API_TOKEN=xxxxx   (secrets are env-only, never here)
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR, section by section:
+#   1 DEMO FEED   — AAPL / MSFT / NVDA / TSLA crawl right->left continuously at
+#                   26 px/s and LOOP SEAMLESSLY (no blank gap). Per symbol:
+#                   WHITE ticker -> AMBER price -> change block colored GREEN ▲
+#                   (up) / RED ▼ (down): arrow + signed change + signed percent.
+#                   Demo state is OPEN, so FULL brightness; prices random-walk so
+#                   the change colors flicker up/down over time.
+#   2 LIVE FEED   — real US-equity prices from Finnhub. Global brightness tracks
+#                   market state: LIVE = full, PRE/AH = ~0.85, CLOSED = ~0.45
+#                   (noticeably dimmer) with prices FROZEN at the last close.
+#                   -> Run this evening/weekend and expect the DIM closed look
+#                      with static prices; run during market hours for full
+#                      brightness + prices refreshing roughly once a minute.
+#                   A bad/unknown symbol shows "SYM —" (no crash, no divide).
+#
+# NOT in this crawl yet (Phase 2/3): the state chip, sparkline, brand chips, and
+# the Bloomberg price-flash. Don't look for them — this is the crawl only.
+#
+# If anything looks wrong: docs/visual-validation.md.
+
+[display]
+rows = 16
+cols = 32
+chain_length = 5
+brightness = 60
+gpio_slowdown = 2
+hardware_mapping = "adafruit-hat"
+
+# --- 1: demo feed (offline, no token) -----------------------------------------
+[[playlist.section]]
+mode = "ticker"
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
+demo = true
+# green_up = false   # uncomment to flip to red-up / green-down (non-US convention)
+
+# --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
+[[playlist.section]]
+mode = "ticker"
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL"]
+update_interval = 60
