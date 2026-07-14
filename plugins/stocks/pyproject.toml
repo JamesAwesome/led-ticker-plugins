@@ -7,12 +7,17 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.14"
 authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
-keywords = ["led-ticker", "led-ticker-plugin", "raspberry-pi", "led-matrix", "stocks", "equities", "finnhub", "ticker"]
+keywords = ["led-ticker", "led-ticker-plugin", "raspberry-pi", "led-matrix", "rgb-led-matrix", "stocks", "equities", "finnhub", "ticker"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Hardware",
     "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
 ]
 dependencies = ["led-ticker-core>=4.9", "aiohttp"]
 
@@ -24,8 +29,10 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-cov>=5.0", "pre-commit>=4.
 
 [project.urls]
 Homepage = "https://docs.ledticker.dev"
+Documentation = "https://docs.ledticker.dev/plugins/"
 Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
 Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
+Changelog = "https://github.com/JamesAwesome/led-ticker-plugins/releases"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

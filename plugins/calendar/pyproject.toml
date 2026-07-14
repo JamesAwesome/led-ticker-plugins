@@ -20,6 +20,7 @@ keywords = [
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
@@ -53,8 +54,10 @@ dev = [
 
 [project.urls]
 Homepage = "https://docs.ledticker.dev"
+Documentation = "https://docs.ledticker.dev/plugins/"
 Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
 Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
+Changelog = "https://github.com/JamesAwesome/led-ticker-plugins/releases"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
