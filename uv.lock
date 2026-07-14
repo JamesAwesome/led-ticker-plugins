@@ -8,6 +8,7 @@ members = [
     "led-ticker-calendar",
     "led-ticker-crypto",
     "led-ticker-flair",
+    "led-ticker-flight",
     "led-ticker-pool",
     "led-ticker-rss",
     "led-ticker-stocks",
@@ -354,7 +355,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-core"
-version = "4.13.0"
+version = "4.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -363,9 +364,9 @@ dependencies = [
     { name = "pillow" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/46/a2/12a0b378020614191cc40c1170b4a69cb4934c631fec0664ccc69ff1650f/led_ticker_core-4.13.0.tar.gz", hash = "sha256:05c750f1b0f9bae28488d379bb92793cbe854c195a829a3cf7e3773dd0db750a", size = 27827206, upload-time = "2026-07-13T22:50:47.337Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/ec/cf5cd00ad398a0e0dd481773779ce3823787ce760627c1ce87ebdccd41d5/led_ticker_core-4.11.0.tar.gz", hash = "sha256:d369ee8b7ad813d003807336405a8c5c16c57c76d7af9434429ca3c0e94000ea", size = 25646743, upload-time = "2026-07-11T14:17:56.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/26/90f62ff20f0206f3a09f4cdad387da4bfd189229baf6cb01baed20be5714/led_ticker_core-4.13.0-py3-none-any.whl", hash = "sha256:9cf9fb08c42e8238959c8347ae44797b55722c5c98c62bb35a8f2752f3b6d76b", size = 1039483, upload-time = "2026-07-13T22:50:45.293Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/2a/74e39f8ad40e2c57e9b663fd5f02ac622cb215c46ad3068ee7edb079106e/led_ticker_core-4.11.0-py3-none-any.whl", hash = "sha256:c7f54616def5556d963e620fc38e8814a10de46d9491e216412a41b9ab5b9c7d", size = 1033487, upload-time = "2026-07-11T14:17:54.087Z" },
 ]
 
 [[package]]
@@ -420,6 +421,35 @@ dev = [
 requires-dist = [
     { name = "led-ticker-core", specifier = ">=4.10" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "led-ticker-flight"
+source = { editable = "plugins/flight" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "led-ticker-core" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9" },
+    { name = "led-ticker-core", specifier = ">=4.8" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
