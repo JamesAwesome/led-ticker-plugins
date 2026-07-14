@@ -14,7 +14,9 @@ def arrow(chg: float | None) -> str:
     return "▲" if chg > 0 else "▼"  # up / down triangle
 
 
-def chg_color(quote, dim: float):
+def chg_color(quote, dim: float, green_up: bool = True):
     chg = quote.change or 0
-    base = pal.UP if chg > 0 else pal.DOWN if chg < 0 else pal.FLAT
+    up_color = pal.UP if green_up else pal.DOWN
+    down_color = pal.DOWN if green_up else pal.UP
+    base = up_color if chg > 0 else down_color if chg < 0 else pal.FLAT
     return pal.dim(base, dim)

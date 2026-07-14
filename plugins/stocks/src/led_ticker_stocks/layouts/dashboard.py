@@ -28,6 +28,7 @@ def draw_dashboard_story(
     focus_index: int,
     total: int,
     frame: int,
+    green_up: bool = True,
     y_offset: int = 0,
 ) -> None:
     """Paint one symbol's longboi trading-dashboard view (a held layout).
@@ -35,6 +36,9 @@ def draw_dashboard_story(
     Unlike the card, the dashboard reads `quotes` (the shared sym->SymbolQuote
     dict) and `symbols` (the ordered display-symbol list) to render a
     watch column showing the NEXT 3 symbols after `focus_index`.
+
+    `green_up` flips the change-line + sparkline + watch-column COLORS only
+    (arrow glyph stays directional) for non-US market conventions.
     """
     dim = STATE_META[state].dim
     scale = getattr(canvas, "scale", 1)
@@ -73,7 +77,15 @@ def draw_dashboard_story(
             f"{_arrow(quote.change)} {format_change(quote.change, quote.dp_decimals)}"
             f"  {format_pct(quote.pct)}"
         )
-        hires(shim, chg_line, 150, 34 + yoff, _chg_color(quote, dim), 13, bold=False)
+        hires(
+            shim,
+            chg_line,
+            150,
+            34 + yoff,
+            _chg_color(quote, dim, green_up=green_up),
+            13,
+            bold=False,
+        )
         hires(
             shim,
             f"PREV {format_price(quote.prev, quote.dp_decimals)}",
@@ -83,7 +95,9 @@ def draw_dashboard_story(
             8,
             bold=False,
         )
-        draw_sparkline(canvas, 288, 8 + yoff, 132, 48, quote, dim=dim)
+        draw_sparkline(
+            canvas, 288, 8 + yoff, 132, 48, quote, dim=dim, green_up=green_up
+        )
     else:
         hires(shim, "—", 150, 4 + yoff, pal.dim(pal.LABEL, dim), 24, bold=True)
 
@@ -100,7 +114,7 @@ def draw_dashboard_story(
                 pv,
                 right_align_x(10, pv, w, _MARGIN, bold=False),
                 y,
-                _chg_color(g, dim),
+                _chg_color(g, dim, green_up=green_up),
                 10,
                 bold=False,
             )

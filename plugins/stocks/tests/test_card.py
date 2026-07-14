@@ -99,6 +99,60 @@ def test_card_ignores_unused_quotes_and_symbols_args():
     assert r1._pixels == r2._pixels
 
 
+def test_card_green_up_false_flips_down_quote_to_green():
+    """`green_up=False` flips a DOWN quote's change-line + sparkline color
+    from red to green (non-US convention) — teeth: would fail if the card
+    ignored `green_up` (Phase 2 final-review Fix 1: card/dashboard were
+    crawl-only).
+
+    The symbol chip is a deterministic per-symbol hash color (`_chip.py`)
+    that, for "AAPL", happens to be red-dominant — so a plain "is there any
+    red pixel" presence check would pass even with `green_up` ignored.
+    Instead, diff the two renders: chip/price/label pixels are IDENTICAL at
+    the same (x, y) in both (same symbol, same position, unaffected by
+    `green_up`), so the pixels that differ between the two dicts are
+    exactly the change-line/sparkline pixels `green_up` controls.
+    """
+    c_default, r_default = _bigsign()
+    draw_card_story(
+        c_default,
+        _down(),
+        MarketState.OPEN,
+        {},
+        ["AAPL"],
+        focus_index=0,
+        total=4,
+        frame=0,
+    )
+    c_flipped, r_flipped = _bigsign()
+    draw_card_story(
+        c_flipped,
+        _down(),
+        MarketState.OPEN,
+        {},
+        ["AAPL"],
+        focus_index=0,
+        total=4,
+        frame=0,
+        green_up=False,
+    )
+
+    def red(v):
+        return v[0] > v[1] and v[0] > v[2]
+
+    def green(v):
+        return v[1] > v[0] and v[1] > v[2]
+
+    diff_keys = {
+        xy
+        for xy in r_default._pixels
+        if xy in r_flipped._pixels and r_default._pixels[xy] != r_flipped._pixels[xy]
+    }
+    assert diff_keys  # green_up must actually change SOME pixels
+    assert all(red(r_default._pixels[xy]) for xy in diff_keys)
+    assert all(green(r_flipped._pixels[xy]) for xy in diff_keys)
+
+
 def test_card_accepts_y_offset():
     c, real = _bigsign()
     # Non-zero y_offset must not raise and must still paint on-canvas

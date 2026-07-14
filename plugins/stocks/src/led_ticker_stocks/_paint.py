@@ -54,13 +54,27 @@ _HIRES_GLYPH_SUBSTITUTIONS = {
 }
 
 
+def _subst(text: str) -> str:
+    """Apply `_HIRES_GLYPH_SUBSTITUTIONS` to `text`.
+
+    Shared by `hires()` (which draws the substituted text) and
+    `right_align_x()` (which measures it) so the two always agree on what
+    string is actually being rendered — otherwise `right_align_x` measures
+    the UN-substituted glyph width (e.g. U+2212's tofu-box advance, which
+    differs from the real hyphen-minus glyph it's about to draw) and
+    right-aligned negatives drift a couple px off the margin.
+    """
+    for missing, safe in _HIRES_GLYPH_SUBSTITUTIONS.items():
+        text = text.replace(missing, safe)
+    return text
+
+
 def hires(
     shim, text: str, x: int, y_top: int, color: Color, size: int, *, bold: bool = True
 ) -> int:
     """Paint Inter `text` at physical (x, y_top); return the ADVANCE width in
     physical px (NOT end-x — call sites do `x += hires(...) + gap`)."""
-    for missing, safe in _HIRES_GLYPH_SUBSTITUTIONS.items():
-        text = text.replace(missing, safe)
+    text = _subst(text)
     font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 
@@ -69,7 +83,7 @@ def right_align_x(
     size: int, text: str, real_width: int, margin: int, *, bold: bool = True
 ) -> int:
     font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
-    return real_width - measure_width(font, text, _PROBE) - margin
+    return real_width - measure_width(font, _subst(text), _PROBE) - margin
 
 
 def px(real, x: int, y: int, color: Color) -> None:

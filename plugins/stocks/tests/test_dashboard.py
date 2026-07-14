@@ -123,6 +123,68 @@ def test_watch_column_wraps_at_end_of_symbol_list():
     assert right1 != right2  # wrapped neighbors (indices 0,1,2) actually drawn
 
 
+def test_dashboard_green_up_false_flips_down_quote_to_green():
+    """`green_up=False` flips a DOWN quote's change-line + sparkline (and
+    watch-column pct) color from red to green — teeth: would fail if the
+    dashboard ignored `green_up` (Phase 2 final-review Fix 1).
+
+    Symbol-chip pixels are a deterministic per-symbol hash color unrelated
+    to `green_up`, so diff the two renders rather than a plain presence
+    check: pixels identical at the same (x, y) in both renders are
+    unaffected by `green_up`; the ones that differ are exactly the
+    change-line/sparkline/watch-column pixels it controls.
+    """
+    c_default, r_default = _longboi()
+    qs = _quotes()
+    down = SymbolQuote(sym="AAPL", price=310.0, prev=315.32, d=-5.32, dp=-1.69)
+    qs["AAPL"] = down
+    draw_dashboard_story(
+        c_default,
+        down,
+        MarketState.OPEN,
+        qs,
+        ["AAPL", "MSFT", "NVDA", "TSLA"],
+        focus_index=0,
+        total=4,
+        frame=0,
+    )
+    c_flipped, r_flipped = _longboi()
+    qs2 = _quotes()
+    qs2["AAPL"] = down
+    draw_dashboard_story(
+        c_flipped,
+        down,
+        MarketState.OPEN,
+        qs2,
+        ["AAPL", "MSFT", "NVDA", "TSLA"],
+        focus_index=0,
+        total=4,
+        frame=0,
+        green_up=False,
+    )
+
+    def red(v):
+        return v[0] > v[1] and v[0] > v[2]
+
+    def green(v):
+        return v[1] > v[0] and v[1] > v[2]
+
+    # Restrict to the hero/sparkline region (x < 434): the watch column
+    # (x >= 434) shows the NEXT 3 symbols, which are UP quotes here, so
+    # their flip runs the opposite direction (green -> red) and would
+    # contaminate a single-direction assertion.
+    diff_keys = {
+        xy
+        for xy in r_default._pixels
+        if xy[0] < 434
+        and xy in r_flipped._pixels
+        and r_default._pixels[xy] != r_flipped._pixels[xy]
+    }
+    assert diff_keys  # green_up must actually change SOME pixels
+    assert all(red(r_default._pixels[xy]) for xy in diff_keys)
+    assert all(green(r_flipped._pixels[xy]) for xy in diff_keys)
+
+
 def test_dashboard_accepts_y_offset():
     # CLAUDE.md: y_offset must be honored so PushUp/PushDown transitions
     # against a held layout don't break.

@@ -74,6 +74,7 @@ class _StockStory(FrameAwareBase):
             focus_index=self.focus_index,
             total=len(self.all_symbols),
             frame=self.frame_for("held"),
+            green_up=self.green_up,
             y_offset=y_offset,
         )
         return canvas, getattr(canvas, "width", 0)

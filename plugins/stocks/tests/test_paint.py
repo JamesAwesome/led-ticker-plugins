@@ -73,6 +73,25 @@ def test_hires_substitutes_inter_missing_minus():
     assert minus_sign != question_mark
 
 
+def test_right_align_negative_ends_flush_like_positive():
+    """`hires()` substitutes U+2212 MINUS SIGN -> ASCII hyphen-minus before
+    drawing, but pre-fix `right_align_x()` measured the UN-substituted
+    string — the minus sign's tofu-box advance differs from the real
+    hyphen-minus glyph it's about to draw, so a right-aligned negative
+    landed a couple px off the margin the positive case hits exactly.
+    Assert both end at the SAME distance from the right edge."""
+    c = _canvas()
+    shim, real = phys_wrap(c)
+
+    x_pos = right_align_x(22, "252.40", real.width, 4, bold=True)
+    end_pos = hires(shim, "252.40", x_pos, 1, pal.PRICE, 22, bold=True)
+
+    x_neg = right_align_x(22, "−252.40", real.width, 4, bold=True)  # U+2212
+    end_neg = hires(shim, "−252.40", x_neg, 20, pal.PRICE, 22, bold=True)
+
+    assert (x_pos + end_pos) == (x_neg + end_neg)
+
+
 def test_hires_leaves_em_dash_unsubstituted():
     # U+2014 EM DASH (model._DASH, the no-data placeholder) IS present in
     # Inter and renders as its own distinct glyph — confirm it's neither

@@ -28,6 +28,7 @@ def draw_card_story(
     focus_index: int,
     total: int,
     frame: int,
+    green_up: bool = True,
     y_offset: int = 0,
 ) -> None:
     """Paint one symbol's bigsign quote card in place (a held layout).
@@ -36,6 +37,9 @@ def draw_card_story(
     display-symbol list) are accepted but unused here — they exist so
     `_StockStory.draw` can call every held layout (this card, and the
     dashboard added in Task 5) through one uniform signature.
+
+    `green_up` flips the change-line + sparkline COLORS only (arrow glyph
+    stays directional) for non-US market conventions; see CLAUDE.md.
     """
     dim = STATE_META[state].dim
     scale = getattr(canvas, "scale", 1)
@@ -70,11 +74,11 @@ def draw_card_story(
             chg_line,
             right_align_x(11, chg_line, w, _MARGIN, bold=False),
             26 + yoff,
-            _chg_color(quote, dim),
+            _chg_color(quote, dim, green_up=green_up),
             11,
             bold=False,
         )
-        draw_sparkline(canvas, 4, 41 + yoff, 178, 19, quote, dim=dim)
+        draw_sparkline(canvas, 4, 41 + yoff, 178, 19, quote, dim=dim, green_up=green_up)
     else:
         hires(
             shim,
