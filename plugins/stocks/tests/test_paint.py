@@ -125,3 +125,29 @@ def test_hires_leaves_em_dash_unsubstituted():
 
     assert em_dash != question_mark
     assert em_dash != hyphen_minus
+
+
+def test_hires_lowers_threshold_so_thin_small_glyphs_render_whole():
+    # At the default 128 threshold, Inter's thin strokes drop out at small
+    # sizes (the "1" digit loses its stem). hires() uses a lower threshold so
+    # sub-50%-coverage edge pixels survive — assert it lights MORE pixels than
+    # a default-threshold render of the same small glyph would.
+    from led_ticker.plugin import draw_text, resolve_font
+
+    def hires_lit(text: str, size: int) -> int:
+        c = _canvas()
+        shim, real = phys_wrap(c)
+        hires(shim, text, 2, 1, pal.SYM, size, bold=False)
+        return sum(1 for v in real._pixels.values() if v != (0, 0, 0))
+
+    def default_lit(text: str, size: int) -> int:
+        c = _canvas()
+        shim, real = phys_wrap(c)
+        font = resolve_font("Inter-Regular", size, 128)  # core default threshold
+        draw_text(shim, font, text, 2, 1 + font.ascent, pal.SYM)
+        return sum(1 for v in real._pixels.values() if v != (0, 0, 0))
+
+    # "1" at size 11 is the canonical dropout case; the lower threshold must
+    # add pixels (the missing stem) vs the default. Would fail if hires()
+    # reverted to the default threshold.
+    assert hires_lit("111", 11) > default_lit("111", 11)

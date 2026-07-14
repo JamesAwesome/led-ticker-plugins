@@ -69,20 +69,32 @@ def _subst(text: str) -> str:
     return text
 
 
+# Inter's default rasterization threshold (128 = 50% coverage) drops thin
+# glyph strokes at small pixel sizes — the "1" digit loses its stem and "0"s
+# break up on the change line / watch column / PREV. A lower threshold keeps
+# sub-50%-coverage edge pixels so small glyphs render whole. 80 is the
+# documented value for thin fonts (core CLAUDE.md `font_threshold`).
+_HIRES_THRESHOLD = 80
+
+
 def hires(
     shim, text: str, x: int, y_top: int, color: Color, size: int, *, bold: bool = True
 ) -> int:
     """Paint Inter `text` at physical (x, y_top); return the ADVANCE width in
     physical px (NOT end-x — call sites do `x += hires(...) + gap`)."""
     text = _subst(text)
-    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
+    font = resolve_font(
+        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
+    )
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 
 
 def right_align_x(
     size: int, text: str, real_width: int, margin: int, *, bold: bool = True
 ) -> int:
-    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
+    font = resolve_font(
+        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
+    )
     return real_width - measure_width(font, _subst(text), _PROBE) - margin
 
 
