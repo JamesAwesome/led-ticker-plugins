@@ -19,6 +19,14 @@ def _canvas():
     return c
 
 
+def _bigsign_canvas():
+    c = mock.Mock()
+    c.width = 256
+    c.height = 64
+    c.scale = 1
+    return c
+
+
 def test_validate_rejects_empty_symbols():
     msgs = StocksTicker.validate_config({"symbols": []})
     assert any("symbol" in m for m in msgs)
@@ -58,6 +66,33 @@ async def test_demo_start_builds_stories_without_token():
     )
     assert len(widget.feed_stories) == 2
     assert all(s.quotes["AAPL"].has_data for s in widget.feed_stories)
+
+
+@pytest.mark.asyncio
+async def test_demo_start_wires_focus_index_and_all_symbols():
+    """Task 4: each story built by __attrs_post_init__ carries its own
+    index into the shared, ordered display-symbol list (used by the card's
+    paging dots and, in Task 5, the dashboard's watch-column neighbors)."""
+    widget = await StocksTicker.start(
+        symbols=["AAPL", "MSFT", "TSLA"], session=mock.Mock(), demo=True
+    )
+    assert [s.focus_index for s in widget.feed_stories] == [0, 1, 2]
+    for story in widget.feed_stories:
+        assert story.all_symbols == ["AAPL", "MSFT", "TSLA"]
+
+
+@pytest.mark.asyncio
+async def test_story_draw_uses_card_layout_on_bigsign_canvas():
+    """A wide (bigsign) canvas resolves to the held `card` layout, which
+    paints in place and returns the canvas width as a stable cursor
+    (rather than a scroll position, which held layouts don't have)."""
+    widget = await StocksTicker.start(
+        symbols=["AAPL", "MSFT"], session=mock.Mock(), demo=True
+    )
+    story = widget.feed_stories[0]
+    canvas, end = story.draw(_bigsign_canvas())
+    assert story._resolved == "card"
+    assert end == canvas.width == 256
 
 
 @pytest.mark.asyncio

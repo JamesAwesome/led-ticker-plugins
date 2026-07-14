@@ -15,9 +15,10 @@ This plugin contributes, via the `led_ticker.plugins` entry point, a single widg
 
 - `stocks.ticker` — live equity price Container from the Finnhub REST API. Cycles one
   `_StockStory` "story" per configured symbol (the engine reads `feed_stories` via
-  `_expand_sources` on every pass). Shows `SYM  price  ▲/▼ change change%`, trend-colored
-  green/red, dimmed by market state. Phase 1 ships exactly one layout (`crawl`, smallsign
-  geometry) — see the README's Roadmap for `card`/`dashboard`.
+  `_expand_sources` on every pass). Trend-colored green/red, dimmed by market state. Three
+  layouts are registered and auto-selected by real panel width: `crawl` (smallsign,
+  scrolling), `card` (bigsign, held), `dashboard` (longboi, held) — see the README's
+  [Layouts](README.md#layouts) section for the user-facing shape of each.
 
 The entry-point name `stocks` is the plugin namespace, so the config `type` is
 `stocks.ticker` (see `register()` in `__init__.py`).
@@ -54,9 +55,16 @@ src/led_ticker_stocks/
                        #   into update()'s market-status except branch)
   demo.py              # DemoFeed: seeded offline random-walk feed for demo=true / no-token
   _palette.py           # Semantic RGB palette (SYM/PRICE/UP/DOWN/FLAT/LABEL) + dim()
+  _paint.py             # phys_wrap() (scale-1 ScaledCanvas shim) + hires()/right_align_x()/
+                        #   px()/paging_dots() physical-pixel paint helpers for card/dashboard
+  _chip.py              # draw_chip(): abstract two-tone brand chip (hash-of-symbol colors)
+  _sparkline.py         # draw_sparkline(): prev-close reference + up/down trend line
   layouts/
-    __init__.py         # LAYOUTS registry ({"crawl": draw_crawl_story}) + resolve_layout()
-    crawl.py             # draw_crawl_story(): the one Phase-1 render function
+    __init__.py         # LAYOUTS registry ({"crawl", "card", "dashboard"}) + resolve_layout()
+    _common.py           # shared arrow()/chg_color() used by card.py + dashboard.py
+    crawl.py             # draw_crawl_story(): smallsign scrolling line (Phase 1)
+    card.py              # draw_card_story(): bigsign held hero card (Phase 2)
+    dashboard.py         # draw_dashboard_story(): longboi held dashboard + watch column (Phase 2)
 ```
 
 `register(api)` (in `__init__.py`):
@@ -162,21 +170,69 @@ propagate (see the initial-fetch tolerance note in `start()` above); only the st
 a clock fallback.
 
 **`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.45` CLSD /
-`0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in
-`draw_crawl_story`, and `chip_label` (`CLSD`/`PRE`/`AH`/`LIVE`) + `chip_rgb` are wired for a
-future state chip (not drawn in Phase 1's crawl — the crawl row has no room for a chip; it's
-consumed by `dim` only today). Don't repurpose `dim` for anything else without checking the
-README's "dims visibly lower when CLSD" claim, which is validated by
+`0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in every layout's
+render function, and `chip_label` (`CLSD`/`PRE`/`AH`/`LIVE`) + `chip_rgb` drive the state-chip
+label `card`/`dashboard` paint bottom-right/left of the hero block (Phase 1's `crawl` has no
+room for a chip; it's consumed by `dim` only there). Don't repurpose `dim` for anything else
+without checking the README's "dims visibly lower when CLSD" claim, which is validated by
 `test_state_dimming_lowers_total_brightness` (`tests/test_render_smoke.py`).
 
 **Geometry auto-select happens in `draw()`, not `validate_config`** — `resolve_layout(canvas,
 override)` needs a real `canvas.width`, which does not exist at config-validation time
 (`validate_config` only sees the raw TOML dict, no canvas). `validate_config` can only check
 that an explicit `layout` STRING names a registered layout (`LAYOUTS` membership); the actual
-width-based auto-select / `NotImplementedError` for non-`crawl`-sized canvases fires lazily
-inside `_StockStory.draw()` on first draw (cached to `self._resolved` so it only resolves
-once per story, not once per frame). Do not try to move the width check into
-`validate_config` — there's nothing to check it against yet.
+width-based auto-select fires lazily inside `_StockStory.draw()` on first draw (cached to
+`self._resolved` so it only resolves once per story, not once per frame). Do not try to move
+the width check into `validate_config` — there's nothing to check it against yet.
+
+**`resolve_layout` MUST read the REAL canvas width, never the wrapper's** — on bigsign/longboi
+the widget-facing canvas is a `ScaledCanvas`, and `ScaledCanvas.width` is the LOGICAL width
+(`real.width // scale`, e.g. 64 at scale=4 on a 256px-wide bigsign) — reading it directly would
+always resolve to `crawl` regardless of panel size. `resolve_layout` unwraps via
+`unwrap_to_real(canvas).width` before comparing against the `≤160` / `≥400` thresholds; a
+plain/mock canvas passes through `unwrap_to_real` unchanged so the same code path works in
+tests. Don't "simplify" this back to `canvas.width` — it silently breaks auto-select on both
+big panels.
+
+**Held-layout renderers share ONE call signature** — `_StockStory.draw` dispatches every
+non-`crawl` layout (currently `card`, `dashboard`) through the identical uniform signature:
+`renderer(canvas, quote, state, quotes, symbols, *, focus_index, total, frame, y_offset)`.
+`quotes` (the shared sym→`SymbolQuote` dict) and `symbols` (the ordered display-symbol list)
+are unused by `card` but present so a NEW held layout doesn't need a widget-shape change to add
+a dashboard-style feature later — see `dashboard.py`'s watch column for the shape a future
+layout would reuse. A new held layout MUST adopt this exact signature (positional `quotes`/
+`symbols`, keyword-only `focus_index`/`total`/`frame`/`y_offset`) even if it ignores some of the
+arguments, so `ticker.py`'s dispatch stays a single unconditional call with no per-layout branch.
+
+**Hi-res paints go through `phys_wrap`, not the wrapper canvas directly** — `card`/`dashboard`
+call `_paint.phys_wrap(canvas)` to get `(shim, real)`: `real` is `unwrap_to_real(canvas)` (the
+underlying physical canvas) and `shim` is a scale-1 `ScaledCanvas` around it, so `hires()` (via
+core's `draw_text`) can place hi-res glyphs at exact PHYSICAL coordinates without the
+scale-4 block-expansion a normal widget canvas would apply. All hand-rolled pixel paints in
+`card.py`/`dashboard.py`/`_sparkline.py`/`_chip.py` (`px()`, `paging_dots()`, the sparkline/chip
+loops) write to `real`, never to `canvas` or `shim` — mixing scales mid-function is how a
+"half-hi-res, half-4x-blocky" render bug would show up. `_sparkline.py`/`_chip.py` gate their
+own physical-vs-logical branch with the public `is_scaled(canvas)` check (from
+`led_ticker.plugin`) rather than a `hasattr(canvas, "scale")` duck-check — prefer `is_scaled`
+for any future physical-pixel helper in this plugin.
+
+**`measure_width` needs a scale-1 canvas probe, not `None`** — `right_align_x` (in `_paint.py`)
+measures hi-res text width to right-align it against the real panel edge; core's
+`measure_width`/`get_text_width` falls back to `SCALE_FALLBACK = 4` when handed `canvas=None`
+(a pre-canvas-existence assumption baked into core — see core's CLAUDE.md "Width tracking"
+note), which would divide the measured width by 4 it shouldn't. `_paint._ScaleOneProbe`
+(`scale = 1`) stands in for a real canvas so the division is a no-op and the measured width
+stays in the same physical-px units `hires()` actually paints in. Passing `None` here silently
+undercounts hi-res text width by 4x and right-aligned text (the price, the change line, the
+watch-column percents) drifts left of where it should sit.
+
+**Both held layouts are static-only in Phase 2** — `card.py`/`dashboard.py` accept `frame` (via
+the uniform signature above) but don't read it yet; there is no price-flash, no pulsing
+sparkline endpoint, and no pulsing state chip. `STATE_META.pulses` (currently only `True` for
+`OPEN`) is plumbed but unused — Phase 3 is where a widget reads `frame`/`pulses` to animate.
+Don't add animation to `card`/`dashboard` without updating the README's Phase 3 roadmap entry
+and `_StockStory`'s `FrameAwareBase.frame_for("held")` call (shared by both layouts today; a
+per-effect counter split may be needed once animation actually lands).
 
 **`green_up` is wired end-to-end** — `StocksTicker.green_up` / `_StockStory.green_up` are
 threaded from config through construction and into `draw_crawl_story(..., green_up=...)`,
@@ -186,11 +242,12 @@ before applying `pal.dim(...)`. Flat/no-data rendering is unaffected. Tripwire:
 test proving the SAME up-quote renders green-dominant at `green_up=True` and red-dominant at
 `green_up=False`.
 
-**`_StockStory` is `FrameAwareBase`** — it calls `self.frame_for("crawl")` and passes the
-result to `draw_crawl_story` as `frame=`, but Phase 1's renderer doesn't yet do anything
-frame-dependent with it (no animated color/border on this widget yet — see the README's
-Phase 3 roadmap for price-flash / pulses). The plumbing is there so Phase 3 doesn't need a
-widget-shape change, only a `layouts/crawl.py` behavior change.
+**`_StockStory` is `FrameAwareBase`** — it calls `self.frame_for("crawl")` for the crawl
+dispatch and `self.frame_for("held")` (shared by BOTH `card` and `dashboard`) for the held
+dispatch, passing the result as `frame=`. No layout does anything frame-dependent with it yet
+(no animated color/border/pulse on any layout — see the README's Phase 3 roadmap for
+price-flash / pulses). The plumbing is there so Phase 3 doesn't need a widget-shape change,
+only a per-layout render-function behavior change.
 
 **One INFO log per successful `update()`** — the Container contract: a silent log stream
 after startup signals the background task died. Demo mode logs
@@ -220,11 +277,22 @@ the whole session.
 - `test_model.py` — `SymbolQuote.has_data`/`change`/`pct` no-data guard + formatting.
 - `test_state.py` — `state_from_status` mapping (isOpen/session) + `state_from_clock` fallback.
 - `test_demo.py` — `DemoFeed` deterministic seeding + `step()`.
-- `test_palette.py` — `dim()` scaling.
 - `test_crawl.py` — Mock-canvas `draw_crawl_story` cursor-arithmetic coverage.
 - `test_render_smoke.py` — REAL `HeadlessBackend` canvas pixel assertions (state dimming
   actually lowers brightness, up/down colors actually flip, no-data placeholder actually
   lights pixels) — the class of bug a Mock-canvas test structurally cannot catch.
+- `test_card.py` / `test_dashboard.py` — REAL `ScaledCanvas`-wrapped `HeadlessBackend` canvas
+  (scale=4) pixel assertions for the held layouts: hero symbol/price/change paint, sparkline
+  presence, state-chip label, paging dots, nothing clipped at the panel edge; `test_dashboard.py`
+  additionally covers the watch column (next-3-symbols rendering + wraparound at the end of the
+  symbol list).
+- `test_chip.py` — `chip_colors_for` determinism/distinctness/override + `draw_chip` two-tone
+  fill + corner-knockout pixel assertions.
+- `test_sparkline.py` — `draw_sparkline` reference-line-only cold start, up/down point coloring
+  relative to `prev`, white leading-edge endpoint, dim-lowers-brightness.
+- `test_paint.py` — `_paint.py` helpers: `phys_wrap`, `hires` advance-width return,
+  `right_align_x` against the scale-1 probe, `px` bounds-clamping, `paging_dots`.
+- `test_palette.py` — `dim()` scaling.
 
 CI is the monorepo's single root path-filtered per-member matrix (`.github/workflows/ci.yml`):
 Python 3.14, `uv sync --extra dev` (led-ticker-core from PyPI), then runs ruff check,
@@ -235,6 +303,17 @@ ruff format --check, pyright, and pytest for the changed member.
 Register the class in `register()` in `__init__.py` (`api.widget`); it becomes
 `stocks.<name>`. Import any core dependency from `led_ticker.plugin` only, and keep the
 import-purity test green. A new layout goes in `layouts/`, registered in `LAYOUTS`
-(`layouts/__init__.py`) with the same signature as `draw_crawl_story` (see its docstring in
-`ticker.py`'s `_StockStory.draw` for the exact call shape:
-`renderer(canvas, quote, state, cursor_pos, frame=..., y_offset=..., end_padding=...)`).
+(`layouts/__init__.py`), added to `resolve_layout`'s width thresholds, and shaped by which
+dispatch branch it belongs to in `ticker.py`'s `_StockStory.draw`:
+
+- The `"crawl"` (scrolling) branch calls
+  `renderer(canvas, quote, state, cursor_pos, frame=..., y_offset=..., end_padding=...)` and
+  returns the new cursor position — this shape is specific to `draw_crawl_story` and isn't
+  meant to be reused; a new scrolling layout would need its own dispatch branch.
+- Every OTHER (held) layout goes through the uniform signature —
+  `renderer(canvas, quote, state, quotes, symbols, *, focus_index, total, frame, y_offset)` —
+  the SAME call for `card` and `dashboard` today. A new held layout MUST adopt this exact
+  signature (see the "Held-layout renderers share ONE call signature" invariant above) even if
+  it ignores `quotes`/`symbols`, so no per-layout branch needs to be added to the dispatch.
+- If `_arrow`/`_chg_color`-shaped logic is needed again, reuse `layouts/_common.py`
+  (`arrow()`/`chg_color()`) rather than re-defining it in the new layout module.

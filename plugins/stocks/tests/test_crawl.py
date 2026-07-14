@@ -26,12 +26,15 @@ def test_resolve_layout_override_wins():
 
 def test_resolve_layout_unregistered_override_raises():
     with pytest.raises(ValueError):
-        resolve_layout(_stub_canvas(160), "card")  # not registered in Phase 1
+        resolve_layout(_stub_canvas(160), "bogus")
 
 
-def test_resolve_layout_wide_canvas_raises_not_implemented():
-    with pytest.raises(NotImplementedError):
-        resolve_layout(_stub_canvas(256), None)
+def test_resolve_layout_wide_canvas_defaults_to_card():
+    assert resolve_layout(_stub_canvas(256), None) == "card"
+
+
+def test_resolve_layout_longboi_canvas_defaults_to_dashboard():
+    assert resolve_layout(_stub_canvas(512), None) == "dashboard"
 
 
 def test_crawl_registered():

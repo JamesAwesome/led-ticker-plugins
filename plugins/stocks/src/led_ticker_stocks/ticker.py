@@ -36,6 +36,8 @@ class _StockStory(FrameAwareBase):
     layout: str | None
     green_up: bool = True
     padding: int = 6
+    focus_index: int = 0
+    all_symbols: list[str] = attrs.field(factory=list)
     _resolved: str | None = attrs.field(init=False, default=None)
 
     def draw(
@@ -48,19 +50,34 @@ class _StockStory(FrameAwareBase):
     ) -> DrawResult:
         if self._resolved is None:
             self._resolved = resolve_layout(canvas, self.layout)
-        renderer = LAYOUTS[self._resolved]
         quote = self.quotes[self.sym]
-        end = renderer(
+        if self._resolved == "crawl":
+            end = LAYOUTS["crawl"](
+                canvas,
+                quote,
+                self.state_ref[0],
+                cursor_pos,
+                frame=self.frame_for("crawl"),
+                y_offset=y_offset,
+                end_padding=self.padding,
+                green_up=self.green_up,
+            )
+            return canvas, end
+        # Held layouts (card/dashboard) paint in place; return a stable
+        # cursor (canvas width) rather than a scroll position.
+        LAYOUTS[self._resolved](
             canvas,
             quote,
             self.state_ref[0],
-            cursor_pos,
-            frame=self.frame_for("crawl"),
-            y_offset=y_offset,
-            end_padding=self.padding,
+            self.quotes,
+            self.all_symbols,
+            focus_index=self.focus_index,
+            total=len(self.all_symbols),
+            frame=self.frame_for("held"),
             green_up=self.green_up,
+            y_offset=y_offset,
         )
-        return canvas, end
+        return canvas, getattr(canvas, "width", 0)
 
 
 @attrs.define
@@ -100,8 +117,10 @@ class StocksTicker:
                 layout=self.layout,
                 green_up=self.green_up,
                 padding=self.padding,
+                focus_index=i,
+                all_symbols=self.symbols,
             )
-            for s in self.symbols
+            for i, s in enumerate(self.symbols)
         ]
 
     @classmethod
