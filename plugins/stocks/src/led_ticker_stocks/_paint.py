@@ -39,11 +39,28 @@ class _ScaleOneProbe:
 _PROBE = _ScaleOneProbe()
 
 
+# Inter (the hi-res font used by the card/dashboard layouts) has no glyph for
+# U+2212 MINUS SIGN — `model.format_change`/`format_pct` emit U+2212 because
+# it's the correct glyph for the BDF crawl font (which DOES have it), but
+# Inter's fallback for an unmapped codepoint renders pixel-for-pixel identical
+# to "?" (tofu). Substitute the ASCII hyphen-minus here, in the hi-res paint
+# path only, so the crawl (BDF, draw_text directly, unaffected) keeps U+2212
+# and the hi-res layouts get a real minus glyph instead of a "?" box.
+# U+2014 EM DASH (the no-data placeholder, `model._DASH`) IS present in Inter
+# and renders as its own distinct glyph — verified pixel-for-pixel different
+# from both U+2212-as-tofu and "?"; no substitution needed for it.
+_HIRES_GLYPH_SUBSTITUTIONS = {
+    "−": "-",  # MINUS SIGN -> HYPHEN-MINUS
+}
+
+
 def hires(
     shim, text: str, x: int, y_top: int, color: Color, size: int, *, bold: bool = True
 ) -> int:
     """Paint Inter `text` at physical (x, y_top); return the ADVANCE width in
     physical px (NOT end-x — call sites do `x += hires(...) + gap`)."""
+    for missing, safe in _HIRES_GLYPH_SUBSTITUTIONS.items():
+        text = text.replace(missing, safe)
     font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 

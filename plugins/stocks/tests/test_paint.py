@@ -51,3 +51,41 @@ def test_paging_dots_marks_current():
     paging_dots(real, 4, 1, 0, 0, dim_color=pal.LABEL, active_color=pal.SYM)
     # 4 dots drawn; the current (index 1) uses the brighter active color
     assert any(v == (255, 255, 255) for v in real._pixels.values())
+
+
+def test_hires_substitutes_inter_missing_minus():
+    # Inter (hi-res) has no glyph for U+2212 MINUS SIGN — the pre-fix
+    # rasterization renders it pixel-for-pixel identical to "?" (tofu).
+    # After the fix, hires() must substitute it with an ASCII hyphen-minus
+    # so it renders as a real minus glyph, not a "?" box.
+    def lit_pixels(text: str) -> set:
+        c = _canvas()
+        shim, real = phys_wrap(c)
+        hires(shim, text, 4, 1, pal.SYM, 22, bold=True)
+        return {k for k, v in real._pixels.items() if v != (0, 0, 0)}
+
+    minus_sign = lit_pixels("−")  # U+2212 MINUS SIGN
+    question_mark = lit_pixels("?")
+    hyphen_minus = lit_pixels("-")  # ASCII hyphen-minus
+
+    # This would FAIL pre-fix: U+2212 rasterized identically to "?" (tofu).
+    assert minus_sign == hyphen_minus
+    assert minus_sign != question_mark
+
+
+def test_hires_leaves_em_dash_unsubstituted():
+    # U+2014 EM DASH (model._DASH, the no-data placeholder) IS present in
+    # Inter and renders as its own distinct glyph — confirm it's neither
+    # tofu ("?") nor coincidentally collapsed onto the hyphen-minus fix.
+    def lit_pixels(text: str) -> set:
+        c = _canvas()
+        shim, real = phys_wrap(c)
+        hires(shim, text, 4, 1, pal.SYM, 22, bold=True)
+        return {k for k, v in real._pixels.items() if v != (0, 0, 0)}
+
+    em_dash = lit_pixels("—")
+    question_mark = lit_pixels("?")
+    hyphen_minus = lit_pixels("-")
+
+    assert em_dash != question_mark
+    assert em_dash != hyphen_minus
