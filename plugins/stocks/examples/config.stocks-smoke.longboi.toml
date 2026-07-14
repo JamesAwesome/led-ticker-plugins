@@ -1,37 +1,57 @@
-# Longboi SMOKE TEST — stocks.ticker equity crawl at scale 4 (pre-merge branch)
+# Longboi SMOKE TEST — stocks.ticker DASHBOARD layout at scale 4 (pre-merge branch)
 #
-# Phase 1 ships the CRAWL only; the hi-res trading DASHBOARD for the longboi is
-# Phase 2. So this smoke forces `layout = "crawl"` — chunky scale-4 BDF text
-# scrolling across the full 512px width, NOT the dashboard yet. Expected for P1.
+# No `layout` override here on purpose: `resolve_layout` reads the real
+# (unwrapped) canvas width and auto-selects `dashboard` at this geometry
+# (512px real width) — the same auto-select a config in the wild gets by
+# just omitting `layout`. `mode = "slideshow"` is the recommended section
+# mode for held layouts (card/dashboard hold one symbol per visit, unlike
+# the scrolling `crawl`, which wants `mode = "ticker"`).
+#
+# IMPORTANT: the dashboard's watch column (the next-3-symbols strip on the
+# right) reads the widget's OWN full symbol list — it does not see other
+# widgets in the section. Keep the stocks widget ALONE in its section (as
+# below) so the watch column shows the intended neighbors instead of
+# whatever another widget happens to be doing.
 #
 # Prereqs on the sign:
 #   - led-ticker-core >= 4.9
-#   - stocks plugin (NOT yet released — Phase 1 PR #42). Add to
+#   - stocks plugin (NOT yet released — Phase 2 PR). Add to
 #     config/requirements-plugins.txt the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase1#subdirectory=plugins/stocks
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase2#subdirectory=plugins/stocks
 #   - Section 1 (demo) needs NO token. Section 2 (live) needs:
 #       FINNHUB_API_TOKEN=xxxxx   in .env  (secrets are env-only, never here)
 #   - copy to config/config.toml, then `make restart`
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
-# WHAT TO LOOK FOR, section by section:
-#   1 DEMO FEED   — AAPL / MSFT / NVDA / TSLA crawl right->left across the full
-#                   512px width at scale 4, vertically centered, looping
-#                   seamlessly. Per symbol: WHITE ticker -> AMBER price -> GREEN ▲
-#                   / RED ▼ change block. FULL brightness (demo=OPEN); more
-#                   symbols fit on-canvas at once than the smaller signs.
-#   2 LIVE FEED   — real prices; global brightness tracks market state (LIVE full /
-#                   PRE·AH ~0.85 / CLOSED ~0.45 + prices frozen at last close).
-#                   Bad symbol -> "SYM —". Prices refresh ~once a minute when open.
+# WHAT TO LOOK FOR, section by section (each symbol HELD ~5.2s, then the
+# section transitions to the next symbol):
+#   1 DEMO FEED   — one trading-DASHBOARD view per symbol: hero SYMBOL +
+#                   brand CHIP (abstract two-tone diagonal block, never a
+#                   logo) + state-chip label on the left; big PRICE + ▲/▼
+#                   signed change/percent (green up / red down) + "PREV"
+#                   reference price in the middle; a SPARKLINE (dotted
+#                   prev-close line + up/down trend + white leading dot)
+#                   right of that; and on the far right a WATCH COLUMN
+#                   listing the NEXT 3 symbols with their percent change,
+#                   plus small PAGING DOTS below it tracking which symbol
+#                   (of 4) is in focus. Nothing should clip at the 64px
+#                   ceiling. FULL brightness (demo=OPEN); change colors +
+#                   sparkline + watch-column percents flicker as the demo
+#                   walk moves prices.
+#   2 LIVE FEED   — same dashboard, real prices; global brightness + the
+#                   state-chip label track market state (LIVE full / PRE·AH
+#                   ~0.85 dimmer, chip reads "PRE"/"AH" / CLOSED ~0.45
+#                   dimmest, chip reads "CLSD", prices frozen at last
+#                   close). Bad symbol -> em-dash price with no sparkline;
+#                   its watch-column row still shows the symbol. Prices
+#                   refresh ~once a minute when open.
 #
 # NOTE (longboi color wiring): these panels wire HUB75 G→Red, R→Blue, B→Green,
 # so led_rgb_sequence = "BRG" is REQUIRED or the up/down green/red will look
 # wrong. If green reads as blue or red as green, that line is the first suspect.
 #
-# NOT here yet (Phase 2/3): hi-res dashboard, sparkline, watch column, state chip,
-# brand chips, price-flash. Phase 2 will auto-select the dashboard on this
-# geometry (drop the `layout` line) — for now the crawl override is intentional.
+# NOT here yet (Phase 3): price-flash on update, sparkline/state-chip pulse.
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -48,20 +68,20 @@ led_rgb_sequence = "BRG"
 
 # --- 1: demo feed (offline, no token) -----------------------------------------
 [[playlist.section]]
-mode = "ticker"
+mode = "slideshow"
+hold_time = 5.2
 
 [[playlist.section.widget]]
 type = "stocks.ticker"
 symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
 demo = true
-layout = "crawl"   # Phase 1: dashboard is Phase 2, so force the crawl on longboi
 
 # --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
 [[playlist.section]]
-mode = "ticker"
+mode = "slideshow"
+hold_time = 5.2
 
 [[playlist.section.widget]]
 type = "stocks.ticker"
 symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD"]
-layout = "crawl"
 update_interval = 60

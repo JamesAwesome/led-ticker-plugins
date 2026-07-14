@@ -15,7 +15,6 @@ LAYOUTS = {
     "card": draw_card_story,
     "dashboard": draw_dashboard_story,
 }
-_HELD = {"card", "dashboard"}
 
 
 def resolve_layout(canvas, override: str | None) -> str:

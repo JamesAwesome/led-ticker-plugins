@@ -1,5 +1,7 @@
 """Intraday sparkline: prev-close reference + up/down points from quote.spark."""
 
+from led_ticker.plugin import is_scaled, unwrap_to_real
+
 from led_ticker_stocks import _palette as pal
 from led_ticker_stocks._paint import px
 
@@ -10,9 +12,7 @@ _GAPFILL_BRIGHT = 0.55
 def draw_sparkline(
     canvas, x: int, y: int, w: int, h: int, quote, *, dim: float
 ) -> None:
-    from led_ticker.plugin import unwrap_to_real
-
-    real = unwrap_to_real(canvas) if hasattr(canvas, "scale") else canvas
+    real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
     samples = list(quote.spark)
     ref_color = pal.dim(pal.LABEL, dim * _REF_BRIGHT)
     mid_y = y + h // 2

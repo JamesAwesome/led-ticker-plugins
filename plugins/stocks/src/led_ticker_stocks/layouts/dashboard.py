@@ -10,21 +10,12 @@ from led_ticker_stocks import _palette as pal
 from led_ticker_stocks._chip import draw_chip
 from led_ticker_stocks._paint import hires, paging_dots, phys_wrap, right_align_x
 from led_ticker_stocks._sparkline import draw_sparkline
+from led_ticker_stocks.layouts._common import arrow as _arrow
+from led_ticker_stocks.layouts._common import chg_color as _chg_color
 from led_ticker_stocks.model import format_change, format_pct, format_price
 from led_ticker_stocks.state import STATE_META
 
 _MARGIN = 6
-
-
-def _arrow(chg: float | None) -> str:
-    if chg is None or chg == 0:
-        return "·"  # middle dot: flat / no-data
-    return "▲" if chg > 0 else "▼"  # up / down triangle
-
-
-def _chg_color(quote, dim: float):
-    chg = quote.change or 0
-    return pal.dim(pal.UP if chg > 0 else pal.DOWN if chg < 0 else pal.FLAT, dim)
 
 
 def draw_dashboard_story(

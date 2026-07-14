@@ -2,7 +2,7 @@
 
 import hashlib
 
-from led_ticker.plugin import Color, make_color, unwrap_to_real
+from led_ticker.plugin import Color, is_scaled, make_color, unwrap_to_real
 
 from led_ticker_stocks import _palette as pal
 from led_ticker_stocks._paint import px
@@ -35,7 +35,7 @@ def _knocked(col: int, row: int, size: int) -> bool:
 
 
 def draw_chip(canvas, x: int, y: int, size: int, quote, *, dim: float) -> None:
-    real = unwrap_to_real(canvas) if hasattr(canvas, "scale") else canvas
+    real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
     c1, c2 = chip_colors_for(quote.sym, quote.chip_colors)
     for row in range(size):
         for col in range(size):
