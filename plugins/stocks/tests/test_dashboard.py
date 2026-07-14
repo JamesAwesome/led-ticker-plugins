@@ -76,6 +76,53 @@ def test_watch_column_shows_neighbors_not_focus():
     assert right1 != right2  # watch column reflects the actual neighbor symbols
 
 
+def test_watch_column_wraps_at_end_of_symbol_list():
+    # focus_index=3 is the LAST symbol in a 4-symbol list. The watch column
+    # formula (focus_index + 1 + r) % len(symbols) must wrap back to the
+    # front of the list (indices 0, 1, 2) rather than IndexError past the end.
+    symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
+    c1, r1 = _longboi()
+    qs = _quotes()
+    draw_dashboard_story(
+        c1,
+        qs["TSLA"],
+        MarketState.OPEN,
+        qs,
+        symbols,
+        focus_index=3,
+        total=4,
+        frame=0,
+    )
+
+    # Same focus_index=3, but different symbols occupying the wrapped
+    # neighbor slots (0, 1, 2) — if the modulo wraparound is actually
+    # exercised, the watch column must reflect these new symbols and the
+    # right-side pixels must differ from the run above.
+    c2, r2 = _longboi()
+    wrapped_symbols = ["ZZZZ", "YYYY", "XXXX", "TSLA"]
+    qs2 = dict(qs)
+    for s, p in [("ZZZZ", 10.0), ("YYYY", 20.0), ("XXXX", 30.0)]:
+        qs2[s] = SymbolQuote(sym=s, price=p, prev=p - 1, d=1.0, dp=0.3)
+    draw_dashboard_story(
+        c2,
+        qs2["TSLA"],
+        MarketState.OPEN,
+        qs2,
+        wrapped_symbols,
+        focus_index=3,
+        total=4,
+        frame=0,
+    )
+
+    lit1 = {xy: v for xy, v in r1._pixels.items() if v != (0, 0, 0)}
+    lit2 = {xy: v for xy, v in r2._pixels.items() if v != (0, 0, 0)}
+    assert lit1 and lit2
+
+    right1 = {xy: v for xy, v in r1._pixels.items() if xy[0] >= 434}
+    right2 = {xy: v for xy, v in r2._pixels.items() if xy[0] >= 434}
+    assert right1 != right2  # wrapped neighbors (indices 0,1,2) actually drawn
+
+
 def test_dashboard_accepts_y_offset():
     # CLAUDE.md: y_offset must be honored so PushUp/PushDown transitions
     # against a held layout don't break.
