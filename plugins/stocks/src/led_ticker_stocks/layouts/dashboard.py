@@ -1,8 +1,14 @@
 """Longboi trading dashboard (held). Geometry from handoff LAYOUTS.longA.
 
-v1 is static — no flash/pulse (that's Phase 3). `frame` is accepted for the
-uniform held-renderer signature but not read yet.
+The hero price flashes whiter on a recent price change (Bloomberg-style,
+wall-clock decay — see `layouts._common.flash_price_color`). `frame` (the
+held renderer's own frame counter) drives two pulses: the LIVE state chip
+breathes while the market is OPEN (`layouts._common.live_pulse`), and the
+sparkline endpoint twinkles regardless of state
+(`layouts._common.endpoint_pulse`, applied inside `draw_sparkline`).
 """
+
+import time
 
 from led_ticker.plugin import make_color
 
@@ -12,6 +18,7 @@ from led_ticker_stocks._paint import hires, paging_dots, phys_wrap, right_align_
 from led_ticker_stocks._sparkline import draw_sparkline
 from led_ticker_stocks.layouts._common import arrow as _arrow
 from led_ticker_stocks.layouts._common import chg_color as _chg_color
+from led_ticker_stocks.layouts._common import flash_price_color, live_pulse
 from led_ticker_stocks.model import format_change, format_pct, format_price
 from led_ticker_stocks.state import STATE_META
 
@@ -41,6 +48,7 @@ def draw_dashboard_story(
     (arrow glyph stays directional) for non-US market conventions.
     """
     dim = STATE_META[state].dim
+    now = time.monotonic()
     scale = getattr(canvas, "scale", 1)
     yoff = y_offset * scale
     shim, real = phys_wrap(canvas)
@@ -52,12 +60,15 @@ def draw_dashboard_story(
     draw_chip(canvas, x, 6 + yoff, 20, quote, dim=dim)
     x += 26
     hires(shim, quote.sym, x, 2 + yoff, pal.dim(pal.SYM, dim), 26, bold=True)
+    # LIVE chip pulses (frame-driven breathing) only while the market is
+    # OPEN; every other state renders steady.
+    chip_dim = dim * live_pulse(frame) if meta.pulses else dim
     hires(
         shim,
         meta.chip_label,
         x,
         48 + yoff,
-        pal.dim(make_color(*meta.chip_rgb), dim),
+        pal.dim(make_color(*meta.chip_rgb), chip_dim),
         9,
         bold=False,
     )
@@ -69,7 +80,7 @@ def draw_dashboard_story(
             format_price(quote.price, quote.dp_decimals),
             150,
             4 + yoff,
-            pal.dim(pal.PRICE, dim),
+            flash_price_color(quote.flash_t, dim, now=now),
             24,
             bold=True,
         )
@@ -96,7 +107,15 @@ def draw_dashboard_story(
             bold=False,
         )
         draw_sparkline(
-            canvas, 288, 8 + yoff, 132, 48, quote, dim=dim, green_up=green_up
+            canvas,
+            288,
+            8 + yoff,
+            132,
+            48,
+            quote,
+            dim=dim,
+            green_up=green_up,
+            frame=frame,
         )
     else:
         hires(shim, "—", 150, 4 + yoff, pal.dim(pal.LABEL, dim), 24, bold=True)

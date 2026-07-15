@@ -1,8 +1,16 @@
+import math
+
 from led_ticker.plugin import HeadlessBackend
 
 from led_ticker_stocks import _palette as pal
 from led_ticker_stocks._sparkline import _REF_BRIGHT, draw_sparkline
+from led_ticker_stocks.layouts._common import ENDPOINT_PULSE_PERIOD
 from led_ticker_stocks.model import SymbolQuote
+
+# The Phase 3 endpoint pulse (`layouts._common.endpoint_pulse`) modulates the
+# sparkline tip's brightness by `frame`; pick the frame nearest its peak
+# (sin(frame/period) == 1) so a `dim=1.0` render still hits pure white.
+_ENDPOINT_PEAK_FRAME = round(ENDPOINT_PULSE_PERIOD * math.pi / 2)
 
 
 def _rgb(color) -> tuple:
@@ -45,12 +53,34 @@ def test_up_points_green_down_points_red_relative_to_prev():
 
 
 def test_endpoint_is_white():
+    # At its peak (Phase 3 `endpoint_pulse`), the endpoint hits pure white
+    # for dim=1.0; away from the peak it's a dimmed white (see
+    # test_endpoint_pulses_with_frame below).
     real = _real()
     q = SymbolQuote(sym="X", price=110.0, prev=100.0)
     for p in [100.0, 108.0, 110.0]:
         q.spark.append(p)
-    draw_sparkline(real, 0, 0, 200, 24, q, dim=1.0)
+    draw_sparkline(real, 0, 0, 200, 24, q, dim=1.0, frame=_ENDPOINT_PEAK_FRAME)
     assert any(v == (255, 255, 255) for v in real._pixels.values())
+
+
+def test_endpoint_pulses_with_frame():
+    """Phase 3: the sparkline endpoint brightness varies with `frame`
+    (independent of market state — the pulse lives in `draw_sparkline`
+    itself, not in the card/dashboard state-chip logic)."""
+    q = SymbolQuote(sym="X", price=110.0, prev=100.0)
+    for p in [100.0, 108.0, 110.0]:
+        q.spark.append(p)
+    peak = _real()
+    draw_sparkline(peak, 0, 0, 200, 24, q, dim=1.0, frame=_ENDPOINT_PEAK_FRAME)
+    trough = _real()
+    # half a period further along -> near the endpoint_pulse trough
+    trough_frame = round(_ENDPOINT_PEAK_FRAME + ENDPOINT_PULSE_PERIOD * math.pi)
+    draw_sparkline(trough, 0, 0, 200, 24, q, dim=1.0, frame=trough_frame)
+
+    # last sample (110.0, the box max) -> endpoint at box top-right corner
+    endpoint_xy = (199, 0)
+    assert peak._pixels[endpoint_xy] != trough._pixels[endpoint_xy]
 
 
 def test_reference_line_sits_at_prev_level_not_box_mid_height():

@@ -61,7 +61,9 @@ src/led_ticker_stocks/
   _sparkline.py         # draw_sparkline(): prev-close reference + up/down trend line
   layouts/
     __init__.py         # LAYOUTS registry ({"crawl", "card", "dashboard"}) + resolve_layout()
-    _common.py           # shared arrow()/chg_color() used by card.py + dashboard.py
+    _common.py           # shared arrow()/chg_color()/flash_price_color()/live_pulse()/
+                         #   endpoint_pulse() used by card.py + dashboard.py (crawl.py also
+                         #   uses flash_price_color())
     crawl.py             # draw_crawl_story(): smallsign scrolling line (Phase 1)
     card.py              # draw_card_story(): bigsign held hero card (Phase 2)
     dashboard.py         # draw_dashboard_story(): longboi held dashboard + watch column (Phase 2)
@@ -226,13 +228,36 @@ stays in the same physical-px units `hires()` actually paints in. Passing `None`
 undercounts hi-res text width by 4x and right-aligned text (the price, the change line, the
 watch-column percents) drifts left of where it should sit.
 
-**Both held layouts are static-only in Phase 2** — `card.py`/`dashboard.py` accept `frame` (via
-the uniform signature above) but don't read it yet; there is no price-flash, no pulsing
-sparkline endpoint, and no pulsing state chip. `STATE_META.pulses` (currently only `True` for
-`OPEN`) is plumbed but unused — Phase 3 is where a widget reads `frame`/`pulses` to animate.
-Don't add animation to `card`/`dashboard` without updating the README's Phase 3 roadmap entry
-and `_StockStory`'s `FrameAwareBase.frame_for("held")` call (shared by both layouts today; a
-per-effect counter split may be needed once animation actually lands).
+**Phase 3 animation layer: two clocks, not one** — all three layouts now animate, and the two
+effects are driven by DIFFERENT clocks that must not be confused:
+
+- **Price flash** (`flash_price_color` in `layouts/_common.py`, called from `crawl.py`,
+  `card.py`, and `dashboard.py`) is WALL-CLOCK, via `time.monotonic()`. `ticker.py`'s
+  `update()` stamps `quote.flash_t = time.monotonic()` only when a live poll observes
+  `fresh.price != existing.price` (demo mode's `DemoFeed` stamps it every step instead, so
+  demo renders always show a flash — see `demo.py`). Each layout's `draw_*_story` reads its
+  own `now = time.monotonic()` at draw time and passes it to `flash_price_color(quote.flash_t,
+  dim, now=now)`, which decays the price color from white back to steady amber over
+  `_FLASH_DECAY_SECONDS` (0.420s). Because it's wall-clock, **the flash intentionally does NOT
+  freeze during transitions** — `pause_frame()` only freezes `FrameAwareBase`'s frame counter,
+  not `time.monotonic()`. This is deliberate (a flash mid-fade should keep decaying even if the
+  panel is transitioning away), not a bug to "fix" by threading it through `frame_for`.
+- **LIVE-chip pulse** (`live_pulse`) and **sparkline-endpoint pulse** (`endpoint_pulse`), both
+  in `layouts/_common.py`, are FRAME-driven — sine functions of the held renderer's own frame
+  counter, passed in as `frame=self.frame_for("held")` from `_StockStory.draw` (shared by
+  `card` and `dashboard`; `crawl` doesn't use either pulse). Because they read `frame_for`, they
+  DO freeze via `pause_frame()`/`resume_frame()` during transitions, same as any other
+  frame-aware effect (see core's constraint #12). `live_pulse` is gated by `STATE_META.pulses`
+  (currently `True` only for `MarketState.OPEN`) — `card.py`/`dashboard.py` compute
+  `chip_dim = dim * live_pulse(frame) if meta.pulses else dim`, so CLOSED/PRE/POST render the
+  state chip at a steady dim with no breathing. `endpoint_pulse` pulses the sparkline tip
+  regardless of market state. Both periods (`STATE_PULSE_PERIOD = 7`,
+  `ENDPOINT_PULSE_PERIOD = 5`) are tuned in engine ticks (`ENGINE_TICK_MS = 50ms`), giving a
+  ~2.2s LIVE-chip cycle and a ~1.6s sparkline-tip cycle (`2π·PERIOD·0.05`) — don't retune one
+  without recomputing the other's comment, and don't hardcode a peak/trough frame constant in a
+  test; derive it from the period (`round(ENDPOINT_PULSE_PERIOD * math.pi / 2)`) so a future
+  retune can't silently desync a test from the code (see `tests/test_sparkline.py`,
+  `tests/test_pulse.py`).
 
 **`green_up` is wired end-to-end** — `StocksTicker.green_up` / `_StockStory.green_up` are
 threaded from config through construction and into `draw_crawl_story(..., green_up=...)`,
@@ -244,10 +269,10 @@ test proving the SAME up-quote renders green-dominant at `green_up=True` and red
 
 **`_StockStory` is `FrameAwareBase`** — it calls `self.frame_for("crawl")` for the crawl
 dispatch and `self.frame_for("held")` (shared by BOTH `card` and `dashboard`) for the held
-dispatch, passing the result as `frame=`. No layout does anything frame-dependent with it yet
-(no animated color/border/pulse on any layout — see the README's Phase 3 roadmap for
-price-flash / pulses). The plumbing is there so Phase 3 doesn't need a widget-shape change,
-only a per-layout render-function behavior change.
+dispatch, passing the result as `frame=`. `card`/`dashboard` read `frame` to drive `live_pulse`/
+`endpoint_pulse` (see the "Phase 3 animation layer" note above); `crawl` accepts a `frame`
+keyword in its own signature but doesn't read it — its only animation (`flash_price_color`) is
+wall-clock, not frame-driven.
 
 **One INFO log per successful `update()`** — the Container contract: a silent log stream
 after startup signals the background task died. Demo mode logs

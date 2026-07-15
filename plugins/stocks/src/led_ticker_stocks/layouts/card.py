@@ -1,8 +1,14 @@
 """Bigsign quote card (held). Geometry from handoff LAYOUTS.bigA.
 
-v1 is static — no flash/pulse (that's Phase 3). `frame` is accepted for the
-uniform held-renderer signature but not read yet.
+The price line flashes whiter on a recent price change (Bloomberg-style,
+wall-clock decay — see `layouts._common.flash_price_color`). `frame`
+(the held renderer's own frame counter) drives two pulses: the LIVE state
+chip breathes while the market is OPEN (`layouts._common.live_pulse`), and
+the sparkline endpoint twinkles regardless of state
+(`layouts._common.endpoint_pulse`, applied inside `draw_sparkline`).
 """
+
+import time
 
 from led_ticker.plugin import make_color
 
@@ -12,6 +18,7 @@ from led_ticker_stocks._paint import hires, paging_dots, phys_wrap, right_align_
 from led_ticker_stocks._sparkline import draw_sparkline
 from led_ticker_stocks.layouts._common import arrow as _arrow
 from led_ticker_stocks.layouts._common import chg_color as _chg_color
+from led_ticker_stocks.layouts._common import flash_price_color, live_pulse
 from led_ticker_stocks.model import format_change, format_pct, format_price
 from led_ticker_stocks.state import STATE_META, MarketState
 
@@ -42,6 +49,7 @@ def draw_card_story(
     stays directional) for non-US market conventions; see CLAUDE.md.
     """
     dim = STATE_META[state].dim
+    now = time.monotonic()
     scale = getattr(canvas, "scale", 1)
     yoff = y_offset * scale
     shim, real = phys_wrap(canvas)
@@ -61,7 +69,7 @@ def draw_card_story(
             price,
             right_align_x(22, price, w, _MARGIN),
             1 + yoff,
-            pal.dim(pal.PRICE, dim),
+            flash_price_color(quote.flash_t, dim, now=now),
             22,
             bold=True,
         )
@@ -78,7 +86,17 @@ def draw_card_story(
             11,
             bold=False,
         )
-        draw_sparkline(canvas, 4, 41 + yoff, 178, 19, quote, dim=dim, green_up=green_up)
+        draw_sparkline(
+            canvas,
+            4,
+            41 + yoff,
+            178,
+            19,
+            quote,
+            dim=dim,
+            green_up=green_up,
+            frame=frame,
+        )
     else:
         hires(
             shim,
@@ -93,9 +111,11 @@ def draw_card_story(
     # Right-hand state zone, stacked top->bottom so nothing overlaps:
     #   [state label]   (+ "AT CLOSE" below it when closed)
     #   [paging dots]   flight-shaped, bottom-right corner
-    # (static; the chip pulse is Phase 3)
+    # LIVE chip pulses (frame-driven breathing) only while the market is
+    # OPEN; every other state renders steady.
     meta = STATE_META[state]
-    state_color = pal.dim(make_color(*meta.chip_rgb), dim)
+    chip_dim = dim * live_pulse(frame) if meta.pulses else dim
+    state_color = pal.dim(make_color(*meta.chip_rgb), chip_dim)
     if state is MarketState.CLOSED:
         hires(shim, meta.chip_label, 192, 37 + yoff, state_color, 9, bold=False)
         hires(shim, "AT CLOSE", 192, 47 + yoff, pal.dim(pal.LABEL, dim), 8, bold=False)

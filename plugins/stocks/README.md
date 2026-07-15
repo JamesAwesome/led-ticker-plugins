@@ -6,7 +6,7 @@ A stock / equities ticker **plugin** for [led-ticker](https://github.com/JamesAw
 - `card` (bigsign, ~256px) — a held hero card: symbol + price + change, a brand chip, a sparkline, a state-chip label, and paging dots.
 - `dashboard` (longboi, ~512px) — a held trading dashboard: the same hero block plus a watch column showing the next symbols and a bigger sparkline.
 
-**Phase 2 scope:** US equities only. FX/forex is still out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier). The animation layer (price-flash, sparkline/chip pulses) is deferred to Phase 3 — see [Roadmap](#roadmap).
+All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ led-ticker-stocks
 pip install led-ticker-stocks
 ```
 
-See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses, and pin production signs to an exact version (`led-ticker-stocks==0.1.0`) so a restart doesn't silently pick up a new release.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses, and pin production signs to an exact version (`led-ticker-stocks==0.3.0`) so a restart doesn't silently pick up a new release.
 
 ## Configuration
 
@@ -86,11 +86,13 @@ At least `symbols` must be a non-empty list — the widget fails at config valid
 
 The dashboard's watch column reads the widget's own full `symbols` list — it shows the neighbors of the currently-focused symbol, not anything from another widget. **Give the stocks widget its own section** (no sibling widgets) on longboi so the watch column always reflects this widget's symbol rotation.
 
-Both held layouts are static in Phase 2 — no price-flash, no pulsing sparkline endpoint or state chip (that's Phase 3; see [Roadmap](#roadmap)).
+Both held layouts animate: the price flashes white then settles back to amber on a change, the LIVE state chip breathes while the market is open, and the sparkline's tip pulses continuously.
 
 ### Demo mode (no token required)
 
 Set `demo = true` (or simply omit `FINNHUB_API_TOKEN` from the environment — an unset token silently routes to the same demo feed, it is not an error) to drive the widget from a deterministic, seeded random-walk price generator instead of live Finnhub data. Useful for previewing the widget, `render-demo` GIFs, or a sign that doesn't have a Finnhub token yet. See [`docs/demo.toml`](docs/demo.toml) for a runnable example.
+
+Demo mode moves the price every step, so the price-flash animation fires continuously (a real Finnhub feed only flashes when a poll observes an actual price change) — it's a good way to preview the flash without waiting for a live tick.
 
 ### Smoke-test configs (per sign)
 
@@ -124,8 +126,9 @@ All three layouts (`"crawl"`, `"card"`, `"dashboard"`) are registered — `layou
 
 ## Roadmap
 
-- **Phase 3:** price-flash on update, sparkline/state-chip pulses, global state dim animated on the held layouts, `font_color`/`border` styling knobs.
-- **Phase 4:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.1.0` release.
+Phase 3 (price-flash on update, sparkline/state-chip pulses) is shipping as `stocks-v0.3.0` — this is now the final planned phase for the three canonical layouts (the `crawl` layout shipped in v0.1.0, `card`/`dashboard` in v0.2.0). Deferred / out of scope: new layouts or widgets, indices/FX, a change-field flash, and `font_color`/`border`/rainbow-gradient styling knobs on these layouts.
+
+- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.3.0` release.
 
 ## Development
 
