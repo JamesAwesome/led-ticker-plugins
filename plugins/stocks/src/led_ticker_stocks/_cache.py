@@ -17,7 +17,7 @@ import os
 import time
 from collections.abc import Iterable
 
-from led_ticker.plugin import run_monitor_loop, spawn_tracked
+from led_ticker.plugin import spawn_tracked
 
 from led_ticker_stocks.demo import DemoFeed, seed_quotes
 from led_ticker_stocks.finnhub import FinnhubClient, parse_quote
@@ -36,6 +36,7 @@ class QuoteCache:
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
         self._task: asyncio.Task[None] | None = None
+        self._base_interval: int = 60
 
     def register(self, symbols: Iterable[str]) -> None:
         """Union `symbols` into the tracked set; seed a zeroed quote for any new one."""
@@ -59,10 +60,18 @@ class QuoteCache:
         symbols registered so far, marking the market OPEN; a token builds a
         real `FinnhubClient`. Tolerates a failed initial `update()` so a
         rate-limited or unreachable Finnhub at boot doesn't block startup.
+
+        The poll cadence is NOT fixed at spawn time: `_run_poll_loop` recomputes
+        it from the live symbol count every cycle (`_effective_interval`), so a
+        consumer that registers more symbols after the loop is already running
+        still widens the interval — a fixed `run_monitor_loop` interval could
+        not react to that, risking N quote calls + 1 status call per cycle
+        exceeding Finnhub's per-key rate budget.
         """
         if self._started:
             return
         self._started = True
+        self._base_interval = interval
 
         token = os.getenv("FINNHUB_API_TOKEN", "")
         if not token:
@@ -80,9 +89,42 @@ class QuoteCache:
                 "starting with placeholders, will retry",
                 e,
             )
-        self._task = spawn_tracked(
-            run_monitor_loop(self, max(interval, len(self._symbols) + 1))
-        )
+        self._task = spawn_tracked(self._run_poll_loop())
+
+    def _effective_interval(self) -> int:
+        """Poll cadence: widens as the live symbol count grows.
+
+        Recomputed fresh on every call (not cached) so late registrants —
+        symbols added via `register()` after the poll loop already started —
+        are reflected on the very next cycle instead of being stuck at the
+        cadence that was correct when `ensure_started` first ran.
+        """
+        return max(self._base_interval, len(self._symbols) + 1)
+
+    async def _run_poll_loop(self) -> None:
+        """Self-paced poll loop (replaces `run_monitor_loop`).
+
+        `run_monitor_loop` fixes its interval at spawn time, which can't
+        widen when more symbols register later. This loop recomputes
+        `_effective_interval()` fresh each cycle instead. Supervised like
+        `run_monitor_loop`'s intent: a transient `update()` failure is
+        logged and the loop keeps running (never dies on one bad cycle),
+        with a simple exponential backoff on repeated failures.
+        """
+        consecutive_errors = 0
+        while True:
+            try:
+                await self.update()
+                consecutive_errors = 0
+            except Exception as e:
+                consecutive_errors += 1
+                logging.warning(
+                    "stocks QuoteCache: poll cycle failed (%s); will retry", e
+                )
+            interval = self._effective_interval()
+            if consecutive_errors:
+                interval *= min(2**consecutive_errors, 10)
+            await asyncio.sleep(interval)
 
     async def update(self) -> None:
         """One poll cycle: demo step, or live market-status + per-symbol quotes."""
