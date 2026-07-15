@@ -1,33 +1,42 @@
-# Smallsign SMOKE TEST — stocks.ticker equity crawl (pre-merge branch)
+# Smallsign SMOKE TEST — stocks.ticker crawl + stocks.quote inline token (pre-merge branch)
+#
+# Phase 4 adds the `stocks.quote` SOURCE (an inline `:id:` price token) and a
+# process-wide shared `QuoteCache`: the crawl WIDGET and the inline TOKEN below
+# both reference AAPL, and the cache fetches AAPL exactly ONCE per cycle for
+# both of them (dedup). This smoke test exercises that shared path.
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.9 (already running everywhere)
-#   - stocks plugin (NOT yet released — Phase 1 PR #42). Add to
+#   - led-ticker-core >= 4.9 (value tokens)
+#   - stocks plugin (NOT yet released — Phase 4 PR #47). Add to
 #     config/requirements-plugins.txt (constraint-based install), the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase1#subdirectory=plugins/stocks
-#   - Section 1 (demo) needs NO token. Section 2 (live) needs a Finnhub free
-#     token in .env:  FINNHUB_API_TOKEN=xxxxx   (secrets are env-only, never here)
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase4#subdirectory=plugins/stocks
 #   - copy to config/config.toml, then `make restart`
+#
+# ONE MODE PER PROCESS (shared cache, first-started-wins):
+#   - DEMO (default): leave `demo = true` on the crawl and DON'T set a token.
+#     The whole cache — crawl AND inline token — runs the synthesized feed.
+#   - LIVE: put FINNHUB_API_TOKEN=xxxxx in .env (secrets are env-only, never
+#     here) AND remove `demo = true`. Real prices everywhere.
+#   - Don't mix: a token in .env WITH `demo = true` is a race (whichever
+#     consumer starts the cache first wins the mode) — pick one.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
 # WHAT TO LOOK FOR, section by section:
-#   1 DEMO FEED   — AAPL / MSFT / NVDA / TSLA crawl right->left continuously at
-#                   26 px/s and LOOP SEAMLESSLY (no blank gap). Per symbol:
-#                   WHITE ticker -> AMBER price -> change block colored GREEN ▲
-#                   (up) / RED ▼ (down): arrow + signed change + signed percent.
-#                   Demo state is OPEN, so FULL brightness; prices random-walk so
-#                   the change colors flicker up/down over time.
-#   2 LIVE FEED   — real US-equity prices from Finnhub. Global brightness tracks
-#                   market state: LIVE = full, PRE/AH = ~0.85, CLOSED = ~0.45
-#                   (noticeably dimmer) with prices FROZEN at the last close.
-#                   -> Run this evening/weekend and expect the DIM closed look
-#                      with static prices; run during market hours for full
-#                      brightness + prices refreshing roughly once a minute.
-#                   A bad/unknown symbol shows "SYM —" (no crash, no divide).
-#
-# NOT in this crawl yet (Phase 2/3): the state chip, sparkline, brand chips, and
-# the Bloomberg price-flash. Don't look for them — this is the crawl only.
+#   1 INLINE TOKEN — an ordinary scrolling MESSAGE with a live price woven into
+#                    its text ("... AAPL 000.00 ▲+0.00%"): symbol, price, arrow,
+#                    signed percent. The token inherits the MESSAGE's color (it
+#                    is plain-text substitution — no independent green/red arrow,
+#                    unlike the crawl). In demo it random-walks every poll tick.
+#                    This AAPL is the SAME AAPL the crawl fetches — one cache,
+#                    one fetch (see the shared-cache note above).
+#   2 CRAWL        — AAPL / MSFT / NVDA / TSLA crawl right->left continuously at
+#                    26 px/s and LOOP SEAMLESSLY (no blank gap). Per symbol:
+#                    WHITE ticker -> AMBER price -> change block colored GREEN ▲
+#                    (up) / RED ▼ (down): arrow + signed change + signed percent.
+#                    In live mode the global brightness tracks market state (full
+#                    open, ~0.85 pre/after-hours, ~0.45 dim + frozen when closed).
+#                    A bad/unknown symbol shows "SYM —" (no crash, no divide).
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -39,7 +48,25 @@ brightness = 60
 gpio_slowdown = 2
 hardware_mapping = "adafruit-hat"
 
-# --- 1: demo feed (offline, no token) -----------------------------------------
+# stocks.quote source: AAPL as an inline `:stocks.aapl:` token. Same symbol as
+# the crawl below -> the shared cache fetches AAPL once for both. `interval`
+# folds into the shared cadence (max(interval, symbol_count + 1)).
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{symbol} {price} {arrow}{pct}"
+# interval = 60
+
+# --- 1: inline token (shares the cache with the crawl) ------------------------
+[[playlist.section]]
+mode = "ticker"
+
+[[playlist.section.widget]]
+type = "message"
+text = "Inline token (shared cache): :stocks.aapl:"
+
+# --- 2: stocks.ticker crawl ---------------------------------------------------
 [[playlist.section]]
 mode = "ticker"
 
@@ -47,13 +74,5 @@ mode = "ticker"
 type = "stocks.ticker"
 symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
 demo = true
-# green_up = false   # uncomment to flip to red-up / green-down (non-US convention)
-
-# --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
-[[playlist.section]]
-mode = "ticker"
-
-[[playlist.section.widget]]
-type = "stocks.ticker"
-symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL"]
-update_interval = 60
+# green_up = false     # uncomment to flip to red-up / green-down (non-US convention)
+# update_interval = 60 # (LIVE only) with a token set + `demo` removed

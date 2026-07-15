@@ -12,12 +12,16 @@ STATUS_URL = "https://finnhub.io/api/v1/stock/market-status"
 def parse_quote(sym, payload):
     from led_ticker_stocks.model import SymbolQuote
 
+    high = payload.get("h")
+    low = payload.get("l")
     return SymbolQuote(
         sym=sym,
         price=float(payload.get("c") or 0.0),
         prev=float(payload.get("pc") or 0.0),
         d=payload.get("d"),
         dp=payload.get("dp"),
+        high=float(high) if high is not None else None,
+        low=float(low) if low is not None else None,
     )
 
 

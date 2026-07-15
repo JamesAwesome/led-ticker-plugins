@@ -1,0 +1,63 @@
+# Smallsign example — stocks.quote INLINE PRICE TOKEN (Phase 4)
+#
+# Demonstrates the `stocks.quote` SOURCE: a live `:id:` price token embedded
+# in an ordinary `message` widget's text, refreshed by a background poll
+# loop — as opposed to the `stocks.ticker` WIDGET (see
+# config.stocks-smoke.smallsign.toml), which owns its own scrolling display.
+# The token and a `stocks.ticker` widget (if you had one) would share ONE
+# `QuoteCache` and ONE Finnhub poll loop — see the README's
+# "Inline price tokens" section.
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.9
+#   - led-ticker-stocks >= 0.4.0 (adds the stocks.quote source)
+#   - NO Finnhub token required — with no FINNHUB_API_TOKEN in the
+#     environment, the shared cache runs in demo mode: a deterministic,
+#     seeded random-walk price that moves every poll tick. Add
+#     FINNHUB_API_TOKEN to .env for real prices; no config change needed.
+#   - copy to config/config.toml, then `make restart` (or `make try` for a
+#     quick headless preview)
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   1 PLACEHOLDER  — for the first few seconds after boot, the token shows
+#                    "…" (the placeholder) while the cache's first fetch is
+#                    in flight.
+#   2 LIVE TOKEN   — the placeholder resolves to "AAPL 000.00 ▲+0.00%"-shaped
+#                    text (symbol, price, arrow, percent change), woven right
+#                    into the message text — no scrolling ticker, no colored
+#                    up/down arrow (a token inherits the HOST widget's color;
+#                    see the README's "Token color is inherited" caveat).
+#   3 MOVEMENT     — in demo mode the price random-walks every poll tick, so
+#                    watch the value change over ~30s without restarting.
+#
+# If anything looks wrong: docs/visual-validation.md.
+
+[display]
+rows = 16
+cols = 32
+chain_length = 5
+brightness = 60
+gpio_slowdown = 2
+hardware_mapping = "adafruit-hat"
+
+# ---------------------------------------------------------------------------
+# Stocks source (the polled token registry). `interval` is short (30s) so the
+# demo random-walk is visibly moving during a quick smoke test; use the
+# default (60s+) in production to stay well under Finnhub's free-tier budget.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{symbol} {price} {arrow}{pct}"
+interval = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8
+
+[[playlist.section.widget]]
+type = "message"
+text = "AAPL is trading at :stocks.aapl:"
