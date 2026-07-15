@@ -10,7 +10,7 @@ from led_ticker.plugin import (
     FrameAwareBase,
 )
 
-from led_ticker_stocks._cache import get_cache
+from led_ticker_stocks._cache import QuoteCache, get_cache
 from led_ticker_stocks.layouts import LAYOUTS, resolve_layout
 from led_ticker_stocks.model import SymbolQuote
 
@@ -34,16 +34,19 @@ class _StockStory(FrameAwareBase):
     _resolved: str | None = attrs.field(init=False, default=None)
 
     @staticmethod
-    def _quote_for(sym: str) -> SymbolQuote:
+    def _quote_for(cache: QuoteCache, sym: str) -> SymbolQuote:
         """Live cache lookup, falling back to a fresh zeroed placeholder.
 
         `QuoteCache.register()` always seeds a zeroed quote, so a `None`
         here only happens for a symbol nobody has registered yet — the
         layouts already render a zeroed/no-data quote correctly (via
         `SymbolQuote.has_data`), so a fresh placeholder is enough; there is
-        nothing here to persist.
+        nothing here to persist. Takes the already-bound `cache` rather
+        than calling `get_cache()` itself, so a held-layout draw (which
+        looks up every watch-column symbol) hits the singleton lookup once
+        per `draw()` instead of once per symbol.
         """
-        quote = get_cache().get(sym)
+        quote = cache.get(sym)
         return quote if quote is not None else SymbolQuote(sym=sym, price=0.0, prev=0.0)
 
     def draw(
@@ -57,7 +60,7 @@ class _StockStory(FrameAwareBase):
         if self._resolved is None:
             self._resolved = resolve_layout(canvas, self.layout)
         cache = get_cache()
-        quote = self._quote_for(self.sym)
+        quote = self._quote_for(cache, self.sym)
         state = cache.state()
         if self._resolved == "crawl":
             end = LAYOUTS["crawl"](
@@ -74,7 +77,7 @@ class _StockStory(FrameAwareBase):
         # Held layouts (card/dashboard) paint in place; return a stable
         # cursor (canvas width) rather than a scroll position. `quotes`
         # feeds the dashboard's watch-column neighbor lookups.
-        quotes = {s: self._quote_for(s) for s in self.all_symbols}
+        quotes = {s: self._quote_for(cache, s) for s in self.all_symbols}
         LAYOUTS[self._resolved](
             canvas,
             quote,
@@ -105,6 +108,20 @@ class StocksTicker:
     green_up: bool = True
     padding: int = 6
     update_interval: int = 60
+    # Accepted-but-IGNORED: exists only so a v0.3.0 config with
+    # `token = "..."` still validates (core allowlists a widget's config
+    # keys from `start()` params ∪ attrs-init fields). The value is never
+    # read here or forwarded anywhere — the Finnhub token comes from env
+    # ONLY, resolved inside the shared `QuoteCache` (see CLAUDE.md
+    # "Secrets belong in .env, not config.toml"). A config-supplied
+    # `token` flows into `self.token` and dead-ends there. Keep the
+    # token-leak regression tests (`test_config_token_is_ignored*`) green
+    # if you touch this.
+    token: str = attrs.field(default="", kw_only=True)
+    # Unlike `token`, `demo` IS wired: `start()` forwards it to
+    # `QuoteCache.ensure_started(force_demo=...)`. See that docstring for
+    # the shared-cache "first widget to start wins" semantics.
+    demo: bool = attrs.field(default=False, kw_only=True)
     feed_title: None = attrs.field(init=False, default=None)
     feed_stories: list[_StockStory] = attrs.field(init=False, factory=list)
 
@@ -161,17 +178,18 @@ class StocksTicker:
         green_up: bool = True,
         padding: int = 6,
         update_interval: int = 60,
+        demo: bool = False,
         **kwargs: Any,
     ) -> Self:
-        # `token` is NOT a `start()` parameter, and this class no longer has
-        # a `token` (or `demo`) field at all — core's widget factory unions
-        # `start()`'s signature into the allowed config keys, so a parameter
-        # here would let `token = "..."` in config.toml override the env
-        # secret and get bound straight into HTTP requests. The Finnhub
-        # token comes from env ONLY, resolved inside the shared `QuoteCache`
-        # (see CLAUDE.md "Secrets belong in .env, not config.toml"). A
-        # config-supplied `token` arriving via **kwargs simply isn't in
-        # `valid` below, so it's dropped rather than bound anywhere.
+        # `token` is deliberately NOT a `start()` parameter (unlike `demo`,
+        # which needs active wiring below): core's widget factory unions
+        # `start()`'s signature into the allowed config keys, and `token`
+        # is already an accepted attrs field on the class (see the field
+        # comment), so it still validates and flows through **kwargs into
+        # `cls(...)` — bound to `widget.token` and never read again. The
+        # Finnhub token comes from env ONLY, resolved inside the shared
+        # `QuoteCache` (see CLAUDE.md "Secrets belong in .env, not
+        # config.toml").
         if len(symbols) > SYMBOL_SOFT_CAP:
             logging.warning(
                 "stocks.ticker: %d symbols configured (soft cap %d) — Finnhub's "
@@ -188,8 +206,15 @@ class StocksTicker:
             green_up=green_up,
             padding=padding,
             update_interval=update_interval,
+            demo=demo,
             **{k: v for k, v in kwargs.items() if k in valid},
         )
         get_cache().register(widget.symbols)
-        await get_cache().ensure_started(session, interval=update_interval)
+        # `force_demo`: the shared cache is single-mode, so `demo = true`
+        # on THIS widget forces the whole cache into demo mode even if a
+        # live token is present — but only if this is the widget that wins
+        # the "first to call ensure_started" race (see that docstring).
+        await get_cache().ensure_started(
+            session, interval=update_interval, force_demo=demo
+        )
         return widget

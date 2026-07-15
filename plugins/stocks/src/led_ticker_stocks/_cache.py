@@ -51,15 +51,26 @@ class QuoteCache:
     def state(self) -> MarketState:
         return self._state
 
-    async def ensure_started(self, session: object, *, interval: int = 60) -> None:
+    async def ensure_started(
+        self, session: object, *, interval: int = 60, force_demo: bool = False
+    ) -> None:
         """Idempotently start the shared poll loop.
 
-        No-op on every call after the first. Resolves the Finnhub token from
-        env ONLY (never a param — see CLAUDE.md "Secrets belong in .env, not
-        config.toml"): no token routes to the offline `DemoFeed` over the
-        symbols registered so far, marking the market OPEN; a token builds a
-        real `FinnhubClient`. Tolerates a failed initial `update()` so a
-        rate-limited or unreachable Finnhub at boot doesn't block startup.
+        No-op on every call after the first — this is a SHARED, single-mode
+        cache: the FIRST widget to call `ensure_started` decides demo vs.
+        live for every widget reading it, and every later call (even with a
+        different `force_demo`) is silently ignored. A config that mixes a
+        `demo = true` widget with a plain live widget in the same process
+        resolves to whichever one's `start()` happens to run first — this
+        is a pre-existing property of the shared-cache design, not new here.
+
+        Resolves the Finnhub token from env ONLY (never a param — see
+        CLAUDE.md "Secrets belong in .env, not config.toml"): `force_demo`
+        OR no token routes to the offline `DemoFeed` over the symbols
+        registered so far, marking the market OPEN; otherwise a token
+        builds a real `FinnhubClient`. Tolerates a failed initial
+        `update()` so a rate-limited or unreachable Finnhub at boot doesn't
+        block startup.
 
         The poll cadence is NOT fixed at spawn time: `_run_poll_loop` recomputes
         it from the live symbol count every cycle (`_effective_interval`), so a
@@ -74,7 +85,7 @@ class QuoteCache:
         self._base_interval = interval
 
         token = os.getenv("FINNHUB_API_TOKEN", "")
-        if not token:
+        if force_demo or not token:
             self._demo_feed = DemoFeed(sorted(self._symbols))
             self._quotes = self._demo_feed.quotes
             self._state = MarketState.OPEN

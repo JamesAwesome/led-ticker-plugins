@@ -5,6 +5,7 @@ import logging
 import time
 import unittest.mock as mock
 
+import attrs
 import pytest
 from led_ticker.plugin import HeadlessBackend
 
@@ -193,6 +194,45 @@ async def test_config_token_is_ignored_no_env(monkeypatch):
     cache = get_cache()
     assert cache._client is None  # empty token routes to the demo feed
     assert cache._demo_feed is not None
+
+
+@pytest.mark.asyncio
+async def test_demo_field_forces_cache_demo(monkeypatch):
+    """`demo = true` in config must force the shared cache into demo mode
+    even when a live Finnhub token is present in env — the cache is
+    single-mode per process, and `force_demo` is the knob that lets a
+    `demo = true` widget win that mode regardless of the token (as long as
+    it's the first widget to call `ensure_started`; see the shared-cache
+    docstring on `QuoteCache.ensure_started`)."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "real-env-token")
+    widget = await StocksTicker.start(symbols=["AAPL"], session=mock.Mock(), demo=True)
+
+    assert widget.demo is True
+    cache = get_cache()
+    assert cache._client is None  # NOT live, despite the env token
+    assert cache._demo_feed is not None
+    assert cache.get("AAPL").has_data  # demo feed seeded + stepped it
+
+
+def test_validate_accepts_demo_and_token_fields():
+    """Core allowlists a widget's config keys from `start()`'s explicit
+    params UNION attrs-init fields (see CLAUDE.md). A v0.3.0 config with
+    `demo = true` / `token = "..."` must resolve to keys in that set, or
+    `led-ticker validate` hard-fails with "unknown field" — the Phase 4
+    Task 2 refactor regressed exactly this for the plugin's own shipped
+    `docs/demo.toml` + smoke configs.
+    """
+    allowed = {f.name for f in attrs.fields(StocksTicker)} | set(
+        inspect.signature(StocksTicker.start).parameters
+    )
+    assert "demo" in allowed
+    assert "token" in allowed
+
+    # And the widget actually constructs with both set, without raising —
+    # `token` is accepted-but-ignored, `demo` is a real field.
+    widget = StocksTicker(symbols=["AAPL"], demo=True, token="ignored")
+    assert widget.demo is True
+    assert widget.token == "ignored"
 
 
 @pytest.mark.asyncio
