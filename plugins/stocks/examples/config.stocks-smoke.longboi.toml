@@ -1,57 +1,67 @@
-# Longboi SMOKE TEST — stocks.ticker DASHBOARD layout at scale 4 (pre-merge branch)
+# Longboi SMOKE TEST — stocks.ticker DASHBOARD layout + stocks.quote inline token (pre-merge branch)
 #
-# No `layout` override here on purpose: `resolve_layout` reads the real
-# (unwrapped) canvas width and auto-selects `dashboard` at this geometry
-# (512px real width) — the same auto-select a config in the wild gets by
-# just omitting `layout`. `mode = "slideshow"` is the recommended section
-# mode for held layouts (card/dashboard hold one symbol per visit, unlike
-# the scrolling `crawl`, which wants `mode = "ticker"`).
+# Phase 4 adds the `stocks.quote` SOURCE (an inline `:id:` price token) and a
+# process-wide shared `QuoteCache`: the dashboard WIDGET and the inline TOKEN
+# below both reference AAPL, and the cache fetches AAPL exactly ONCE per cycle
+# for both of them (dedup). This smoke test exercises that shared path.
+#
+# No `layout` override on the ticker on purpose: `resolve_layout` reads the real
+# (unwrapped) canvas width and auto-selects `dashboard` at this geometry (512px
+# real width) — the same auto-select a config in the wild gets by just omitting
+# `layout`. `mode = "slideshow"` is the recommended mode for held layouts.
 #
 # IMPORTANT: the dashboard's watch column (the next-3-symbols strip on the
 # right) reads the widget's OWN full symbol list — it does not see other
-# widgets in the section. Keep the stocks widget ALONE in its section (as
-# below) so the watch column shows the intended neighbors instead of
-# whatever another widget happens to be doing.
+# widgets or the inline token. Keep the stocks widget ALONE in its section (as
+# below) so the watch column shows the intended neighbors. The inline-token
+# message lives in its OWN section, so it doesn't disturb that.
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.9
-#   - stocks plugin (NOT yet released — Phase 2 PR). Add to
+#   - led-ticker-core >= 4.9 (value tokens)
+#   - stocks plugin (NOT yet released — Phase 4 PR #47). Add to
 #     config/requirements-plugins.txt the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase2#subdirectory=plugins/stocks
-#   - Section 1 (demo) needs NO token. Section 2 (live) needs:
-#       FINNHUB_API_TOKEN=xxxxx   in .env  (secrets are env-only, never here)
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase4#subdirectory=plugins/stocks
 #   - copy to config/config.toml, then `make restart`
+#
+# ONE MODE PER PROCESS (shared cache, first-started-wins):
+#   - DEMO (default): leave `demo = true` on the dashboard and DON'T set a token.
+#     The whole cache — dashboard AND inline token — runs the synthesized feed.
+#   - LIVE: put FINNHUB_API_TOKEN=xxxxx in .env (secrets are env-only, never
+#     here) AND remove `demo = true`. Real prices everywhere.
+#   - Don't mix: a token in .env WITH `demo = true` is a race (whichever
+#     consumer starts the cache first wins the mode) — pick one.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
-# WHAT TO LOOK FOR, section by section (each symbol HELD ~5.2s, then the
-# section transitions to the next symbol):
-#   1 DEMO FEED   — one trading-DASHBOARD view per symbol: hero SYMBOL +
-#                   brand CHIP (abstract two-tone diagonal block, never a
-#                   logo) + state-chip label on the left; big PRICE + ▲/▼
-#                   signed change/percent (green up / red down) + "PREV"
-#                   reference price in the middle; a SPARKLINE (dotted
-#                   prev-close line + up/down trend + white leading dot)
-#                   right of that; and on the far right a WATCH COLUMN
-#                   listing the NEXT 3 symbols with their percent change,
-#                   plus small PAGING DOTS below it tracking which symbol
-#                   (of 4) is in focus. Nothing should clip at the 64px
-#                   ceiling. FULL brightness (demo=OPEN); change colors +
-#                   sparkline + watch-column percents flicker as the demo
-#                   walk moves prices.
-#   2 LIVE FEED   — same dashboard, real prices; global brightness + the
-#                   state-chip label track market state (LIVE full / PRE·AH
-#                   ~0.85 dimmer, chip reads "PRE"/"AH" / CLOSED ~0.45
-#                   dimmest, chip reads "CLSD", prices frozen at last
-#                   close). Bad symbol -> em-dash price with no sparkline;
-#                   its watch-column row still shows the symbol. Prices
-#                   refresh ~once a minute when open.
+# WHAT TO LOOK FOR:
+#   1 INLINE TOKEN — a held MESSAGE with a live price woven into its text
+#                    ("... AAPL 000.00 ▲+0.00%"): symbol, price, arrow, signed
+#                    percent, in hi-res text. The token inherits the message's
+#                    color (plain-text substitution — no independent green/red
+#                    arrow, unlike the dashboard). In demo it random-walks each
+#                    poll tick. This AAPL is the SAME AAPL the dashboard fetches
+#                    — one cache, one fetch (see the shared-cache note above).
+#   2 DASHBOARD (per symbol, HELD ~5.2s, then transitions to the next symbol) —
+#                    one trading-DASHBOARD view per symbol: hero SYMBOL + brand
+#                    CHIP (abstract two-tone diagonal block, never a logo) +
+#                    state-chip label on the left; big PRICE + ▲/▼ signed
+#                    change/percent (green up / red down) + "PREV" reference
+#                    price in the middle; a SPARKLINE (dotted prev-close line +
+#                    up/down trend + white leading dot) right of that; and on the
+#                    far right a WATCH COLUMN listing the NEXT 3 symbols with
+#                    their percent change, plus small PAGING DOTS below it
+#                    tracking which symbol (of 8) is in focus. On a price change,
+#                    a Bloomberg PRICE-FLASH (Phase 3) briefly tints the price;
+#                    the state chip + sparkline endpoint PULSE while open.
+#                    Nothing should clip at the 64px ceiling. In live mode global
+#                    brightness + the state-chip label track market state (LIVE
+#                    full / PRE·AH ~0.85 / CLOSED ~0.45 dim, frozen). Bad symbol
+#                    -> em-dash price with no sparkline; its watch-column row
+#                    still shows the symbol.
 #
 # NOTE (longboi color wiring): these panels wire HUB75 G→Red, R→Blue, B→Green,
 # so led_rgb_sequence = "BRG" is REQUIRED or the up/down green/red will look
 # wrong. If green reads as blue or red as green, that line is the first suspect.
-#
-# NOT here yet (Phase 3): price-flash on update, sparkline/state-chip pulse.
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -66,17 +76,27 @@ panel_type = "FM6126A"
 # Muen P2 panels wire HUB75 G-pin → Red LED, R-pin → Blue LED, B-pin → Green LED.
 led_rgb_sequence = "BRG"
 
-# --- 1: demo feed (offline, no token) -----------------------------------------
+# stocks.quote source: AAPL as an inline `:stocks.aapl:` token. Same symbol as
+# the dashboard below -> the shared cache fetches AAPL once for both. `interval`
+# folds into the shared cadence (max(interval, symbol_count + 1)).
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{symbol} {price} {arrow}{pct}"
+# interval = 60
+
+# --- 1: inline token (shares the cache with the dashboard) --------------------
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 5.2
 
 [[playlist.section.widget]]
-type = "stocks.ticker"
-symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
-demo = true
+type = "message"
+text = "Inline token (shared cache): :stocks.aapl:"
+font_size = 22
 
-# --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
+# --- 2: stocks.ticker dashboard (widget ALONE in its section — see note) ------
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 5.2
@@ -84,4 +104,5 @@ hold_time = 5.2
 [[playlist.section.widget]]
 type = "stocks.ticker"
 symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD"]
-update_interval = 60
+demo = true
+# update_interval = 60 # (LIVE only) with a token set + `demo` removed

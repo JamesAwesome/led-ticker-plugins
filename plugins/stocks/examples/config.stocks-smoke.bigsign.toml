@@ -1,46 +1,58 @@
-# Bigsign SMOKE TEST — stocks.ticker CARD layout at scale 4 (pre-merge branch)
+# Bigsign SMOKE TEST — stocks.ticker CARD layout + stocks.quote inline token (pre-merge branch)
 #
-# No `layout` override here on purpose: `resolve_layout` reads the real
-# (unwrapped) canvas width and auto-selects `card` at this geometry
-# (~256px real width) — the same auto-select a config in the wild gets by
-# just omitting `layout`. `mode = "slideshow"` is the recommended section
-# mode for held layouts (card/dashboard hold one symbol per visit, unlike
-# the scrolling `crawl`, which wants `mode = "ticker"`).
+# Phase 4 adds the `stocks.quote` SOURCE (an inline `:id:` price token) and a
+# process-wide shared `QuoteCache`: the card WIDGET and the inline TOKEN below
+# both reference AAPL, and the cache fetches AAPL exactly ONCE per cycle for
+# both of them (dedup). This smoke test exercises that shared path.
+#
+# No `layout` override on the ticker on purpose: `resolve_layout` reads the real
+# (unwrapped) canvas width and auto-selects `card` at this geometry (~256px real
+# width) — the same auto-select a config in the wild gets by just omitting
+# `layout`. `mode = "slideshow"` is the recommended mode for held layouts (card
+# holds one symbol per visit, unlike the scrolling `crawl`, which wants `ticker`).
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.9
-#   - stocks plugin (NOT yet released — Phase 2 PR). Add to
+#   - led-ticker-core >= 4.9 (value tokens)
+#   - stocks plugin (NOT yet released — Phase 4 PR #47). Add to
 #     config/requirements-plugins.txt the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase2#subdirectory=plugins/stocks
-#   - Section 1 (demo) needs NO token. Section 2 (live) needs:
-#       FINNHUB_API_TOKEN=xxxxx   in .env  (secrets are env-only, never here)
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase4#subdirectory=plugins/stocks
 #   - copy to config/config.toml, then `make restart`
+#
+# ONE MODE PER PROCESS (shared cache, first-started-wins):
+#   - DEMO (default): leave `demo = true` on the card and DON'T set a token.
+#     The whole cache — card AND inline token — runs the synthesized feed.
+#   - LIVE: put FINNHUB_API_TOKEN=xxxxx in .env (secrets are env-only, never
+#     here) AND remove `demo = true`. Real prices everywhere.
+#   - Don't mix: a token in .env WITH `demo = true` is a race (whichever
+#     consumer starts the cache first wins the mode) — pick one.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
-# WHAT TO LOOK FOR, section by section (each symbol HELD ~5.2s, then the
-# section transitions to the next symbol):
-#   1 DEMO FEED   — one hero CARD per symbol: big SYMBOL (top-left) + big
-#                   PRICE (top-right), both bold hi-res. Below the price: a
-#                   ▲/▼ arrow + signed change + signed percent, green (up) /
-#                   red (down). A brand CHIP (abstract two-tone diagonal
-#                   block, never a logo) sits left of the symbol. Below
-#                   that: a SPARKLINE spanning most of the card width — a
-#                   dotted prev-close reference line plus an up/down-colored
-#                   trend line with a white leading-edge dot. Bottom-right:
-#                   a state chip label ("LIVE" while demo=OPEN) + small
-#                   PAGING DOTS tracking which symbol (of 4) is showing.
-#                   Nothing should clip at the 64px ceiling. FULL brightness
-#                   (demo=OPEN); change colors + sparkline flicker as the
-#                   demo walk moves prices.
-#   2 LIVE FEED   — same card, real prices; global brightness + the state
-#                   chip label track market state (LIVE full / PRE·AH
-#                   ~0.85 dimmer, chip reads "PRE"/"AH" / CLOSED ~0.45
-#                   dimmest, chip reads "CLSD" + an "AT CLOSE" note, prices
-#                   frozen at last close). Bad symbol -> em-dash price with
-#                   no sparkline. Prices refresh ~once a minute when open.
-#
-# NOT here yet (Phase 3): price-flash on update, sparkline/state-chip pulse.
+# WHAT TO LOOK FOR:
+#   1 INLINE TOKEN — a held MESSAGE with a live price woven into its text
+#                    ("... AAPL 000.00 ▲+0.00%"): symbol, price, arrow, signed
+#                    percent, in hi-res text. The token inherits the message's
+#                    color (plain-text substitution — no independent green/red
+#                    arrow, unlike the card). In demo it random-walks each poll
+#                    tick. This AAPL is the SAME AAPL the card fetches — one
+#                    cache, one fetch (see the shared-cache note above).
+#   2 CARD (per symbol, HELD ~5.2s, then transitions to the next symbol) —
+#                    one hero CARD per symbol: big SYMBOL (top-left) + big PRICE
+#                    (top-right), both bold hi-res. Below the price: a ▲/▼ arrow
+#                    + signed change + signed percent, green (up) / red (down).
+#                    A brand CHIP (abstract two-tone diagonal block, never a
+#                    logo) sits left of the symbol. Below that: a SPARKLINE
+#                    spanning most of the card width — a dotted prev-close
+#                    reference line plus an up/down-colored trend line with a
+#                    white leading-edge dot. Bottom-right: a state chip label
+#                    ("LIVE" while demo=OPEN) + small PAGING DOTS tracking which
+#                    symbol (of 4) is showing. On a price change, a Bloomberg
+#                    PRICE-FLASH (Phase 3) briefly tints the price cell; the LIVE
+#                    chip + sparkline endpoint PULSE while open. Nothing should
+#                    clip at the 64px ceiling. In live mode global brightness +
+#                    the state-chip label track market state (LIVE full / PRE·AH
+#                    ~0.85 dimmer / CLOSED ~0.45 dimmest + "AT CLOSE", frozen).
+#                    Bad symbol -> em-dash price with no sparkline.
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -56,7 +68,27 @@ hardware_mapping = "adafruit-hat"
 gpio_slowdown = 3
 pwm_bits = 8
 
-# --- 1: demo feed (offline, no token) -----------------------------------------
+# stocks.quote source: AAPL as an inline `:stocks.aapl:` token. Same symbol as
+# the card below -> the shared cache fetches AAPL once for both. `interval`
+# folds into the shared cadence (max(interval, symbol_count + 1)).
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{symbol} {price} {arrow}{pct}"
+# interval = 60
+
+# --- 1: inline token (shares the cache with the card) -------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 5.2
+
+[[playlist.section.widget]]
+type = "message"
+text = "Inline token (shared cache): :stocks.aapl:"
+font_size = 22
+
+# --- 2: stocks.ticker card ----------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 5.2
@@ -65,13 +97,4 @@ hold_time = 5.2
 type = "stocks.ticker"
 symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
 demo = true
-
-# --- 2: live feed (needs FINNHUB_API_TOKEN in .env) ---------------------------
-[[playlist.section]]
-mode = "slideshow"
-hold_time = 5.2
-
-[[playlist.section.widget]]
-type = "stocks.ticker"
-symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL"]
-update_interval = 60
+# update_interval = 60 # (LIVE only) with a token set + `demo` removed
