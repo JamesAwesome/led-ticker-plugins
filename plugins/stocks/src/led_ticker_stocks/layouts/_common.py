@@ -19,9 +19,9 @@ _FLASH_DECAY_SECONDS = 0.420
 # TICKS (ENGINE_TICK_MS = 50ms per the core held-loop cadence), not
 # wall-clock seconds — the `frame` value comes from the held renderer's
 # `frame_for("held")` counter, so these stay in lockstep with the render
-# loop rather than drifting against it.
-STATE_PULSE_PERIOD = 24  # ~2s full cycle at 50ms/tick — LIVE chip "breathing"
-ENDPOINT_PULSE_PERIOD = 20  # slightly faster "twinkle" on the sparkline tip
+# loop rather than drifting against it. Full sine cycle = 2*pi*PERIOD*0.05s.
+STATE_PULSE_PERIOD = 7  # 2*pi*7*0.05 ~= 2.2s full cycle — LIVE chip "breathing"
+ENDPOINT_PULSE_PERIOD = 5  # 2*pi*5*0.05 ~= 1.6s — faster "twinkle" on the sparkline tip
 
 
 def live_pulse(frame: int) -> float:
