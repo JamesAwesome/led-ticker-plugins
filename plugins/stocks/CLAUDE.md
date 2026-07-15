@@ -121,9 +121,11 @@ keys it will bind, so if `token` were a `start()` parameter, a user's `token = "
 requests — exactly the leak `resolve_secret_token` / "secrets belong in `.env`" is meant to
 prevent. The actual env resolution (`os.getenv("FINNHUB_API_TOKEN", "")`) now happens ONCE,
 inside `QuoteCache.ensure_started()` — not per-widget. `StocksTicker` still carries a `token`
-attrs field only so a v0.3.0-era config with `token = "..."` still validates; `start()`
-explicitly filters it out of the `cls(...)` call (`k != "token"`) before construction, so a
-config-supplied value dead-ends on `widget.token` and never reaches the cache. Tripwires:
+attrs field only so a v0.3.0-era config with `token = "..."` still validates: the value flows
+through `**kwargs` into `cls(...)` and binds to `widget.token`, but `start()` never reads or
+forwards it, so a config-supplied token dead-ends on the instance and never reaches the cache.
+(There is deliberately no `k != "token"` filter — `token` is a legitimate attrs field; it is
+inert, not stripped.) Tripwires:
 `test_config_token_is_ignored`, `test_config_token_is_ignored_no_env` (`tests/test_ticker.py`).
 
 **Empty token silently routes to demo, not an error** — `QuoteCache.ensure_started()` treats
