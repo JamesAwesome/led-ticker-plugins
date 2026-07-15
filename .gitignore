@@ -10,5 +10,8 @@ build/
 .coverage.*
 htmlcov/
 .env
-.claude/
+# Track committed agent skills (.claude/skills/); ignore per-user/local .claude state.
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 .superpowers/
