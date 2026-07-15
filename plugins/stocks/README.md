@@ -6,7 +6,7 @@ A stock / equities ticker **plugin** for [led-ticker](https://github.com/JamesAw
 - `card` (bigsign, ~256px) — a held hero card: symbol + price + change, a brand chip, a sparkline, a state-chip label, and paging dots.
 - `dashboard` (longboi, ~512px) — a held trading dashboard: the same hero block plus a watch column showing the next symbols and a bigger sparkline.
 
-All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. It also contributes a `stocks.quote` **source** — a live `:id:` price token you can weave into any other widget's text (a headline, a two-row detail line, a clock/date composite) — see [Inline price tokens](#inline-price-tokens). **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
+All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. It also contributes a `stocks.quote` **source** — a live `:id:` price token you can weave into any other widget's text (a headline, a two-row detail line, a clock/date composite) — see [Inline price tokens](#inline-price-tokens) — and a `stocks.trend` **color provider** that tints any text widget green/red/neutral by a symbol's day change, independent of which widget is doing the drawing — see [Trend color](#trend-color). **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
 
 ## Prerequisites
 
@@ -173,11 +173,40 @@ Every `stocks.quote` token and every `stocks.ticker` widget in the same process 
 
 With no `FINNHUB_API_TOKEN` set (or `demo = true` on any `stocks.ticker` widget sharing the process — see [Demo mode](#demo-mode-no-token-required) for the first-started-wins nuance), tokens show a moving, synthesized price instead of the `…` placeholder — useful for previewing a token-driven config or a `render-demo` GIF with no Finnhub account at all. [`examples/config.stocks-token.smallsign.toml`](examples/config.stocks-token.smallsign.toml) is a ready-to-run, token-free example.
 
+## Trend color
+
+Besides the `stocks.ticker` widget and the `stocks.quote` source, this plugin registers a `stocks.trend` **color provider** — set it as `font_color` on any text widget to tint the text green/red/neutral by a symbol's day change, without switching to the `stocks.ticker` widget:
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "AAPL :stocks.aapl:"
+font_color = {style = "stocks.trend", symbol = "AAPL"}
+```
+
+This tints the **whole message** — it's a whole-string provider (like `color_cycle`), not a per-character one (like `rainbow`): the entire string turns green when the symbol's day change is positive, red when negative, and neutral gray when flat or before the first quote lands. There's no way to color just the price segment of a token differently from the surrounding label text (that's deferred future work, tracked separately from this plugin). Pairing it with an [inline price token](#inline-price-tokens), as in the example above, gives a compact "SYM price" line that tints by direction; it also works on any other text widget's `font_color`.
+
+### Fields
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `symbol` | string | — | **Required.** The ticker symbol to track (e.g. `"AAPL"`). Same FX restriction as the widget/source — a symbol containing `/` fails validation. |
+| `up` | `[r, g, b]` | `[60, 220, 60]` (green) | Color when the symbol's day change is positive. |
+| `down` | `[r, g, b]` | `[255, 60, 60]` (red) | Color when the symbol's day change is negative. |
+| `flat` | `[r, g, b]` | `[150, 150, 150]` (neutral gray) | Color when the change is exactly zero, or when no quote has landed for the symbol yet. |
+| `green_up` | bool | `true` | Set `false` to swap `up`/`down` (same convention as the widget's own `green_up`). |
+
+### Feeding requirement
+
+`stocks.trend` **reads** the shared `QuoteCache`; it does not start it. The symbol must be fed by a `stocks.quote` [source](#inline-price-tokens) or a `stocks.ticker` widget somewhere in the same config — something has to actually start the cache's poll loop and register a real quote for the symbol. The natural pairing above already has a feeder: the `[[source]]` block behind `:stocks.aapl:` is what starts the cache. If nothing in the config feeds the symbol, the cache never starts and the widget renders the `flat` color forever — not an error, just a steady neutral gray.
+
+See [`examples/config.stocks-trend.smallsign.toml`](examples/config.stocks-trend.smallsign.toml) for a ready-to-run, token-free demo.
+
 ## Roadmap
 
-Phase 4 (the `stocks.quote` inline price token, backed by a shared `QuoteCache` that dedups Finnhub requests across every widget/token in the process) is shipping as `stocks-v0.4.0` — this is now the final planned phase for v1. `crawl` shipped in v0.1.0, `card`/`dashboard` in v0.2.0, the price-flash/pulse animation layer in v0.3.0. Deferred / out of scope: indices/FX, per-token color, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
+Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), and the `stocks.trend` color provider (v0.5.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), indices/FX, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
 
-- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.4.0` release.
+- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.5.0` release.
 
 ## Development
 
