@@ -1,42 +1,39 @@
-# Smallsign SMOKE TEST — stocks.ticker crawl + stocks.quote inline token (pre-merge branch)
+# Smallsign SMOKE TEST — stocks.ticker crawl + a MIXED-COLOR inline price token
 #
-# Phase 4 adds the `stocks.quote` SOURCE (an inline `:id:` price token) and a
-# process-wide shared `QuoteCache`: the crawl WIDGET and the inline TOKEN below
-# both reference AAPL, and the cache fetches AAPL exactly ONCE per cycle for
-# both of them (dedup). This smoke test exercises that shared path.
+# The crawl WIDGET and the inline `:stocks.aapl:` TOKEN share ONE `QuoteCache`
+# (AAPL fetched once per cycle for both — dedup). The token line here is a
+# MIXED-COLOR demo: the literal "AAPL " is white (the message `font_color`) and
+# the price is GREEN (up) / RED (down) by trend, because the `[[source]]` carries
+# a `color` provider (`stocks.trend`) that colors just the token.
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.9 (value tokens)
-#   - stocks plugin (NOT yet released — Phase 4 PR #47). Add to
-#     config/requirements-plugins.txt (constraint-based install), the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase4#subdirectory=plugins/stocks
+#   - led-ticker-core WITH colored value tokens (PR #390 — a `[[source]] color`
+#     that tints just the `:id:` token). NOT in a core release yet. On an OLDER
+#     core the `color` line is ignored and the WHOLE message renders in
+#     `font_color` (white) — no mixed color, everything else still works.
+#   - led-ticker-stocks >= 0.5.0 (the `stocks.trend` color provider). In
+#     config/requirements-plugins.txt:  led-ticker-stocks==0.5.0
 #   - copy to config/config.toml, then `make restart`
 #
 # ONE MODE PER PROCESS (shared cache, first-started-wins):
-#   - DEMO (default): leave `demo = true` on the crawl and DON'T set a token.
-#     The whole cache — crawl AND inline token — runs the synthesized feed.
-#   - LIVE: put FINNHUB_API_TOKEN=xxxxx in .env (secrets are env-only, never
-#     here) AND remove `demo = true`. Real prices everywhere.
-#   - Don't mix: a token in .env WITH `demo = true` is a race (whichever
-#     consumer starts the cache first wins the mode) — pick one.
+#   - DEMO (default): leave `demo = true` on the crawl, no FINNHUB_API_TOKEN.
+#     The whole cache — crawl AND token — runs the synthesized feed.
+#   - LIVE: put FINNHUB_API_TOKEN=xxxxx in .env (secrets are env-only) AND
+#     remove `demo = true`. Real prices everywhere.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
 # WHAT TO LOOK FOR, section by section:
-#   1 INLINE TOKEN — an ordinary scrolling MESSAGE with a live price woven into
-#                    its text ("... AAPL 000.00 ▲+0.00%"): symbol, price, arrow,
-#                    signed percent. The token inherits the MESSAGE's color (it
-#                    is plain-text substitution — no independent green/red arrow,
-#                    unlike the crawl). In demo it random-walks every poll tick.
-#                    This AAPL is the SAME AAPL the crawl fetches — one cache,
-#                    one fetch (see the shared-cache note above).
+#   1 MIXED-COLOR TOKEN — a scrolling MESSAGE reading "AAPL 000.00 +0.00%". The
+#                    "AAPL " label is WHITE; the price + signed percent are GREEN
+#                    when AAPL is up on the day, RED when down (trend color on the
+#                    token only — the two colors on ONE line is the thing to
+#                    verify). In demo the price random-walks so the color flips
+#                    over ~30s. This AAPL is the SAME AAPL the crawl fetches.
 #   2 CRAWL        — AAPL / MSFT / NVDA / TSLA crawl right->left continuously at
-#                    26 px/s and LOOP SEAMLESSLY (no blank gap). Per symbol:
-#                    WHITE ticker -> AMBER price -> change block colored GREEN ▲
-#                    (up) / RED ▼ (down): arrow + signed change + signed percent.
-#                    In live mode the global brightness tracks market state (full
-#                    open, ~0.85 pre/after-hours, ~0.45 dim + frozen when closed).
-#                    A bad/unknown symbol shows "SYM —" (no crash, no divide).
+#                    26 px/s and LOOP SEAMLESSLY. Per symbol: WHITE ticker ->
+#                    AMBER price -> change block GREEN ▲ (up) / RED ▼ (down).
+#                    In live mode global brightness tracks market state.
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -48,23 +45,26 @@ brightness = 60
 gpio_slowdown = 2
 hardware_mapping = "adafruit-hat"
 
-# stocks.quote source: AAPL as an inline `:stocks.aapl:` token. Same symbol as
-# the crawl below -> the shared cache fetches AAPL once for both. `interval`
-# folds into the shared cadence (max(interval, symbol_count + 1)).
+# stocks.quote source: AAPL as an inline `:stocks.aapl:` token, shared with the
+# crawl (one fetch for both). `color` tints JUST the token by trend — green up /
+# red down (same provider the ticker widget uses). `format` drops the arrow glyph
+# (the color conveys direction); smallsign is BDF (scale 1), no hi-res font.
 [[source]]
 id = "stocks.aapl"
 type = "stocks.quote"
 symbol = "AAPL"
-format = "{symbol} {price} {arrow}{pct}"
+format = "{price} {pct}"
+color = {style = "stocks.trend", symbol = "AAPL"}
 # interval = 60
 
-# --- 1: inline token (shares the cache with the crawl) ------------------------
+# --- 1: mixed-color inline token (shares the cache with the crawl) ------------
 [[playlist.section]]
 mode = "ticker"
 
 [[playlist.section.widget]]
 type = "message"
-text = "Inline token (shared cache): :stocks.aapl:"
+text = "AAPL :stocks.aapl:"
+font_color = [255, 255, 255]   # "AAPL " white; the token is trend-colored
 
 # --- 2: stocks.ticker crawl ---------------------------------------------------
 [[playlist.section]]

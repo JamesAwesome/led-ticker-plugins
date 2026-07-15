@@ -1,9 +1,11 @@
-# Bigsign SMOKE TEST — stocks.ticker CARD layout + stocks.quote inline token (pre-merge branch)
+# Bigsign SMOKE TEST — stocks.ticker CARD + a HI-RES, MIXED-COLOR inline token
 #
-# Phase 4 adds the `stocks.quote` SOURCE (an inline `:id:` price token) and a
-# process-wide shared `QuoteCache`: the card WIDGET and the inline TOKEN below
-# both reference AAPL, and the cache fetches AAPL exactly ONCE per cycle for
-# both of them (dedup). This smoke test exercises that shared path.
+# The card WIDGET and the inline `:stocks.aapl:` TOKEN share ONE `QuoteCache`
+# (AAPL fetched once per cycle for both — dedup). The token line here is a HI-RES
+# (Inter-Bold) + MIXED-COLOR demo: the literal "AAPL " is white (the message
+# `font_color`) and the price is GREEN (up) / RED (down) by trend, because the
+# `[[source]]` carries a `color` provider (`stocks.trend`) that colors just the
+# token. Two colors on ONE hi-res line is the thing to hardware-validate.
 #
 # No `layout` override on the ticker on purpose: `resolve_layout` reads the real
 # (unwrapped) canvas width and auto-selects `card` at this geometry (~256px real
@@ -12,10 +14,12 @@
 # holds one symbol per visit, unlike the scrolling `crawl`, which wants `ticker`).
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.9 (value tokens)
-#   - stocks plugin (NOT yet released — Phase 4 PR #47). Add to
-#     config/requirements-plugins.txt the git ref:
-#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@feat/stocks-phase4#subdirectory=plugins/stocks
+#   - led-ticker-core WITH colored value tokens (PR #390 — a `[[source]] color`
+#     that tints just the `:id:` token). NOT in a core release yet. On an OLDER
+#     core the `color` line is ignored and the whole message renders in
+#     `font_color` (white) — no mixed color; hi-res + everything else still work.
+#   - led-ticker-stocks >= 0.5.0 (the `stocks.trend` color provider). In
+#     config/requirements-plugins.txt:  led-ticker-stocks==0.5.0
 #   - copy to config/config.toml, then `make restart`
 #
 # ONE MODE PER PROCESS (shared cache, first-started-wins):
@@ -29,13 +33,13 @@
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
 # WHAT TO LOOK FOR:
-#   1 INLINE TOKEN — a held MESSAGE with a live price woven into its text
-#                    ("... AAPL 000.00 ▲+0.00%"): symbol, price, arrow, signed
-#                    percent, in hi-res text. The token inherits the message's
-#                    color (plain-text substitution — no independent green/red
-#                    arrow, unlike the card). In demo it random-walks each poll
-#                    tick. This AAPL is the SAME AAPL the card fetches — one
-#                    cache, one fetch (see the shared-cache note above).
+#   1 HI-RES MIXED-COLOR TOKEN — a held (scroll-on-overflow) HI-RES Inter-Bold
+#                    MESSAGE reading "AAPL 000.00 +0.00%". The "AAPL " label is
+#                    WHITE; the price + signed percent are GREEN when AAPL is up on
+#                    the day, RED when down (trend color on the TOKEN only). Verify
+#                    BOTH: crisp hi-res glyphs AND two colors on one line. In demo
+#                    the price random-walks so the color flips over ~30s. This AAPL
+#                    is the SAME AAPL the card fetches — one cache, one fetch.
 #   2 CARD (per symbol, HELD ~5.2s, then transitions to the next symbol) —
 #                    one hero CARD per symbol: big SYMBOL (top-left) + big PRICE
 #                    (top-right), both bold hi-res. Below the price: a ▲/▼ arrow
@@ -68,25 +72,30 @@ hardware_mapping = "adafruit-hat"
 gpio_slowdown = 3
 pwm_bits = 8
 
-# stocks.quote source: AAPL as an inline `:stocks.aapl:` token. Same symbol as
-# the card below -> the shared cache fetches AAPL once for both. `interval`
-# folds into the shared cadence (max(interval, symbol_count + 1)).
+# stocks.quote source: AAPL as an inline `:stocks.aapl:` token, shared with the
+# card (one fetch for both). `color` tints JUST the token by trend — green up /
+# red down (same provider the ticker widget uses). `format` drops the arrow glyph
+# (the color conveys direction, and hi-res Inter has no ▲/▼ glyph).
 [[source]]
 id = "stocks.aapl"
 type = "stocks.quote"
 symbol = "AAPL"
-format = "{symbol} {price} {arrow}{pct}"
+format = "{price} {pct}"
+color = {style = "stocks.trend", symbol = "AAPL"}
 # interval = 60
 
-# --- 1: inline token (shares the cache with the card) -------------------------
+# --- 1: hi-res mixed-color inline token (shares the cache with the card) -------
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 5.2
 
 [[playlist.section.widget]]
 type = "message"
-text = "Inline token (shared cache): :stocks.aapl:"
-font_size = 22
+text = "AAPL :stocks.aapl:"
+font = "Inter-Bold"            # bundled hi-res font (scale 4)
+font_size = 44
+font_threshold = 80           # thin-stroke hi-res needs a lower threshold
+font_color = [255, 255, 255]  # "AAPL " white; the token is trend-colored
 
 # --- 2: stocks.ticker card ----------------------------------------------------
 [[playlist.section]]
