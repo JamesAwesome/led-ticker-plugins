@@ -752,6 +752,7 @@ git commit -m "feat(stocks): provider seam in QuoteCache — finnhub | twelvedat
 - Consumes: `QuoteCache.ensure_started(..., provider=...)` (Task 3); `SymbolQuote.state` (Task 1).
 - Produces:
   - `StockSource.provider: str = "finnhub"` (attrs field, kw_only) + `StockSource.decimals: int | None = None`; `update()` passes `provider=self.provider` to `ensure_started`; `_field_value` uses `self.decimals` when set.
+  - **Minus-sign belt:** `update()` substitutes U+2212 `−` → ASCII `-` in the emitted token value (a token is rendered in an arbitrary user font that may lack U+2212, unlike the crawl BDF / hires-layout painters which control their own font). Ships the cure even before the core rasterizer fix (led-ticker PR #393) is released. See "Why" below.
   - `StocksTicker.provider: str = "finnhub"` (attrs field + `start()` param) → forwarded to `ensure_started`.
   - Both `validate_config`s: reject `/` symbols ONLY when `provider == "finnhub"`; reject an unknown `provider` value.
   - `_StockStory.draw` reads `quote.state` instead of `cache.state()`.
@@ -785,6 +786,30 @@ def test_decimals_override_forces_fixed_decimals():
     q = SymbolQuote(sym="EUR/USD", price=1.14669, prev=1.14,
                     dp_decimals=4, state=MarketState.OPEN)
     assert src._field_value(q, "price") == "1.15"  # forced 2, not auto 4
+
+
+async def test_token_value_substitutes_u2212_minus_with_ascii(monkeypatch):
+    """Minus-sign belt: emitted token value uses ASCII '-', not U+2212, so a
+    negative renders in any user font (the panel showed '?' otherwise)."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["DKS"])
+    q = cache.get("DKS")
+    q.price, q.prev = 207.19, 209.90  # down -> negative pct -> U+2212
+    q.dp_decimals, q.state = decimals_for(207.19), MarketState.OPEN
+    # Avoid real network: make ensure_started a no-op.
+    async def _noop(*a, **k):
+        return None
+    monkeypatch.setattr(type(cache), "ensure_started", _noop)
+
+    src = StockSource(id="s", symbol="DKS", format="{price} {pct}")
+    src._used_fields = ("price", "pct")
+    await src.update()
+    assert "−" not in src.current  # no U+2212
+    assert "-" in src.current      # ASCII hyphen present
 ```
 
 (Match the existing `StockSource(...)` construction style in `test_source.py` for required base fields like `id` — adjust the kwargs to whatever `PolledDataSource` requires there.)
@@ -843,13 +868,26 @@ In `_field_value`, use the override for every `format_price` call. Add a small h
 
 Update the `prev`, `high`, `low`, `day_range` branches to pass `dec` instead of `q.dp_decimals`. (`pct`, `arrow`, `symbol` are unaffected.)
 
-In `update()`, pass the provider through:
+In `update()`, pass the provider through AND apply the minus-sign belt to the emitted value:
 
 ```python
         await get_cache().ensure_started(
             self.session, interval=self.interval, provider=self.provider
         )
+        q = get_cache().get(self.symbol)
+        if q is None or not q.has_data:
+            return
+        fields = {name: self._field_value(q, name) for name in self._used_fields}
+        # Minus-sign belt: a token is embedded in an arbitrary user message
+        # font that may lack U+2212 MINUS SIGN (which format_change/format_pct
+        # emit for negatives) — it renders as "?" there. Core PR #393 fixes
+        # this generally in the hi-res rasterizer, but substitute here too so
+        # the cure ships with the plugin, font-agnostic, before a core release.
+        value = self.format.format(**fields).replace("−", "-")
+        self._set_value(value)
 ```
+
+**Why (root cause, led-ticker hardware 2026-07-15):** the token format `"{price} {pct}"` on a down symbol emits `−1.98%` (U+2212). U+2212 is absent from the core hi-res charset, so an Inter-Bold `message` drew core's `?` fallback → `DKS 207.19 ?1.98%` on the panel. The crawl (BDF) and card/dashboard (plugin `_paint._subst`) already handle it; only the inline token slipped through.
 
 - [ ] **Step 4: Write the failing ticker tests** — append to `tests/test_ticker.py`:
 
@@ -1123,7 +1161,7 @@ git commit -m "test(stocks): cover twelvedata + providers modules in import-puri
 
 ## Self-Review
 
-**Spec coverage:** provider seam (Task 3) ✓; TwelveDataClient + parse (Task 2) ✓; per-symbol state (Tasks 1, 3, 4) ✓; auto-format (Task 1) + source `decimals` override (Task 4) ✓; provider-aware validation (Task 4) ✓; demo mode (Task 1) ✓; smoke config + README (Task 5) ✓; import purity (Task 6) ✓. Deferred widget prefix/suffix/decimals is explicitly out of scope per the 2026-07-15 trim — no task, matches the updated spec.
+**Spec coverage:** provider seam (Task 3) ✓; TwelveDataClient + parse (Task 2) ✓; per-symbol state (Tasks 1, 3, 4) ✓; auto-format (Task 1) + source `decimals` override (Task 4) ✓; provider-aware validation (Task 4) ✓; minus-sign belt (Task 4) ✓ — pairs with the general core rasterizer fix in led-ticker PR #393; demo mode (Task 1) ✓; smoke config + README (Task 5) ✓; import purity (Task 6) ✓. Deferred widget prefix/suffix/decimals is explicitly out of scope per the 2026-07-15 trim — no task, matches the updated spec.
 
 **Placeholder scan:** all code steps carry full code; the two "match existing style" notes (test base-field kwargs in Task 4 Step 1, story-draw capture in Task 4 Step 4) point at concrete existing patterns rather than leaving logic unwritten.
 
