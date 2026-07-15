@@ -6,7 +6,7 @@ A stock / equities ticker **plugin** for [led-ticker](https://github.com/JamesAw
 - `card` (bigsign, ~256px) — a held hero card: symbol + price + change, a brand chip, a sparkline, a state-chip label, and paging dots.
 - `dashboard` (longboi, ~512px) — a held trading dashboard: the same hero block plus a watch column showing the next symbols and a bigger sparkline.
 
-All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
+All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. It also contributes a `stocks.quote` **source** — a live `:id:` price token you can weave into any other widget's text (a headline, a two-row detail line, a clock/date composite) — see [Inline price tokens](#inline-price-tokens). **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
 
 ## Prerequisites
 
@@ -90,9 +90,11 @@ Both held layouts animate: the price flashes white then settles back to amber on
 
 ### Demo mode (no token required)
 
-Set `demo = true` (or simply omit `FINNHUB_API_TOKEN` from the environment — an unset token silently routes to the same demo feed, it is not an error) to drive the widget from a deterministic, seeded random-walk price generator instead of live Finnhub data. Useful for previewing the widget, `render-demo` GIFs, or a sign that doesn't have a Finnhub token yet. See [`docs/demo.toml`](docs/demo.toml) for a runnable example.
+Set `demo = true` (or simply omit `FINNHUB_API_TOKEN` from the environment — an unset token silently routes to the same demo feed, it is not an error) to drive prices from a deterministic, seeded random-walk generator instead of live Finnhub data. Useful for previewing the widget, `render-demo` GIFs, or a sign that doesn't have a Finnhub token yet. See [`docs/demo.toml`](docs/demo.toml) for a runnable example.
 
 Demo mode moves the price every step, so the price-flash animation fires continuously (a real Finnhub feed only flashes when a poll observes an actual price change) — it's a good way to preview the flash without waiting for a live tick.
+
+**Demo is a process-wide setting, not a per-widget one.** Every `stocks.ticker` widget and `stocks.quote` [inline token](#inline-price-tokens) in the same process shares one `QuoteCache` (see [Rate limits](#rate-limits--api-token)), and that cache is single-mode: the FIRST consumer to actually start it (widget `start()` or a token's first `update()` tick) decides live vs. demo for *everything* reading it that session. `demo = true` on one widget forces the whole cache into demo — but only if that widget wins the race to start it first; a config that mixes a `demo = true` widget with a plain live widget/token resolves to whichever one starts first, which isn't something the config file controls. In practice this rarely matters: no `FINNHUB_API_TOKEN` in the environment already routes everyone to demo regardless of start order, so `demo = true` is mostly useful for forcing demo output even when a real token IS configured (e.g. a `render-demo` GIF run against a sign that also has a live token in `.env`).
 
 ### Smoke-test configs (per sign)
 
@@ -114,7 +116,7 @@ Get a free API token at [finnhub.io/register](https://finnhub.io/register) and s
 export FINNHUB_API_TOKEN="your-token-here"
 ```
 
-Finnhub's free tier allows **60 requests per minute, per API key** — not per widget. Every poll cycle costs `len(symbols) + 1` requests (one market-status call plus one quote call per symbol; the widget skips the quote calls entirely while the market is closed, holding last prices instead). The widget enforces `effective_interval = max(update_interval, len(symbols) + 1)` automatically, so a single `stocks.ticker` on its own can't blow the budget — but the 60/min ceiling is shared across **everything** using that token: two signs pointed at the same Finnhub key, or another Finnhub-backed widget/script on the same key, split the same 60 requests. Give each sign (or each concurrent consumer) its own free Finnhub account/token if you're running more than one.
+Finnhub's free tier allows **60 requests per minute, per API key** — not per widget. All `stocks.ticker` widgets and `stocks.quote` [inline tokens](#inline-price-tokens) in one process share a single poll loop and a single deduplicated symbol set (registering `"AAPL"` from three different widgets/tokens still costs one `AAPL` fetch per cycle, not three — see the field's own [Inline price tokens](#inline-price-tokens) section). Every poll cycle costs `len(symbols) + 1` requests, where `symbols` is the UNION of every symbol registered process-wide (one market-status call plus one quote call per distinct symbol; quote calls are skipped entirely while the market is closed, holding last prices instead). The cadence self-widens to `max(update_interval, len(symbols) + 1)`, recomputed every cycle so it reacts to late registrants (a token added after boot, a second widget in another section) — so a single sign's stocks usage on its own can't blow the budget. The 60/min ceiling is still shared across **everything** using that token, though: two signs pointed at the same Finnhub key, or another Finnhub-backed widget/script on the same key, split the same 60 requests. Give each sign (or each concurrent consumer) its own free Finnhub account/token if you're running more than one.
 
 ### Equities only — FX requires a paid tier
 
@@ -124,11 +126,58 @@ Finnhub's free tier returns HTTP 403 on forex (`/forex/*`) endpoints. This plugi
 
 All three layouts (`"crawl"`, `"card"`, `"dashboard"`) are registered — `layout =` selects among them explicitly. Omit the field and `resolve_layout` picks by real panel width (see [Layouts](#layouts)): ≤160px → `crawl`, ~160–400px → `card`, ≥400px → `dashboard`. An unrecognized `layout` value fails config validation naming the registered set.
 
+## Inline price tokens
+
+Besides the `stocks.ticker` **widget**, this plugin registers a `stocks.quote` **source** — a live price value you embed in any *other* widget's text with a `:id:` token (led-ticker's [value tokens](https://docs.ledticker.dev/concepts/value-tokens/) mechanism, requires led-ticker-core `>= 4.9`). Declare it as a `[[source]]` block, give it an `id`, and reference `:id:` anywhere text is drawn:
+
+```toml
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{price}"          # optional; this is the default
+# placeholder = "…"         # optional; shown until the first fetch
+
+[[playlist.section.widget]]
+type = "message"
+text = "AAPL :stocks.aapl:"   # -> "AAPL 317.31", updating live
+```
+
+### Fields
+
+`format` is a plain [`str.format`](https://docs.python.org/3/library/string.html#format-string-syntax) string over these named fields — reference only the ones you need, the rest are never computed (lazy, weather-style):
+
+| Field | Example | Description |
+|---|---|---|
+| `price` | `317.31` | Last price, decimal-formatted. |
+| `change` | `+1.99` | Signed absolute change vs. previous close. |
+| `pct` | `+0.63%` | Signed percent change vs. previous close. |
+| `arrow` | `▲` | `▲` up / `▼` down / `·` flat — plain text, not colored (see the caveat below). |
+| `symbol` | `AAPL` | The configured ticker symbol. |
+| `prev` | `315.32` | Previous close. |
+| `high` | `320.00` | Session high (em dash `—` if not yet known). |
+| `low` | `310.50` | Session low (em dash `—` if not yet known). |
+| `day_range` | `310.50–320.00` | `{low}–{high}` combined. |
+
+A symbol containing `/` (e.g. `"EUR/USD"`) fails validation — same FX restriction as the widget, see [Equities only](#equities-only--fx-requires-a-paid-tier).
+
+### Token color is inherited, not per-token
+
+A price token renders as part of the HOST widget's text — it takes whatever `font_color` (or per-char provider, e.g. `rainbow`) that widget already has. Unlike the `stocks.ticker` **widget**, which independently colors its change line green/red per `green_up`, a `▲`/`▼` produced by `{arrow}` inside a token **cannot** be independently colored green or red — it's just another character in the string. If you need the widget's colored up/down semantics, use `stocks.ticker` directly; use the token when you want a compact price reference woven into other text (a headline, a two-row detail line, a clock/date composite) and don't need per-direction coloring.
+
+### Shared cache, one poll loop
+
+Every `stocks.quote` token and every `stocks.ticker` widget in the same process reads the SAME `QuoteCache` — see [Rate limits](#rate-limits--api-token). Registering `AAPL` via a token and via a widget (or via three separate tokens) still only fetches `AAPL` **once** per poll cycle; the cache dedups by symbol, not by consumer. A token-only config (no `stocks.ticker` widget anywhere) still works — the first `:id:` token to draw self-starts the shared poll loop.
+
+### Demo behavior
+
+With no `FINNHUB_API_TOKEN` set (or `demo = true` on any `stocks.ticker` widget sharing the process — see [Demo mode](#demo-mode-no-token-required) for the first-started-wins nuance), tokens show a moving, synthesized price instead of the `…` placeholder — useful for previewing a token-driven config or a `render-demo` GIF with no Finnhub account at all. [`examples/config.stocks-token.smallsign.toml`](examples/config.stocks-token.smallsign.toml) is a ready-to-run, token-free example.
+
 ## Roadmap
 
-Phase 3 (price-flash on update, sparkline/state-chip pulses) is shipping as `stocks-v0.3.0` — this is now the final planned phase for the three canonical layouts (the `crawl` layout shipped in v0.1.0, `card`/`dashboard` in v0.2.0). Deferred / out of scope: new layouts or widgets, indices/FX, a change-field flash, and `font_color`/`border`/rainbow-gradient styling knobs on these layouts.
+Phase 4 (the `stocks.quote` inline price token, backed by a shared `QuoteCache` that dedups Finnhub requests across every widget/token in the process) is shipping as `stocks-v0.4.0` — this is now the final planned phase for v1. `crawl` shipped in v0.1.0, `card`/`dashboard` in v0.2.0, the price-flash/pulse animation layer in v0.3.0. Deferred / out of scope: indices/FX, per-token color, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
 
-- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.3.0` release.
+- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.4.0` release.
 
 ## Development
 

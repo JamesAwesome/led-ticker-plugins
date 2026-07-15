@@ -11,7 +11,7 @@ keep it working*.
 
 ## Overview
 
-This plugin contributes, via the `led_ticker.plugins` entry point, a single widget:
+This plugin contributes, via the `led_ticker.plugins` entry point, one widget and one source:
 
 - `stocks.ticker` — live equity price Container from the Finnhub REST API. Cycles one
   `_StockStory` "story" per configured symbol (the engine reads `feed_stories` via
@@ -19,9 +19,16 @@ This plugin contributes, via the `led_ticker.plugins` entry point, a single widg
   layouts are registered and auto-selected by real panel width: `crawl` (smallsign,
   scrolling), `card` (bigsign, held), `dashboard` (longboi, held) — see the README's
   [Layouts](README.md#layouts) section for the user-facing shape of each.
+- `stocks.quote` — a `PolledDataSource` (core `led_ticker.plugin`) exposing a live `:id:`
+  price token embeddable in any other widget's text — see the README's
+  [Inline price tokens](README.md#inline-price-tokens) section.
 
-The entry-point name `stocks` is the plugin namespace, so the config `type` is
-`stocks.ticker` (see `register()` in `__init__.py`).
+As of Phase 4 (`_cache.py`), NEITHER `stocks.ticker` NOR `stocks.quote` owns any Finnhub I/O
+itself — both are thin readers of a single process-wide `QuoteCache`. See "Phase 4: the
+shared `QuoteCache`" below before touching either.
+
+The entry-point name `stocks` is the plugin namespace, so the config types are
+`stocks.ticker` / `stocks.quote` (see `register()` in `__init__.py`).
 
 ## Commands
 
@@ -44,15 +51,22 @@ Python **3.14+** only.
 
 ```
 src/led_ticker_stocks/
-  __init__.py         # register(api) → api.widget("ticker")(StocksTicker)
-  ticker.py            # StocksTicker (Container): validate_config(), start(), update();
-                       #   _StockStory: per-symbol story reading the shared quote dict
+  __init__.py         # register(api) → api.widget("ticker")(StocksTicker),
+                       #   api.source("quote")(StockSource)
+  _cache.py            # QuoteCache: the ONE Finnhub-owning singleton (Phase 4) —
+                       #   register()/get()/state()/ensure_started()/update()/reset();
+                       #   get_cache() returns the process-wide instance
+  ticker.py            # StocksTicker (Container): validate_config(), start() (registers +
+                       #   ensure_started, owns no data); _StockStory: per-symbol story
+                       #   reading QuoteCache live on every draw()
+  source.py            # StockSource (stocks.quote): PolledDataSource reading QuoteCache;
+                       #   validate_config(), _field_value() per-format-field dispatch
   finnhub.py           # FinnhubClient (quote + market-status GETs); parse_quote()
   model.py             # SymbolQuote + format_price/format_change/format_pct
   state.py             # MarketState enum + STATE_META (dim/label/color/pulses) +
                        #   state_from_status() (Finnhub) + state_from_clock()/
                        #   state_now_from_clock() (US/Eastern wall-clock fallback, wired
-                       #   into update()'s market-status except branch)
+                       #   into QuoteCache.update()'s market-status except branch)
   demo.py              # DemoFeed: seeded offline random-walk feed for demo=true / no-token
   _palette.py           # Semantic RGB palette (SYM/PRICE/UP/DOWN/FLAT/LABEL) + dim()
   _paint.py             # phys_wrap() (scale-1 ScaledCanvas shim) + hires()/right_align_x()/
@@ -74,6 +88,7 @@ src/led_ticker_stocks/
 ```python
 def register(api):
     api.widget("ticker")(StocksTicker)
+    api.source("quote")(StockSource)
 ```
 
 ## Load-bearing invariants
@@ -88,49 +103,60 @@ which AST-walks every source file. Intra-package imports
 **Python 3.14 / PEP 649** — no `from __future__ import annotations` anywhere (same rule as
 core). Bare `dict[str, SymbolQuote]` / `tuple` annotations are fine.
 
-**`StocksTicker` is a Container** — it exposes `feed_stories: list[_StockStory]` (one story
-per symbol), all reading a SHARED `self._quotes: dict[str, SymbolQuote]` mutated in place by
-`update()`. The engine reads `feed_stories` via `_expand_sources` on every pass, so a price
-update surfaces within at most one cycle. **Never** snapshot `feed_stories` into a cycle
-iterator, and never give each `_StockStory` its own copy of a quote — that was the longboi
-stale-display pattern (a container that updates correctly in the background but a frozen
-snapshot never sees it). `_StockStory.quotes` and `state_ref` are the SAME dict/list object
-handed to every story and mutated by `StocksTicker.update()`; a story never owns its data.
+**`StocksTicker` is a Container that owns no data** — it exposes `feed_stories:
+list[_StockStory]` (one story per symbol); each story reads the shared `QuoteCache` live on
+every `draw()` (`cache.get(sym)` / `cache.state()` — see "Phase 4: the shared `QuoteCache`"
+below). `StocksTicker.update()` no longer exists — `start()` only registers symbols and calls
+`ensure_started()`; polling and mutation happen entirely inside `QuoteCache`. The engine reads
+`feed_stories` via `_expand_sources` on every pass, so a price update surfaces within at most
+one cycle. **Never** snapshot `feed_stories` into a cycle iterator, and never give each
+`_StockStory` its own copy of a quote — that was the longboi stale-display pattern (a
+container that updates correctly in the background but a frozen snapshot never sees it).
 
 **Token is env-only, never a `start()` parameter** — `StocksTicker.start()` deliberately does
-NOT declare a `token` parameter. Core's widget factory unions a Container's `start()` keyword
-signature into the set of config keys it will bind, so if `token` were a `start()` parameter,
-a user's `token = "..."` in `config.toml` would silently override the env secret and flow
-straight into Finnhub HTTP requests — exactly the leak `resolve_secret_token` /
-"secrets belong in `.env`" is meant to prevent. `start()` always resolves
-`os.getenv("FINNHUB_API_TOKEN", "")` itself. Defense in depth: even if a stray `token` arrives
-via `start(**kwargs)` (e.g. a future config field collision), it is explicitly filtered out of
-the `cls(...)` call (`k != "token"`) before the resolved env value is applied last, so a
-config-supplied value can never win. Tripwires: `test_config_token_is_ignored`,
-`test_config_token_is_ignored_no_env` (`tests/test_ticker.py`).
+NOT declare a `token` parameter (and `StockSource`/`PolledDataSource` never see one either).
+Core's widget factory unions a Container's `start()` keyword signature into the set of config
+keys it will bind, so if `token` were a `start()` parameter, a user's `token = "..."` in
+`config.toml` would silently override the env secret and flow straight into Finnhub HTTP
+requests — exactly the leak `resolve_secret_token` / "secrets belong in `.env`" is meant to
+prevent. The actual env resolution (`os.getenv("FINNHUB_API_TOKEN", "")`) now happens ONCE,
+inside `QuoteCache.ensure_started()` — not per-widget. `StocksTicker` still carries a `token`
+attrs field only so a v0.3.0-era config with `token = "..."` still validates; `start()`
+explicitly filters it out of the `cls(...)` call (`k != "token"`) before construction, so a
+config-supplied value dead-ends on `widget.token` and never reaches the cache. Tripwires:
+`test_config_token_is_ignored`, `test_config_token_is_ignored_no_env` (`tests/test_ticker.py`).
 
-**Empty token silently routes to demo, not an error** — `__attrs_post_init__` treats
-`self.demo or not self.token` as one condition: `demo = true` OR a missing/empty
-`FINNHUB_API_TOKEN` both land on the exact same `DemoFeed` path. This is intentional (a sign
-that forgot to set the env var boots with a visible, moving placeholder rather than a
-dead/erroring widget) — do not turn "no token" into a hard failure without updating the
-README's demo-mode section, which documents this fallback as the recommended smoke-test path.
+**Empty token silently routes to demo, not an error** — `QuoteCache.ensure_started()` treats
+`force_demo or not token` as one condition: `demo = true` on ANY registered widget OR a
+missing/empty `FINNHUB_API_TOKEN` both land on the exact same `DemoFeed` path, for the WHOLE
+cache (not just the widget that set `demo = true`) — see the "single-mode, first-started-wins"
+rule below. This is intentional (a sign that forgot to set the env var boots with a visible,
+moving placeholder rather than a dead/erroring widget) — do not turn "no token" into a hard
+failure without updating the README's demo-mode section, which documents this fallback as the
+recommended smoke-test path.
 
-**Rate rule: `effective_interval = max(update_interval, len(symbols) + 1)`** — computed once
-in `start()` before construction and stored as `self.update_interval` (passed to
-`run_monitor_loop`). Each `update()` costs `len(symbols) + 1` Finnhub requests (1 status +
-1-per-symbol quote) while the market is open, or exactly **1** while closed (see the no-quote-
-calls-when-closed rule below). Finnhub's free tier is 60 req/min **per API key**, not per
-widget instance — the README's rate-limit section documents that two signs or two
-Finnhub-backed widgets sharing one token divide the same budget; this code cannot see or
-enforce that cross-widget sharing, only the single-widget floor. `start()` also logs ONE
-`logging.warning` when `len(symbols) > SYMBOL_SOFT_CAP` (20) noting the free-tier 60/min
-budget and the `max(update_interval, N+1)` cadence — advisory only, does not clamp or reject.
+**Rate rule: `effective_interval = max(base_interval, len(symbols) + 1)`, recomputed live** —
+`QuoteCache._effective_interval()` is NOT cached; it reads `len(self._symbols)` fresh every
+poll cycle (`_run_poll_loop`), so a symbol registered AFTER the loop already started (a second
+widget in another section, a `stocks.quote` token added later) still widens the cadence on the
+very next cycle — a fixed `run_monitor_loop` interval could not do this, which is why the
+cache runs its own `_run_poll_loop` instead. `len(symbols)` here is the UNION of every symbol
+any widget or source has EVER called `register()` with, process-wide — not one widget's own
+list. Each `update()` costs `len(symbols) + 1` Finnhub requests (1 status + 1-per-symbol
+quote, each DISTINCT symbol fetched exactly once regardless of how many consumers registered
+it — see "Phase 4: the shared `QuoteCache`" and the dedup tripwire below) while the market is
+open, or exactly **1** while closed (see the no-quote-calls-when-closed rule below). Finnhub's
+free tier is 60 req/min **per API key**, not per widget instance — the README's rate-limit
+section documents that two signs or two Finnhub-backed widgets/tokens sharing one token divide
+the same budget; this code cannot see or enforce that cross-process sharing, only the
+single-process floor. `StocksTicker.start()` still logs one `logging.warning` when
+`len(symbols) > SYMBOL_SOFT_CAP` (20) for THIS widget's own list — advisory only, does not
+clamp or reject.
 
-**No quote calls while the market is closed** — `update()` always fetches market status
-first; if `state_from_status(...)` resolves to `MarketState.CLOSED` it returns immediately
-without calling `fetch_quote` for any symbol (comment: "frozen when closed — hold last
-prices"). This is both a rate-budget optimization (1 request instead of `N+1`) and the
+**No quote calls while the market is closed** — `QuoteCache.update()` always fetches market
+status first; if `state_from_status(...)` resolves to `MarketState.CLOSED` it returns
+immediately without calling `fetch_quote` for any symbol (comment: "frozen when closed — hold
+last prices"). This is both a rate-budget optimization (1 request instead of `N+1`) and the
 correct product behavior (equity prices don't change when the exchange is shut). Don't add a
 "keep polling anyway" mode without updating the rate-rule math above.
 
@@ -145,7 +171,8 @@ before touching `format_price`/`format_change`/`format_pct` — do not reorder t
 check to run after any arithmetic on `price`/`prev`. Tripwire:
 `test_no_data_placeholder_renders_without_raising` (`tests/test_render_smoke.py`).
 
-**A no-data tick never clobbers a good last-known quote** — in `update()`'s per-symbol loop,
+**A no-data tick never clobbers a good last-known quote** — in `QuoteCache.update()`'s
+per-symbol loop,
 `existing.price/prev/d/dp` (and the spark append) are only overwritten when the FRESH parsed
 quote has `has_data`. A transient zeroed payload (e.g. Finnhub briefly returning `{"c": 0,
 "pc": 0}` mid-session for a normally-valid symbol) is logged at DEBUG and skipped — the
@@ -160,16 +187,16 @@ key may be null or absent, without a separate holiday calendar. Only when `isOpe
 does the code look at `session` (`"pre-market"` → `PRE`, `"regular"` → `OPEN`,
 `"post-market"` → `AFTER`; an unrecognized/missing session string while `isOpen` is true
 defaults to `OPEN`, not `CLOSED` — don't flip that default). `state_from_clock()` /
-`state_now_from_clock()` are the US/Eastern wall-clock fallback: `update()` wraps
+`state_now_from_clock()` are the US/Eastern wall-clock fallback: `QuoteCache.update()` wraps
 `fetch_market_status()` in try/except, and on ANY exception (timeout, non-2xx, malformed
-JSON) it logs a warning and sets `self._state_ref[0] = state_now_from_clock()` instead of
+JSON) it logs a warning and sets `self._state = state_now_from_clock()` instead of
 propagating — the CLOSED-skip logic below then applies to the clock-derived state exactly
 as it would to a status-derived one. `state_from_clock(now_eastern)` is the pure/testable
 half (weekday + regular-session-window check); `state_now_from_clock()` is the thin runtime
 wrapper that supplies the real `datetime.now(zoneinfo.ZoneInfo("America/New_York"))`. Quote
 fetches (`fetch_quote`) are NOT wrapped this way — a per-symbol quote failure is expected to
-propagate (see the initial-fetch tolerance note in `start()` above); only the status call has
-a clock fallback.
+propagate (see the initial-fetch tolerance note in "Phase 4: the shared `QuoteCache`" below);
+only the status call has a clock fallback.
 
 **`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.45` CLSD /
 `0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in every layout's
@@ -232,8 +259,8 @@ watch-column percents) drifts left of where it should sit.
 effects are driven by DIFFERENT clocks that must not be confused:
 
 - **Price flash** (`flash_price_color` in `layouts/_common.py`, called from `crawl.py`,
-  `card.py`, and `dashboard.py`) is WALL-CLOCK, via `time.monotonic()`. `ticker.py`'s
-  `update()` stamps `quote.flash_t = time.monotonic()` only when a live poll observes
+  `card.py`, and `dashboard.py`) is WALL-CLOCK, via `time.monotonic()`. `_cache.py`'s
+  `QuoteCache.update()` stamps `quote.flash_t = time.monotonic()` only when a live poll observes
   `fresh.price != existing.price` (demo mode's `DemoFeed` stamps it every step instead, so
   demo renders always show a flash — see `demo.py`). Each layout's `draw_*_story` reads its
   own `now = time.monotonic()` at draw time and passes it to `flash_price_color(quote.flash_t,
@@ -274,18 +301,71 @@ dispatch, passing the result as `frame=`. `card`/`dashboard` read `frame` to dri
 keyword in its own signature but doesn't read it — its only animation (`flash_price_color`) is
 wall-clock, not frame-driven.
 
-**One INFO log per successful `update()`** — the Container contract: a silent log stream
-after startup signals the background task died. Demo mode logs
-`"stocks.ticker demo tick: N symbols"`; live mode logs `"stocks.ticker updated: N/M symbols"`
-(or `"market closed — holding last prices"` when it short-circuits). Never log the raw
+**One INFO log per successful `update()` cycle** — lives in `_cache.py` now, not `ticker.py`:
+a silent log stream after startup signals the shared poll task died (see
+`test_reset_cancels_spawned_task`-style tripwires). Demo mode logs `"stocks QuoteCache demo
+tick: N symbols"`; live mode logs `"stocks QuoteCache updated: N/M symbols"` (or `"stocks
+QuoteCache: market closed — holding last prices"` when it short-circuits). Never log the raw
 Finnhub response body (it doesn't contain secrets, but keep the convention consistent with
-other first-party plugins).
+other first-party plugins). There is exactly ONE such log stream for the whole process — it
+covers every widget/token sharing the cache, not one per consumer.
 
-**Initial fetch failure is tolerated, not fatal** — `start()` wraps its first `update()` call
-in `try/except Exception`, logs a warning, and still constructs + starts the monitor loop on
-failure (e.g. Finnhub rate-limited or unreachable at boot). The widget always renders
-something (last-known or placeholder prices) rather than being dropped from the section for
-the whole session.
+## Phase 4: the shared `QuoteCache`
+
+`_cache.py` centralizes ALL Finnhub I/O behind one process-wide `QuoteCache` singleton
+(`get_cache()`), replacing the earlier design where each `stocks.ticker` widget instance ran
+its own `FinnhubClient` + `run_monitor_loop`. This exists because a config with more than one
+stocks-reading consumer (two `stocks.ticker` sections, or a widget plus one or more
+`stocks.quote` tokens) would otherwise multiply Finnhub request volume per shared symbol —
+the dedup rule below is the whole point of this file.
+
+- **Consumers register, never fetch directly.** `StocksTicker.start()` calls
+  `get_cache().register(widget.symbols)`; `StockSource.__attrs_post_init__` calls
+  `get_cache().register([self.symbol])`. `register()` unions into `self._symbols: set[str]`
+  and seeds a zeroed placeholder quote for any symbol not already tracked — registering the
+  same symbol from N different consumers is a no-op after the first. Reads go through
+  `get()`/`state()`, both O(1) dict lookups against cache state mutated by the shared poll
+  loop — no consumer awaits or fetches on its own draw/update path.
+- **Dedup is structural, not counted.** Because `_symbols` is a `set` and `update()`'s
+  per-symbol loop iterates it exactly once per cycle, a symbol registered by both a widget
+  AND a token is fetched exactly once per poll cycle — never once per consumer. Tripwire:
+  `test_shared_symbol_fetched_exactly_once_per_cycle` (`tests/test_dedup.py`) — registers the
+  same symbol via a widget-style `register()` call and an independent `StockSource`
+  construction, monkeypatches the (stub) client's `fetch_quote` to count calls per symbol,
+  runs one `update()` cycle live/OPEN, and asserts the count is exactly `{"AAPL": 1}`. If you
+  ever change the cache to track fetches per-registrant instead of per-symbol-in-a-set, this
+  test is the regression signal.
+- **Single-mode, first-started-wins.** `ensure_started(session, interval, force_demo)` is
+  idempotent — `self._started` gates it, so every call after the first (from ANY consumer) is
+  a silent no-op, INCLUDING a later call with a different `force_demo`. The cache resolves
+  `FINNHUB_API_TOKEN` from env exactly once, at that first call, and decides live-vs-demo for
+  every consumer reading it that process — see the README's "Demo is a process-wide setting"
+  callout. Do not add a per-consumer override to this; it would require re-architecting
+  `ensure_started` away from idempotent, which the poll-loop-spawn logic depends on.
+- **`update()` is the one method that performs I/O**, called both from inside
+  `ensure_started()` (an initial, exception-tolerant fetch so a rate-limited/unreachable
+  Finnhub at boot doesn't block startup) and from `_run_poll_loop()` on the recomputed
+  `_effective_interval()` cadence (see the rate-rule invariant above). `StockSource.update()`
+  (the `PolledDataSource` hook core calls on ITS OWN interval) never fetches Finnhub directly
+  — it calls `get_cache().ensure_started(self.session, interval=self.interval)` (cheap no-op
+  after the first call from anywhere) then reads `get_cache().get(self.symbol)`. This is how a
+  token-only config (no `stocks.ticker` widget in the process) still gets a running poll loop:
+  the FIRST `:id:` token to tick self-starts the cache.
+- **`reset()` is a test seam, not production API** — cancels the spawned poll task and clears
+  every field back to construction defaults. `tests/conftest.py`'s autouse
+  `_reset_quote_cache` fixture calls it before AND after every test in the plugin's suite
+  (also duplicated locally in `test_cache.py`'s own fixture) so symbol registration and a
+  spawned `asyncio.Task` can never leak between tests — the SAME hermetic pattern the "keep
+  the process-wide QuoteCache singleton hermetic" comment describes. Any NEW test file that
+  touches `stocks.ticker`, `stocks.quote`, or `_cache` directly relies on this fixture already
+  running (autouse, no explicit import needed) — don't add a second competing reset fixture
+  with different scope.
+
+**Initial fetch failure is tolerated, not fatal** — `QuoteCache.ensure_started()` wraps its
+first `update()` call in `try/except Exception`, logs a warning, and still spawns the poll
+loop on failure (e.g. Finnhub rate-limited or unreachable at boot). Every widget/token reading
+the cache always renders something (last-known or placeholder prices) rather than being
+dropped from the section for the whole session.
 
 ## Tests / CI
 
@@ -296,8 +376,21 @@ the whole session.
 - `test_smoke.py` — loads the plugin through led-ticker's real plugin loader and asserts
   `stocks.ticker` registers under the `stocks` namespace (entry-point wiring guard).
 - `test_ticker.py` — `StocksTicker`/`_StockStory` behavior: `validate_config` (empty symbols,
-  FX rejection, unknown layout), shared-quote story draw, demo-mode `start()`, live `update()`,
-  and the token-leak-prevention pair above.
+  FX rejection, unknown layout), shared-cache story draw, demo-mode `start()`, and the
+  token-leak-prevention pair above.
+- `test_cache.py` — `QuoteCache` itself: register/dedup/seed, live `update()` mutation +
+  flash-stamp, closed-market quote skip, demo synthesis (including a late registrant added
+  after `ensure_started`), `_effective_interval` widening, `ensure_started` idempotence,
+  `reset()` task cancellation.
+- `test_source.py` — `StockSource` (`stocks.quote`): `validate_config` (unknown field,
+  malformed/non-str format, bad conversion spec, FX rejection), placeholder-until-first-update,
+  construction-registers-with-cache, `update()` rendering every format field off a seeded
+  cache quote, lazy `_used_fields` (an unreferenced field is never computed), and the
+  token-only self-start path (`update()` calls `ensure_started` idempotently).
+- `test_dedup.py` — the shared-cache integration tripwire: registers ONE symbol via two
+  independent consumers (widget-style `register()` + a `StockSource` construction), counts
+  `fetch_quote` calls per symbol across one live `update()` cycle, asserts the count is
+  exactly one — see "Phase 4: the shared `QuoteCache`" above.
 - `test_finnhub.py` — `FinnhubClient` request shaping + `parse_quote`.
 - `test_model.py` — `SymbolQuote.has_data`/`change`/`pct` no-data guard + formatting.
 - `test_state.py` — `state_from_status` mapping (isOpen/session) + `state_from_clock` fallback.
@@ -325,9 +418,12 @@ ruff format --check, pyright, and pytest for the changed member.
 
 ## Adding to the plugin
 
-Register the class in `register()` in `__init__.py` (`api.widget`); it becomes
-`stocks.<name>`. Import any core dependency from `led_ticker.plugin` only, and keep the
-import-purity test green. A new layout goes in `layouts/`, registered in `LAYOUTS`
+Register the class in `register()` in `__init__.py` (`api.widget` for a Container/widget,
+`api.source` for a `PolledDataSource`); it becomes `stocks.<name>` either way. Import any core
+dependency from `led_ticker.plugin` only, and keep the import-purity test green. A new source
+that also needs live prices should read `_cache.get_cache()` exactly like `StockSource` does —
+never open its own `FinnhubClient` (see "Phase 4: the shared `QuoteCache`" above). A new
+layout goes in `layouts/`, registered in `LAYOUTS`
 (`layouts/__init__.py`), added to `resolve_layout`'s width thresholds, and shaped by which
 dispatch branch it belongs to in `ticker.py`'s `_StockStory.draw`:
 
