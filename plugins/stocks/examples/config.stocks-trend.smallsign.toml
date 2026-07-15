@@ -1,0 +1,72 @@
+# Smallsign example — stocks.trend COLOR PROVIDER (v0.5.0)
+#
+# Demonstrates the `stocks.trend` COLOR PROVIDER: tints a `message` widget's
+# WHOLE text green/red/neutral by a symbol's day change, reading the same
+# shared `QuoteCache` as the `stocks.quote` source (see
+# config.stocks-token.smallsign.toml) and the `stocks.ticker` widget (see
+# config.stocks-smoke.smallsign.toml). It's not a widget or a source — it's
+# set as `font_color` on any text widget.
+#
+# FEEDING REQUIREMENT: stocks.trend only READS the shared cache — it never
+# starts polling on its own. The AAPL symbol below is fed by the
+# `[[source]]` stocks.quote block, whose first update tick starts the
+# cache. Remove that source (or point it at a different symbol than the
+# `font_color` table below) and the message renders a steady neutral gray
+# forever — not an error, just nothing feeding it.
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.9
+#   - led-ticker-stocks >= 0.5.0 (adds the stocks.trend color provider)
+#   - NO Finnhub token required — with no FINNHUB_API_TOKEN in the
+#     environment, the shared cache runs in demo mode: a deterministic,
+#     seeded random-walk price that moves every poll tick, so the trend
+#     color flips without waiting for a real market move.
+#   - copy to config/config.toml, then `make restart` (or `make try` for a
+#     quick headless preview)
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   1 PLACEHOLDER  — for the first few seconds after boot, the token shows
+#                    "…" and the message renders neutral gray (no quote for
+#                    AAPL has landed in the cache yet).
+#   2 TREND COLOR  — once the first quote lands, the WHOLE message ("AAPL
+#                    000.00 ▲+0.00%") tints green when the demo price is up
+#                    on the day, red when the demo price is down.
+#   3 MOVEMENT     — the demo feed random-walks every poll tick (interval
+#                    below is 30s for a fast smoke test), so watch the
+#                    message flip between green and red over ~1-2 minutes
+#                    without restarting.
+#
+# If anything looks wrong: docs/visual-validation.md.
+
+[display]
+rows = 16
+cols = 32
+chain_length = 5
+brightness = 60
+gpio_slowdown = 2
+hardware_mapping = "adafruit-hat"
+
+# ---------------------------------------------------------------------------
+# Stocks source — this is what starts the shared cache and feeds AAPL for
+# both the inline token below and the stocks.trend color provider watching
+# the same symbol. `interval` is short (30s) so the demo random-walk
+# visibly flips the trend color during a quick smoke test; use the default
+# (60s+) in production to stay well under Finnhub's free-tier budget.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "stocks.aapl"
+type = "stocks.quote"
+symbol = "AAPL"
+format = "{symbol} {price} {arrow}{pct}"
+interval = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8
+
+[[playlist.section.widget]]
+type = "message"
+text = "AAPL :stocks.aapl:"
+font_color = {style = "stocks.trend", symbol = "AAPL"}

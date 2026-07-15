@@ -11,7 +11,8 @@ keep it working*.
 
 ## Overview
 
-This plugin contributes, via the `led_ticker.plugins` entry point, one widget and one source:
+This plugin contributes, via the `led_ticker.plugins` entry point, one widget, one source, and
+one color provider:
 
 - `stocks.ticker` — live equity price Container from the Finnhub REST API. Cycles one
   `_StockStory` "story" per configured symbol (the engine reads `feed_stories` via
@@ -22,6 +23,10 @@ This plugin contributes, via the `led_ticker.plugins` entry point, one widget an
 - `stocks.quote` — a `PolledDataSource` (core `led_ticker.plugin`) exposing a live `:id:`
   price token embeddable in any other widget's text — see the README's
   [Inline price tokens](README.md#inline-price-tokens) section.
+- `stocks.trend` — a `ColorProviderBase` (core `led_ticker.plugin`) that tints a text widget's
+  `font_color` green/red/neutral by a symbol's day change, reading the same shared
+  `QuoteCache` — see the README's [Trend color](README.md#trend-color) section and the
+  `StocksTrendColor` invariant below.
 
 As of Phase 4 (`_cache.py`), NEITHER `stocks.ticker` NOR `stocks.quote` owns any Finnhub I/O
 itself — both are thin readers of a single process-wide `QuoteCache`. See "Phase 4: the
@@ -61,6 +66,8 @@ src/led_ticker_stocks/
                        #   reading QuoteCache live on every draw()
   source.py            # StockSource (stocks.quote): PolledDataSource reading QuoteCache;
                        #   validate_config(), _field_value() per-format-field dispatch
+  trend_color.py       # StocksTrendColor (stocks.trend): whole-string ColorProvider reading
+                       #   QuoteCache; green up / red down / neutral flat; never starts the cache
   finnhub.py           # FinnhubClient (quote + market-status GETs); parse_quote()
   model.py             # SymbolQuote + format_price/format_change/format_pct
   state.py             # MarketState enum + STATE_META (dim/label/color/pulses) +
@@ -89,6 +96,7 @@ src/led_ticker_stocks/
 def register(api):
     api.widget("ticker")(StocksTicker)
     api.source("quote")(StockSource)
+    api.color_provider("trend")(StocksTrendColor)
 ```
 
 ## Load-bearing invariants
@@ -318,6 +326,26 @@ before applying `pal.dim(...)`. Flat/no-data rendering is unaffected. Tripwire:
 test proving the SAME up-quote renders green-dominant at `green_up=True` and red-dominant at
 `green_up=False`.
 
+**`StocksTrendColor` is a thin whole-string color provider, never a data owner** — registered
+via `api.color_provider("trend")(StocksTrendColor)` (`stocks.trend`), `per_char = False`,
+`frame_invariant = False` (color tracks live data, so it must be re-evaluated on every draw —
+same reasoning as Rainbow/ColorCycle). `color_for` mirrors `layouts/_common.py`'s `chg_color`
+exactly (`chg > 0` → up, `chg < 0` → down, else flat; `green_up` swaps up/down) and reads
+`get_cache().get(symbol)` directly. It MUST NOT raise — a color provider runs in the render
+loop — and it MUST NOT call `ensure_started()` or perform any I/O; a provider has no
+session/async context to own a poll loop, unlike `StockSource`. `__init__` DOES call
+`get_cache().register([symbol])` so the symbol joins the shared union and rides whichever
+consumer starts the cache (the Phase-4 late-registrant catch-up above covers a provider
+constructed after boot) — but registering is not starting: with no `stocks.quote` source or
+`stocks.ticker` widget feeding the same symbol in the config, the cache never starts and
+`color_for` always returns `flat` (not an error, just a steady neutral gray forever — see the
+README's [Trend color](README.md#trend-color) feeding-requirement callout). Config-surface
+validation (`symbol` required/non-empty, FX-pair rejection, `up`/`down`/`flat` RGB coercion —
+ints 0-255, bool excluded) lives entirely in `__init__`, which raises `ValueError`; there is no
+separate `validate_config` hook for a color provider — the coercion path
+(`_build_plugin_style`) surfaces `__init__`'s raise at config-load. Tripwire:
+`tests/test_trend_color.py`.
+
 **`_StockStory` is `FrameAwareBase`** — it calls `self.frame_for("crawl")` for the crawl
 dispatch and `self.frame_for("held")` (shared by BOTH `card` and `dashboard`) for the held
 dispatch, passing the result as `frame=`. `card`/`dashboard` read `frame` to drive `live_pulse`/
@@ -418,6 +446,10 @@ dropped from the section for the whole session.
   independent consumers (widget-style `register()` + a `StockSource` construction), counts
   `fetch_quote` calls per symbol across one live `update()` cycle, asserts the count is
   exactly one — see "Phase 4: the shared `QuoteCache`" above.
+- `test_trend_color.py` — `StocksTrendColor`: up/down/flat color selection off a seeded quote,
+  `green_up` swap, `up`/`down`/`flat` overrides, no-data-never-raises, missing/empty/FX
+  `symbol` raises, bad `[r,g,b]` raises, construction registers the symbol with the cache,
+  `per_char`/`frame_invariant` flags.
 - `test_finnhub.py` — `FinnhubClient` request shaping + `parse_quote`.
 - `test_model.py` — `SymbolQuote.has_data`/`change`/`pct` no-data guard + formatting.
 - `test_state.py` — `state_from_status` mapping (isOpen/session) + `state_from_clock` fallback.
@@ -446,10 +478,12 @@ ruff format --check, pyright, and pytest for the changed member.
 ## Adding to the plugin
 
 Register the class in `register()` in `__init__.py` (`api.widget` for a Container/widget,
-`api.source` for a `PolledDataSource`); it becomes `stocks.<name>` either way. Import any core
-dependency from `led_ticker.plugin` only, and keep the import-purity test green. A new source
-that also needs live prices should read `_cache.get_cache()` exactly like `StockSource` does —
-never open its own `FinnhubClient` (see "Phase 4: the shared `QuoteCache`" above). A new
+`api.source` for a `PolledDataSource`, `api.color_provider` for a `ColorProviderBase`); it
+becomes `stocks.<name>` either way. Import any core dependency from `led_ticker.plugin` only,
+and keep the import-purity test green. A new source or color provider that also needs live
+prices should read `_cache.get_cache()` exactly like `StockSource`/`StocksTrendColor` do —
+never open its own `FinnhubClient`, and never call `ensure_started()` from a color provider
+(see "Phase 4: the shared `QuoteCache`" above and the `StocksTrendColor` invariant). A new
 layout goes in `layouts/`, registered in `LAYOUTS`
 (`layouts/__init__.py`), added to `resolve_layout`'s width thresholds, and shaped by which
 dispatch branch it belongs to in `ticker.py`'s `_StockStory.draw`:
