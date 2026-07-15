@@ -1,8 +1,11 @@
 """Crawl layout: one scrolling equity segment `SYM  price  ▲ chg%` per story."""
 
+import time
+
 from led_ticker.plugin import FONT_DEFAULT, compute_baseline, draw_text
 
 from led_ticker_stocks import _palette as pal
+from led_ticker_stocks.layouts._common import flash_price_color
 from led_ticker_stocks.model import SymbolQuote, format_change, format_pct, format_price
 from led_ticker_stocks.state import STATE_META, MarketState
 
@@ -27,6 +30,7 @@ def draw_crawl_story(
     green_up: bool = True,
 ) -> int:
     dim = STATE_META[state].dim
+    now = time.monotonic()
     baseline = compute_baseline(FONT_DEFAULT, canvas) + y_offset
     cursor = x
 
@@ -44,10 +48,15 @@ def draw_crawl_story(
             + end_padding
         )
 
-    # price (amber)  — flash handled in Phase 3; Phase 1 draws steady amber
+    # price (amber, flashing whiter on a recent change — see flash_price_color)
     price_str = format_price(quote.price, quote.dp_decimals)
     cursor = draw_text(
-        canvas, FONT_DEFAULT, price_str, cursor, baseline, pal.dim(pal.PRICE, dim)
+        canvas,
+        FONT_DEFAULT,
+        price_str,
+        cursor,
+        baseline,
+        flash_price_color(quote.flash_t, dim, now=now),
     )
     cursor += _GAP
 

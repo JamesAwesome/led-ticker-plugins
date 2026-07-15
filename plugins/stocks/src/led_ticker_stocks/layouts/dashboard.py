@@ -1,8 +1,12 @@
 """Longboi trading dashboard (held). Geometry from handoff LAYOUTS.longA.
 
-v1 is static — no flash/pulse (that's Phase 3). `frame` is accepted for the
-uniform held-renderer signature but not read yet.
+The hero price flashes whiter on a recent price change (Bloomberg-style,
+wall-clock decay — see `layouts._common.flash_price_color`); everything else
+is static. `frame` is accepted for the uniform held-renderer signature but
+not read yet.
 """
+
+import time
 
 from led_ticker.plugin import make_color
 
@@ -12,6 +16,7 @@ from led_ticker_stocks._paint import hires, paging_dots, phys_wrap, right_align_
 from led_ticker_stocks._sparkline import draw_sparkline
 from led_ticker_stocks.layouts._common import arrow as _arrow
 from led_ticker_stocks.layouts._common import chg_color as _chg_color
+from led_ticker_stocks.layouts._common import flash_price_color
 from led_ticker_stocks.model import format_change, format_pct, format_price
 from led_ticker_stocks.state import STATE_META
 
@@ -41,6 +46,7 @@ def draw_dashboard_story(
     (arrow glyph stays directional) for non-US market conventions.
     """
     dim = STATE_META[state].dim
+    now = time.monotonic()
     scale = getattr(canvas, "scale", 1)
     yoff = y_offset * scale
     shim, real = phys_wrap(canvas)
@@ -69,7 +75,7 @@ def draw_dashboard_story(
             format_price(quote.price, quote.dp_decimals),
             150,
             4 + yoff,
-            pal.dim(pal.PRICE, dim),
+            flash_price_color(quote.flash_t, dim, now=now),
             24,
             bold=True,
         )

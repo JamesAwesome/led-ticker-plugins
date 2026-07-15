@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 from typing import Any, Self
 
 import attrs
@@ -246,6 +247,8 @@ class StocksTicker:
             fresh = parse_quote(sym, payload)
             existing = self._quotes[sym]
             if fresh.has_data:
+                if fresh.price != existing.price:
+                    existing.flash_t = time.monotonic()
                 existing.price, existing.prev = fresh.price, fresh.prev
                 existing.d, existing.dp = fresh.d, fresh.dp
                 existing.spark.append(fresh.price)
