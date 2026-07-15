@@ -19,6 +19,8 @@ class SymbolQuote:
     spark: collections.deque = attrs.field(factory=lambda: collections.deque(maxlen=64))
     chip_colors: tuple | None = None
     flash_t: float | None = None
+    high: float | None = None
+    low: float | None = None
 
     @property
     def has_data(self) -> bool:

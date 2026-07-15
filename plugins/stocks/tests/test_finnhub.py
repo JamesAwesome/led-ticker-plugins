@@ -79,6 +79,19 @@ def test_parse_quote_maps_fields():
     assert q.has_data
 
 
+def test_parse_quote_maps_high_low():
+    payload = {"c": 317.31, "pc": 315.32, "h": 323.45, "l": 315.78}
+    q = parse_quote("AAPL", payload)
+    assert q.high == pytest.approx(323.45)
+    assert q.low == pytest.approx(315.78)
+
+
+def test_parse_quote_missing_high_low_is_none():
+    payload = {"c": 317.31, "pc": 315.32}
+    q = parse_quote("AAPL", payload)
+    assert q.high is None and q.low is None
+
+
 def test_parse_quote_zeroed_is_no_data():
     payload = {
         "c": 0,
