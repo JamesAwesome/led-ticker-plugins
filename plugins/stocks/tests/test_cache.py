@@ -105,7 +105,12 @@ async def test_update_live_does_not_restamp_flash_on_unchanged_price(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_closed_skips_quotes(monkeypatch):
+async def test_closed_fetches_cold_symbols_once(monkeypatch):
+    """A cold boot while the market is CLOSED must still fetch each symbol ONCE
+    to grab the last close. Regression: the cache used to skip ALL quote calls
+    when closed, so a sign booted after hours left the card on em-dash and
+    inline tokens stuck on their "…" placeholder forever (Finnhub /quote
+    returns the last close in `c` even when the market is shut)."""
     monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
     c = _cache.get_cache()
     c.register(["AAPL"])
@@ -114,7 +119,7 @@ async def test_closed_skips_quotes(monkeypatch):
 
     async def q(sym):
         calls.append(sym)
-        return {"c": 1, "pc": 1}
+        return {"c": 252.4, "pc": 252.0, "d": 0.4, "dp": 0.16, "h": 253, "l": 251}
 
     async def st(exchange="US"):
         return {"isOpen": False, "session": None}
@@ -122,7 +127,40 @@ async def test_closed_skips_quotes(monkeypatch):
     c._client.fetch_quote = q
     c._client.fetch_market_status = st
     await c.update()
-    assert calls == []  # frozen when closed
+    assert calls == ["AAPL"]  # fetched once despite the market being closed
+    assert c.get("AAPL").has_data  # populated with the last close
+    assert c.get("AAPL").price == 252.4
+
+
+@pytest.mark.asyncio
+async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
+    """Once a symbol holds a price, a CLOSED cycle must NOT refetch it — freeze
+    it and save the per-key rate budget. Only cold (no-data) symbols are
+    fetched while closed."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())
+    calls = []
+
+    async def q(sym):
+        calls.append(sym)
+        return {"c": 252.4, "pc": 252.0, "d": 0.4, "dp": 0.16, "h": 253, "l": 251}
+
+    async def st_open(exchange="US"):
+        return {"isOpen": True, "session": "regular"}
+
+    async def st_closed(exchange="US"):
+        return {"isOpen": False, "session": None}
+
+    c._client.fetch_quote = q
+    c._client.fetch_market_status = st_open
+    await c.update()  # open cycle populates AAPL
+    assert calls == ["AAPL"]
+
+    c._client.fetch_market_status = st_closed
+    await c.update()  # closed cycle must NOT refetch the now-populated symbol
+    assert calls == ["AAPL"]  # unchanged — frozen, no second call
 
 
 @pytest.mark.asyncio

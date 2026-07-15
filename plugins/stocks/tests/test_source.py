@@ -135,6 +135,31 @@ async def test_update_high_low_missing_renders_em_dash():
     assert src.current == "—|—"
 
 
+async def test_token_resolves_to_last_close_when_market_closed(monkeypatch):
+    """End-to-end regression for the after-hours boot bug: a token booted while
+    the market is CLOSED must still resolve to the last close, not sit on its
+    "…" placeholder. The shared cache now fetches cold symbols even when closed
+    (Finnhub /quote returns the last close in `c`), so the token populates."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())  # initial fetch fails, tolerated
+
+    async def closed_status(exchange="US"):
+        return {"isOpen": False, "session": None}
+
+    async def last_close(sym):
+        return {"c": 252.4, "pc": 252.0, "d": 0.4, "dp": 0.16, "h": 253, "l": 251}
+
+    c._client.fetch_market_status = closed_status
+    c._client.fetch_quote = last_close
+    await c.update()  # closed + cold AAPL -> fetched once -> populated
+
+    src = _src(symbol="AAPL", format="{symbol} {price} {arrow}{pct}", placeholder="…")
+    await src.update()
+    assert src.current == "AAPL 252.40 ▲+0.16%"  # the close, NOT the placeholder
+
+
 async def test_no_data_keeps_placeholder():
     # register() alone seeds a zeroed (no-data) quote; mark started so
     # update() doesn't self-start a demo feed that would fabricate data.

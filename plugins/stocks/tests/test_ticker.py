@@ -269,9 +269,10 @@ async def test_update_falls_back_to_clock_on_status_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_clock_fallback_closed_skips_quotes(monkeypatch):
-    """Same fallback, but the clock-derived state is CLOSED — the existing
-    no-quote-calls-when-closed logic must still apply to it.
+async def test_update_clock_fallback_closed_still_fetches_cold(monkeypatch):
+    """Same fallback, but the clock-derived state is CLOSED. The closed policy
+    applies to the fallback state too — but a COLD symbol still gets its one
+    last-close fetch (a sign booted after hours must not sit on em-dash).
     """
     monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
     await StocksTicker.start(symbols=["AAPL"], session=mock.Mock())
@@ -294,8 +295,9 @@ async def test_update_clock_fallback_closed_skips_quotes(monkeypatch):
 
     await cache.update()
 
-    assert cache.state() is MarketState.CLOSED
-    assert quote_calls == []  # closed → no quote fetches, even via the fallback path
+    assert cache.state() is MarketState.CLOSED  # fallback state applied
+    assert quote_calls == ["AAPL"]  # cold symbol fetched once despite closed
+    assert cache.get("AAPL").price == 999.0  # populated with the last close
 
 
 @pytest.mark.asyncio

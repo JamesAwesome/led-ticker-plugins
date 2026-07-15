@@ -155,12 +155,20 @@ single-process floor. `StocksTicker.start()` still logs one `logging.warning` wh
 `len(symbols) > SYMBOL_SOFT_CAP` (20) for THIS widget's own list — advisory only, does not
 clamp or reject.
 
-**No quote calls while the market is closed** — `QuoteCache.update()` always fetches market
-status first; if `state_from_status(...)` resolves to `MarketState.CLOSED` it returns
-immediately without calling `fetch_quote` for any symbol (comment: "frozen when closed — hold
-last prices"). This is both a rate-budget optimization (1 request instead of `N+1`) and the
-correct product behavior (equity prices don't change when the exchange is shut). Don't add a
-"keep polling anyway" mode without updating the rate-rule math above.
+**Closed-market freeze is per-symbol, NOT a whole-cycle skip** — `QuoteCache.update()` always
+fetches market status first. When `MarketState.CLOSED`, it does NOT blanket-skip quotes:
+it fetches only symbols whose cached quote has **no data yet** (`not existing.has_data`) and
+freezes (skips) the rest. This is load-bearing: a sign booted after hours has ALL symbols
+cold, and Finnhub `/quote` returns the last close in `c` even while the exchange is shut — so
+one fetch per cold symbol is what makes the card show the close and inline `:stocks.*:` tokens
+resolve past their `…` placeholder. A whole-cycle `return` when closed (the original Phase-4
+bug) left every symbol empty forever on an after-hours boot: em-dash cards, dead tokens. Once
+a symbol holds a price, closed cycles skip it (rate-budget: worst case `N+1` on the first
+closed cycle, then `1` status-only per cycle as symbols warm up; steady-state closed is still
+1 request). Late registrants added while closed are cold, so they too get their one fetch.
+Don't reintroduce an early `return` on `CLOSED`. Tripwires:
+`test_closed_fetches_cold_symbols_once`, `test_closed_holds_symbols_that_already_have_data`
+(`tests/test_cache.py`).
 
 **No-data guard: `pc == 0` (or `c == 0`) never divides** — `SymbolQuote.has_data` is
 `self.prev != 0 and self.price != 0`; `change`/`pct` both return `None` — never attempt
@@ -179,8 +187,8 @@ per-symbol loop,
 quote has `has_data`. A transient zeroed payload (e.g. Finnhub briefly returning `{"c": 0,
 "pc": 0}` mid-session for a normally-valid symbol) is logged at DEBUG and skipped — the
 symbol keeps rendering its last-known price for that tick instead of flashing the em-dash
-placeholder. This is orthogonal to the closed-market freeze above (that skips the whole
-per-symbol loop; this skips one symbol's write within it).
+placeholder. This is orthogonal to the closed-market freeze above (that skips the *fetch* for
+symbols already holding data; this skips one symbol's *write* when a fetch returns zeroed).
 
 **Market-state mapping: `closed = not isOpen`, else map `session`** —
 `state_from_status(payload)` treats ANY falsy `isOpen` (including a missing key) as
@@ -192,8 +200,8 @@ defaults to `OPEN`, not `CLOSED` — don't flip that default). `state_from_clock
 `state_now_from_clock()` are the US/Eastern wall-clock fallback: `QuoteCache.update()` wraps
 `fetch_market_status()` in try/except, and on ANY exception (timeout, non-2xx, malformed
 JSON) it logs a warning and sets `self._state = state_now_from_clock()` instead of
-propagating — the CLOSED-skip logic below then applies to the clock-derived state exactly
-as it would to a status-derived one. `state_from_clock(now_eastern)` is the pure/testable
+propagating — the closed-market policy above then applies to the clock-derived state exactly
+as it would to a status-derived one (a cold symbol still gets its one last-close fetch). `state_from_clock(now_eastern)` is the pure/testable
 half (weekday + regular-session-window check); `state_now_from_clock()` is the thin runtime
 wrapper that supplies the real `datetime.now(zoneinfo.ZoneInfo("America/New_York"))`. Quote
 fetches (`fetch_quote`) are NOT wrapped this way — a per-symbol quote failure is expected to
@@ -306,8 +314,9 @@ wall-clock, not frame-driven.
 **One INFO log per successful `update()` cycle** — lives in `_cache.py` now, not `ticker.py`:
 a silent log stream after startup signals the shared poll task died (see
 `test_reset_cancels_spawned_task`-style tripwires). Demo mode logs `"stocks QuoteCache demo
-tick: N symbols"`; live mode logs `"stocks QuoteCache updated: N/M symbols"` (or `"stocks
-QuoteCache: market closed — holding last prices"` when it short-circuits). Never log the raw
+tick: N symbols"`; live mode logs `"stocks QuoteCache updated: F fetched, H held (M symbols)"`
+(preceded, when closed, by `"stocks QuoteCache: market closed — fetching last close for cold
+symbols, holding the rest"`). Never log the raw
 Finnhub response body (it doesn't contain secrets, but keep the convention consistent with
 other first-party plugins). There is exactly ONE such log stream for the whole process — it
 covers every widget/token sharing the cache, not one per consumer.
@@ -381,7 +390,7 @@ dropped from the section for the whole session.
   FX rejection, unknown layout), shared-cache story draw, demo-mode `start()`, and the
   token-leak-prevention pair above.
 - `test_cache.py` — `QuoteCache` itself: register/dedup/seed, live `update()` mutation +
-  flash-stamp, closed-market quote skip, demo synthesis (including a late registrant added
+  flash-stamp, closed-market cold-fetch + warm-symbol freeze, demo synthesis (including a late registrant added
   after `ensure_started`), `_effective_interval` widening, `ensure_started` idempotence,
   `reset()` task cancellation.
 - `test_source.py` — `StockSource` (`stocks.quote`): `validate_config` (unknown field,

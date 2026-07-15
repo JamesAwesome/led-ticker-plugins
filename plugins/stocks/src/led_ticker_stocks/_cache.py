@@ -177,16 +177,27 @@ class QuoteCache:
                 e,
             )
             self._state = state_now_from_clock()
-        if self._state is MarketState.CLOSED:
-            logging.info("stocks QuoteCache: market closed — holding last prices")
-            return  # frozen when closed (no quote calls)
+        # When closed, we freeze — but only symbols that ALREADY hold a price.
+        # A cold symbol (fresh boot after hours, or a late registrant) still
+        # needs ONE fetch to grab the last close: Finnhub /quote returns it in
+        # `c` even while the market is shut. Skipping ALL fetches when closed
+        # left cold symbols empty forever — em-dash cards, "…" inline tokens.
+        closed = self._state is MarketState.CLOSED
+        if closed:
+            logging.info(
+                "stocks QuoteCache: market closed — fetching last close for "
+                "cold symbols, holding the rest"
+            )
 
-        updated = 0
+        fetched = held = 0
         # snapshot: a consumer may register() a new symbol during an await
         for sym in list(self._symbols):
+            existing = self._quotes[sym]
+            if closed and existing.has_data:
+                held += 1  # frozen: already hold a close price, don't spend a call
+                continue
             payload = await self._client.fetch_quote(sym)
             fresh = parse_quote(sym, payload)
-            existing = self._quotes[sym]
             if fresh.has_data:
                 if fresh.price != existing.price:
                     existing.flash_t = time.monotonic()
@@ -200,9 +211,12 @@ class QuoteCache:
                     "holding last price",
                     sym,
                 )
-            updated += 1
+            fetched += 1
         logging.info(
-            "stocks QuoteCache updated: %d/%d symbols", updated, len(self._symbols)
+            "stocks QuoteCache updated: %d fetched, %d held (%d symbols)",
+            fetched,
+            held,
+            len(self._symbols),
         )
 
     def reset(self) -> None:
