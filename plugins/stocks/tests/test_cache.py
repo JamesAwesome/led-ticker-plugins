@@ -50,6 +50,61 @@ async def test_update_live_mutates_and_stamps_flash(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_live_survives_concurrent_register_during_await(monkeypatch):
+    """A consumer calling register() while update() is parked on an in-flight
+    fetch_quote() await must not raise `RuntimeError: Set changed size during
+    iteration` — update() iterates a snapshot of _symbols, not the live set."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())  # spawns loop; tolerate initial
+
+    calls = []
+
+    async def q(sym):
+        calls.append(sym)
+        if len(calls) == 1:
+            # Simulate a concurrent registrant during this in-flight await —
+            # this used to mutate the set update() is iterating over.
+            c.register(["NEWSYM"])
+        return {"c": 200.0, "d": 5.0, "dp": 2.5, "pc": 195.0, "h": 201, "l": 194}
+
+    async def st(exchange="US"):
+        return {"isOpen": True, "session": "regular"}
+
+    c._client.fetch_quote = q
+    c._client.fetch_market_status = st
+
+    await c.update()  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_update_live_does_not_restamp_flash_on_unchanged_price(monkeypatch):
+    """flash_t is stamped ONLY on a real price change — a second tick that
+    returns the SAME price must leave flash_t untouched."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())  # spawns loop; tolerate initial
+
+    async def q(sym):
+        return {"c": 200.0, "d": 5.0, "dp": 2.5, "pc": 195.0, "h": 201, "l": 194}
+
+    async def st(exchange="US"):
+        return {"isOpen": True, "session": "regular"}
+
+    c._client.fetch_quote = q
+    c._client.fetch_market_status = st
+
+    await c.update()  # first tick: price changes 0 -> 200, flash_t stamped
+    stamped = c.get("AAPL").flash_t
+    assert stamped is not None
+
+    await c.update()  # second tick: same price, flash_t must be unchanged
+    assert c.get("AAPL").flash_t == stamped
+
+
+@pytest.mark.asyncio
 async def test_closed_skips_quotes(monkeypatch):
     monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
     c = _cache.get_cache()

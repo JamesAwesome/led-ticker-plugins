@@ -121,9 +121,20 @@ class QuoteCache:
         `run_monitor_loop`'s intent: a transient `update()` failure is
         logged and the loop keeps running (never dies on one bad cycle),
         with a simple exponential backoff on repeated failures.
+
+        Sleep-first: `ensure_started` already awaits one eager `update()`
+        before spawning this loop, so firing another `update()` immediately
+        here would double the initial Finnhub request burst
+        (2×(N+1) requests back-to-back at boot) for no benefit — the eager
+        call already populated values. The loop's first real work happens
+        after one interval has elapsed.
         """
         consecutive_errors = 0
         while True:
+            interval = self._effective_interval()
+            if consecutive_errors:
+                interval *= min(2**consecutive_errors, 10)
+            await asyncio.sleep(interval)
             try:
                 await self.update()
                 consecutive_errors = 0
@@ -132,10 +143,6 @@ class QuoteCache:
                 logging.warning(
                     "stocks QuoteCache: poll cycle failed (%s); will retry", e
                 )
-            interval = self._effective_interval()
-            if consecutive_errors:
-                interval *= min(2**consecutive_errors, 10)
-            await asyncio.sleep(interval)
 
     async def update(self) -> None:
         """One poll cycle: demo step, or live market-status + per-symbol quotes."""
@@ -175,7 +182,8 @@ class QuoteCache:
             return  # frozen when closed (no quote calls)
 
         updated = 0
-        for sym in self._symbols:
+        # snapshot: a consumer may register() a new symbol during an await
+        for sym in list(self._symbols):
             payload = await self._client.fetch_quote(sym)
             fresh = parse_quote(sym, payload)
             existing = self._quotes[sym]
