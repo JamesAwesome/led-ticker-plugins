@@ -121,16 +121,16 @@ magnitude at parse time:
 Finnhub quotes get the same magnitude rule applied (equity prices are all `>= 10` in
 practice → 2 decimals → unchanged). This keeps one code path for both providers.
 
-**Optional overrides** on both `stocks.quote` (source) and `stocks.ticker` (widget):
-- `decimals: int` — force a fixed decimal count (overrides the magnitude rule).
-- `prefix: str` — string prepended to rendered price (e.g. `"$"`), default `""`.
-- `suffix: str` — string appended (e.g. `" USD"`), default `""`.
+**Optional override (source only, v1):**
+- `decimals: int` on `stocks.quote` — force a fixed decimal count (overrides the
+  magnitude rule); applied in the source's `_field_value`. Cheap, non-redundant.
 
-For the **token** these mostly duplicate the existing `format` string power
-(`format = "${price}"` already works), so they are secondary there; they matter most for
-the **widget** layouts, which render price with fixed internal formatting. The plan wires
-`prefix`/`suffix`/`decimals` into `format_price`'s call sites in the layouts and the
-source `_field_value`.
+**Deferred (YAGNI trim, 2026-07-15):** widget-level `prefix` / `suffix` / `decimals`.
+The auto-magnitude rule already renders forex/crypto correctly on the widget layouts with
+zero config, and threading `prefix`/`suffix` through all three layouts (card/crawl/
+dashboard) and their right-alignment math is invasive for cosmetic polish. On the token,
+`prefix`/`suffix` are already covered by the `format` string (`format = "${price} USD"`).
+Widget-level overrides are noted as a future pass, not v1 scope.
 
 ### 4. Provider-aware validation (`source.py`, `ticker.py`)
 
@@ -185,8 +185,8 @@ demo quotes through the same magnitude rule and marks them `OPEN` (demo is alway
 - **Per-symbol state:** a mixed config (one open, one closed symbol) renders two
   different chip states; Finnhub path still stamps one global state onto all quotes
   (regression: existing chip tests green).
-- **Auto-format:** `format_price` via `dp_decimals` for `1.14669` / `64,906.62` /
-  `208.89`; `decimals`/`prefix`/`suffix` overrides.
+- **Auto-format:** `decimals_for(price)` magnitude table (`1.14669` / `64,906.62` /
+  `208.89`); source `decimals` override in `_field_value`.
 - **Validation:** `/` symbol rejected for finnhub, accepted for twelvedata; unknown
   `provider` value rejected; existing finnhub validation tests unchanged.
 - **Demo:** `demo = true` with `EUR/USD` synthesizes data, 4-decimal render, `LIVE` chip.
