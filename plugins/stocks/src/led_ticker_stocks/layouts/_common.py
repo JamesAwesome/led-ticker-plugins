@@ -5,6 +5,8 @@ signed percent, trend-colored); this module is the single definition so the
 two layouts can't drift.
 """
 
+import math
+
 from led_ticker.plugin import Color, make_color
 
 from led_ticker_stocks import _palette as pal
@@ -12,6 +14,24 @@ from led_ticker_stocks import _palette as pal
 # Bloomberg-style price flash: a fresh tick lifts the price color toward
 # white, then decays back to steady dimmed amber over this many seconds.
 _FLASH_DECAY_SECONDS = 0.420
+
+# Frame-counter-driven pulses (Phase 3): both periods are tuned in ENGINE
+# TICKS (ENGINE_TICK_MS = 50ms per the core held-loop cadence), not
+# wall-clock seconds — the `frame` value comes from the held renderer's
+# `frame_for("held")` counter, so these stay in lockstep with the render
+# loop rather than drifting against it.
+STATE_PULSE_PERIOD = 24  # ~2s full cycle at 50ms/tick — LIVE chip "breathing"
+ENDPOINT_PULSE_PERIOD = 20  # slightly faster "twinkle" on the sparkline tip
+
+
+def live_pulse(frame: int) -> float:
+    """LIVE-chip brightness multiplier: a slow breathing pulse, range ~[0.10, 1.00]."""
+    return 0.55 + 0.45 * math.sin(frame / STATE_PULSE_PERIOD)
+
+
+def endpoint_pulse(frame: int) -> float:
+    """Sparkline endpoint brightness multiplier, range ~[0.35, 1.00]."""
+    return 0.35 + 0.65 * (0.5 + 0.5 * math.sin(frame / ENDPOINT_PULSE_PERIOD))
 
 
 def arrow(chg: float | None) -> str:

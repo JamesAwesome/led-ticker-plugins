@@ -4,13 +4,23 @@ from led_ticker.plugin import is_scaled, unwrap_to_real
 
 from led_ticker_stocks import _palette as pal
 from led_ticker_stocks._paint import px
+from led_ticker_stocks.layouts._common import endpoint_pulse
 
 _REF_BRIGHT = 0.55
 _GAPFILL_BRIGHT = 0.55
 
 
 def draw_sparkline(
-    canvas, x: int, y: int, w: int, h: int, quote, *, dim: float, green_up: bool = True
+    canvas,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    quote,
+    *,
+    dim: float,
+    green_up: bool = True,
+    frame: int = 0,
 ) -> None:
     real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
     samples = list(quote.spark)
@@ -61,7 +71,7 @@ def draw_sparkline(
                 px(real, sx, gy, gap_color)
         prev_pt = (sx, sy)
 
-    # static white endpoint (pulse is Phase 3)
+    # pulsing white endpoint (frame-counter driven, see layouts._common)
     ex = x + w - 1
     ey = sample_y(samples[-1])
-    px(real, ex, ey, pal.dim(pal.WHITE, dim))
+    px(real, ex, ey, pal.dim(pal.WHITE, dim * endpoint_pulse(frame)))
