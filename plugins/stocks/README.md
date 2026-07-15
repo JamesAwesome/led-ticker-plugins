@@ -37,7 +37,7 @@ led-ticker-stocks
 pip install led-ticker-stocks
 ```
 
-See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses, and pin production signs to an exact version (`led-ticker-stocks==0.1.0`) so a restart doesn't silently pick up a new release.
+See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses, and pin production signs to an exact version (`led-ticker-stocks==0.3.0`) so a restart doesn't silently pick up a new release.
 
 ## Configuration
 
@@ -126,9 +126,9 @@ All three layouts (`"crawl"`, `"card"`, `"dashboard"`) are registered — `layou
 
 ## Roadmap
 
-Phase 3 (price-flash on update, sparkline/state-chip pulses) is shipped — this is now the final planned phase for the three canonical layouts. Deferred / out of scope: new layouts or widgets, indices/FX, a change-field flash, and `font_color`/`border`/rainbow-gradient styling knobs on these layouts.
+Phase 3 (price-flash on update, sparkline/state-chip pulses) is shipping as `stocks-v0.3.0` — this is now the final planned phase for the three canonical layouts (the `crawl` layout shipped in v0.1.0, `card`/`dashboard` in v0.2.0). Deferred / out of scope: new layouts or widgets, indices/FX, a change-field flash, and `font_color`/`border`/rainbow-gradient styling knobs on these layouts.
 
-- **Phase 4:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.1.0` release.
+- **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.3.0` release.
 
 ## Development
 
