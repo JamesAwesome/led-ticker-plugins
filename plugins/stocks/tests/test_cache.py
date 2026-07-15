@@ -133,6 +133,77 @@ async def test_closed_fetches_cold_symbols_once(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_late_registrant_caught_up_on_ensure_started(monkeypatch):
+    """A second consumer starting an already-running cache with NEW symbols
+    (e.g. a stocks.ticker widget booting after a stocks.quote token already
+    started the cache with just its own symbol) must fetch those symbols
+    immediately via ensure_started's catch-up — not leave them cold until the
+    next poll cycle a full interval away. Regression: after hours only the
+    card whose symbol the token shared got data; the widget's others stayed
+    on em-dash.
+    """
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+
+    # Consumer A (the token) starts the cache with only AAPL.
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())  # initial fetch fails, tolerated
+
+    calls = []
+
+    async def q(sym):
+        calls.append(sym)
+        return {"c": 100.0, "pc": 99.0}
+
+    async def st(exchange="US"):
+        return {"isOpen": False, "session": None}  # market closed
+
+    c._client.fetch_quote = q
+    c._client.fetch_market_status = st
+    await c.update()  # A's first cycle warms AAPL
+    assert calls == ["AAPL"]
+    calls.clear()
+
+    # Consumer B (the widget) registers MORE symbols, then calls ensure_started.
+    # Already started -> must catch up the new symbols right now.
+    c.register(["AAPL", "MSFT", "NVDA"])
+    await c.ensure_started(session=mock.Mock())
+
+    assert set(calls) == {"MSFT", "NVDA"}  # the NEW symbols, fetched immediately
+    assert c.get("MSFT").has_data and c.get("NVDA").has_data
+    assert "AAPL" not in calls  # already warm -> not refetched while closed
+
+
+@pytest.mark.asyncio
+async def test_ensure_started_no_catchup_when_all_symbols_warm(monkeypatch):
+    """ensure_started's catch-up is a no-op when every registered symbol has
+    already been fetched — a later consumer re-registering the SAME symbols
+    must not trigger a redundant fetch."""
+    monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
+    c = _cache.get_cache()
+    c.register(["AAPL"])
+    await c.ensure_started(session=mock.Mock())
+
+    calls = []
+
+    async def q(sym):
+        calls.append(sym)
+        return {"c": 100.0, "pc": 99.0}
+
+    async def st(exchange="US"):
+        return {"isOpen": True, "session": "regular"}
+
+    c._client.fetch_quote = q
+    c._client.fetch_market_status = st
+    await c.update()  # warm AAPL
+    calls.clear()
+
+    c.register(["AAPL"])  # same symbol, already warm
+    await c.ensure_started(session=mock.Mock())
+    assert calls == []  # nothing pending -> no catch-up fetch
+
+
+@pytest.mark.asyncio
 async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
     """Once a symbol holds a price, a CLOSED cycle must NOT refetch it — freeze
     it and save the per-key rate budget. Only cold (no-data) symbols are

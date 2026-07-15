@@ -31,12 +31,22 @@ class QuoteCache:
     def __init__(self) -> None:
         self._symbols: set[str] = set()
         self._quotes: dict[str, SymbolQuote] = {}
+        # Symbols we've called fetch_quote for at least once (demo: seeded).
+        # Drives two things: the closed-market freeze (skip a symbol we've
+        # already tried, data or not) and the late-registrant catch-up
+        # (fetch symbols registered after the initial fetch). NOT `has_data`
+        # — a bad symbol has no data but must not refetch forever.
+        self._attempted: set[str] = set()
         self._state: MarketState = MarketState.CLOSED
         self._client: FinnhubClient | None = None
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
         self._task: asyncio.Task[None] | None = None
         self._base_interval: int = 60
+        # Serializes the two update() drivers (the poll loop and the
+        # late-registrant catch-up) so they can't double-fetch concurrently.
+        # Created in ensure_started (inside the running loop).
+        self._poll_lock: asyncio.Lock | None = None
 
     def register(self, symbols: Iterable[str]) -> None:
         """Union `symbols` into the tracked set; seed a zeroed quote for any new one."""
@@ -80,9 +90,18 @@ class QuoteCache:
         exceeding Finnhub's per-key rate budget.
         """
         if self._started:
+            # A consumer registering AFTER the cache started (e.g. a
+            # stocks.ticker widget whose start() runs after a stocks.quote
+            # token already booted the cache, or a hot-reloaded source)
+            # brings symbols the initial fetch never saw. Catch them up now
+            # so their cards / tokens populate immediately instead of sitting
+            # cold (em-dash / "…") until the next poll cycle, a full interval
+            # away. Cheap no-op when every registered symbol is already warm.
+            await self._catch_up_new_symbols()
             return
         self._started = True
         self._base_interval = interval
+        self._poll_lock = asyncio.Lock()
 
         token = os.getenv("FINNHUB_API_TOKEN", "")
         if force_demo or not token:
@@ -129,6 +148,7 @@ class QuoteCache:
         call already populated values. The loop's first real work happens
         after one interval has elapsed.
         """
+        assert self._poll_lock is not None  # spawned only after ensure_started
         consecutive_errors = 0
         while True:
             interval = self._effective_interval()
@@ -136,13 +156,32 @@ class QuoteCache:
                 interval *= min(2**consecutive_errors, 10)
             await asyncio.sleep(interval)
             try:
-                await self.update()
+                async with self._poll_lock:
+                    await self.update()
                 consecutive_errors = 0
             except Exception as e:
                 consecutive_errors += 1
                 logging.warning(
                     "stocks QuoteCache: poll cycle failed (%s); will retry", e
                 )
+
+    async def _catch_up_new_symbols(self) -> None:
+        """Fetch symbols registered since the last poll — called when a later
+        consumer starts an already-running cache. A no-op unless there is at
+        least one symbol never attempted yet, so it doesn't refire on bad
+        symbols (attempted, no data) or when everything is already warm."""
+        if not (self._symbols - self._attempted):
+            return
+        assert self._poll_lock is not None  # started implies the lock exists
+        try:
+            async with self._poll_lock:
+                await self.update()
+        except Exception as e:
+            logging.warning(
+                "stocks QuoteCache: catch-up for late registrants failed "
+                "(%s); the poll loop will retry",
+                e,
+            )
 
     async def update(self) -> None:
         """One poll cycle: demo step, or live market-status + per-symbol quotes."""
@@ -160,6 +199,7 @@ class QuoteCache:
             for _ in range(len(self._symbols)):
                 self._demo_feed.step()
             self._state = MarketState.OPEN
+            self._attempted.update(self._symbols)  # all seeded -> nothing pending
             logging.info("stocks QuoteCache demo tick: %d symbols", len(self._symbols))
             return
 
@@ -177,11 +217,13 @@ class QuoteCache:
                 e,
             )
             self._state = state_now_from_clock()
-        # When closed, we freeze — but only symbols that ALREADY hold a price.
-        # A cold symbol (fresh boot after hours, or a late registrant) still
-        # needs ONE fetch to grab the last close: Finnhub /quote returns it in
-        # `c` even while the market is shut. Skipping ALL fetches when closed
-        # left cold symbols empty forever — em-dash cards, "…" inline tokens.
+        # When closed, we freeze — but only symbols we've ALREADY fetched once.
+        # A never-attempted symbol (fresh boot after hours, or a late
+        # registrant) still needs ONE fetch to grab the last close: Finnhub
+        # /quote returns it in `c` even while the market is shut. Skipping ALL
+        # fetches when closed left cold symbols empty forever — em-dash cards,
+        # "…" inline tokens. Keying the freeze on `_attempted` (not `has_data`)
+        # also stops a bad symbol from refetching every closed cycle.
         closed = self._state is MarketState.CLOSED
         if closed:
             logging.info(
@@ -193,10 +235,11 @@ class QuoteCache:
         # snapshot: a consumer may register() a new symbol during an await
         for sym in list(self._symbols):
             existing = self._quotes[sym]
-            if closed and existing.has_data:
-                held += 1  # frozen: already hold a close price, don't spend a call
+            if closed and sym in self._attempted:
+                held += 1  # frozen: already tried this symbol, don't spend a call
                 continue
             payload = await self._client.fetch_quote(sym)
+            self._attempted.add(sym)
             fresh = parse_quote(sym, payload)
             if fresh.has_data:
                 if fresh.price != existing.price:
@@ -225,11 +268,13 @@ class QuoteCache:
             self._task.cancel()
         self._symbols = set()
         self._quotes = {}
+        self._attempted = set()
         self._state = MarketState.CLOSED
         self._client = None
         self._demo_feed = None
         self._started = False
         self._task = None
+        self._poll_lock = None
 
 
 _CACHE = QuoteCache()

@@ -157,18 +157,32 @@ clamp or reject.
 
 **Closed-market freeze is per-symbol, NOT a whole-cycle skip** — `QuoteCache.update()` always
 fetches market status first. When `MarketState.CLOSED`, it does NOT blanket-skip quotes:
-it fetches only symbols whose cached quote has **no data yet** (`not existing.has_data`) and
-freezes (skips) the rest. This is load-bearing: a sign booted after hours has ALL symbols
-cold, and Finnhub `/quote` returns the last close in `c` even while the exchange is shut — so
-one fetch per cold symbol is what makes the card show the close and inline `:stocks.*:` tokens
-resolve past their `…` placeholder. A whole-cycle `return` when closed (the original Phase-4
-bug) left every symbol empty forever on an after-hours boot: em-dash cards, dead tokens. Once
-a symbol holds a price, closed cycles skip it (rate-budget: worst case `N+1` on the first
-closed cycle, then `1` status-only per cycle as symbols warm up; steady-state closed is still
-1 request). Late registrants added while closed are cold, so they too get their one fetch.
-Don't reintroduce an early `return` on `CLOSED`. Tripwires:
-`test_closed_fetches_cold_symbols_once`, `test_closed_holds_symbols_that_already_have_data`
-(`tests/test_cache.py`).
+it fetches only symbols it has **never attempted** (`sym not in self._attempted`) and freezes
+(skips) the rest. This is load-bearing: a sign booted after hours has ALL symbols cold, and
+Finnhub `/quote` returns the last close in `c` even while the exchange is shut — so one fetch
+per cold symbol is what makes the card show the close and inline `:stocks.*:` tokens resolve
+past their `…` placeholder. A whole-cycle `return` when closed (the original Phase-4 bug) left
+every symbol empty forever on an after-hours boot: em-dash cards, dead tokens. The freeze keys
+on `_attempted` (symbols we've called `fetch_quote` for at least once), NOT `has_data`: a bad
+symbol has no data but must not refetch every closed cycle. Once a symbol is attempted, closed
+cycles skip it (rate-budget: worst case `N+1` on the first closed cycle, then `1` status-only
+per cycle as symbols warm up; steady-state closed is still 1 request). Late registrants added
+while closed are un-attempted, so they too get their one fetch. Don't reintroduce an early
+`return` on `CLOSED`. Tripwires: `test_closed_fetches_cold_symbols_once`,
+`test_closed_holds_symbols_that_already_have_data` (`tests/test_cache.py`).
+
+**Late-registrant catch-up in `ensure_started`** — the cache is single-mode, first-started-wins
+(above), so whichever consumer boots the cache first runs the initial fetch over only the
+symbols registered AT THAT MOMENT. A `stocks.ticker` widget whose `start()` runs AFTER a
+`stocks.quote` token already started the cache would otherwise leave its extra symbols cold
+until the next poll cycle (a full interval) — the after-hours symptom where only the card
+sharing the token's symbol got data. So `ensure_started`'s already-started path is NOT a bare
+`return`: it calls `_catch_up_new_symbols()`, which fetches any symbol in `_symbols - _attempted`
+right now (a no-op when all warm, so it doesn't refire on the source's every-tick
+`ensure_started` call or on bad symbols). The poll loop and the catch-up both drive `update()`,
+so they share `self._poll_lock` (an `asyncio.Lock` created in the first-start path) to avoid a
+concurrent double-fetch. Tripwires: `test_late_registrant_caught_up_on_ensure_started`,
+`test_ensure_started_no_catchup_when_all_symbols_warm` (`tests/test_cache.py`).
 
 **No-data guard: `pc == 0` (or `c == 0`) never divides** — `SymbolQuote.has_data` is
 `self.prev != 0 and self.price != 0`; `change`/`pct` both return `None` — never attempt
@@ -346,13 +360,15 @@ the dedup rule below is the whole point of this file.
   runs one `update()` cycle live/OPEN, and asserts the count is exactly `{"AAPL": 1}`. If you
   ever change the cache to track fetches per-registrant instead of per-symbol-in-a-set, this
   test is the regression signal.
-- **Single-mode, first-started-wins.** `ensure_started(session, interval, force_demo)` is
-  idempotent — `self._started` gates it, so every call after the first (from ANY consumer) is
-  a silent no-op, INCLUDING a later call with a different `force_demo`. The cache resolves
-  `FINNHUB_API_TOKEN` from env exactly once, at that first call, and decides live-vs-demo for
-  every consumer reading it that process — see the README's "Demo is a process-wide setting"
-  callout. Do not add a per-consumer override to this; it would require re-architecting
-  `ensure_started` away from idempotent, which the poll-loop-spawn logic depends on.
+- **Single-mode, first-started-wins.** The MODE decision in `ensure_started(session, interval,
+  force_demo)` is idempotent — `self._started` gates it, so the token resolution, live-vs-demo
+  choice, `_base_interval`, and poll-loop spawn all happen exactly once, at the first call, and
+  a later call with a different `force_demo` does NOT change them. The cache resolves
+  `FINNHUB_API_TOKEN` from env exactly once — see the README's "Demo is a process-wide setting"
+  callout. Do not add a per-consumer mode override; it would require re-architecting the
+  first-start path, which the poll-loop-spawn logic depends on. NOTE the already-started path is
+  no longer a pure no-op: it runs `_catch_up_new_symbols()` (see the "Late-registrant catch-up"
+  invariant above) — that fetches new symbols but never touches the mode/token/loop state.
 - **`update()` is the one method that performs I/O**, called both from inside
   `ensure_started()` (an initial, exception-tolerant fetch so a rate-limited/unreachable
   Finnhub at boot doesn't block startup) and from `_run_poll_loop()` on the recomputed

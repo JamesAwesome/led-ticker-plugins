@@ -19,6 +19,7 @@ def _seed_started(symbol: str, **quote_kw) -> None:
     c = _cache.get_cache()
     c.register([symbol])
     c._started = True
+    c._attempted.add(symbol)  # already fetched -> no late-registrant catch-up
     quote_kw.setdefault("price", 0.0)
     quote_kw.setdefault("prev", 0.0)
     c._quotes[symbol] = SymbolQuote(sym=symbol, **quote_kw)
@@ -161,11 +162,13 @@ async def test_token_resolves_to_last_close_when_market_closed(monkeypatch):
 
 
 async def test_no_data_keeps_placeholder():
-    # register() alone seeds a zeroed (no-data) quote; mark started so
-    # update() doesn't self-start a demo feed that would fabricate data.
+    # register() alone seeds a zeroed (no-data) quote; mark started + attempted
+    # so update() neither self-starts a demo feed nor catch-up-fetches — this
+    # simulates a symbol that WAS fetched but returned no data (e.g. bad ticker).
     c = _cache.get_cache()
     c.register(["AAPL"])
     c._started = True
+    c._attempted.add("AAPL")
     src = _src(symbol="AAPL", format="{price}", placeholder="…")
     await src.update()
     assert src.current == "…"
