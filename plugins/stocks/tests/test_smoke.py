@@ -20,5 +20,16 @@ def test_entry_point_registers_stocks_namespace():
         from led_ticker.app.factories import get_source_class
 
         assert get_source_class("stocks.quote") is not None
+
+        # color provider registered under the same namespace
+        from led_ticker.color_providers import _PROVIDER_REGISTRY
+
+        assert "stocks.trend" in _PROVIDER_REGISTRY
+
+        # and it coerces from an inline font_color table
+        from led_ticker.app.coercion import _coerce_color_provider
+
+        prov = _coerce_color_provider({"style": "stocks.trend", "symbol": "AAPL"})
+        assert prov is not None and prov.symbol == "AAPL"
     finally:
         L.reset_plugins()
