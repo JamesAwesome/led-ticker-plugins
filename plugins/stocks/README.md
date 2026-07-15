@@ -204,7 +204,7 @@ See [`examples/config.stocks-trend.smallsign.toml`](examples/config.stocks-trend
 
 ## Roadmap
 
-Phase 4 (the `stocks.quote` inline price token, backed by a shared `QuoteCache` that dedups Finnhub requests across every widget/token in the process) is shipping as `stocks-v0.4.0` — this is now the final planned phase for v1. `crawl` shipped in v0.1.0, `card`/`dashboard` in v0.2.0, the price-flash/pulse animation layer in v0.3.0. Deferred / out of scope: indices/FX, per-token color, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
+Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), and the `stocks.trend` color provider (v0.5.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), indices/FX, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
 
 - **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.4.0` release.
 

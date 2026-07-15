@@ -57,7 +57,8 @@ Python **3.14+** only.
 ```
 src/led_ticker_stocks/
   __init__.py         # register(api) → api.widget("ticker")(StocksTicker),
-                       #   api.source("quote")(StockSource)
+                       #   api.source("quote")(StockSource),
+                       #   api.color_provider("trend")(StocksTrendColor)
   _cache.py            # QuoteCache: the ONE Finnhub-owning singleton (Phase 4) —
                        #   register()/get()/state()/ensure_started()/update()/reset();
                        #   get_cache() returns the process-wide instance
@@ -330,7 +331,9 @@ test proving the SAME up-quote renders green-dominant at `green_up=True` and red
 via `api.color_provider("trend")(StocksTrendColor)` (`stocks.trend`), `per_char = False`,
 `frame_invariant = False` (color tracks live data, so it must be re-evaluated on every draw —
 same reasoning as Rainbow/ColorCycle). `color_for` mirrors `layouts/_common.py`'s `chg_color`
-exactly (`chg > 0` → up, `chg < 0` → down, else flat; `green_up` swaps up/down) and reads
+*branching* (`chg > 0` → up, `chg < 0` → down, else flat; `green_up` swaps up/down) — but NOT
+its market-state dimming or its amber `pal.FLAT`; the provider's flat default is a neutral gray
+(`_DEFAULT_FLAT`), and its up/down default to `pal.UP`/`pal.DOWN`. It reads
 `get_cache().get(symbol)` directly. It MUST NOT raise — a color provider runs in the render
 loop — and it MUST NOT call `ensure_started()` or perform any I/O; a provider has no
 session/async context to own a poll loop, unlike `StockSource`. `__init__` DOES call
