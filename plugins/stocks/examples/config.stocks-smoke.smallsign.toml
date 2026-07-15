@@ -1,14 +1,14 @@
 # Smallsign SMOKE TEST — stocks.ticker crawl + a MIXED-COLOR inline price token
 #
-# The crawl WIDGET and the inline `:stocks.aapl:` TOKEN share ONE `QuoteCache`
-# (AAPL fetched once per cycle for both — dedup). The token line here is a
-# MIXED-COLOR demo: the literal "AAPL " is white (the message `font_color`) and
+# The crawl WIDGET and the inline `:stocks.dks:` TOKEN share ONE `QuoteCache`
+# (DKS fetched once per cycle for both — dedup). The token line here is a
+# MIXED-COLOR demo: the literal "DKS " is white (the message `font_color`) and
 # the price is GREEN (up) / RED (down) by trend, because the `[[source]]` carries
 # a `color` provider (`stocks.trend`) that colors just the token.
 #
 # Prereqs on the sign:
-#   - led-ticker-core WITH colored value tokens (PR #390 — a `[[source]] color`
-#     that tints just the `:id:` token). NOT in a core release yet. On an OLDER
+#   - led-ticker-core >= 4.14.0 (colored value tokens — a `[[source]] color`
+#     that tints just the `:id:` token). On an OLDER
 #     core the `color` line is ignored and the WHOLE message renders in
 #     `font_color` (white) — no mixed color, everything else still works.
 #   - led-ticker-stocks >= 0.5.0 (the `stocks.trend` color provider). In
@@ -24,13 +24,13 @@
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
 # WHAT TO LOOK FOR, section by section:
-#   1 MIXED-COLOR TOKEN — a scrolling MESSAGE reading "AAPL 000.00 +0.00%". The
-#                    "AAPL " label is WHITE; the price + signed percent are GREEN
-#                    when AAPL is up on the day, RED when down (trend color on the
+#   1 MIXED-COLOR TOKEN — a scrolling MESSAGE reading "DKS 000.00 +0.00%". The
+#                    "DKS " label is WHITE; the price + signed percent are GREEN
+#                    when DKS is up on the day, RED when down (trend color on the
 #                    token only — the two colors on ONE line is the thing to
 #                    verify). In demo the price random-walks so the color flips
-#                    over ~30s. This AAPL is the SAME AAPL the crawl fetches.
-#   2 CRAWL        — AAPL / MSFT / NVDA / TSLA crawl right->left continuously at
+#                    over ~30s. This DKS is the SAME DKS the crawl fetches.
+#   2 CRAWL        — DKS / MSFT / NVDA / TSLA crawl right->left continuously at
 #                    26 px/s and LOOP SEAMLESSLY. Per symbol: WHITE ticker ->
 #                    AMBER price -> change block GREEN ▲ (up) / RED ▼ (down).
 #                    In live mode global brightness tracks market state.
@@ -45,16 +45,16 @@ brightness = 60
 gpio_slowdown = 2
 hardware_mapping = "adafruit-hat"
 
-# stocks.quote source: AAPL as an inline `:stocks.aapl:` token, shared with the
+# stocks.quote source: DKS as an inline `:stocks.dks:` token, shared with the
 # crawl (one fetch for both). `color` tints JUST the token by trend — green up /
 # red down (same provider the ticker widget uses). `format` drops the arrow glyph
 # (the color conveys direction); smallsign is BDF (scale 1), no hi-res font.
 [[source]]
-id = "stocks.aapl"
+id = "stocks.dks"
 type = "stocks.quote"
-symbol = "AAPL"
+symbol = "DKS"
 format = "{price} {pct}"
-color = {style = "stocks.trend", symbol = "AAPL"}
+color = {style = "stocks.trend", symbol = "DKS"}
 # interval = 60
 
 # --- 1: mixed-color inline token (shares the cache with the crawl) ------------
@@ -63,8 +63,8 @@ mode = "ticker"
 
 [[playlist.section.widget]]
 type = "message"
-text = "AAPL :stocks.aapl:"
-font_color = [255, 255, 255]   # "AAPL " white; the token is trend-colored
+text = "DKS :stocks.dks:"
+font_color = [255, 255, 255]   # "DKS " white; the token is trend-colored
 
 # --- 2: stocks.ticker crawl ---------------------------------------------------
 [[playlist.section]]
@@ -72,7 +72,7 @@ mode = "ticker"
 
 [[playlist.section.widget]]
 type = "stocks.ticker"
-symbols = ["AAPL", "MSFT", "NVDA", "TSLA"]
+symbols = ["DKS", "MSFT", "NVDA", "TSLA"]
 demo = true
 # green_up = false     # uncomment to flip to red-up / green-down (non-US convention)
 # update_interval = 60 # (LIVE only) with a token set + `demo` removed

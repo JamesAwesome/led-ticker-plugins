@@ -1,8 +1,8 @@
 # Longboi SMOKE TEST — stocks.ticker DASHBOARD + a HI-RES, MIXED-COLOR inline token
 #
-# The dashboard WIDGET and the inline `:stocks.aapl:` TOKEN share ONE `QuoteCache`
-# (AAPL fetched once per cycle for both — dedup). The token line here is a HI-RES
-# (Inter-Bold) + MIXED-COLOR demo: the literal "AAPL " is white (the message
+# The dashboard WIDGET and the inline `:stocks.dks:` TOKEN share ONE `QuoteCache`
+# (DKS fetched once per cycle for both — dedup). The token line here is a HI-RES
+# (Inter-Bold) + MIXED-COLOR demo: the literal "DKS " is white (the message
 # `font_color`) and the price is GREEN (up) / RED (down) by trend, because the
 # `[[source]]` carries a `color` provider (`stocks.trend`) that colors just the
 # token. Two colors on ONE hi-res line is the thing to hardware-validate.
@@ -19,8 +19,8 @@
 # message lives in its OWN section, so it doesn't disturb that.
 #
 # Prereqs on the sign:
-#   - led-ticker-core WITH colored value tokens (PR #390 — a `[[source]] color`
-#     that tints just the `:id:` token). NOT in a core release yet. On an OLDER
+#   - led-ticker-core >= 4.14.0 (colored value tokens — a `[[source]] color`
+#     that tints just the `:id:` token). On an OLDER
 #     core the `color` line is ignored and the whole message renders in
 #     `font_color` (white) — no mixed color; hi-res + everything else still work.
 #   - led-ticker-stocks >= 0.5.0 (the `stocks.trend` color provider). In
@@ -39,13 +39,13 @@
 #
 # WHAT TO LOOK FOR:
 #   1 HI-RES MIXED-COLOR TOKEN — a held (scroll-on-overflow) HI-RES Inter-Bold
-#                    MESSAGE reading "AAPL 000.00 +0.00%". The "AAPL " label is
-#                    WHITE; the price + signed percent are GREEN when AAPL is up on
+#                    MESSAGE reading "DKS 000.00 +0.00%". The "DKS " label is
+#                    WHITE; the price + signed percent are GREEN when DKS is up on
 #                    the day, RED when down (trend color on the TOKEN only). Verify
 #                    BOTH: crisp hi-res glyphs AND two colors on one line (and that
 #                    green/red read correctly given the BRG wiring below). In demo
-#                    the price random-walks so the color flips over ~30s. This AAPL
-#                    is the SAME AAPL the dashboard fetches — one cache, one fetch.
+#                    the price random-walks so the color flips over ~30s. This DKS
+#                    is the SAME DKS the dashboard fetches — one cache, one fetch.
 #   2 DASHBOARD (per symbol, HELD ~5.2s, then transitions to the next symbol) —
 #                    one trading-DASHBOARD view per symbol: hero SYMBOL + brand
 #                    CHIP (abstract two-tone diagonal block, never a logo) +
@@ -81,16 +81,16 @@ panel_type = "FM6126A"
 # Muen P2 panels wire HUB75 G-pin → Red LED, R-pin → Blue LED, B-pin → Green LED.
 led_rgb_sequence = "BRG"
 
-# stocks.quote source: AAPL as an inline `:stocks.aapl:` token, shared with the
+# stocks.quote source: DKS as an inline `:stocks.dks:` token, shared with the
 # dashboard (one fetch for both). `color` tints JUST the token by trend — green
 # up / red down (same provider the ticker widget uses). `format` drops the arrow
 # glyph (the color conveys direction, and hi-res Inter has no ▲/▼ glyph).
 [[source]]
-id = "stocks.aapl"
+id = "stocks.dks"
 type = "stocks.quote"
-symbol = "AAPL"
+symbol = "DKS"
 format = "{price} {pct}"
-color = {style = "stocks.trend", symbol = "AAPL"}
+color = {style = "stocks.trend", symbol = "DKS"}
 # interval = 60
 
 # --- 1: hi-res mixed-color inline token (shares the cache with the dashboard) --
@@ -100,11 +100,11 @@ hold_time = 5.2
 
 [[playlist.section.widget]]
 type = "message"
-text = "AAPL :stocks.aapl:"
+text = "DKS :stocks.dks:"
 font = "Inter-Bold"            # bundled hi-res font (scale 4)
 font_size = 44
 font_threshold = 80           # thin-stroke hi-res needs a lower threshold
-font_color = [255, 255, 255]  # "AAPL " white; the token is trend-colored
+font_color = [255, 255, 255]  # "DKS " white; the token is trend-colored
 
 # --- 2: stocks.ticker dashboard (widget ALONE in its section — see note) ------
 [[playlist.section]]
@@ -113,6 +113,6 @@ hold_time = 5.2
 
 [[playlist.section.widget]]
 type = "stocks.ticker"
-symbols = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD"]
+symbols = ["DKS", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD"]
 demo = true
 # update_interval = 60 # (LIVE only) with a token set + `demo` removed
