@@ -341,6 +341,45 @@ async def test_ensure_started_twelvedata_builds_td_provider(monkeypatch):
     monkeypatch.setattr(cache, "update", _noop_update)
     await cache.ensure_started(session=object(), provider="twelvedata")
     assert isinstance(cache._provider, TwelveDataProvider)
+    # A per-minute rate limiter is built from the provider's cap (TD = 8/min)
+    # so a boot burst / large symbol list can't trip a 429.
+    assert cache._limiter is not None
+
+
+async def test_catch_up_fetches_only_new_cold_symbols(monkeypatch):
+    """Surgical catch-up: a late-registering widget fetches ONLY its new
+    symbols, not the already-warm ones a token source primed. Re-fetching
+    everything (Twelve Data never freezes) stacked the boot burst past the
+    8/min cap and 429'd on the longboi."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["EUR/USD", "BTC/USD"])
+    cache._attempted.update({"EUR/USD", "BTC/USD"})  # already warm (token sources)
+    calls = []
+
+    class _Prov:
+        REQUESTS_PER_MINUTE = 8
+
+        async def fetch_market_state(self):
+            return None  # twelvedata-style (per-symbol)
+
+        async def fetch_quote(self, sym):
+            calls.append(sym)
+            return SymbolQuote(
+                sym=sym,
+                price=5.0,
+                prev=4.0,
+                dp_decimals=decimals_for(5.0),
+                state=MarketState.OPEN,
+            )
+
+    _install_prov(cache, _Prov())
+    cache.register(["AAPL", "NVDA"])  # widget adds 2 new cold symbols
+    await cache._catch_up_new_symbols()
+    assert sorted(calls) == ["AAPL", "NVDA"]  # ONLY the new ones; warm not re-hit
 
 
 async def test_ensure_started_no_token_routes_to_demo(monkeypatch):

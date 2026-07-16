@@ -19,6 +19,7 @@ from collections.abc import Iterable
 
 from led_ticker.plugin import spawn_tracked
 
+from led_ticker_stocks._ratelimit import AsyncRateLimiter
 from led_ticker_stocks.demo import DemoFeed, seed_quotes
 from led_ticker_stocks.finnhub import FinnhubClient, parse_quote
 from led_ticker_stocks.model import SymbolQuote
@@ -46,6 +47,9 @@ class QuoteCache:
         self._attempted: set[str] = set()
         self._state: MarketState = MarketState.CLOSED
         self._provider: Provider | None = None
+        # Per-minute request throttle, built from the provider's cap once the
+        # provider is resolved. Guards against boot-burst / large-symbol 429s.
+        self._limiter: AsyncRateLimiter | None = None
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
         self._task: asyncio.Task[None] | None = None
@@ -125,8 +129,16 @@ class QuoteCache:
         else:
             self._provider = FinnhubProvider(FinnhubClient(token, session))
 
+        if self._provider is not None:
+            self._limiter = AsyncRateLimiter(self._provider.REQUESTS_PER_MINUTE)
+
+        # Hold the poll lock for the eager fetch so a second consumer's
+        # `ensure_started` -> `_catch_up_new_symbols` (which also takes the
+        # lock) can't fire a redundant fetch of the same symbols before this
+        # populates `_attempted` (the boot-race double-fetch).
         try:
-            await self.update()
+            async with self._poll_lock:
+                await self.update()
         except Exception as e:
             logging.warning(
                 "stocks QuoteCache: initial fetch failed (%s); "
@@ -179,17 +191,77 @@ class QuoteCache:
                     "stocks QuoteCache: poll cycle failed (%s); will retry", e
                 )
 
+    async def _fetch_one(self, sym: str, global_state: MarketState | None) -> None:
+        """Rate-limited fetch + in-place merge of one symbol's live quote.
+
+        Assumes the caller decided this symbol is NOT frozen this cycle. Shared
+        by the full `update()` loop and the surgical late-registrant catch-up
+        so both throttle identically and merge the same way.
+        """
+        if self._limiter is not None:
+            await self._limiter.acquire()
+        assert self._provider is not None
+        existing = self._quotes[sym]
+        fresh = await self._provider.fetch_quote(sym)
+        self._attempted.add(sym)
+        if global_state is not None:
+            fresh.state = global_state  # Finnhub: stamp the one global state
+        if fresh.has_data:
+            if fresh.price != existing.price:
+                existing.flash_t = time.monotonic()
+            existing.price, existing.prev = fresh.price, fresh.prev
+            existing.d, existing.dp = fresh.d, fresh.dp
+            existing.high, existing.low = fresh.high, fresh.low
+            existing.dp_decimals = fresh.dp_decimals
+            existing.state = fresh.state
+            existing.spark.append(fresh.price)
+        else:
+            # No fresh price, but adopt the state so the market CHIP (widget
+            # reads quote.state) reflects reality even on a no-trade tick.
+            existing.state = fresh.state
+            logging.debug(
+                "stocks QuoteCache: %s returned no data this tick — holding last price",
+                sym,
+            )
+
     async def _catch_up_new_symbols(self) -> None:
-        """Fetch symbols registered since the last poll — called when a later
-        consumer starts an already-running cache. A no-op unless there is at
-        least one symbol never attempted yet, so it doesn't refire on bad
-        symbols (attempted, no data) or when everything is already warm."""
+        """Fetch ONLY the symbols registered since the last poll — called when a
+        later consumer (e.g. a stocks.ticker widget starting after a token
+        already booted the cache) brings new symbols. Fetches just the cold
+        ones, NOT a full `update()`: re-running the whole cycle re-fetches every
+        already-warm symbol too (Twelve Data never freezes), stacking redundant
+        requests at boot and tripping the per-minute 429. Demo seeds new symbols
+        with no network, so it takes the cheap full path."""
         if not (self._symbols - self._attempted):
             return
         assert self._poll_lock is not None  # started implies the lock exists
         try:
             async with self._poll_lock:
-                await self.update()
+                # Re-check under the lock: the eager fetch (also lock-held) or
+                # another catch-up may have just warmed these.
+                cold = self._symbols - self._attempted
+                if not cold:
+                    return
+                if self._demo_feed is not None:
+                    await self.update()  # demo: cheap, no network
+                    return
+                global_state = (
+                    await self._provider.fetch_market_state()
+                    if self._provider is not None
+                    else None
+                )
+                if global_state is not None:
+                    self._state = global_state
+                for sym in sorted(cold):
+                    await self._fetch_one(sym, global_state)
+                if global_state is None:
+                    self._state = (
+                        MarketState.OPEN
+                        if any(
+                            q.state is MarketState.OPEN for q in self._quotes.values()
+                        )
+                        else MarketState.CLOSED
+                    )
         except Exception as e:
             logging.warning(
                 "stocks QuoteCache: catch-up for late registrants failed "
@@ -251,29 +323,7 @@ class QuoteCache:
                     existing.state = global_state
                 held += 1
                 continue
-            fresh = await self._provider.fetch_quote(sym)
-            self._attempted.add(sym)
-            if global_state is not None:
-                fresh.state = global_state  # Finnhub: stamp the one global state
-            if fresh.has_data:
-                if fresh.price != existing.price:
-                    existing.flash_t = time.monotonic()
-                existing.price, existing.prev = fresh.price, fresh.prev
-                existing.d, existing.dp = fresh.d, fresh.dp
-                existing.high, existing.low = fresh.high, fresh.low
-                existing.dp_decimals = fresh.dp_decimals
-                existing.state = fresh.state
-                existing.spark.append(fresh.price)
-            else:
-                # No fresh price, but adopt the state so the market CHIP
-                # (widget reads quote.state) reflects reality even on a
-                # no-trade tick. (The freeze gates on global_state, not this.)
-                existing.state = fresh.state
-                logging.debug(
-                    "stocks QuoteCache: %s returned no data this tick — "
-                    "holding last price",
-                    sym,
-                )
+            await self._fetch_one(sym, global_state)
             fetched += 1
         # For a per-symbol provider (Twelve Data), derive the legacy global
         # state() for any back-compat reader: OPEN if any tracked symbol is
@@ -300,6 +350,7 @@ class QuoteCache:
         self._attempted = set()
         self._state = MarketState.CLOSED
         self._provider = None
+        self._limiter = None
         self._demo_feed = None
         self._started = False
         self._task = None

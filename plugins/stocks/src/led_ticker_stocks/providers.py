@@ -9,7 +9,7 @@ so fetch_market_state() returns None and per-symbol state rides on the quote.
 """
 
 import logging
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from led_ticker_stocks import finnhub, twelvedata
 from led_ticker_stocks.model import SymbolQuote
@@ -20,8 +20,11 @@ class Provider(Protocol):
     """The two provider-specific pieces `QuoteCache` drives each cycle.
 
     `fetch_market_state` returns a global `MarketState` (Finnhub) or `None`
-    when state is per-symbol on the quote (Twelve Data).
+    when state is per-symbol on the quote (Twelve Data). `REQUESTS_PER_MINUTE`
+    is the free-tier per-minute request cap the cache rate-limits to.
     """
+
+    REQUESTS_PER_MINUTE: ClassVar[int]
 
     async def fetch_market_state(self) -> MarketState | None: ...
 
@@ -29,6 +32,9 @@ class Provider(Protocol):
 
 
 class FinnhubProvider:
+    # Finnhub free tier: 60 requests/min per token.
+    REQUESTS_PER_MINUTE: ClassVar[int] = 60
+
     def __init__(self, client):
         self._client = client
 
@@ -49,6 +55,10 @@ class FinnhubProvider:
 
 
 class TwelveDataProvider:
+    # Twelve Data free tier: 8 requests/min (the credit/day budget is bounded
+    # separately by the poll interval). Cap a bit under to leave headroom.
+    REQUESTS_PER_MINUTE: ClassVar[int] = 8
+
     def __init__(self, client):
         self._client = client
 

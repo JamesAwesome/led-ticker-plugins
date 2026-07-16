@@ -42,12 +42,15 @@
 #     it validates rendering, motion, trend colour, the minus, and the plumbing.
 #     Use LIVE to see the real multi-asset formatting + per-symbol state.
 #
-# CREDIT BUDGET (Twelve Data free tier ~800 credits/day, 1 credit/symbol/poll;
-# TD symbols are NOT frozen while closed, so each polls every cycle): with 5
-# distinct symbols, keep interval >= 108*5 = 540 s. This config uses 600 s
-# (5 * 86400/600 = 720 fetches/day, under budget). Delayed data (~1–15 min) means
-# faster polling shows nothing new anyway. Boot fetches once eagerly, so real
-# prices appear within seconds regardless of the interval.
+# RATE LIMITS — Twelve Data's free tier has TWO caps:
+#   - ~800 credits/DAY (1 credit/symbol/poll). TD symbols are NOT frozen while
+#     closed, so each polls every cycle — keep interval >= 108*N s. This config:
+#     5 symbols at 600 s = 5 * 86400/600 = 720 fetches/day, under budget.
+#   - 8 requests/MINUTE. A boot burst (widget + tokens priming the shared cache)
+#     or a >8-symbol list can trip this. The plugin now client-side throttles to
+#     the provider's per-minute cap, so bursts are paced automatically and won't
+#     429 — a small set (<=8) still paints within seconds; a larger one populates
+#     a few symbols per pass. Delayed data (~1-15 min) makes faster polling moot.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #
