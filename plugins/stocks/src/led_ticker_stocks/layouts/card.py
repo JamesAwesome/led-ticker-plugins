@@ -24,6 +24,24 @@ from led_ticker_stocks.state import STATE_META, MarketState
 
 _MARGIN = 4
 
+# The symbol (left) and price (right) share the card's top row. Min real-px gap
+# between them, and the ladder of hi-res sizes the price may shrink to so a wide
+# value (crypto magnitudes, or a negative's leading minus) never overlaps a long
+# symbol. 22 is the design size; 11 is the floor (matches the change line).
+_SYM_PRICE_GAP = 6
+_PRICE_SIZES = (22, 18, 16, 14, 12, 11)
+
+
+def _fit_price_size(price: str, sym_end: int, real_width: int) -> int:
+    """Largest size in `_PRICE_SIZES` whose right-aligned price clears the
+    symbol's right edge (`sym_end`) by `_SYM_PRICE_GAP` — so the two never
+    overlap. Falls back to the smallest size (still far better than a fixed-22
+    collision) if even that would touch."""
+    for size in _PRICE_SIZES:
+        if right_align_x(size, price, real_width, _MARGIN) >= sym_end + _SYM_PRICE_GAP:
+            return size
+    return _PRICE_SIZES[-1]
+
 
 def draw_card_story(
     canvas,
@@ -59,18 +77,25 @@ def draw_card_story(
     draw_chip(canvas, x, 4 + yoff, 16, quote, dim=dim)
     x += 20
 
-    hires(shim, quote.sym, x, 1 + yoff, pal.dim(pal.SYM, dim), 22, bold=True)
+    # hires() returns the advance width, so this is the symbol's right edge.
+    sym_end = x + hires(
+        shim, quote.sym, x, 1 + yoff, pal.dim(pal.SYM, dim), 22, bold=True
+    )
     # company name unknown in v1 (no metadata source) -> skip; symbol carries it
 
     if quote.has_data:
         price = format_price(quote.price, quote.dp_decimals)
+        # Shrink the price to the largest size that clears the symbol, so a wide
+        # value (crypto, or a negative's minus) can't land on the symbol's last
+        # letter (the price is drawn after, so it would win the overlap).
+        price_size = _fit_price_size(price, sym_end, w)
         hires(
             shim,
             price,
-            right_align_x(22, price, w, _MARGIN),
+            right_align_x(price_size, price, w, _MARGIN),
             1 + yoff,
             flash_price_color(quote.flash_t, dim, now=now),
-            22,
+            price_size,
             bold=True,
         )
         chg_line = (

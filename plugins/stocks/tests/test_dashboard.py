@@ -220,3 +220,100 @@ def test_dashboard_no_data_does_not_crash():
         frame=0,
     )
     assert real._pixels
+
+
+def test_hero_symbol_shrinks_to_clear_price_block():
+    """A 7-char pair (EUR/USD) at the design size 26 runs into the fixed
+    x=150 price block; the fit helper must shrink it. Short equity symbols
+    keep the design size (no visual change)."""
+    from led_ticker_stocks._paint import text_width
+    from led_ticker_stocks.layouts.dashboard import (
+        _HERO_SYM_GAP,
+        _HERO_SYM_SIZES,
+        _PRICE_BLOCK_X,
+        _fit_hero_sym_size,
+    )
+
+    assert _fit_hero_sym_size("AAPL", 32) == _HERO_SYM_SIZES[0]
+    size = _fit_hero_sym_size("EUR/USD", 32)
+    assert size < _HERO_SYM_SIZES[0]
+    # Invariant (platform-metric independent): the chosen size clears the
+    # price block, unless it hit the ladder floor.
+    assert (
+        32 + text_width(size, "EUR/USD", bold=True) <= _PRICE_BLOCK_X - _HERO_SYM_GAP
+        or size == _HERO_SYM_SIZES[-1]
+    )
+
+
+def test_watch_row_symbol_and_pct_never_overlap():
+    """REGRESSION (hardware, longboi): the watch column drew a 7-char pair +
+    its right-aligned pct with no collision guard — 'EUR/USD' and '-0.2%'
+    touched/overlapped. The shared row size must fit both in the column."""
+    from led_ticker_stocks._paint import text_width
+    from led_ticker_stocks.layouts.dashboard import (
+        _WATCH_GAP,
+        _WATCH_SIZES,
+        _fit_watch_size,
+    )
+
+    col = 74  # 512 - 434 - _MARGIN, the real longboi watch column
+    for sym, pv in [
+        ("EUR/USD", "−0.20%"),
+        ("EUR/USD", "−10.55%"),
+        ("BTC/USD", "−1.17%"),
+    ]:
+        size = _fit_watch_size(sym, pv, col)
+        used = (
+            text_width(size, sym, bold=True)
+            + _WATCH_GAP
+            + text_width(size, pv, bold=False)
+        )
+        assert used <= col or size == _WATCH_SIZES[-1]
+    # Short equity rows keep the design size.
+    assert _fit_watch_size("AAPL", "−0.69%", col) == _WATCH_SIZES[0]
+
+
+def test_watch_row_renders_separated_pixels():
+    """End-to-end: render a dashboard whose watch row is EUR/USD with a pct and
+    assert the symbol and pct paint as two separated pixel blocks."""
+    real = HeadlessBackend(512, 64).create_canvas()
+    canvas = ScaledCanvas(real, scale=4, content_height=16)
+
+    def q(sym, price, prev, dp):
+        return SymbolQuote(
+            sym=sym,
+            price=price,
+            prev=prev,
+            dp=dp,
+            dp_decimals=4,
+            state=MarketState.OPEN,
+        )
+
+    quotes = {
+        "BTC/USD": q("BTC/USD", 64906.62, 65043.98, -10.55),
+        "EUR/USD": q("EUR/USD", 1.1467, 1.1490, -0.20),
+    }
+    syms = ["BTC/USD", "EUR/USD"]
+    draw_dashboard_story(
+        canvas,
+        quotes["BTC/USD"],
+        MarketState.OPEN,
+        quotes,
+        syms,
+        focus_index=0,
+        total=2,
+        frame=0,
+    )
+    # Watch row 0 = EUR/USD. Collect lit columns in the watch band.
+    cols = sorted(
+        {
+            x
+            for y in range(6, 19)
+            for x in range(430, 512)
+            if real.get_pixel(x, y) != (0, 0, 0)
+        }
+    )
+    assert cols, "watch row should have painted something"
+    # There must be a gap of >2px somewhere between symbol and pct blocks.
+    gaps = [b - a for a, b in zip(cols, cols[1:], strict=False) if b - a > 2]
+    assert gaps, "symbol and pct rendered as one continuous block (overlap)"
