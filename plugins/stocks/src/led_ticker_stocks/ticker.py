@@ -13,6 +13,7 @@ from led_ticker.plugin import (
 from led_ticker_stocks._cache import QuoteCache, get_cache
 from led_ticker_stocks.layouts import LAYOUTS, resolve_layout
 from led_ticker_stocks.model import SymbolQuote
+from led_ticker_stocks.source import _PROVIDERS
 
 # Soft cap on configured symbols: each poll cycle costs len(symbols) + 1
 # Finnhub requests, and the free tier is 60 req/min per token. Above this,
@@ -61,7 +62,7 @@ class _StockStory(FrameAwareBase):
             self._resolved = resolve_layout(canvas, self.layout)
         cache = get_cache()
         quote = self._quote_for(cache, self.sym)
-        state = cache.state()
+        state = quote.state
         if self._resolved == "crawl":
             end = LAYOUTS["crawl"](
                 canvas,
@@ -122,6 +123,12 @@ class StocksTicker:
     # `QuoteCache.ensure_started(force_demo=...)`. See that docstring for
     # the shared-cache "first widget to start wins" semantics.
     demo: bool = attrs.field(default=False, kw_only=True)
+    # Which quote provider the shared cache uses for THIS widget's symbols
+    # (forwarded to `QuoteCache.ensure_started`; see the shared-cache
+    # single-mode caveat there — first `start()` to run wins for the whole
+    # process). "twelvedata" is required for forex/crypto symbols (a `/`),
+    # which "finnhub" (the default) rejects at validate time.
+    provider: str = attrs.field(default="finnhub", kw_only=True)
     feed_title: None = attrs.field(init=False, default=None)
     feed_stories: list[_StockStory] = attrs.field(init=False, factory=list)
 
@@ -154,12 +161,19 @@ class StocksTicker:
         ):
             msgs.append("stocks.ticker: symbols must be a non-empty list of strings")
             return msgs
-        for s in symbols:
-            if "/" in s:
-                msgs.append(
-                    f"stocks.ticker: {s!r} looks like forex — FX requires a paid "
-                    "Finnhub tier (v1 is equities only)"
-                )
+        provider = cfg.get("provider", "finnhub")
+        if provider not in _PROVIDERS:
+            msgs.append(
+                f"stocks.ticker: unknown provider {provider!r} "
+                f"(known: {', '.join(_PROVIDERS)})"
+            )
+        if provider == "finnhub":
+            for s in symbols:
+                if "/" in s:
+                    msgs.append(
+                        f"stocks.ticker: {s!r} looks like forex — FX requires a paid "
+                        'Finnhub tier. Use provider = "twelvedata" for forex/crypto'
+                    )
         layout = cfg.get("layout")
         if layout is not None and layout not in LAYOUTS:
             msgs.append(
@@ -179,6 +193,7 @@ class StocksTicker:
         padding: int = 6,
         update_interval: int = 60,
         demo: bool = False,
+        provider: str = "finnhub",
         **kwargs: Any,
     ) -> Self:
         # `token` is deliberately NOT a `start()` parameter (unlike `demo`,
@@ -207,6 +222,7 @@ class StocksTicker:
             padding=padding,
             update_interval=update_interval,
             demo=demo,
+            provider=provider,
             **{k: v for k, v in kwargs.items() if k in valid},
         )
         get_cache().register(widget.symbols)
@@ -215,6 +231,6 @@ class StocksTicker:
         # live token is present — but only if this is the widget that wins
         # the "first to call ensure_started" race (see that docstring).
         await get_cache().ensure_started(
-            session, interval=update_interval, force_demo=demo
+            session, interval=update_interval, force_demo=demo, provider=provider
         )
         return widget

@@ -13,10 +13,19 @@ def _seed_price(sym: str) -> float:
 
 
 def seed_quotes(symbols):
+    from led_ticker_stocks.model import decimals_for
+    from led_ticker_stocks.state import MarketState
+
     out = {}
     for sym in symbols:
         p = _seed_price(sym)
-        out[sym] = SymbolQuote(sym=sym, price=p, prev=p)
+        out[sym] = SymbolQuote(
+            sym=sym,
+            price=p,
+            prev=p,
+            dp_decimals=decimals_for(p),
+            state=MarketState.OPEN,
+        )
         out[sym].spark.append(p)
     return out
 

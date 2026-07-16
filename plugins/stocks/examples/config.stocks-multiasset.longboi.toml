@@ -1,0 +1,164 @@
+# Longboi SMOKE TEST — MULTI-ASSET via Twelve Data (stocks + forex + crypto)
+#
+# Flexes everything new in the Twelve Data provider (v0.6.0):
+#   - `provider = "twelvedata"` on BOTH the ticker widget and the inline tokens
+#     (default is still "finnhub"). ONE free key drives all asset classes.
+#   - `/`-symbols (EUR/USD forex, BTC/USD crypto) — Finnhub's free tier rejects
+#     these; Twelve Data routes the asset class off the symbol itself.
+#   - PER-SYMBOL market state: a 24/7 crypto reads LIVE while an after-hours
+#     stock reads CLSD in the SAME dashboard rotation (Finnhub had one global
+#     state for every symbol).
+#   - AUTO-FORMAT by magnitude: forex 4 decimals (1.1467), crypto with a
+#     thousands separator (64,906.62), equities 2 (208.89) — no per-symbol config.
+#   - `decimals` override on a `stocks.quote` token (BTC forced to 0 → "64,907").
+#   - `stocks.trend` color on a `/`-symbol (used to reject forex) tinting just
+#     the token green-up / red-down.
+#   - The U+2212 MINUS belt: a down value renders a real "-", not the old "?"
+#     (pairs with led-ticker-core's hi-res rasterizer fix).
+#
+# The dashboard WIDGET and the two inline TOKENS share ONE `QuoteCache`: EUR/USD
+# and BTC/USD are fetched once per cycle for both the widget and their tokens
+# (dedup — the tokens cost no extra credits).
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.14.0 (colored value tokens). For the crisp minus on
+#     a negative, core with the hi-res U+2212 fix helps, but the plugin's own
+#     minus belt already renders "-" in the token on ANY core.
+#   - led-ticker-stocks >= 0.6.0 (this branch). Until 0.6.0 is on PyPI, install
+#     it from the branch in config/requirements-plugins.txt:
+#       led-ticker-stocks @ git+https://github.com/JamesAwesome/led-ticker-plugins.git@stocks-twelvedata-provider#subdirectory=plugins/stocks
+#     (pin to a tag/SHA for production; a branch ref is fine for a smoke).
+#   - copy to config/config.toml, then `make restart`.
+#
+# ONE MODE PER PROCESS (shared cache, first-started-wins):
+#   - LIVE (recommended for this smoke): put TWELVEDATA_API_KEY=xxxxx in .env
+#     (secrets are env-only, NEVER here). Real stock/forex/crypto everywhere.
+#     Free key (10 s): https://twelvedata.com/pricing
+#   - DEMO (no key): with no TWELVEDATA_API_KEY set, the whole cache runs the
+#     synthesized feed automatically — no `demo = true` needed. CAVEAT: the demo
+#     price is ~50–500 for EVERY symbol and always OPEN, so demo does NOT show
+#     the true forex 4-decimals, crypto magnitude, or mixed open/closed chips —
+#     it validates rendering, motion, trend colour, the minus, and the plumbing.
+#     Use LIVE to see the real multi-asset formatting + per-symbol state.
+#
+# RATE LIMITS — Twelve Data's free tier has TWO caps:
+#   - ~800 credits/DAY (1 credit/symbol/poll). TD symbols are NOT frozen while
+#     closed, so each polls every cycle — keep interval >= 108*N s. This config:
+#     5 symbols at 600 s = 5 * 86400/600 = 720 fetches/day, under budget.
+#   - 8 requests/MINUTE. A boot burst (widget + tokens priming the shared cache)
+#     or a >8-symbol list can trip this. The plugin now client-side throttles to
+#     the provider's per-minute cap, so bursts are paced automatically and won't
+#     429 — a small set (<=8) still paints within seconds; a larger one populates
+#     a few symbols per pass. Delayed data (~1-15 min) makes faster polling moot.
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR:
+#   1 MULTI-ASSET DASHBOARD — one dashboard cycling a crypto (BTC/USD), stocks
+#                    (AAPL, NVDA), a second crypto (ETH/USD) and a forex pair
+#                    (EUR/USD). The `/`-symbols render fine (no validation
+#                    rejection). Watch column on the right lists the next
+#                    neighbours with their percent change; paging dots track the
+#                    focused symbol.
+#   2 PER-SYMBOL STATE CHIP [LIVE] — BTC/USD and ETH/USD show LIVE (crypto is
+#                    24/7); off US-market-hours AAPL/NVDA show CLSD (and EUR/USD
+#                    closed on weekends). Two different chips in ONE rotation is
+#                    the Twelve Data upgrade over Finnhub's single global state.
+#   3 AUTO-FORMAT [LIVE] — EUR/USD renders 4 decimals (e.g. 1.1467), BTC/USD with
+#                    a thousands separator (e.g. 64,906.62), AAPL/NVDA 2 decimals.
+#                    No per-symbol formatting was configured.
+#   4 DECIMALS OVERRIDE — the BTC token (section 2) forces `decimals = 0`, so its
+#                    price reads rounded with no cents (e.g. "64,907"), unlike the
+#                    dashboard's auto 2-decimal BTC.
+#   5 MIXED-COLOR HI-RES FOREX TOKEN — section 1 reads "EUR/USD 1.1467 -0.03%":
+#                    the "EUR/USD " label is WHITE (message font_color); the rate +
+#                    signed percent are trend-coloured GREEN up / RED down (the
+#                    trend provider now accepts a `/`-symbol). Crisp hi-res glyphs.
+#   6 THE MINUS — on any down symbol the signed change/percent shows a real "-"
+#                    (e.g. "-0.03%"), NOT a "?" box. This is the whole reason for
+#                    the belt + the core rasterizer fix.
+#
+# NOTE (longboi colour wiring): these panels wire HUB75 G→Red, R→Blue, B→Green,
+# so led_rgb_sequence = "BRG" is REQUIRED or up/down green/red will look wrong.
+# If green reads as blue or red as green, that line is the first suspect.
+#
+# If anything looks wrong: docs/visual-validation.md.
+
+[display]
+rows = 64
+cols = 128
+chain_length = 4
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+panel_type = "FM6126A"
+# Muen P2 panels wire HUB75 G-pin → Red LED, R-pin → Blue LED, B-pin → Green LED.
+led_rgb_sequence = "BRG"
+
+# --- Sources: two inline tokens, both Twelve Data, both shared with the
+#     dashboard below (EUR/USD + BTC/USD are in the widget's symbol list too, so
+#     the cache fetches each once for widget AND token — no extra credits). ---
+
+# EUR/USD forex rate as a `:eurusd:` token. `color` tints JUST the token by
+# trend (green up / red down); the trend provider now accepts a "/" symbol.
+# `format` drops the ▲/▼ glyph (hi-res Inter has none; the colour conveys it).
+[[source]]
+id = "eurusd"
+type = "stocks.quote"
+provider = "twelvedata"
+symbol = "EUR/USD"
+interval = 600
+format = "{price} {pct}"
+color = {style = "stocks.trend", symbol = "EUR/USD"}
+
+# BTC/USD crypto as a `:btc:` token, with a `decimals = 0` OVERRIDE so the price
+# reads rounded (no cents) — contrast the dashboard's auto 2-decimal BTC.
+[[source]]
+id = "btc"
+type = "stocks.quote"
+provider = "twelvedata"
+symbol = "BTC/USD"
+interval = 600
+decimals = 0
+format = "{price} {pct}"
+color = {style = "stocks.trend", symbol = "BTC/USD"}
+
+# --- 1: hi-res mixed-colour FOREX token (white label + trend-coloured rate) ----
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 5.2
+
+[[playlist.section.widget]]
+type = "message"
+text = "EUR/USD :eurusd:"
+font = "Inter-Bold"            # bundled hi-res font (scale 4)
+font_size = 44
+font_threshold = 80           # thin-stroke hi-res needs a lower threshold
+font_color = [255, 255, 255]  # "EUR/USD " white; the token is trend-coloured
+
+# --- 2: hi-res CRYPTO token with the decimals override --------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 5.2
+
+[[playlist.section.widget]]
+type = "message"
+text = "BTC/USD :btc:"
+font = "Inter-Bold"
+font_size = 44
+font_threshold = 80
+font_color = [255, 255, 255]
+
+# --- 3: multi-asset stocks.ticker dashboard (widget ALONE in its section: the
+#        watch column reads the widget's OWN symbol list) --------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 5.2
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+provider = "twelvedata"
+symbols = ["BTC/USD", "AAPL", "EUR/USD", "ETH/USD", "NVDA"]
+update_interval = 600
+# No `demo = true`: with a TWELVEDATA_API_KEY set this runs LIVE; with no key the
+# shared cache auto-demos (synthesized feed) — see the DEMO caveat in the header.

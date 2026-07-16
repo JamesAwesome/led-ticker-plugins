@@ -4,6 +4,8 @@ import collections
 
 import attrs
 
+from led_ticker_stocks.state import MarketState
+
 _MINUS = "−"  # U+2212 MINUS SIGN (renders wider/cleaner than hyphen)
 _DASH = "—"  # U+2014 EM DASH placeholder for no-data
 
@@ -21,6 +23,7 @@ class SymbolQuote:
     flash_t: float | None = None
     high: float | None = None
     low: float | None = None
+    state: MarketState = MarketState.CLOSED
 
     @property
     def has_data(self) -> bool:
@@ -45,6 +48,22 @@ class SymbolQuote:
     def push_price(self, price: float) -> None:
         self.price = price
         self.spark.append(price)
+
+
+def decimals_for(price: float) -> int:
+    """Pick display decimals from a value's magnitude.
+
+    Lets one code path render every asset class sensibly: forex rates
+    (~1.15) need 4 decimals, sub-1 values 5, and equities / large crypto
+    (>=10) the usual 2. Finnhub equity prices are all >=10, so this yields
+    2 there — unchanged from the old fixed default.
+    """
+    m = abs(price)
+    if m < 1:
+        return 5
+    if m < 10:
+        return 4
+    return 2
 
 
 def format_price(v: float, decimals: int) -> str:

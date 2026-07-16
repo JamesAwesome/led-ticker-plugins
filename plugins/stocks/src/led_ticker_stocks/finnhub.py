@@ -14,12 +14,16 @@ def parse_quote(sym, payload):
 
     high = payload.get("h")
     low = payload.get("l")
+    price = float(payload.get("c") or 0.0)
     return SymbolQuote(
         sym=sym,
-        price=float(payload.get("c") or 0.0),
+        price=price,
         prev=float(payload.get("pc") or 0.0),
         d=payload.get("d"),
         dp=payload.get("dp"),
+        # Finnhub is equities-only -> fixed 2 decimals (model default); a $7
+        # stock is "7.45", not "7.4500". Magnitude auto-decimals (decimals_for)
+        # applies only to the Twelve Data path (forex/sub-$1 need 4-5).
         high=float(high) if high is not None else None,
         low=float(low) if low is not None else None,
     )

@@ -49,11 +49,6 @@ class StocksTrendColor(ColorProviderBase):
                 "stocks.trend requires a non-empty 'symbol' string: "
                 "font_color = {style = 'stocks.trend', symbol = 'AAPL'}"
             )
-        if "/" in symbol:
-            raise ValueError(
-                f"stocks.trend symbol {symbol!r} looks like a forex pair; "
-                "Finnhub's free tier is equities-only (forex requires a paid tier)."
-            )
         self.symbol = symbol
         self._up = _coerce_rgb(up, "up") if up is not None else pal.UP
         self._down = _coerce_rgb(down, "down") if down is not None else pal.DOWN

@@ -2,10 +2,12 @@ import pytest
 
 from led_ticker_stocks.model import (
     SymbolQuote,
+    decimals_for,
     format_change,
     format_pct,
     format_price,
 )
+from led_ticker_stocks.state import MarketState
 
 
 def test_has_data_false_on_zero():
@@ -54,3 +56,20 @@ def test_formatting():
     assert format_pct(0.63) == "+0.63%"
     assert format_pct(-1.2) == "−1.20%"
     assert format_pct(None) == "—"
+
+
+def test_decimals_for_magnitude_bands():
+    assert decimals_for(0.00042) == 5  # sub-1 (some crypto)
+    assert decimals_for(0.5) == 5
+    assert decimals_for(1.0) == 4  # boundary
+    assert decimals_for(1.14669) == 4  # forex
+    assert decimals_for(9.99) == 4
+    assert decimals_for(10.0) == 2  # boundary
+    assert decimals_for(208.89) == 2  # equity
+    assert decimals_for(64906.62) == 2  # crypto large
+    assert decimals_for(-3.5) == 4  # magnitude, not sign
+
+
+def test_symbol_quote_defaults_to_closed_state():
+    q = SymbolQuote(sym="AAPL", price=0.0, prev=0.0)
+    assert q.state is MarketState.CLOSED

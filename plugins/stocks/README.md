@@ -6,7 +6,7 @@ A stock / equities ticker **plugin** for [led-ticker](https://github.com/JamesAw
 - `card` (bigsign, ~256px) — a held hero card: symbol + price + change, a brand chip, a sparkline, a state-chip label, and paging dots.
 - `dashboard` (longboi, ~512px) — a held trading dashboard: the same hero block plus a watch column showing the next symbols and a bigger sparkline.
 
-All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. It also contributes a `stocks.quote` **source** — a live `:id:` price token you can weave into any other widget's text (a headline, a two-row detail line, a clock/date composite) — see [Inline price tokens](#inline-price-tokens) — and a `stocks.trend` **color provider** that tints any text widget green/red/neutral by a symbol's day change, independent of which widget is doing the drawing — see [Trend color](#trend-color). **Scope:** US equities only. FX/forex is out of scope — see [Equities only](#equities-only--fx-requires-a-paid-tier).
+All three layouts animate: the price line pops white on a change and settles back to amber (Bloomberg-style flash), the LIVE state chip breathes while the market is open, and the sparkline's tip pulses. It also contributes a `stocks.quote` **source** — a live `:id:` price token you can weave into any other widget's text (a headline, a two-row detail line, a clock/date composite) — see [Inline price tokens](#inline-price-tokens) — and a `stocks.trend` **color provider** that tints any text widget green/red/neutral by a symbol's day change, independent of which widget is doing the drawing — see [Trend color](#trend-color). **Scope:** Finnhub (the default provider) is US equities only; forex and crypto are available via `provider = "twelvedata"` — see [Multi-asset via Twelve Data](#multi-asset-via-twelve-data).
 
 ## Prerequisites
 
@@ -118,9 +118,9 @@ export FINNHUB_API_TOKEN="your-token-here"
 
 Finnhub's free tier allows **60 requests per minute, per API key** — not per widget. All `stocks.ticker` widgets and `stocks.quote` [inline tokens](#inline-price-tokens) in one process share a single poll loop and a single deduplicated symbol set (registering `"AAPL"` from three different widgets/tokens still costs one `AAPL` fetch per cycle, not three — see the field's own [Inline price tokens](#inline-price-tokens) section). Every poll cycle costs `len(symbols) + 1` requests, where `symbols` is the UNION of every symbol registered process-wide (one market-status call plus one quote call per distinct symbol). While the market is **closed**, a symbol is fetched only until it holds a price — Finnhub returns the last close even when the exchange is shut, so a sign booted after hours still shows the close (and inline tokens still resolve); once warm, closed cycles freeze it and cost just the one market-status call. The cadence self-widens to `max(update_interval, len(symbols) + 1)`, recomputed every cycle so it reacts to late registrants (a token added after boot, a second widget in another section) — so a single sign's stocks usage on its own can't blow the budget. The `update_interval` floor itself is set by whichever consumer starts the cache first: `ensure_started` is a no-op after the first call, so in a mixed config a widget's `update_interval` and a token's `interval` don't average — the first one to boot wins, and the loser's value is ignored (same first-started-wins rule as demo mode). Give overlapping consumers the same interval if you care which one applies. The 60/min ceiling is still shared across **everything** using that token, though: two signs pointed at the same Finnhub key, or another Finnhub-backed widget/script on the same key, split the same 60 requests. Give each sign (or each concurrent consumer) its own free Finnhub account/token if you're running more than one.
 
-### Equities only — FX requires a paid tier
+### Finnhub is equities-only (use Twelve Data for FX/crypto)
 
-Finnhub's free tier returns HTTP 403 on forex (`/forex/*`) endpoints. This plugin only implements the equities `/quote` + `/stock/market-status` endpoints — FX pairs are out of scope until a paid-tier client ships (not on the current roadmap). `validate_config` rejects any symbol containing `/` (the conventional FX pair separator, e.g. `"EUR/USD"`) at config-load time with a message explaining why, rather than letting it fail opaquely at runtime.
+Finnhub's free tier returns HTTP 403 on forex (`/forex/*`) endpoints, and this plugin's Finnhub path only implements the equities `/quote` + `/stock/market-status` endpoints — FX and crypto pairs aren't supported under `provider = "finnhub"` (the default). For forex or crypto symbols, set `provider = "twelvedata"` instead — see [Multi-asset via Twelve Data](#multi-asset-via-twelve-data). `validate_config` rejects any symbol containing `/` (the conventional FX pair separator, e.g. `"EUR/USD"`) under the Finnhub provider at config-load time with a message pointing at `provider = "twelvedata"`, rather than letting it fail opaquely at runtime.
 
 ### `layout` override
 
@@ -159,7 +159,7 @@ text = "AAPL :stocks.aapl:"   # -> "AAPL 317.31", updating live
 | `low` | `310.50` | Session low (em dash `—` if not yet known). |
 | `day_range` | `310.50–320.00` | `{low}–{high}` combined. |
 
-A symbol containing `/` (e.g. `"EUR/USD"`) fails validation — same FX restriction as the widget, see [Equities only](#equities-only--fx-requires-a-paid-tier).
+A symbol containing `/` (e.g. `"EUR/USD"`) fails validation under `provider = "finnhub"` (the default) — same FX restriction as the widget, see [Finnhub is equities-only](#finnhub-is-equities-only-use-twelve-data-for-fxcrypto). Use `provider = "twelvedata"` on the source for forex/crypto — see [Multi-asset via Twelve Data](#multi-asset-via-twelve-data).
 
 ### Token color is inherited, not per-token
 
@@ -202,9 +202,30 @@ This tints the **whole message** — it's a whole-string provider (like `color_c
 
 See [`examples/config.stocks-trend.smallsign.toml`](examples/config.stocks-trend.smallsign.toml) for a ready-to-run, token-free demo.
 
+## Multi-asset via Twelve Data
+
+Finnhub (the default) is US equities only — set `provider = "twelvedata"` on `stocks.ticker` **or** `stocks.quote` to poll [Twelve Data](https://twelvedata.com/) instead, which additionally covers forex and crypto:
+
+```toml
+[[playlist.section.widget]]
+type = "stocks.ticker"
+provider = "twelvedata"
+symbols = ["AAPL", "EUR/USD", "BTC/USD"]
+```
+
+- **Provider is effectively process-global, not per-widget.** `provider` is a field on both `stocks.ticker` and `stocks.quote`, but every widget/source shares one `QuoteCache`, and `ensure_started` resolves ONE `_provider` on the first call — the first widget/source to start the shared cache picks the provider for every symbol in the process (same first-started-wins caveat as `demo`/`interval`, see [Rate limits & API token](#rate-limits--api-token)). A Finnhub widget and a Twelve Data source in the same config route the TD symbol through whichever provider wins the start race, which means Finnhub → 403 on forex/crypto if Finnhub starts first. Use ONE provider across all `stocks.*` blocks in a given config; each provider still needs its own token in the environment (see below).
+- **Symbol formats route the asset class, no exchange prefix:** a bare ticker (`"AAPL"`) is a stock, a slash-separated pair (`"EUR/USD"`) is forex, and a slash-separated pair against a fiat/stable (`"BTC/USD"`) is crypto. Twelve Data infers the asset class from the symbol shape alone.
+- **Finnhub stays the default** and remains equities-only — a `/` in a symbol under `provider = "finnhub"` (or the field omitted) fails validation pointing at `provider = "twelvedata"`, same as today. Forex and crypto symbols always require the Twelve Data provider.
+- **Get a free key** at [twelvedata.com/pricing](https://twelvedata.com/pricing) and put it in `.env` as `TWELVEDATA_API_KEY` — **never** in `config.toml` (same env-only convention as `FINNHUB_API_TOKEN`; see [Rate limits & API token](#rate-limits--api-token)).
+- **Data is delayed** ~1–15 minutes on the free tier. That's fine at sign cadence — nobody is day-trading off an LED panel — but don't expect tick-by-tick accuracy.
+- **Auto-formatting needs no config:** prices pick their decimal places from magnitude — forex pairs (~1.15) render at 4 decimals, equities and larger crypto values render at 2 decimals with thousands separators (`65,432.10`). `decimals` on `stocks.quote` still overrides this per source if you want something else.
+- **Credit budget:** the free tier is ~800 credits/day (1 credit per symbol per poll). Unlike the Finnhub path, Twelve Data symbols are **not** frozen while their market is closed — each polls every cycle — so pick `update_interval` (widget) / `interval` (source) to stay in budget: roughly `interval ≥ 108 × symbol_count` seconds keeps you under 800/day. Example: 3 symbols → `interval = 360` (720/day).
+
+See [`examples/config.stocks-multiasset.bigsign.toml`](examples/config.stocks-multiasset.bigsign.toml) for a ready-to-run bigsign example: a `card` layout cycling a stock/forex/crypto trio plus a mixed-color inline `:eurusd:` token in its own section.
+
 ## Roadmap
 
-Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), and the `stocks.trend` color provider (v0.5.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), indices/FX, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
+Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), the `stocks.trend` color provider (v0.5.0), and [multi-asset Twelve Data support](#multi-asset-via-twelve-data) — forex + crypto via `provider = "twelvedata"` (v0.6.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), stock indices, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
 
 - **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.5.0` release.
 
