@@ -1062,3 +1062,50 @@ class TestMLBUpdateLogging:
             f"expected INFO log mentioning 'updated' and team 'NYM'; "
             f"got: {[r.message for r in info_records]}"
         )
+
+
+class TestGeometryGuard:
+    """Layout-collision audit 2026-07-16: below the measured floor the live
+    center zone collides (outs dots over the diamond and the team name on a
+    logical-64 bigsign canvas). The guard raises with the fix in the message
+    — the two_row band-guard precedent."""
+
+    def _game(self):
+        from led_ticker_baseball._models import GameInfo
+
+        return GameInfo(
+            home_abbr="NYY",
+            away_abbr="BOS",
+            home_score=4,
+            away_score=2,
+            state="live",
+            inning="▼5",
+            balls=1,
+            strikes=2,
+            outs=2,
+            on_first=True,
+        )
+
+    def test_narrow_canvas_raises_with_steering_message(self):
+        import pytest
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        from led_ticker_baseball._scoreboard import MLBScoreboardMessage
+
+        real = HeadlessBackend(256, 64).create_canvas()
+        narrow = ScaledCanvas(real, scale=4, content_height=16)  # logical 64
+        msg = MLBScoreboardMessage(game=self._game(), team_abbr="NYY")
+        with pytest.raises(ValueError, match="two_row"):
+            msg.draw(narrow, 0)
+
+    def test_longboi_128_logical_does_not_raise(self):
+        """128 logical (longboi 512/4) is the measured SAFE floor — worst-case
+        live data is collision-free there; the guard must not fire."""
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        from led_ticker_baseball._scoreboard import MLBScoreboardMessage
+
+        real = HeadlessBackend(512, 64).create_canvas()
+        longboi = ScaledCanvas(real, scale=4, content_height=16)  # logical 128
+        msg = MLBScoreboardMessage(game=self._game(), team_abbr="NYY")
+        msg.draw(longboi, 0)  # must not raise
