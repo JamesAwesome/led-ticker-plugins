@@ -51,8 +51,8 @@ async def test_shared_symbol_fetched_exactly_once_per_cycle(monkeypatch):
     async def open_status(exchange: str = "US"):
         return {"isOpen": True, "session": "regular"}
 
-    c._client.fetch_quote = counting_fetch_quote
-    c._client.fetch_market_status = open_status
+    c._provider._client.fetch_quote = counting_fetch_quote
+    c._provider._client.fetch_market_status = open_status
 
     await c.update()  # ONE poll cycle, live mode, market OPEN
 

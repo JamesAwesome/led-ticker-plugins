@@ -130,8 +130,8 @@ async def test_update_live_updates_shared_quotes(monkeypatch):
     async def fake_status(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    cache._client.fetch_quote = fake_quote
-    cache._client.fetch_market_status = fake_status
+    cache._provider._client.fetch_quote = fake_quote
+    cache._provider._client.fetch_market_status = fake_status
     await cache.update()
 
     assert cache.get("AAPL").price == 200.0
@@ -180,9 +180,9 @@ async def test_config_token_is_ignored(monkeypatch):
     await StocksTicker.start(symbols=["AAPL"], session=mock.Mock(), token="LEAK")
 
     cache = get_cache()
-    assert cache._client is not None
-    assert cache._client._token != "LEAK"
-    assert cache._client._token == "real-env-token"
+    assert cache._provider is not None
+    assert cache._provider._client._token != "LEAK"
+    assert cache._provider._client._token == "real-env-token"
 
 
 @pytest.mark.asyncio
@@ -192,7 +192,7 @@ async def test_config_token_is_ignored_no_env(monkeypatch):
     await StocksTicker.start(symbols=["AAPL"], session=mock.Mock(), token="LEAK")
 
     cache = get_cache()
-    assert cache._client is None  # empty token routes to the demo feed
+    assert cache._provider is None  # empty token routes to the demo feed
     assert cache._demo_feed is not None
 
 
@@ -209,7 +209,7 @@ async def test_demo_field_forces_cache_demo(monkeypatch):
 
     assert widget.demo is True
     cache = get_cache()
-    assert cache._client is None  # NOT live, despite the env token
+    assert cache._provider is None  # NOT live, despite the env token
     assert cache._demo_feed is not None
     assert cache.get("AAPL").has_data  # demo feed seeded + stepped it
 
@@ -254,10 +254,10 @@ async def test_update_falls_back_to_clock_on_status_failure(monkeypatch):
     async def fake_quote(sym):
         return {"c": 123.0, "d": 1.0, "dp": 0.5, "pc": 122.0}
 
-    cache._client.fetch_market_status = failing_status
-    cache._client.fetch_quote = fake_quote
+    cache._provider._client.fetch_market_status = failing_status
+    cache._provider._client.fetch_quote = fake_quote
     monkeypatch.setattr(
-        "led_ticker_stocks._cache.state_now_from_clock", lambda: MarketState.OPEN
+        "led_ticker_stocks.providers.state_now_from_clock", lambda: MarketState.OPEN
     )
 
     await cache.update()  # must not raise
@@ -287,10 +287,10 @@ async def test_update_clock_fallback_closed_still_fetches_cold(monkeypatch):
         quote_calls.append(sym)
         return {"c": 999.0, "pc": 998.0}
 
-    cache._client.fetch_market_status = failing_status
-    cache._client.fetch_quote = fake_quote
+    cache._provider._client.fetch_market_status = failing_status
+    cache._provider._client.fetch_quote = fake_quote
     monkeypatch.setattr(
-        "led_ticker_stocks._cache.state_now_from_clock", lambda: MarketState.CLOSED
+        "led_ticker_stocks.providers.state_now_from_clock", lambda: MarketState.CLOSED
     )
 
     await cache.update()
@@ -315,8 +315,8 @@ async def test_update_holds_last_price_on_zeroed_tick(monkeypatch):
     async def good_quote(sym):
         return {"c": 200.0, "d": 5.0, "dp": 2.5, "pc": 195.0}
 
-    cache._client.fetch_market_status = fake_status
-    cache._client.fetch_quote = good_quote
+    cache._provider._client.fetch_market_status = fake_status
+    cache._provider._client.fetch_quote = good_quote
     await cache.update()
     quote = cache.get("AAPL")
     assert quote.price == 200.0
@@ -326,7 +326,7 @@ async def test_update_holds_last_price_on_zeroed_tick(monkeypatch):
     async def zeroed_quote(sym):
         return {"c": 0, "pc": 0}
 
-    cache._client.fetch_quote = zeroed_quote
+    cache._provider._client.fetch_quote = zeroed_quote
     await cache.update()
 
     assert quote.price == 200.0  # held, not clobbered to 0
@@ -346,19 +346,19 @@ async def test_update_still_applies_good_data_after_holding(monkeypatch):
     async def fake_status(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    cache._client.fetch_market_status = fake_status
+    cache._provider._client.fetch_market_status = fake_status
 
     async def zeroed_quote(sym):
         return {"c": 0, "pc": 0}
 
-    cache._client.fetch_quote = zeroed_quote
+    cache._provider._client.fetch_quote = zeroed_quote
     await cache.update()
     assert not cache.get("AAPL").has_data
 
     async def good_quote(sym):
         return {"c": 250.0, "d": 2.0, "dp": 0.8, "pc": 248.0}
 
-    cache._client.fetch_quote = good_quote
+    cache._provider._client.fetch_quote = good_quote
     await cache.update()
     quote = cache.get("AAPL")
     assert quote.price == 250.0

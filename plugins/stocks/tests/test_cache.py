@@ -41,8 +41,8 @@ async def test_update_live_mutates_and_stamps_flash(monkeypatch):
     async def st(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
     before = c.get("AAPL").flash_t
     await c.update()
     assert c.get("AAPL").price == 200.0 and c.get("AAPL").high == 201.0
@@ -72,8 +72,8 @@ async def test_update_live_survives_concurrent_register_during_await(monkeypatch
     async def st(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
 
     await c.update()  # must not raise
 
@@ -93,8 +93,8 @@ async def test_update_live_does_not_restamp_flash_on_unchanged_price(monkeypatch
     async def st(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
 
     await c.update()  # first tick: price changes 0 -> 200, flash_t stamped
     stamped = c.get("AAPL").flash_t
@@ -124,8 +124,8 @@ async def test_closed_fetches_cold_symbols_once(monkeypatch):
     async def st(exchange="US"):
         return {"isOpen": False, "session": None}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
     await c.update()
     assert calls == ["AAPL"]  # fetched once despite the market being closed
     assert c.get("AAPL").has_data  # populated with the last close
@@ -158,8 +158,8 @@ async def test_late_registrant_caught_up_on_ensure_started(monkeypatch):
     async def st(exchange="US"):
         return {"isOpen": False, "session": None}  # market closed
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
     await c.update()  # A's first cycle warms AAPL
     assert calls == ["AAPL"]
     calls.clear()
@@ -193,8 +193,8 @@ async def test_ensure_started_no_catchup_when_all_symbols_warm(monkeypatch):
     async def st(exchange="US"):
         return {"isOpen": True, "session": "regular"}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st
     await c.update()  # warm AAPL
     calls.clear()
 
@@ -205,9 +205,18 @@ async def test_ensure_started_no_catchup_when_all_symbols_warm(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
-    """Once a symbol holds a price, a CLOSED cycle must NOT refetch it — freeze
-    it and save the per-key rate budget. Only cold (no-data) symbols are
-    fetched while closed."""
+    """Once a symbol's LAST-KNOWN state settles to CLOSED, a subsequent cycle
+    must NOT refetch it — freeze it and save the per-key rate budget.
+
+    The generalized per-symbol freeze (Task 3) reads each quote's own stored
+    `state` from the END of the previous cycle, not the just-fetched global
+    state — this is what lets the same freeze check work for Twelve Data,
+    which has no separate global status call at all. One consequence for
+    Finnhub: on the very cycle the market transitions open->closed, AAPL's
+    stored state is still OPEN (from the prior cycle), so it is fetched ONE
+    more time before the freeze can see CLOSED and take hold on the cycle
+    after that — a one-cycle lag versus the old global-state-gates-everyone
+    check, in exchange for a single unified freeze rule."""
     monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
     c = _cache.get_cache()
     c.register(["AAPL"])
@@ -224,14 +233,17 @@ async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
     async def st_closed(exchange="US"):
         return {"isOpen": False, "session": None}
 
-    c._client.fetch_quote = q
-    c._client.fetch_market_status = st_open
+    c._provider._client.fetch_quote = q
+    c._provider._client.fetch_market_status = st_open
     await c.update()  # open cycle populates AAPL
     assert calls == ["AAPL"]
 
-    c._client.fetch_market_status = st_closed
-    await c.update()  # closed cycle must NOT refetch the now-populated symbol
-    assert calls == ["AAPL"]  # unchanged — frozen, no second call
+    c._provider._client.fetch_market_status = st_closed
+    await c.update()  # transition cycle: last-known state was OPEN -> one more fetch
+    assert calls == ["AAPL", "AAPL"]
+
+    await c.update()  # now frozen: last-known state is CLOSED
+    assert calls == ["AAPL", "AAPL"]  # unchanged — frozen, no third call
 
 
 @pytest.mark.asyncio
@@ -308,3 +320,64 @@ def test_state_defaults_closed():
     from led_ticker_stocks.state import MarketState
 
     assert c.state() is MarketState.CLOSED
+
+
+async def test_ensure_started_twelvedata_builds_td_provider(monkeypatch):
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.providers import TwelveDataProvider
+
+    monkeypatch.setenv("TWELVEDATA_API_KEY", "tdkey")
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+    # Prevent real network: stub the provider's fetch to a no-data quote.
+    started = {}
+
+    async def _noop_update():
+        started["ran"] = True
+
+    monkeypatch.setattr(cache, "update", _noop_update)
+    await cache.ensure_started(session=object(), provider="twelvedata")
+    assert isinstance(cache._provider, TwelveDataProvider)
+
+
+async def test_ensure_started_no_token_routes_to_demo(monkeypatch):
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.state import MarketState
+
+    monkeypatch.delenv("TWELVEDATA_API_KEY", raising=False)
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+    await cache.ensure_started(session=object(), provider="twelvedata")
+    assert cache.state() is MarketState.OPEN  # demo feed marks OPEN
+    assert cache.get("EUR/USD") is not None
+
+
+async def test_warm_closed_symbol_is_frozen_cold_is_fetched(monkeypatch):
+    """Generalized per-symbol freeze: attempted+CLOSED held, cold fetched."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["WARM", "COLD"])
+    # WARM: attempted, last state CLOSED -> should be held.
+    cache._attempted.add("WARM")
+    cache._quotes["WARM"].state = MarketState.CLOSED
+    calls = []
+
+    class _Prov:
+        async def fetch_market_state(self):
+            return None  # per-symbol (twelvedata-style)
+
+        async def fetch_quote(self, sym):
+            calls.append(sym)
+            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
+                               dp_decimals=decimals_for(5.0),
+                               state=MarketState.OPEN)
+
+    cache._provider = _Prov()
+    cache._started = True
+    import asyncio
+    cache._poll_lock = asyncio.Lock()
+    await cache.update()
+    assert calls == ["COLD"]  # WARM held, COLD fetched

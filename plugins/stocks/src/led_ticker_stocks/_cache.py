@@ -22,7 +22,14 @@ from led_ticker.plugin import spawn_tracked
 from led_ticker_stocks.demo import DemoFeed, seed_quotes
 from led_ticker_stocks.finnhub import FinnhubClient, parse_quote
 from led_ticker_stocks.model import SymbolQuote
-from led_ticker_stocks.state import MarketState, state_from_status, state_now_from_clock
+from led_ticker_stocks.providers import FinnhubProvider, TwelveDataProvider
+from led_ticker_stocks.state import MarketState
+from led_ticker_stocks.twelvedata import TwelveDataClient
+
+_PROVIDER_ENV = {
+    "finnhub": "FINNHUB_API_TOKEN",
+    "twelvedata": "TWELVEDATA_API_KEY",
+}
 
 
 class QuoteCache:
@@ -39,6 +46,7 @@ class QuoteCache:
         self._attempted: set[str] = set()
         self._state: MarketState = MarketState.CLOSED
         self._client: FinnhubClient | None = None
+        self._provider: object | None = None
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
         self._task: asyncio.Task[None] | None = None
@@ -62,7 +70,12 @@ class QuoteCache:
         return self._state
 
     async def ensure_started(
-        self, session: object, *, interval: int = 60, force_demo: bool = False
+        self,
+        session: object,
+        *,
+        interval: int = 60,
+        force_demo: bool = False,
+        provider: str = "finnhub",
     ) -> None:
         """Idempotently start the shared poll loop.
 
@@ -74,13 +87,13 @@ class QuoteCache:
         resolves to whichever one's `start()` happens to run first — this
         is a pre-existing property of the shared-cache design, not new here.
 
-        Resolves the Finnhub token from env ONLY (never a param — see
+        Resolves the provider token from env ONLY (never a param — see
         CLAUDE.md "Secrets belong in .env, not config.toml"): `force_demo`
         OR no token routes to the offline `DemoFeed` over the symbols
         registered so far, marking the market OPEN; otherwise a token
-        builds a real `FinnhubClient`. Tolerates a failed initial
-        `update()` so a rate-limited or unreachable Finnhub at boot doesn't
-        block startup.
+        builds the real provider (`FinnhubProvider` or `TwelveDataProvider`)
+        selected by `provider`. Tolerates a failed initial `update()` so a
+        rate-limited or unreachable upstream at boot doesn't block startup.
 
         The poll cadence is NOT fixed at spawn time: `_run_poll_loop` recomputes
         it from the live symbol count every cycle (`_effective_interval`), so a
@@ -103,13 +116,15 @@ class QuoteCache:
         self._base_interval = interval
         self._poll_lock = asyncio.Lock()
 
-        token = os.getenv("FINNHUB_API_TOKEN", "")
+        token = os.getenv(_PROVIDER_ENV.get(provider, "FINNHUB_API_TOKEN"), "")
         if force_demo or not token:
             self._demo_feed = DemoFeed(sorted(self._symbols))
             self._quotes = self._demo_feed.quotes
             self._state = MarketState.OPEN
+        elif provider == "twelvedata":
+            self._provider = TwelveDataProvider(TwelveDataClient(token, session))
         else:
-            self._client = FinnhubClient(token, session)
+            self._provider = FinnhubProvider(FinnhubClient(token, session))
 
         try:
             await self.update()
@@ -203,44 +218,31 @@ class QuoteCache:
             logging.info("stocks QuoteCache demo tick: %d symbols", len(self._symbols))
             return
 
-        assert self._client is not None, (
-            "stocks QuoteCache: live mode requires a client"
+        assert self._provider is not None, (
+            "stocks QuoteCache: live mode requires a provider"
         )
 
-        try:
-            status = await self._client.fetch_market_status()
-            self._state = state_from_status(status)
-        except Exception as e:
-            logging.warning(
-                "stocks QuoteCache: market-status request failed (%s); "
-                "falling back to the US/Eastern clock",
-                e,
-            )
-            self._state = state_now_from_clock()
-        # When closed, we freeze — but only symbols we've ALREADY fetched once.
-        # A never-attempted symbol (fresh boot after hours, or a late
-        # registrant) still needs ONE fetch to grab the last close: Finnhub
-        # /quote returns it in `c` even while the market is shut. Skipping ALL
-        # fetches when closed left cold symbols empty forever — em-dash cards,
-        # "…" inline tokens. Keying the freeze on `_attempted` (not `has_data`)
-        # also stops a bad symbol from refetching every closed cycle.
-        closed = self._state is MarketState.CLOSED
-        if closed:
-            logging.info(
-                "stocks QuoteCache: market closed — fetching last close for "
-                "cold symbols, holding the rest"
-            )
+        global_state = await self._provider.fetch_market_state()
+        if global_state is not None:
+            self._state = global_state
 
         fetched = held = 0
-        # snapshot: a consumer may register() a new symbol during an await
-        for sym in list(self._symbols):
+        for sym in list(self._symbols):  # snapshot: register() may add mid-await
             existing = self._quotes[sym]
-            if closed and sym in self._attempted:
-                held += 1  # frozen: already tried this symbol, don't spend a call
+            # Generalized per-symbol freeze: hold a symbol we've already tried
+            # whose last-known market state is CLOSED. Cold symbols (never
+            # attempted) always fetch once — Finnhub /quote and Twelve Data
+            # /quote both return the last close even while shut, so a fresh
+            # boot after hours still populates. Keys on state, not has_data,
+            # so a bad symbol (attempted, no data, CLOSED) does not refetch
+            # forever.
+            if sym in self._attempted and existing.state is MarketState.CLOSED:
+                held += 1
                 continue
-            payload = await self._client.fetch_quote(sym)
+            fresh = await self._provider.fetch_quote(sym)
             self._attempted.add(sym)
-            fresh = parse_quote(sym, payload)
+            if global_state is not None:
+                fresh.state = global_state  # Finnhub: stamp the one global state
             if fresh.has_data:
                 if fresh.price != existing.price:
                     existing.flash_t = time.monotonic()
@@ -248,14 +250,27 @@ class QuoteCache:
                 existing.d, existing.dp = fresh.d, fresh.dp
                 existing.high, existing.low = fresh.high, fresh.low
                 existing.dp_decimals = fresh.dp_decimals
+                existing.state = fresh.state
                 existing.spark.append(fresh.price)
             else:
+                # Even with no price, adopt the state so the freeze can act
+                # next cycle (e.g. a symbol that closed with no fresh trade).
+                existing.state = fresh.state
                 logging.debug(
                     "stocks QuoteCache: %s returned no data this tick — "
                     "holding last price",
                     sym,
                 )
             fetched += 1
+        # For a per-symbol provider (Twelve Data), derive the legacy global
+        # state() for any back-compat reader: OPEN if any tracked symbol is
+        # open, else CLOSED. (Widget stories read quote.state directly now.)
+        if global_state is None:
+            self._state = (
+                MarketState.OPEN
+                if any(q.state is MarketState.OPEN for q in self._quotes.values())
+                else MarketState.CLOSED
+            )
         logging.info(
             "stocks QuoteCache updated: %d fetched, %d held (%d symbols)",
             fetched,
@@ -272,6 +287,7 @@ class QuoteCache:
         self._attempted = set()
         self._state = MarketState.CLOSED
         self._client = None
+        self._provider = None
         self._demo_feed = None
         self._started = False
         self._task = None

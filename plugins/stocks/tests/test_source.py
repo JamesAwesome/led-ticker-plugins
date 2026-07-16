@@ -152,8 +152,8 @@ async def test_token_resolves_to_last_close_when_market_closed(monkeypatch):
     async def last_close(sym):
         return {"c": 252.4, "pc": 252.0, "d": 0.4, "dp": 0.16, "h": 253, "l": 251}
 
-    c._client.fetch_market_status = closed_status
-    c._client.fetch_quote = last_close
+    c._provider._client.fetch_market_status = closed_status
+    c._provider._client.fetch_quote = last_close
     await c.update()  # closed + cold AAPL -> fetched once -> populated
 
     src = _src(symbol="AAPL", format="{symbol} {price} {arrow}{pct}", placeholder="…")
