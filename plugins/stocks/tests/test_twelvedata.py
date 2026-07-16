@@ -171,3 +171,13 @@ async def test_fetch_quote_bad_header_is_ignored():
     client = TwelveDataClient("tok", session=session, on_credits=seen.append)
     await client.fetch_quote("EUR/USD")
     assert seen == []
+
+
+async def test_fetch_quote_negative_header_is_ignored():
+    """A nonsensical negative credits-left is defensively rejected (never fed
+    to the limiter as a real budget)."""
+    seen = []
+    session = _mock_session(_FOREX, headers={"api-credits-left": "-5"})
+    client = TwelveDataClient("tok", session=session, on_credits=seen.append)
+    await client.fetch_quote("EUR/USD")
+    assert seen == []
