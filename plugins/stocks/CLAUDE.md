@@ -104,6 +104,8 @@ def register(api):
 
 Each rule must hold when modifying the named files.
 
+**Positioned hi-res text is collision-guarded** — the layouts' symbol/price/watch-column fit ladders (`_fit_price_size` etc.) implement the monorepo layout invariant (measure via core's `hires_text_width`, plugin-owned ladders, pixel-separation tests, never <6px measured clearance — see CONTRIBUTING.md). Don't add a new fixed-position/right-aligned text surface without one.
+
 **Import only the public surface** — every `led_ticker` import MUST come from
 `led_ticker.plugin`, never `led_ticker.<internal>`. Enforced by `tests/test_import_purity.py`,
 which AST-walks every source file. Intra-package imports

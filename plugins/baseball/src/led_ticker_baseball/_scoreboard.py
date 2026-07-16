@@ -1,4 +1,12 @@
-"""MLBScoreboardMessage and its builder helpers."""
+"""MLBScoreboardMessage and its builder helpers.
+
+Layout-collision audit 2026-07-16: all positioned text here is already
+collision-safe — variable-length labels go through ``_fit_team_name`` (full
+name -> abbreviation fallback, measured), everything else is measured-and-
+centered within its own zone (``_draw_centered``) or fixed-vocabulary (team
+abbreviations, score digits, inning strings, dash pips). No unguarded
+fixed-position/right-aligned surface; no fit-ladder retrofit needed.
+"""
 
 from datetime import datetime, timedelta
 from typing import Any
