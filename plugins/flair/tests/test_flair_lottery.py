@@ -1088,3 +1088,40 @@ class TestRegistration:
         api = _RecordingAPI()
         flair_pkg.register(api)
         assert api.widgets["lottery"] is Lottery
+
+
+class TestFaceLegibility:
+    """Ball-face text legibility (hardware, halal-cart sign 2026-07-16):
+    small Inter at the default threshold 128 dropped thin strokes — GYRO
+    read as BYRD. The lottery now resolves at the thin-stroke threshold."""
+
+    def test_fit_and_paint_resolve_at_thin_stroke_threshold(self, monkeypatch):
+        import led_ticker_flair.flair.lottery as lot
+
+        seen = []
+        real_resolve = lot.resolve_font
+
+        def spy(name, size=None, threshold=None):
+            seen.append(threshold)
+            return real_resolve(name, size, threshold)
+
+        monkeypatch.setattr(lot, "resolve_font", spy)
+        size = lot.auto_font_size("HALAL", 56, "Inter-Bold", 4)
+        assert size > 0
+        assert set(seen) == {lot._FACE_THRESHOLD}, (
+            "fit measurement must resolve at the thin-stroke threshold"
+        )
+
+    def test_config_set_font_raises_helpfully(self):
+        """The 'font' TOML key is core-reserved (coerced to a Font OBJECT
+        before construction) — the widget must reject a non-string with a
+        clear message instead of crashing deep in the paint path."""
+        import pytest
+
+        from led_ticker_flair.flair.lottery import Lottery
+
+        class _FakeCoercedFont:  # what the core loader hands over
+            pass
+
+        with pytest.raises(ValueError, match="reserved by the core"):
+            Lottery(words=["A"], font=_FakeCoercedFont())
