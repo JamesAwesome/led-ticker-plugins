@@ -80,3 +80,27 @@ async def test_note_rate_limited_floors_at_one_per_minute():
         rl.note_rate_limited()
     await rl.acquire()
     assert slept[-1] == pytest.approx(60.0, abs=1e-6)
+
+
+async def test_observe_credits_left_clamps_tokens_down():
+    """The server's api-credits-left is truth for remaining budget: sync the
+    bucket DOWN to it (a sibling sign burned some), never up."""
+    rl, _clock, slept = _limiter(8)  # starts full: 8 tokens
+    rl.observe_credits_left(3)  # server says only 3 left this window
+    # 3 acquires are now free; the 4th must wait (bucket clamped to 3)
+    for _ in range(3):
+        await rl.acquire()
+    assert slept == []
+    await rl.acquire()
+    assert len(slept) == 1
+
+
+async def test_observe_credits_left_never_raises_tokens():
+    """A higher server number does not inflate our bucket beyond what we hold
+    (capacity is owned by the /api_usage seed, not the per-request header)."""
+    rl, _clock, slept = _limiter(8)
+    for _ in range(8):
+        await rl.acquire()  # drain to 0
+    rl.observe_credits_left(8)  # server claims 8 left — must NOT refill us
+    await rl.acquire()
+    assert slept  # still had to wait; observe didn't hand us free tokens
