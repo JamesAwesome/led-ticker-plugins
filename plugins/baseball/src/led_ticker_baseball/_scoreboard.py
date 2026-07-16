@@ -1,11 +1,21 @@
 """MLBScoreboardMessage and its builder helpers.
 
-Layout-collision audit 2026-07-16: all positioned text here is already
-collision-safe — variable-length labels go through ``_fit_team_name`` (full
-name -> abbreviation fallback, measured), everything else is measured-and-
-centered within its own zone (``_draw_centered``) or fixed-vocabulary (team
-abbreviations, score digits, inning strings, dash pips). No unguarded
-fixed-position/right-aligned surface; no fit-ladder retrofit needed.
+Layout-collision audit 2026-07-16 (survey: tests/survey_layout_gaps.py):
+- On >=~128-logical-px canvases (smallsign 160): collision-safe. Labels go
+  through ``_fit_team_name`` (measured fallback), everything else is
+  measured-and-centered in its zone or fixed-vocabulary.
+- On NARROW logical canvases (bigsign at scale 4 = logical 64): the LIVE
+  center zone is genuinely broken — the design assumes >=128 logical px
+  (see the half_h comment), and at width 64 the center zone (26px, halves
+  of 13px) cannot hold inning+outs / B/S / the diamond cluster: the outs
+  dots overlap the 2B diamond and reach the home team name, and the
+  diamonds overlap the B/S row, with TYPICAL data. ``layout =
+  "scoreboard"`` is user-selectable on any sign, so this was
+  config-reachable. GUARDED: ``draw()`` raises below
+  ``_MIN_LOGICAL_WIDTH`` (measured floor 128 — worst case is clean at
+  128/160, overlaps at 112, piles up at 64), steering narrow signs to
+  ``layout = "two_row"``/``"ticker"`` — the two_row band-guard precedent
+  (core's render breaker surfaces the message; the panel keeps running).
 """
 
 from datetime import datetime, timedelta
@@ -38,6 +48,14 @@ from led_ticker_baseball.teams import (
     _team_palette,
 )
 
+# Measured floor for the scoreboard layout (survey: tests/survey_layout_gaps.py):
+# the worst-case live center zone (extra innings "▼15" + outs dots + full count
+# + the base diamond) is collision-free at >=128 logical px (longboi 512/4 and
+# smallsign 160 both clear), overlaps at 112 (extra innings), and piles up at
+# 96 (typical data) and 64 (bigsign at scale 4). 128 is also the design's own
+# stated assumption (the half_h comment below).
+_MIN_LOGICAL_WIDTH = 128
+
 
 @attrs.define
 class MLBScoreboardMessage(FrameAwareBase):
@@ -69,6 +87,20 @@ class MLBScoreboardMessage(FrameAwareBase):
             measure_width,
             safe_scale,
         )
+
+        # Geometry guard (layout-collision audit 2026-07-16): below the
+        # measured floor the live center zone collides (see module docstring).
+        # Raise with the fix in the message — the two_row band-guard precedent:
+        # core's render breaker trips this widget and surfaces the error
+        # (status board / logs) while the rest of the rotation keeps running.
+        if canvas.width < _MIN_LOGICAL_WIDTH:
+            raise ValueError(
+                f"baseball.scores: layout='scoreboard' needs a canvas >= "
+                f"{_MIN_LOGICAL_WIDTH} logical px wide (this canvas: "
+                f"{canvas.width}) — the live center zone (inning/outs/count/"
+                f"diamond) collides below that. Use layout='two_row' or "
+                f"'ticker' on this sign."
+            )
 
         scale = safe_scale(canvas)
         half_h = canvas.height // 2  # logical rows per band (8 on 128×16 canvas)
