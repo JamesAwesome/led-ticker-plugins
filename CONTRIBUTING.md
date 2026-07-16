@@ -36,4 +36,29 @@ make lint   # ruff + pyright
 make format # ruff format
 ```
 
+### Layout invariant: positioned hi-res text must be collision-guarded
+
+Any plugin that paints hi-res text at a fixed or computed position (not
+scrolling) with variable-length data must:
+
+- **(a) measure with core's `hires_text_width`** (via `led_ticker.plugin`) —
+  the same glyph resolution the renderer draws with, so collision math can't
+  drift from the paint;
+- **(b) shrink-to-fit via `fit_text_size`** with a plugin-owned size ladder
+  when the text would collide with a neighbor (ladder values are per-layout
+  design decisions — keep them in the plugin, not core);
+- **(c) ship a pixel-separation regression test** — invariant-based, never
+  exact-pinning sizes or widths (freetype metrics differ macOS vs Linux);
+- **(d) never ship < 6px measured clearance** — a near-miss on dev metrics is
+  an overlap on the panel (stocks #54; flight dashboard columns). *Documented
+  exception:* where neighbors are strongly color-differentiated AND the
+  design's own pre-guard rhythm is tighter, the floor may be as low as 2px
+  (never touching) — the exception must be justified in a comment at the
+  gap constant (see flight `dashboard_layout._COL_GAP`). Prefer ROW-UNIFORM
+  fits when several values share a row: mixed sizes on one row read as
+  broken typography (worse than the tight spacing they fix).
+
+Scrolling layouts are exempt (motion is the overflow mechanism), as is
+fixed-vocabulary text that cannot vary in length (digits, team abbreviations).
+
 Read the target plugin's `CLAUDE.md` before changing it — each package documents its own invariants. Keep changes scoped to one plugin per PR where you can, and make sure `make test` and `make lint` pass.

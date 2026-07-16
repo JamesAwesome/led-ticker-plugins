@@ -107,6 +107,20 @@ def draw_empty(canvas, clock_ms: float, wide: bool, *, y_offset: int = 0) -> Non
     if w > canvas.width:
         label = "NO TRAFFIC"
         w = measure_width(FONT_SMALL, label, canvas)
+    # Layout-collision audit 2026-07-16 (docs/superpowers/plans/
+    # 2026-07-16-layout-guards-sweep.md): this label has no adjacent block
+    # (it's centered alone), so the applicable check is "fits the canvas",
+    # not the 6px inter-block rule. `fit_text_size`/`hires_text_width`
+    # don't apply here — FONT_SMALL is a BDF font resolved outside
+    # `resolve_font`'s name-based cache, and both core helpers explicitly
+    # degenerate to a no-op ladder for BDF (no per-size measurement to
+    # shrink through); the two-string fallback above IS this label's
+    # shrink-to-fit step. Measured on both shipped hero/dashboard
+    # geometries (the only ones with scale != 1): bigsign (64 logical
+    # cols) leaves ~28px margin on both edges, longboi (128 logical cols)
+    # ~64px — both far past the 6px floor. A residual clip is only
+    # reachable on an undocumented scale>1 build narrower than bigsign's
+    # 256 physical px, which no reference build ships.
     bx = max(0, (canvas.width - w) // 2)
     baseline = compute_baseline(FONT_SMALL, canvas) + y_offset
     draw_text(canvas, FONT_SMALL, label, bx, baseline, dim(IDLE, pulse))

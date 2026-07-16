@@ -22,6 +22,8 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
 
 ## Load-bearing invariants
 
+- **Positioned hi-res text is collision-guarded.** The monorepo layout invariant applies (CONTRIBUTING.md): measure via core's `hires_text_width`, shrink-to-fit via `fit_text_size` with plugin-owned ladders, pixel-separation tests, never <6px measured clearance. Survey harness: `tests/survey_layout_gaps.py` (worst-case fixture: 7-char WN callsign so SOUTHWEST renders). The handoff's design sizes are the ladder TOPS — shrinking below them only on measured collision does not violate the handoff-normative rule below.
+
 - **The design handoff is normative.** `design/README.md` (plus `app.js`, `led-engine.js`,
   and `Flight Tracker LED Layouts.html`, all committed verbatim in `design/`) is the visual
   spec for this widget — semantic palette, airline color table, and every layout number
