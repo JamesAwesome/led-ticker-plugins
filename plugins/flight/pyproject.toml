@@ -28,7 +28,7 @@ classifiers = [
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
 ]
-dependencies = ["led-ticker-core>=4.8", "aiohttp>=3.9"]
+dependencies = ["led-ticker-core>=4.16", "aiohttp>=3.9"]
 
 [project.entry-points."led_ticker.plugins"]
 flight = "led_ticker_flight:register"

@@ -12,7 +12,7 @@ cut between rotating flights read as a glitch on the physical panel). A
 single held flight never fades — see the `bright` computation below.
 """
 
-from led_ticker.plugin import safe_scale
+from led_ticker.plugin import fit_text_size, safe_scale
 
 from led_ticker_flight.data import VR_COLOR, vr_state
 from led_ticker_flight.fins import draw_fin
@@ -38,6 +38,18 @@ from led_ticker_flight.palette import (
 )
 
 DWELL_MS = 4800
+
+# Metric-column value shrink-to-fit ladder (layout collision-guard sweep,
+# 2026-07-16 — docs/superpowers/plans/2026-07-16-layout-guards-sweep.md).
+# 16 is the design size (handoff's longA() metric columns); the survey
+# harness (tests/survey_layout_gaps.py) found a 5-digit altitude + vr-glyph
+# prefix can land within 3px of the next column, and a long DIST value
+# ("222KM NE") can overflow its own column budget by ~9px — both real
+# collisions on worst-case data, not imagined ones. Floor 12 matches the
+# name/type row's own size (this file's `hires(..., 12, ...)` calls above)
+# so a maximally-shrunk value still reads at a size already used elsewhere
+# in this widget. Ladder values are plugin-owned per CLAUDE.md's convention.
+_COL_VALUE_SIZES = (16, 14, 12)
 
 
 def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> None:
@@ -93,7 +105,17 @@ def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> 
             else:
                 glyph = "▲" if state == "climb" else "▼"
                 vx += hires(shim, glyph, cx, 26 + dy, vr_color, 11, bright=b) + 3
-        hires(shim, val, vx, 24 + dy, color, 16, bright=b)
+        # Budget = the space left in this column's slot after the vr-glyph
+        # prefix (col 0 only; vx == cx elsewhere), minus a 6px inter-column
+        # gap (the near-miss rule — stocks #54). The last column has no
+        # neighboring column, only the panel edge; it still respects its
+        # col_w slot (for visual alignment with the paging dots below) AND,
+        # defensively, the true physical right margin.
+        budget = col_w - (vx - cx) - 6
+        if i == len(cols) - 1:
+            budget = min(budget, real.width - vx - 6)
+        size = fit_text_size(val, _COL_VALUE_SIZES, budget, font="Inter-Bold")
+        hires(shim, val, vx, 24 + dy, color, size, bright=b)
 
     paging_dots(
         real,
