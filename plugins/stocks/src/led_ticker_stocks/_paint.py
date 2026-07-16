@@ -98,6 +98,16 @@ def right_align_x(
     return real_width - measure_width(font, _subst(text), _PROBE) - margin
 
 
+def text_width(size: int, text: str, *, bold: bool = True) -> int:
+    """Physical advance width of `text` at `size` — the same measurement
+    `hires()` will draw and `right_align_x()` aligns with (glyph substitutions
+    included), so collision math never drifts from the paint."""
+    font = resolve_font(
+        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
+    )
+    return measure_width(font, _subst(text), _PROBE)
+
+
 def px(real, x: int, y: int, color: Color) -> None:
     if 0 <= x < real.width and 0 <= y < real.height:
         real.SetPixel(x, y, color.red, color.green, color.blue)
