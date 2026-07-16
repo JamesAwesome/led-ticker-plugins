@@ -112,7 +112,8 @@ async def test_update_down_arrow():
     _seed_started("AAPL", price=310.0, prev=315.32, d=-5.32, dp=-1.69)
     src = _src(symbol="AAPL", format="{arrow}{change}")
     await src.update()
-    assert src.current == "▼" + format_change(-5.32, 2)
+    # Minus-sign belt: the emitted token substitutes U+2212 -> ASCII '-'.
+    assert src.current == "▼" + format_change(-5.32, 2).replace("−", "-")
 
 
 async def test_update_flat_arrow():
@@ -220,3 +221,60 @@ async def test_update_self_start_is_idempotent_across_calls():
     task_after_first = _cache.get_cache()._task
     await src.update()
     assert _cache.get_cache()._task is task_after_first
+
+
+# ── provider field + provider-aware validation ──────────────────────────────
+
+
+def test_validate_rejects_slash_symbol_for_finnhub():
+    # provider defaults to finnhub
+    errs = StockSource.validate_config({"symbol": "EUR/USD"})
+    assert any("forex" in e.lower() for e in errs)
+
+
+def test_validate_accepts_slash_symbol_for_twelvedata():
+    errs = StockSource.validate_config({"symbol": "EUR/USD", "provider": "twelvedata"})
+    assert errs == []
+
+
+def test_validate_rejects_unknown_provider():
+    errs = StockSource.validate_config({"symbol": "AAPL", "provider": "bogus"})
+    assert any("provider" in e.lower() for e in errs)
+
+
+def test_decimals_override_forces_fixed_decimals():
+    from led_ticker_stocks.model import SymbolQuote
+    from led_ticker_stocks.state import MarketState
+
+    src = StockSource(
+        id="s", provider="twelvedata", symbol="EUR/USD", format="{price}", decimals=2
+    )
+    q = SymbolQuote(
+        sym="EUR/USD", price=1.14669, prev=1.14, dp_decimals=4, state=MarketState.OPEN
+    )
+    assert src._field_value(q, "price") == "1.15"  # forced 2, not auto 4
+
+
+async def test_token_value_substitutes_u2212_minus_with_ascii(monkeypatch):
+    """Minus-sign belt: emitted token value uses ASCII '-', not U+2212, so a
+    negative renders in any user font (the panel showed '?' otherwise)."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["DKS"])
+    q = cache.get("DKS")
+    q.price, q.prev = 207.19, 209.90  # down -> negative pct -> U+2212
+    q.dp_decimals, q.state = decimals_for(207.19), MarketState.OPEN
+    # Avoid real network: make ensure_started a no-op.
+    async def _noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(type(cache), "ensure_started", _noop)
+
+    src = _src(symbol="DKS", format="{price} {pct}")
+    src._used_fields = ("price", "pct")
+    await src.update()
+    assert "−" not in src.current  # no U+2212
+    assert "-" in src.current  # ASCII hyphen present

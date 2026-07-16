@@ -26,6 +26,9 @@ from led_ticker_stocks.model import SymbolQuote, format_change, format_pct, form
 
 _DEFAULT_FORMAT = "{price}"
 
+# Known `provider` values — single source of truth, imported by ticker.py.
+_PROVIDERS = ("finnhub", "twelvedata")
+
 # Fields exposed to `format`.
 _FIELDS = (
     "price",
@@ -59,6 +62,8 @@ class StockSource(PolledDataSource):
     symbol: str = attrs.field(default="", kw_only=True)
     format: str = attrs.field(default=_DEFAULT_FORMAT, kw_only=True)
     placeholder: str = attrs.field(default="…", kw_only=True)
+    provider: str = attrs.field(default="finnhub", kw_only=True)
+    decimals: int | None = attrs.field(default=None, kw_only=True)
     # Cached at construction: only the field names referenced in `format`.
     # Declared as an attrs field (slotted class) — set in __attrs_post_init__.
     _used_fields: tuple[str, ...] = attrs.field(init=False, factory=tuple)
@@ -66,13 +71,19 @@ class StockSource(PolledDataSource):
     @classmethod
     def validate_config(cls, cfg: dict) -> list[str]:
         errors: list[str] = []
+        provider = cfg.get("provider", "finnhub")
+        if provider not in _PROVIDERS:
+            errors.append(
+                f"stocks.quote: unknown provider {provider!r} "
+                f"(known: {', '.join(_PROVIDERS)})."
+            )
         symbol = cfg.get("symbol")
         if not symbol:
             errors.append("stocks.quote: 'symbol' is required.")
-        elif isinstance(symbol, str) and "/" in symbol:
+        elif isinstance(symbol, str) and "/" in symbol and provider == "finnhub":
             errors.append(
                 f"stocks.quote: {symbol!r} looks like forex — FX requires a paid "
-                "Finnhub tier (v1 is equities only)."
+                "Finnhub tier. Use provider = \"twelvedata\" for forex/crypto."
             )
         fmt = cfg.get("format", _DEFAULT_FORMAT)
         if not isinstance(fmt, str):
@@ -115,11 +126,17 @@ class StockSource(PolledDataSource):
         self.current = self.placeholder
 
     def _field_value(self, q: SymbolQuote, name: str) -> Any:
-        """Compute one field value by name from a live `SymbolQuote`."""
+        """Compute one field value by name from a live `SymbolQuote`.
+
+        `self.decimals` (config override) wins over the quote's own
+        auto-picked `dp_decimals` when set — e.g. forcing a forex pair to
+        2 decimals instead of `decimals_for`'s auto 4.
+        """
+        dec = self.decimals if self.decimals is not None else q.dp_decimals
         if name == "price":
-            return format_price(q.price, q.dp_decimals)
+            return format_price(q.price, dec)
         if name == "change":
-            return format_change(q.change, q.dp_decimals)
+            return format_change(q.change, dec)
         if name == "pct":
             return format_pct(q.pct)
         if name == "arrow":
@@ -129,14 +146,14 @@ class StockSource(PolledDataSource):
         if name == "symbol":
             return q.sym
         if name == "prev":
-            return format_price(q.prev, q.dp_decimals)
+            return format_price(q.prev, dec)
         if name == "high":
-            return "—" if q.high is None else format_price(q.high, q.dp_decimals)
+            return "—" if q.high is None else format_price(q.high, dec)
         if name == "low":
-            return "—" if q.low is None else format_price(q.low, q.dp_decimals)
+            return "—" if q.low is None else format_price(q.low, dec)
         if name == "day_range":
-            low = "—" if q.low is None else format_price(q.low, q.dp_decimals)
-            high = "—" if q.high is None else format_price(q.high, q.dp_decimals)
+            low = "—" if q.low is None else format_price(q.low, dec)
+            high = "—" if q.high is None else format_price(q.high, dec)
             return f"{low}–{high}"
         raise KeyError(name)  # unreachable for validated formats
 
@@ -145,11 +162,19 @@ class StockSource(PolledDataSource):
         # from whichever consumer (widget or source) reaches this first.
         # A token-only config with no `stocks.ticker` widget still needs
         # this to actually populate the cache.
-        await get_cache().ensure_started(self.session, interval=self.interval)
+        await get_cache().ensure_started(
+            self.session, interval=self.interval, provider=self.provider
+        )
         q = get_cache().get(self.symbol)
         if q is None or not q.has_data:
             # Leave the placeholder (or last good value) — no data yet.
             return
         fields = {name: self._field_value(q, name) for name in self._used_fields}
+        # Minus-sign belt: a token is embedded in an arbitrary user message
+        # font that may lack U+2212 MINUS SIGN (which format_change/format_pct
+        # emit for negatives) — it renders as "?" there. Core PR #393 fixes
+        # this generally in the hi-res rasterizer, but substitute here too so
+        # the cure ships with the plugin, font-agnostic, before a core release.
+        value = self.format.format(**fields).replace("−", "-")
         # write-order: _set_value writes current before version, no await between.
-        self._set_value(self.format.format(**fields))
+        self._set_value(value)

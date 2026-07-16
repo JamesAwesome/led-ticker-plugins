@@ -418,3 +418,64 @@ async def test_start_tolerates_initial_fetch_failure(monkeypatch, caplog):
     assert widget is not None
     assert len(widget.feed_stories) == 1
     assert any("initial fetch failed" in r.getMessage() for r in caplog.records)
+
+
+# ── provider field + provider-aware validation ──────────────────────────────
+
+
+def test_ticker_validate_rejects_slash_for_finnhub():
+    msgs = StocksTicker.validate_config({"symbols": ["EUR/USD"]})
+    assert any("forex" in m.lower() for m in msgs)
+
+
+def test_ticker_validate_accepts_slash_for_twelvedata():
+    msgs = StocksTicker.validate_config(
+        {"symbols": ["EUR/USD"], "provider": "twelvedata"}
+    )
+    assert msgs == []
+
+
+def test_ticker_validate_rejects_unknown_provider():
+    msgs = StocksTicker.validate_config({"symbols": ["AAPL"], "provider": "bogus"})
+    assert any("provider" in m.lower() for m in msgs)
+
+
+@pytest.mark.asyncio
+async def test_start_forwards_provider_to_cache(monkeypatch):
+    import led_ticker_stocks.ticker as tk
+
+    captured = {}
+
+    async def _ensure(
+        self, session, *, interval=60, force_demo=False, provider="finnhub"
+    ):
+        captured["provider"] = provider
+
+    monkeypatch.setattr(tk.QuoteCache, "ensure_started", _ensure)
+    await StocksTicker.start(
+        symbols=["EUR/USD"], session=object(), provider="twelvedata", demo=False
+    )
+    assert captured["provider"] == "twelvedata"
+
+
+def test_story_reads_per_symbol_state(canvas, monkeypatch):
+    """A story draws with its own symbol's quote.state, not a global."""
+    import led_ticker_stocks.ticker as tk
+
+    cache = get_cache()
+    cache.register(["BTCUSD"])
+    q = cache.get("BTCUSD")
+    q.price, q.prev, q.state = 100.0, 90.0, MarketState.OPEN
+
+    captured = {}
+
+    def _capture_crawl(canvas, quote, state, cursor_pos, **kwargs):
+        captured["state"] = state
+        return cursor_pos
+
+    monkeypatch.setitem(tk.LAYOUTS, "crawl", _capture_crawl)
+    story = _StockStory(sym="BTCUSD", layout="crawl", all_symbols=["BTCUSD"])
+    story.draw(canvas, 0)
+
+    assert captured["state"] is q.state
+    assert captured["state"] is MarketState.OPEN
