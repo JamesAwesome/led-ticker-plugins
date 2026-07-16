@@ -45,7 +45,6 @@ class QuoteCache:
         # — a bad symbol has no data but must not refetch forever.
         self._attempted: set[str] = set()
         self._state: MarketState = MarketState.CLOSED
-        self._client: FinnhubClient | None = None
         self._provider: object | None = None
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
@@ -243,6 +242,13 @@ class QuoteCache:
             # and Twelve Data /quote both return the last close even while shut,
             # so a fresh boot after hours still populates.
             if market_closed and sym in self._attempted:
+                # Keep the market CHIP fresh for a held symbol: Finnhub stamps
+                # the global state on every symbol every cycle so the chip flips
+                # to CLSD on close even though the price is held. (Freeze gate is
+                # `market_closed`, not this — so this cannot re-latch. TD never
+                # reaches here: global_state is None, it never freezes.)
+                if global_state is not None:
+                    existing.state = global_state
                 held += 1
                 continue
             fresh = await self._provider.fetch_quote(sym)
@@ -293,7 +299,6 @@ class QuoteCache:
         self._quotes = {}
         self._attempted = set()
         self._state = MarketState.CLOSED
-        self._client = None
         self._provider = None
         self._demo_feed = None
         self._started = False

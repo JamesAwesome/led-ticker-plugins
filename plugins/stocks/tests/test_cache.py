@@ -414,6 +414,34 @@ async def test_reopen_refetches_previously_frozen_symbol(monkeypatch):
     assert calls == ["AAPL"]
 
 
+async def test_held_finnhub_symbol_chip_state_follows_global(monkeypatch):
+    """A warm Finnhub symbol that is FROZEN while closed must still show the
+    CLOSED market state on its chip (quote.state), not a stale OPEN — the story
+    reads quote.state for the chip."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["AAPL"])
+    box = {"s": MarketState.OPEN}
+
+    class _Prov:
+        async def fetch_market_state(self):
+            return box["s"]
+
+        async def fetch_quote(self, sym):
+            return SymbolQuote(sym=sym, price=50.0, prev=49.0,
+                               dp_decimals=decimals_for(50.0), state=box["s"])
+
+    _install_prov(cache, _Prov())
+    await cache.update()                       # open: AAPL fetched, state OPEN
+    assert cache.get("AAPL").state is MarketState.OPEN
+    box["s"] = MarketState.CLOSED
+    await cache.update()                       # closed: AAPL held, chip must flip
+    assert cache.get("AAPL").state is MarketState.CLOSED
+
+
 async def test_twelvedata_never_frozen_here_always_fetches(monkeypatch):
     """A per-symbol provider (global_state None) never freezes in update() —
     every symbol fetches each cycle so its own reopen is auto-detected, even

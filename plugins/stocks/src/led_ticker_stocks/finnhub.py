@@ -10,7 +10,7 @@ STATUS_URL = "https://finnhub.io/api/v1/stock/market-status"
 
 
 def parse_quote(sym, payload):
-    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.model import SymbolQuote
 
     high = payload.get("h")
     low = payload.get("l")
@@ -21,7 +21,9 @@ def parse_quote(sym, payload):
         prev=float(payload.get("pc") or 0.0),
         d=payload.get("d"),
         dp=payload.get("dp"),
-        dp_decimals=decimals_for(price),
+        # Finnhub is equities-only -> fixed 2 decimals (model default); a $7
+        # stock is "7.45", not "7.4500". Magnitude auto-decimals (decimals_for)
+        # applies only to the Twelve Data path (forex/sub-$1 need 4-5).
         high=float(high) if high is not None else None,
         low=float(low) if low is not None else None,
     )
