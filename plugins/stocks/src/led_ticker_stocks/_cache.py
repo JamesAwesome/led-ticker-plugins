@@ -130,7 +130,19 @@ class QuoteCache:
             self._provider = FinnhubProvider(FinnhubClient(token, session))
 
         if self._provider is not None:
-            self._limiter = AsyncRateLimiter(self._provider.REQUESTS_PER_MINUTE)
+            # Auto-size the throttle to the key's actual plan (before the eager
+            # fetch, so even the first cycle is paced right — a paid key never
+            # crawls at the free-tier rate). Detection is tolerant: None -> the
+            # provider's safe default. A 429 later ratchets it down further.
+            detected = await self._provider.fetch_plan_limit()
+            rpm = detected or self._provider.REQUESTS_PER_MINUTE
+            if not detected:
+                logging.info(
+                    "stocks QuoteCache: rate auto-detect unavailable — "
+                    "using %d req/min default",
+                    rpm,
+                )
+            self._limiter = AsyncRateLimiter(rpm)
 
         # Hold the poll lock for the eager fetch so a second consumer's
         # `ensure_started` -> `_catch_up_new_symbols` (which also takes the
@@ -202,7 +214,21 @@ class QuoteCache:
             await self._limiter.acquire()
         assert self._provider is not None
         existing = self._quotes[sym]
-        fresh = await self._provider.fetch_quote(sym)
+        try:
+            fresh = await self._provider.fetch_quote(sym)
+        except Exception as e:
+            # A 429 is ground truth: our seeded/detected rate was too high (a
+            # stale, shared-key, or downgraded plan). Ratchet the limiter down
+            # for the session, then re-raise so the poll loop's backoff still
+            # runs and the symbol stays cold for a retry. (getattr avoids an
+            # aiohttp import here; ClientResponseError carries `.status`.)
+            if getattr(e, "status", None) == 429 and self._limiter is not None:
+                self._limiter.note_rate_limited()
+                logging.warning(
+                    "stocks QuoteCache: 429 — lowering the request rate for "
+                    "this session"
+                )
+            raise
         self._attempted.add(sym)
         if global_state is not None:
             fresh.state = global_state  # Finnhub: stamp the one global state

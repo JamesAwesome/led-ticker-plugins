@@ -60,3 +60,23 @@ async def test_zero_rpm_is_unlimited_noop():
     rl = AsyncRateLimiter(0, clock=_FakeClock(), sleep=_boom)
     for _ in range(100):
         await rl.acquire()
+
+
+async def test_note_rate_limited_halves_the_rate_and_drains():
+    """A 429 ratchets the sustained rate down: 8/min -> 4/min, so an empty
+    bucket now waits 15 s (60/4) for a token instead of 7.5 s."""
+    rl, _clock, slept = _limiter(8)
+    for _ in range(8):
+        await rl.acquire()  # drain the burst
+    rl.note_rate_limited()  # -> 4/min, tokens 0
+    await rl.acquire()
+    assert slept[-1] == pytest.approx(15.0, abs=1e-6)
+
+
+async def test_note_rate_limited_floors_at_one_per_minute():
+    """Repeated 429s can't drive the rate below 1/min (a 60 s wait)."""
+    rl, _clock, slept = _limiter(2)
+    for _ in range(10):
+        rl.note_rate_limited()
+    await rl.acquire()
+    assert slept[-1] == pytest.approx(60.0, abs=1e-6)

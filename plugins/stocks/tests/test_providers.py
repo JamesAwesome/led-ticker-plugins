@@ -36,3 +36,31 @@ async def test_twelvedata_provider_state_is_per_symbol_none_global():
     assert await prov.fetch_market_state() is None
     q = await prov.fetch_quote("EUR/USD")
     assert q.state is MarketState.OPEN
+
+
+async def test_twelvedata_provider_fetch_plan_limit_reads_plan_limit():
+    client = mock.Mock()
+    client.fetch_api_usage = mock.AsyncMock(
+        return_value={"plan_limit": 300, "plan_category": "pro"}
+    )
+    prov = TwelveDataProvider(client)
+    assert await prov.fetch_plan_limit() == 300
+
+
+async def test_twelvedata_provider_fetch_plan_limit_none_on_error():
+    client = mock.Mock()
+    client.fetch_api_usage = mock.AsyncMock(side_effect=RuntimeError("boom"))
+    prov = TwelveDataProvider(client)
+    assert await prov.fetch_plan_limit() is None  # never raises
+
+
+async def test_twelvedata_provider_fetch_plan_limit_none_on_missing_field():
+    client = mock.Mock()
+    client.fetch_api_usage = mock.AsyncMock(return_value={"plan_category": "basic"})
+    prov = TwelveDataProvider(client)
+    assert await prov.fetch_plan_limit() is None
+
+
+async def test_finnhub_provider_fetch_plan_limit_is_none():
+    prov = FinnhubProvider(mock.Mock())
+    assert await prov.fetch_plan_limit() is None

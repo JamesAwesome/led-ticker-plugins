@@ -341,9 +341,88 @@ async def test_ensure_started_twelvedata_builds_td_provider(monkeypatch):
     monkeypatch.setattr(cache, "update", _noop_update)
     await cache.ensure_started(session=object(), provider="twelvedata")
     assert isinstance(cache._provider, TwelveDataProvider)
-    # A per-minute rate limiter is built from the provider's cap (TD = 8/min)
+    # A per-minute rate limiter is built (auto-detected, or the safe default)
     # so a boot burst / large symbol list can't trip a 429.
     assert cache._limiter is not None
+
+
+async def test_ensure_started_sizes_limiter_from_detected_plan_limit(monkeypatch):
+    """A paid key's higher per-minute cap (detected via /api_usage) sizes the
+    throttle, so a paid user isn't stuck at the free-tier rate."""
+    import led_ticker_stocks.providers as providers_mod
+    from led_ticker_stocks._cache import get_cache
+
+    monkeypatch.setenv("TWELVEDATA_API_KEY", "tdkey")
+
+    async def _detect_pro(self):
+        return 300
+
+    monkeypatch.setattr(
+        providers_mod.TwelveDataProvider, "fetch_plan_limit", _detect_pro
+    )
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+
+    async def _noop_update():
+        pass
+
+    monkeypatch.setattr(cache, "update", _noop_update)
+    await cache.ensure_started(session=object(), provider="twelvedata")
+    assert cache._limiter is not None
+    assert cache._limiter._capacity == 300  # detected paid rate, not the 8 default
+
+
+async def test_ensure_started_falls_back_to_default_when_detect_none(monkeypatch):
+    """Detection failure (None) falls back to the provider's safe default (8)."""
+    import led_ticker_stocks.providers as providers_mod
+    from led_ticker_stocks._cache import get_cache
+
+    monkeypatch.setenv("TWELVEDATA_API_KEY", "tdkey")
+
+    async def _detect_none(self):
+        return None
+
+    monkeypatch.setattr(
+        providers_mod.TwelveDataProvider, "fetch_plan_limit", _detect_none
+    )
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+
+    async def _noop_update():
+        pass
+
+    monkeypatch.setattr(cache, "update", _noop_update)
+    await cache.ensure_started(session=object(), provider="twelvedata")
+    assert cache._limiter is not None
+    assert cache._limiter._capacity == 8  # TwelveDataProvider.REQUESTS_PER_MINUTE
+
+
+async def test_429_during_fetch_lowers_the_session_rate(monkeypatch):
+    """A 429 is ground truth: it ratchets the shared limiter down for the
+    session (a stale/shared/downgraded plan), then re-raises for the backoff."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks._ratelimit import AsyncRateLimiter
+
+    class _429(Exception):
+        status = 429
+
+    class _Prov:
+        REQUESTS_PER_MINUTE = 8
+
+        async def fetch_market_state(self):
+            return None
+
+        async def fetch_quote(self, sym):
+            raise _429()
+
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+    cache._limiter = AsyncRateLimiter(300)  # detected paid rate
+    _install_prov(cache, _Prov())
+    before = cache._limiter._capacity
+    with pytest.raises(_429):
+        await cache._fetch_one("EUR/USD", None)
+    assert cache._limiter._capacity == before / 2  # halved by note_rate_limited
 
 
 async def test_catch_up_fetches_only_new_cold_symbols(monkeypatch):
