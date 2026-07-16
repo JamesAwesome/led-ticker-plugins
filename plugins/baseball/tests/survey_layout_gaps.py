@@ -28,9 +28,9 @@ different vertical bands (the |dy| heuristic is loose). Interpret the
 output against the render, not mechanically.
 """
 
+import led_ticker.plugin as plug
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
-import led_ticker.plugin as plug
 from led_ticker_baseball._models import GameInfo
 from led_ticker_baseball._scoreboard import MLBScoreboardMessage
 
