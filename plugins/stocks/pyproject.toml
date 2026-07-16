@@ -19,7 +19,7 @@ classifiers = [
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
 ]
-dependencies = ["led-ticker-core>=4.9", "aiohttp"]
+dependencies = ["led-ticker-core>=4.16", "aiohttp"]
 
 [project.entry-points."led_ticker.plugins"]
 stocks = "led_ticker_stocks:register"

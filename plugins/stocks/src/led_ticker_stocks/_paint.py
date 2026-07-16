@@ -10,6 +10,7 @@ from led_ticker.plugin import (
     Color,
     ScaledCanvas,
     draw_text,
+    hires_text_width,
     measure_width,
     resolve_font,
     unwrap_to_real,
@@ -101,11 +102,19 @@ def right_align_x(
 def text_width(size: int, text: str, *, bold: bool = True) -> int:
     """Physical advance width of `text` at `size` — the same measurement
     `hires()` will draw and `right_align_x()` aligns with (glyph substitutions
-    included), so collision math never drifts from the paint."""
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
+    included), so collision math never drifts from the paint.
+
+    Delegates to core's `hires_text_width` (led-ticker-core>=4.16), which
+    measures with the SAME glyph resolution `hires()` draws with — the
+    plugin-local measurement this used to hand-roll via `resolve_font` +
+    `measure_width` is now core's public surface (promoted from this exact
+    pattern, stocks #54)."""
+    return hires_text_width(
+        _subst(text),
+        size,
+        font="Inter-Bold" if bold else "Inter-Regular",
+        threshold=_HIRES_THRESHOLD,
     )
-    return measure_width(font, _subst(text), _PROBE)
 
 
 def px(real, x: int, y: int, color: Color) -> None:
