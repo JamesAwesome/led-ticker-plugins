@@ -267,6 +267,7 @@ async def test_token_value_substitutes_u2212_minus_with_ascii(monkeypatch):
     q = cache.get("DKS")
     q.price, q.prev = 207.19, 209.90  # down -> negative pct -> U+2212
     q.dp_decimals, q.state = decimals_for(207.19), MarketState.OPEN
+
     # Avoid real network: make ensure_started a no-op.
     async def _noop(*a, **k):
         return None

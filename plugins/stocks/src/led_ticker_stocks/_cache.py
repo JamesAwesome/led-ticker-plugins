@@ -22,7 +22,7 @@ from led_ticker.plugin import spawn_tracked
 from led_ticker_stocks.demo import DemoFeed, seed_quotes
 from led_ticker_stocks.finnhub import FinnhubClient, parse_quote
 from led_ticker_stocks.model import SymbolQuote
-from led_ticker_stocks.providers import FinnhubProvider, TwelveDataProvider
+from led_ticker_stocks.providers import FinnhubProvider, Provider, TwelveDataProvider
 from led_ticker_stocks.state import MarketState
 from led_ticker_stocks.twelvedata import TwelveDataClient
 
@@ -45,7 +45,7 @@ class QuoteCache:
         # — a bad symbol has no data but must not refetch forever.
         self._attempted: set[str] = set()
         self._state: MarketState = MarketState.CLOSED
-        self._provider: object | None = None
+        self._provider: Provider | None = None
         self._demo_feed: DemoFeed | None = None
         self._started: bool = False
         self._task: asyncio.Task[None] | None = None

@@ -83,7 +83,7 @@ class StockSource(PolledDataSource):
         elif isinstance(symbol, str) and "/" in symbol and provider == "finnhub":
             errors.append(
                 f"stocks.quote: {symbol!r} looks like forex — FX requires a paid "
-                "Finnhub tier. Use provider = \"twelvedata\" for forex/crypto."
+                'Finnhub tier. Use provider = "twelvedata" for forex/crypto.'
             )
         fmt = cfg.get("format", _DEFAULT_FORMAT)
         if not isinstance(fmt, str):

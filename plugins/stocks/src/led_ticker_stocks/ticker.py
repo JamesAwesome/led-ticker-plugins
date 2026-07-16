@@ -172,7 +172,7 @@ class StocksTicker:
                 if "/" in s:
                     msgs.append(
                         f"stocks.ticker: {s!r} looks like forex — FX requires a paid "
-                        "Finnhub tier. Use provider = \"twelvedata\" for forex/crypto"
+                        'Finnhub tier. Use provider = "twelvedata" for forex/crypto'
                     )
         layout = cfg.get("layout")
         if layout is not None and layout not in LAYOUTS:

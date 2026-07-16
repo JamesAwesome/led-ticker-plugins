@@ -61,10 +61,10 @@ def test_formatting():
 def test_decimals_for_magnitude_bands():
     assert decimals_for(0.00042) == 5  # sub-1 (some crypto)
     assert decimals_for(0.5) == 5
-    assert decimals_for(1.0) == 4    # boundary
+    assert decimals_for(1.0) == 4  # boundary
     assert decimals_for(1.14669) == 4  # forex
     assert decimals_for(9.99) == 4
-    assert decimals_for(10.0) == 2   # boundary
+    assert decimals_for(10.0) == 2  # boundary
     assert decimals_for(208.89) == 2  # equity
     assert decimals_for(64906.62) == 2  # crypto large
     assert decimals_for(-3.5) == 4  # magnitude, not sign

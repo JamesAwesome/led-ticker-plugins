@@ -22,7 +22,7 @@ def _f(payload, key):
         return None
     try:
         return float(v)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

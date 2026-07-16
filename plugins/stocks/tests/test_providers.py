@@ -25,8 +25,12 @@ async def test_finnhub_provider_falls_back_to_clock_on_status_error():
 async def test_twelvedata_provider_state_is_per_symbol_none_global():
     client = mock.Mock()
     client.fetch_quote = mock.AsyncMock(
-        return_value={"symbol": "EUR/USD", "close": "1.1", "previous_close": "1.0",
-                      "is_market_open": True}
+        return_value={
+            "symbol": "EUR/USD",
+            "close": "1.1",
+            "previous_close": "1.0",
+            "is_market_open": True,
+        }
     )
     prov = TwelveDataProvider(client)
     assert await prov.fetch_market_state() is None

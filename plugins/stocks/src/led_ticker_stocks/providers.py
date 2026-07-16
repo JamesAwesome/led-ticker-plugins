@@ -9,16 +9,30 @@ so fetch_market_state() returns None and per-symbol state rides on the quote.
 """
 
 import logging
+from typing import Protocol
 
 from led_ticker_stocks import finnhub, twelvedata
-from led_ticker_stocks.state import state_from_status, state_now_from_clock
+from led_ticker_stocks.model import SymbolQuote
+from led_ticker_stocks.state import MarketState, state_from_status, state_now_from_clock
+
+
+class Provider(Protocol):
+    """The two provider-specific pieces `QuoteCache` drives each cycle.
+
+    `fetch_market_state` returns a global `MarketState` (Finnhub) or `None`
+    when state is per-symbol on the quote (Twelve Data).
+    """
+
+    async def fetch_market_state(self) -> MarketState | None: ...
+
+    async def fetch_quote(self, sym: str) -> SymbolQuote: ...
 
 
 class FinnhubProvider:
     def __init__(self, client):
         self._client = client
 
-    async def fetch_market_state(self):
+    async def fetch_market_state(self) -> MarketState | None:
         try:
             status = await self._client.fetch_market_status()
             return state_from_status(status)
@@ -30,7 +44,7 @@ class FinnhubProvider:
             )
             return state_now_from_clock()
 
-    async def fetch_quote(self, sym) -> object:
+    async def fetch_quote(self, sym: str) -> SymbolQuote:
         return finnhub.parse_quote(sym, await self._client.fetch_quote(sym))
 
 
@@ -38,8 +52,8 @@ class TwelveDataProvider:
     def __init__(self, client):
         self._client = client
 
-    async def fetch_market_state(self):
+    async def fetch_market_state(self) -> MarketState | None:
         return None  # per-symbol; each quote carries is_market_open
 
-    async def fetch_quote(self, sym):
+    async def fetch_quote(self, sym: str) -> SymbolQuote:
         return twelvedata.parse_quote(sym, await self._client.fetch_quote(sym))

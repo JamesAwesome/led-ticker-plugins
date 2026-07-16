@@ -79,20 +79,28 @@ def test_parse_sets_open_state_from_is_market_open():
 
 
 def test_parse_sets_magnitude_decimals():
-    assert parse_quote("EUR/USD", _FOREX).dp_decimals == 4     # ~1.15
+    assert parse_quote("EUR/USD", _FOREX).dp_decimals == 4  # ~1.15
     assert parse_quote("AAPL", _STOCK_CLOSED).dp_decimals == 2  # ~209
 
 
 def test_parse_missing_high_low_is_none():
-    payload = {"symbol": "X", "close": "5.0", "previous_close": "4.0",
-               "is_market_open": True}
+    payload = {
+        "symbol": "X",
+        "close": "5.0",
+        "previous_close": "4.0",
+        "is_market_open": True,
+    }
     q = parse_quote("X", payload)
     assert q.high is None and q.low is None
 
 
 def test_parse_zeroed_is_no_data():
-    payload = {"symbol": "ZZZ", "close": "0", "previous_close": "0",
-               "is_market_open": False}
+    payload = {
+        "symbol": "ZZZ",
+        "close": "0",
+        "previous_close": "0",
+        "is_market_open": False,
+    }
     q = parse_quote("ZZZ", payload)
     assert not q.has_data
 

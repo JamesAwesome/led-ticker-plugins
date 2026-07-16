@@ -373,9 +373,13 @@ async def test_warm_symbol_frozen_when_globally_closed_cold_fetched(monkeypatch)
 
         async def fetch_quote(self, sym):
             calls.append(sym)
-            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
-                               dp_decimals=decimals_for(5.0),
-                               state=MarketState.CLOSED)
+            return SymbolQuote(
+                sym=sym,
+                price=5.0,
+                prev=4.0,
+                dp_decimals=decimals_for(5.0),
+                state=MarketState.CLOSED,
+            )
 
     _install_prov(cache, _Prov())
     await cache.update()
@@ -403,14 +407,19 @@ async def test_reopen_refetches_previously_frozen_symbol(monkeypatch):
 
         async def fetch_quote(self, sym):
             calls.append(sym)
-            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
-                               dp_decimals=decimals_for(5.0), state=box["s"])
+            return SymbolQuote(
+                sym=sym,
+                price=5.0,
+                prev=4.0,
+                dp_decimals=decimals_for(5.0),
+                state=box["s"],
+            )
 
     _install_prov(cache, _Prov())
-    await cache.update()          # closed -> held
+    await cache.update()  # closed -> held
     assert calls == []
     box["s"] = MarketState.OPEN
-    await cache.update()          # reopened -> MUST fetch again
+    await cache.update()  # reopened -> MUST fetch again
     assert calls == ["AAPL"]
 
 
@@ -431,14 +440,19 @@ async def test_held_finnhub_symbol_chip_state_follows_global(monkeypatch):
             return box["s"]
 
         async def fetch_quote(self, sym):
-            return SymbolQuote(sym=sym, price=50.0, prev=49.0,
-                               dp_decimals=decimals_for(50.0), state=box["s"])
+            return SymbolQuote(
+                sym=sym,
+                price=50.0,
+                prev=49.0,
+                dp_decimals=decimals_for(50.0),
+                state=box["s"],
+            )
 
     _install_prov(cache, _Prov())
-    await cache.update()                       # open: AAPL fetched, state OPEN
+    await cache.update()  # open: AAPL fetched, state OPEN
     assert cache.get("AAPL").state is MarketState.OPEN
     box["s"] = MarketState.CLOSED
-    await cache.update()                       # closed: AAPL held, chip must flip
+    await cache.update()  # closed: AAPL held, chip must flip
     assert cache.get("AAPL").state is MarketState.CLOSED
 
 
@@ -462,8 +476,13 @@ async def test_twelvedata_never_frozen_here_always_fetches(monkeypatch):
 
         async def fetch_quote(self, sym):
             calls.append(sym)
-            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
-                               dp_decimals=decimals_for(5.0), state=MarketState.CLOSED)
+            return SymbolQuote(
+                sym=sym,
+                price=5.0,
+                prev=4.0,
+                dp_decimals=decimals_for(5.0),
+                state=MarketState.CLOSED,
+            )
 
     _install_prov(cache, _Prov())
     await cache.update()
