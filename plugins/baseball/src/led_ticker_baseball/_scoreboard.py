@@ -1,11 +1,18 @@
 """MLBScoreboardMessage and its builder helpers.
 
-Layout-collision audit 2026-07-16: all positioned text here is already
-collision-safe — variable-length labels go through ``_fit_team_name`` (full
-name -> abbreviation fallback, measured), everything else is measured-and-
-centered within its own zone (``_draw_centered``) or fixed-vocabulary (team
-abbreviations, score digits, inning strings, dash pips). No unguarded
-fixed-position/right-aligned surface; no fit-ladder retrofit needed.
+Layout-collision audit 2026-07-16 (survey: tests/survey_layout_gaps.py):
+- On >=~128-logical-px canvases (smallsign 160): collision-safe. Labels go
+  through ``_fit_team_name`` (measured fallback), everything else is
+  measured-and-centered in its zone or fixed-vocabulary.
+- On NARROW logical canvases (bigsign at scale 4 = logical 64): the LIVE
+  center zone is genuinely broken — the design assumes >=128 logical px
+  (see the half_h comment), and at width 64 the center zone (26px, halves
+  of 13px) cannot hold inning+outs / B/S / the diamond cluster: the outs
+  dots overlap the 2B diamond and reach the home team name, and the
+  diamonds overlap the B/S row, with TYPICAL data. ``layout =
+  "scoreboard"`` is user-selectable on any sign, so this is
+  config-reachable. Open finding — fix direction TBD (geometry guard
+  steering narrow signs to two_row, or a compact narrow-live layout).
 """
 
 from datetime import datetime, timedelta
