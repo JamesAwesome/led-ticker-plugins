@@ -385,6 +385,21 @@ _INSET_NO_BORDER = 1
 _INSET_WITH_BORDER = 3
 
 
+def _font_is_a_name(_inst, _attr, value):
+    """`font` in a TOML widget block is a core-RESERVED key: the config
+    loader coerces it to a Font OBJECT before construction, which this widget
+    cannot use (it re-resolves the NAME at multiple sizes for the ball-face
+    auto-fit). Without this guard a config-set `font` crashed deep in the
+    paint path with an unhashable/unknown-font error."""
+    if not isinstance(value, str):
+        raise ValueError(
+            "flair.lottery: the 'font' config key is reserved by the core "
+            "loader and cannot select the ball font — remove it (the "
+            "lottery auto-sizes Inter-Bold at a thin-stroke threshold; "
+            "ball faces are too small for other faces to matter)."
+        )
+
+
 @attrs.define
 class Lottery(FrameAwareBase):
     """N labeled balls roll in from off-canvas left, one at a time in
@@ -413,7 +428,7 @@ class Lottery(FrameAwareBase):
     ball_style: str = "classic"
     colors: Any = None
     roll_ms: int = 800
-    font: str = attrs.field(default="Inter-Bold")
+    font: str = attrs.field(default="Inter-Bold", validator=_font_is_a_name)
     # Entry order: "rack_fill" (first entrant lands rightmost, no crossings)
     # or "roll_through" (left-to-right fill; later balls roll over settled
     # ones). See roll_order_for_slot.
@@ -427,21 +442,6 @@ class Lottery(FrameAwareBase):
     # given, else the PALETTE cycled in ball order — computed once at
     # construction so draw()/rebuilds never re-decide it.
     _resolved_colors: list[tuple[int, int, int]] = attrs.field(init=False, factory=list)
-
-    @font.validator
-    def _font_is_a_name(self, _attr, value):
-        # `font` in a TOML widget block is a core-RESERVED key: the config
-        # loader coerces it to a Font OBJECT before construction, which this
-        # widget cannot use (it re-resolves the NAME at multiple sizes for the
-        # ball-face auto-fit). Without this guard a config-set `font` crashed
-        # deep in the paint path with an unhashable/unknown-font error.
-        if not isinstance(value, str):
-            raise ValueError(
-                "flair.lottery: the 'font' config key is reserved by the core "
-                "loader and cannot select the ball font — remove it (the "
-                "lottery auto-sizes Inter-Bold at a thin-stroke threshold; "
-                "ball faces are too small for other faces to matter)."
-            )
 
     # Per-ball construct-once rotation surfaces (one per word) + the shared
     # "already settled" composite. Both are dropped (set to None) by
