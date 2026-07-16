@@ -1139,7 +1139,12 @@ type = "stocks.ticker"
 provider = "twelvedata"
 symbols = ["AAPL", "EUR/USD", "BTC/USD"]
 layout = "card"
-update_interval = 60
+# Twelve Data's free tier is ~800 credits/day (1 credit per symbol per poll)
+# and, unlike the Finnhub path, TD symbols are NOT frozen while their market
+# is closed (each polls every cycle). Keep the interval generous: 3 symbols at
+# 300s ≈ 864 fetches/day. Shorten only if you have a paid tier. Delayed data
+# (~1–15 min) means faster polling shows nothing new anyway.
+update_interval = 300
 
 # --- A mixed-color inline token line: white label + trend-colored price ---
 [[source]]
@@ -1147,6 +1152,7 @@ id = "eurusd"
 type = "stocks.quote"
 provider = "twelvedata"
 symbol = "EUR/USD"
+interval = 300   # see the credit-budget note on the widget above
 format = "{price}"
 color = { style = "stocks.trend", symbol = "EUR/USD" }
 
@@ -1182,6 +1188,7 @@ Add a "Multi-asset via Twelve Data" section documenting:
 - Data is delayed (~1–15 min) on the free tier — fine at sign cadence.
 - Finnhub stays the default and is equities-only (forex/crypto need `twelvedata`).
 - Auto-formatting: forex shows 4 decimals, crypto/equities 2 with thousands separators — no config needed.
+- **Credit budget:** the free tier is ~800 credits/day (1 credit per symbol per poll). Unlike the Finnhub path, Twelve Data symbols are **not** frozen while their market is closed — each polls every cycle — so pick `update_interval` (widget) / `interval` (source) to stay in budget: roughly `interval ≥ 108 × symbol_count` seconds keeps you under 800/day. Example: 3 symbols → `update_interval = 300`.
 
 Match the README's existing heading style and tone.
 
