@@ -30,6 +30,11 @@ class Provider(Protocol):
 
     async def fetch_quote(self, sym: str) -> SymbolQuote: ...
 
+    async def fetch_plan_limit(self) -> int | None:
+        """The key's actual per-minute request cap, if the provider can detect
+        it (else None → the cache uses `REQUESTS_PER_MINUTE`). Must never raise."""
+        ...
+
 
 class FinnhubProvider:
     # Finnhub free tier: 60 requests/min per token.
@@ -53,6 +58,9 @@ class FinnhubProvider:
     async def fetch_quote(self, sym: str) -> SymbolQuote:
         return finnhub.parse_quote(sym, await self._client.fetch_quote(sym))
 
+    async def fetch_plan_limit(self) -> int | None:
+        return None  # no auto-detect; the cache uses REQUESTS_PER_MINUTE (60)
+
 
 class TwelveDataProvider:
     # Twelve Data free tier: 8 requests/min (the credit/day budget is bounded
@@ -67,3 +75,25 @@ class TwelveDataProvider:
 
     async def fetch_quote(self, sym: str) -> SymbolQuote:
         return twelvedata.parse_quote(sym, await self._client.fetch_quote(sym))
+
+    async def fetch_plan_limit(self) -> int | None:
+        """Per-minute cap from /api_usage, or None on ANY failure (the cache
+        then falls back to REQUESTS_PER_MINUTE). Logs the detected tier so a
+        troubleshooting user can confirm detection. Never raises."""
+        try:
+            usage = await self._client.fetch_api_usage()
+        except Exception as e:
+            logging.warning(
+                "stocks: Twelve Data rate auto-detect failed (%s); using default", e
+            )
+            return None
+        limit = usage.get("plan_limit")
+        if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit <= 0:
+            return None
+        limit = int(limit)
+        logging.info(
+            "stocks: Twelve Data plan %r — %d req/min",
+            usage.get("plan_category", "?"),
+            limit,
+        )
+        return limit

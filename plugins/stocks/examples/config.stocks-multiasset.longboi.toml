@@ -45,11 +45,13 @@
 #   - ~800 credits/DAY (1 credit/symbol/poll). TD symbols are NOT frozen while
 #     closed, so each polls every cycle — keep interval >= 108*N s. This config:
 #     5 symbols at 600 s = 5 * 86400/600 = 720 fetches/day, under budget.
-#   - 8 requests/MINUTE. A boot burst (widget + tokens priming the shared cache)
-#     or a >8-symbol list can trip this. The plugin now client-side throttles to
-#     the provider's per-minute cap, so bursts are paced automatically and won't
-#     429 — a small set (<=8) still paints within seconds; a larger one populates
-#     a few symbols per pass. Delayed data (~1-15 min) makes faster polling moot.
+#   - N requests/MINUTE (8 on the free tier). A boot burst (widget + tokens
+#     priming the shared cache) or a big symbol list can trip this. The plugin
+#     client-side throttles to your key's per-minute cap, which it AUTO-DETECTS
+#     at boot (/api_usage) — a PAID key runs at its full rate with no config; a
+#     429 ratchets the rate down for the session. Bursts are paced so they won't
+#     429; a small set paints within seconds. Delayed data (~1-15 min) makes
+#     faster polling moot.
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
 #

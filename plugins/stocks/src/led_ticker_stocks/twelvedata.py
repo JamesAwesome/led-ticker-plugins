@@ -13,6 +13,7 @@ from led_ticker_stocks.model import SymbolQuote, decimals_for
 from led_ticker_stocks.state import MarketState
 
 QUOTE_URL = "https://api.twelvedata.com/quote"
+API_USAGE_URL = "https://api.twelvedata.com/api_usage"
 
 
 def _f(payload, key):
@@ -53,5 +54,16 @@ class TwelveDataClient:
         async with self._session.get(QUOTE_URL, params=params) as resp:
             if resp.status != 200:
                 logging.warning("Twelve Data /quote failed: HTTP %s", resp.status)
+                resp.raise_for_status()
+            return await resp.json()
+
+    async def fetch_api_usage(self):
+        """Raw /api_usage body — reports the plan's per-minute `plan_limit`,
+        daily limit, and `plan_category` (tier). Used to auto-size the request
+        rate to the key's actual plan (free 8/min vs. a paid tier)."""
+        params = {"apikey": self._token}
+        async with self._session.get(API_USAGE_URL, params=params) as resp:
+            if resp.status != 200:
+                logging.warning("Twelve Data /api_usage failed: HTTP %s", resp.status)
                 resp.raise_for_status()
             return await resp.json()

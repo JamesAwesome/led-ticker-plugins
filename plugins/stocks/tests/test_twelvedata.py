@@ -120,3 +120,29 @@ async def test_fetch_quote_raises_on_non_200():
     client = TwelveDataClient("tok", session=session)
     with pytest.raises(aiohttp.ClientResponseError):
         await client.fetch_quote("EUR/USD")
+
+
+_API_USAGE = {
+    "current_usage": 1,
+    "plan_limit": 300,
+    "daily_usage": 60,
+    "plan_daily_limit": 100000,
+    "plan_category": "pro",
+}
+
+
+async def test_fetch_api_usage_returns_body_with_apikey():
+    captured = {}
+    session = _mock_session(_API_USAGE, capture=captured)
+    client = TwelveDataClient("tok", session=session)
+    result = await client.fetch_api_usage()
+    assert result["plan_limit"] == 300
+    assert result["plan_category"] == "pro"
+    assert captured["params"]["apikey"] == "tok"
+
+
+async def test_fetch_api_usage_raises_on_non_200():
+    session = _mock_session({"code": 401, "status": "error"}, status=401)
+    client = TwelveDataClient("tok", session=session)
+    with pytest.raises(aiohttp.ClientResponseError):
+        await client.fetch_api_usage()

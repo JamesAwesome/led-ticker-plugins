@@ -47,3 +47,15 @@ class AsyncRateLimiter:
             self._tokens = 1.0
             self._last = self._clock()
         self._tokens -= 1.0
+
+    def note_rate_limited(self) -> None:
+        """A 429 fired despite our pacing: halve the sustained rate (floor
+        1/min) and drain the bucket. The seeded/detected rate is only a
+        starting guess; the server's 429 is ground truth, so ratchet down and
+        do NOT auto-recover this session (a restart re-detects)."""
+        current_rpm = 60.0 / self._interval if self._interval > 0 else 8.0
+        new_rpm = max(1.0, current_rpm / 2.0)
+        self._interval = 60.0 / new_rpm
+        self._capacity = new_rpm
+        self._tokens = 0.0
+        self._last = self._clock()
