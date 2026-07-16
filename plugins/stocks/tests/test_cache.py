@@ -1,10 +1,17 @@
 """QuoteCache: shared singleton owning all Finnhub I/O (Phase 4)."""
 
+import asyncio
 from unittest import mock
 
 import pytest
 
 from led_ticker_stocks import _cache
+
+
+def _install_prov(cache, prov):
+    cache._provider = prov
+    cache._started = True
+    cache._poll_lock = asyncio.Lock()
 
 
 @pytest.fixture(autouse=True)
@@ -205,18 +212,14 @@ async def test_ensure_started_no_catchup_when_all_symbols_warm(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
-    """Once a symbol's LAST-KNOWN state settles to CLOSED, a subsequent cycle
-    must NOT refetch it — freeze it and save the per-key rate budget.
+    """Once a symbol has been attempted and THIS cycle's global market state
+    is CLOSED, a subsequent cycle must NOT refetch it — freeze it and save
+    the per-key rate budget.
 
-    The generalized per-symbol freeze (Task 3) reads each quote's own stored
-    `state` from the END of the previous cycle, not the just-fetched global
-    state — this is what lets the same freeze check work for Twelve Data,
-    which has no separate global status call at all. One consequence for
-    Finnhub: on the very cycle the market transitions open->closed, AAPL's
-    stored state is still OPEN (from the prior cycle), so it is fetched ONE
-    more time before the freeze can see CLOSED and take hold on the cycle
-    after that — a one-cycle lag versus the old global-state-gates-everyone
-    check, in exchange for a single unified freeze rule."""
+    The freeze gates on `global_state` (Finnhub: the just-fetched status for
+    this cycle), not stale per-quote state — so the freeze takes hold
+    immediately on the very cycle the market transitions open->closed, with
+    no one-cycle lag."""
     monkeypatch.setenv("FINNHUB_API_TOKEN", "tok")
     c = _cache.get_cache()
     c.register(["AAPL"])
@@ -239,11 +242,11 @@ async def test_closed_holds_symbols_that_already_have_data(monkeypatch):
     assert calls == ["AAPL"]
 
     c._provider._client.fetch_market_status = st_closed
-    await c.update()  # transition cycle: last-known state was OPEN -> one more fetch
-    assert calls == ["AAPL", "AAPL"]
+    await c.update()  # closed cycle: frozen immediately, no second fetch
+    assert calls == ["AAPL"]
 
-    await c.update()  # now frozen: last-known state is CLOSED
-    assert calls == ["AAPL", "AAPL"]  # unchanged — frozen, no third call
+    await c.update()  # still frozen: global state is still CLOSED
+    assert calls == ["AAPL"]  # unchanged — frozen, no third call
 
 
 @pytest.mark.asyncio
@@ -352,17 +355,77 @@ async def test_ensure_started_no_token_routes_to_demo(monkeypatch):
     assert cache.get("EUR/USD") is not None
 
 
-async def test_warm_closed_symbol_is_frozen_cold_is_fetched(monkeypatch):
-    """Generalized per-symbol freeze: attempted+CLOSED held, cold fetched."""
+async def test_warm_symbol_frozen_when_globally_closed_cold_fetched(monkeypatch):
+    """Freeze on THIS cycle's global CLOSED (Finnhub-style provider): an
+    attempted symbol is held, a cold one still fetches its last close."""
     from led_ticker_stocks._cache import get_cache
     from led_ticker_stocks.model import SymbolQuote, decimals_for
     from led_ticker_stocks.state import MarketState
 
     cache = get_cache()
     cache.register(["WARM", "COLD"])
-    # WARM: attempted, last state CLOSED -> should be held.
     cache._attempted.add("WARM")
-    cache._quotes["WARM"].state = MarketState.CLOSED
+    calls = []
+
+    class _Prov:
+        async def fetch_market_state(self):
+            return MarketState.CLOSED  # global (finnhub-style)
+
+        async def fetch_quote(self, sym):
+            calls.append(sym)
+            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
+                               dp_decimals=decimals_for(5.0),
+                               state=MarketState.CLOSED)
+
+    _install_prov(cache, _Prov())
+    await cache.update()
+    assert calls == ["COLD"]  # WARM held (attempted + globally closed), COLD fetched
+
+
+async def test_reopen_refetches_previously_frozen_symbol(monkeypatch):
+    """REGRESSION (Task 3 review): a symbol frozen while closed MUST resume
+    fetching when the market reopens. Gating the freeze on stale per-quote
+    state latched it CLOSED forever (dead panel until restart)."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["AAPL"])
+    cache._attempted.add("AAPL")
+    cache._quotes["AAPL"].state = MarketState.CLOSED
+    calls = []
+    box = {"s": MarketState.CLOSED}
+
+    class _Prov:
+        async def fetch_market_state(self):
+            return box["s"]
+
+        async def fetch_quote(self, sym):
+            calls.append(sym)
+            return SymbolQuote(sym=sym, price=5.0, prev=4.0,
+                               dp_decimals=decimals_for(5.0), state=box["s"])
+
+    _install_prov(cache, _Prov())
+    await cache.update()          # closed -> held
+    assert calls == []
+    box["s"] = MarketState.OPEN
+    await cache.update()          # reopened -> MUST fetch again
+    assert calls == ["AAPL"]
+
+
+async def test_twelvedata_never_frozen_here_always_fetches(monkeypatch):
+    """A per-symbol provider (global_state None) never freezes in update() —
+    every symbol fetches each cycle so its own reopen is auto-detected, even
+    one that is attempted with a CLOSED last state."""
+    from led_ticker_stocks._cache import get_cache
+    from led_ticker_stocks.model import SymbolQuote, decimals_for
+    from led_ticker_stocks.state import MarketState
+
+    cache = get_cache()
+    cache.register(["BTC/USD"])
+    cache._attempted.add("BTC/USD")
+    cache._quotes["BTC/USD"].state = MarketState.CLOSED
     calls = []
 
     class _Prov:
@@ -372,12 +435,8 @@ async def test_warm_closed_symbol_is_frozen_cold_is_fetched(monkeypatch):
         async def fetch_quote(self, sym):
             calls.append(sym)
             return SymbolQuote(sym=sym, price=5.0, prev=4.0,
-                               dp_decimals=decimals_for(5.0),
-                               state=MarketState.OPEN)
+                               dp_decimals=decimals_for(5.0), state=MarketState.CLOSED)
 
-    cache._provider = _Prov()
-    cache._started = True
-    import asyncio
-    cache._poll_lock = asyncio.Lock()
+    _install_prov(cache, _Prov())
     await cache.update()
-    assert calls == ["COLD"]  # WARM held, COLD fetched
+    assert calls == ["BTC/USD"]  # NOT frozen despite attempted + CLOSED

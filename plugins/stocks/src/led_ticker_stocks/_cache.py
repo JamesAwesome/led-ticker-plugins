@@ -226,17 +226,23 @@ class QuoteCache:
         if global_state is not None:
             self._state = global_state
 
+        # Freeze on THIS cycle's global authority, not stale per-quote state.
+        # A held symbol skips its fetch, so `existing.state` never updates —
+        # gating on it would latch the symbol CLOSED forever and it would never
+        # resume on reopen (dead panel until restart). `global_state` is
+        # refreshed every cycle, so reopen (-> OPEN) unfreezes. Finnhub: this
+        # equals the original `closed = self._state is CLOSED`. Twelve Data:
+        # global_state is None -> never frozen here -> every symbol fetches each
+        # cycle and auto-detects its own reopen from is_market_open (interval
+        # bounds credit use).
+        market_closed = global_state is MarketState.CLOSED
         fetched = held = 0
         for sym in list(self._symbols):  # snapshot: register() may add mid-await
             existing = self._quotes[sym]
-            # Generalized per-symbol freeze: hold a symbol we've already tried
-            # whose last-known market state is CLOSED. Cold symbols (never
-            # attempted) always fetch once — Finnhub /quote and Twelve Data
-            # /quote both return the last close even while shut, so a fresh
-            # boot after hours still populates. Keys on state, not has_data,
-            # so a bad symbol (attempted, no data, CLOSED) does not refetch
-            # forever.
-            if sym in self._attempted and existing.state is MarketState.CLOSED:
+            # Cold symbols (never attempted) always fetch once — Finnhub /quote
+            # and Twelve Data /quote both return the last close even while shut,
+            # so a fresh boot after hours still populates.
+            if market_closed and sym in self._attempted:
                 held += 1
                 continue
             fresh = await self._provider.fetch_quote(sym)
@@ -253,8 +259,9 @@ class QuoteCache:
                 existing.state = fresh.state
                 existing.spark.append(fresh.price)
             else:
-                # Even with no price, adopt the state so the freeze can act
-                # next cycle (e.g. a symbol that closed with no fresh trade).
+                # No fresh price, but adopt the state so the market CHIP
+                # (widget reads quote.state) reflects reality even on a
+                # no-trade tick. (The freeze gates on global_state, not this.)
                 existing.state = fresh.state
                 logging.debug(
                     "stocks QuoteCache: %s returned no data this tick — "
