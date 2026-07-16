@@ -64,9 +64,15 @@ def test_missing_symbol_raises():
         StocksTrendColor()
 
 
-def test_fx_symbol_raises():
-    with pytest.raises(ValueError, match="forex"):
-        StocksTrendColor(symbol="EUR/USD")
+def test_trend_color_accepts_slash_symbol():
+    """Forex/crypto symbols (EUR/USD, BTC/USD) must be accepted — the trend
+    provider is a passive cache reader with no provider awareness; symbol
+    validity is the source/widget's concern, not this provider's."""
+    from led_ticker_stocks.trend_color import StocksTrendColor
+
+    # Must not raise (previously rejected any '/' as forex).
+    prov = StocksTrendColor(symbol="EUR/USD")
+    assert prov.symbol == "EUR/USD"
 
 
 @pytest.mark.parametrize("bad", [[300, 0, 0], [0, 0], [1, 2, "x"], [True, 0, 0]])
