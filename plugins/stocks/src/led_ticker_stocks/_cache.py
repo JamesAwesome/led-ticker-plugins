@@ -247,6 +247,7 @@ class QuoteCache:
                 existing.price, existing.prev = fresh.price, fresh.prev
                 existing.d, existing.dp = fresh.d, fresh.dp
                 existing.high, existing.low = fresh.high, fresh.low
+                existing.dp_decimals = fresh.dp_decimals
                 existing.spark.append(fresh.price)
             else:
                 logging.debug(
