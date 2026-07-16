@@ -128,7 +128,13 @@ def _spy_value_extents(monkeypatch, canvas, flights, clock_ms=0.0):
     return calls
 
 
-def test_column_values_keep_6px_clearance_worst_case(longboi, monkeypatch):
+def test_column_values_keep_min_clearance_worst_case(longboi, monkeypatch):
+    """Every column value clears the next column by >= _COL_GAP (2px — the
+    documented exception to the 6px default: strongly color-differentiated
+    neighbors + the design's own pre-guard clearance; CONTRIBUTING.md), and
+    the DIST value stays inside the panel's right margin."""
+    from led_ticker_flight.dashboard_layout import _COL_GAP
+
     calls = _spy_value_extents(monkeypatch, longboi, [WORST_CASE_AIRCRAFT])
     real = unwrap_to_real(longboi)
     ends = {text: end for text, _start, end in calls}
@@ -140,14 +146,58 @@ def test_column_values_keep_6px_clearance_worst_case(longboi, monkeypatch):
     trk_end = ends["305°"]
     dist_start = starts["222KM NE"]
     dist_end = ends["222KM NE"]
-    assert spd_start - alt_end >= 6, "ALT value lands <6px before the SPD column starts"
-    assert trk_start - spd_end >= 6, "SPD value lands <6px before the TRK column starts"
-    assert dist_start - trk_end >= 6, (
-        "TRK value lands <6px before the DIST column starts"
+    assert spd_start - alt_end >= _COL_GAP, "ALT value crowds the SPD column"
+    assert trk_start - spd_end >= _COL_GAP, "SPD value crowds the TRK column"
+    assert dist_start - trk_end >= _COL_GAP, "TRK value crowds the DIST column"
+    assert real.width - dist_end >= _COL_GAP, (
+        "DIST value overflows into the right margin"
     )
-    assert real.width - dist_end >= 6, (
-        "DIST value overflows its column budget into the right margin"
+
+
+def test_row_stays_at_design_size_and_uniform_worst_case(longboi, monkeypatch):
+    """At the 2px floor even the survey's worst case fits at the FULL design
+    size — the guard must be invisible for all realistic data (James render
+    review, 2026-07-16). And the row is UNIFORM: mixed value sizes on one
+    row read as broken typography."""
+    import led_ticker_flight.dashboard_layout as dash
+
+    sizes: dict[str, int] = {}
+    orig_hires = dash.hires
+
+    def spy(shim, text, x, y_top, color, size, **kw):
+        sizes[text] = size
+        return orig_hires(shim, text, x, y_top, color, size, **kw)
+
+    monkeypatch.setattr(dash, "hires", spy)
+    dash.render_dashboard(longboi, [WORST_CASE_AIRCRAFT], clock_ms=0.0)
+    vals = {
+        t: s for t, s in sizes.items() if t in ("41,000", "510", "305°", "222KM NE")
+    }
+    assert set(vals.values()) == {16}, f"expected uniform design size, got {vals}"
+
+
+def test_row_shrinks_uniformly_when_a_value_cannot_fit(longboi, monkeypatch):
+    """A genuinely-too-wide value shrinks the WHOLE row together (row-uniform
+    fit), never just its own column."""
+    import led_ticker_flight.dashboard_layout as dash
+
+    wide = Aircraft(
+        "WN1234A", "B77W", 41000, -1200, 510, 305, "1,222KM NNW", 1222.0, "N7088A"
     )
+    sizes: dict[str, int] = {}
+    orig_hires = dash.hires
+
+    def spy(shim, text, x, y_top, color, size, **kw):
+        sizes[text] = size
+        return orig_hires(shim, text, x, y_top, color, size, **kw)
+
+    monkeypatch.setattr(dash, "hires", spy)
+    dash.render_dashboard(longboi, [wide], clock_ms=0.0)
+    vals = {
+        t: s for t, s in sizes.items() if t in ("41,000", "510", "305°", "1,222KM NNW")
+    }
+    assert len(set(vals.values())) == 1, f"row must shrink uniformly, got {vals}"
+    assert next(iter(set(vals.values()))) < 16, "an over-wide value must shrink the row"
 
 
 def test_short_column_values_keep_design_size_16(longboi, monkeypatch):

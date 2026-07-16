@@ -11,6 +11,12 @@ blocks, which false-flag 4-5px letter gaps inside a word), then reports:
 Intentional intra-field pairs (the vr glyph + value, spaced `+3` by
 construction and accumulated so they cannot overlap) are excluded.
 
+NOTE (post-guard): the dashboard's 2-3px inter-column gaps flagged below
+are the DOCUMENTED EXCEPTION (dashboard_layout._COL_GAP = 2 — strongly
+color-differentiated neighbors, the design's own pre-guard clearance; see
+CONTRIBUTING.md). A rerun showing those flags is expected output, not a
+regression; the row-uniform fit guards anything tighter or wider.
+
 FINDINGS (2026-07-16, fixture below — 7-char WN callsign so the SOUTHWEST
 airline name renders; descend glyph; widest realistic metric values):
 - DASHBOARD: col-0 value '41,000' ends 3px before col-1 ('510' / 'SPD KT')

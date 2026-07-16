@@ -50,7 +50,13 @@ scrolling) with variable-length data must:
 - **(c) ship a pixel-separation regression test** — invariant-based, never
   exact-pinning sizes or widths (freetype metrics differ macOS vs Linux);
 - **(d) never ship < 6px measured clearance** — a near-miss on dev metrics is
-  an overlap on the panel (stocks #54; flight dashboard columns).
+  an overlap on the panel (stocks #54; flight dashboard columns). *Documented
+  exception:* where neighbors are strongly color-differentiated AND the
+  design's own pre-guard rhythm is tighter, the floor may be as low as 2px
+  (never touching) — the exception must be justified in a comment at the
+  gap constant (see flight `dashboard_layout._COL_GAP`). Prefer ROW-UNIFORM
+  fits when several values share a row: mixed sizes on one row read as
+  broken typography (worse than the tight spacing they fix).
 
 Scrolling layouts are exempt (motion is the overflow mechanism), as is
 fixed-vocabulary text that cannot vary in length (digits, team abbreviations).
