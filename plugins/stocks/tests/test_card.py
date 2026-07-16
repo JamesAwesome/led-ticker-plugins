@@ -172,3 +172,33 @@ def test_card_accepts_y_offset():
     lit = {xy: v for xy, v in real._pixels.items() if v != (0, 0, 0)}
     assert lit
     assert all(0 <= x < 256 and 0 <= y < 64 for (x, y) in lit)
+
+
+def test_fit_price_size_short_case_keeps_max():
+    from led_ticker_stocks.layouts.card import _PRICE_SIZES, _fit_price_size
+
+    # A narrow symbol edge + a short price leaves ample room -> no shrink.
+    assert _fit_price_size("123.45", sym_end=40, real_width=256) == _PRICE_SIZES[0]
+
+
+def test_fit_price_size_shrinks_to_clear_a_wide_symbol():
+    from led_ticker_stocks._paint import right_align_x
+    from led_ticker_stocks.layouts.card import (
+        _MARGIN,
+        _PRICE_SIZES,
+        _SYM_PRICE_GAP,
+        _fit_price_size,
+    )
+
+    # A symbol occupying most of the panel + a wide crypto-magnitude price: the
+    # 22px price would overlap the symbol, so it must shrink.
+    price = "64,906.62"
+    w, sym_end = 256, 180
+    size = _fit_price_size(price, sym_end, w)
+    assert size < _PRICE_SIZES[0]  # shrank from the design size
+    # Invariant (independent of platform font metrics): the chosen price clears
+    # the symbol, unless it hit the floor.
+    assert (
+        right_align_x(size, price, w, _MARGIN) >= sym_end + _SYM_PRICE_GAP
+        or size == _PRICE_SIZES[-1]
+    )
