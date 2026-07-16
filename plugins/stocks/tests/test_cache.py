@@ -605,3 +605,33 @@ async def test_twelvedata_never_frozen_here_always_fetches(monkeypatch):
     _install_prov(cache, _Prov())
     await cache.update()
     assert calls == ["BTC/USD"]  # NOT frozen despite attempted + CLOSED
+
+
+async def test_ensure_started_wires_credit_observer(monkeypatch):
+    """The limiter's observe_credits_left is registered on the provider so live
+    header signals reach it."""
+    import led_ticker_stocks.providers as providers_mod
+    from led_ticker_stocks._cache import get_cache
+
+    monkeypatch.setenv("TWELVEDATA_API_KEY", "tdkey")
+    observers = []
+
+    def _capture(self, cb):
+        observers.append(cb)
+
+    async def _detect(self):
+        return 8
+
+    monkeypatch.setattr(providers_mod.TwelveDataProvider, "fetch_plan_limit", _detect)
+    monkeypatch.setattr(
+        providers_mod.TwelveDataProvider, "set_credit_observer", _capture
+    )
+    cache = get_cache()
+    cache.register(["EUR/USD"])
+
+    async def _noop_update():
+        pass
+
+    monkeypatch.setattr(cache, "update", _noop_update)
+    await cache.ensure_started(session=object(), provider="twelvedata")
+    assert observers and observers[0] == cache._limiter.observe_credits_left

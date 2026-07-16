@@ -143,6 +143,10 @@ class QuoteCache:
                     rpm,
                 )
             self._limiter = AsyncRateLimiter(rpm)
+            # Live-correct the pace from each response's api-credits-left so a
+            # second sign sharing this key (or a mid-run downgrade) is respected
+            # without waiting for a 429.
+            self._provider.set_credit_observer(self._limiter.observe_credits_left)
 
         # Hold the poll lock for the eager fetch so a second consumer's
         # `ensure_started` -> `_catch_up_new_symbols` (which also takes the

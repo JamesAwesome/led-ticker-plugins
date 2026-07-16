@@ -9,6 +9,7 @@ so fetch_market_state() returns None and per-symbol state rides on the quote.
 """
 
 import logging
+from collections.abc import Callable
 from typing import ClassVar, Protocol
 
 from led_ticker_stocks import finnhub, twelvedata
@@ -33,6 +34,11 @@ class Provider(Protocol):
     async def fetch_plan_limit(self) -> int | None:
         """The key's actual per-minute request cap, if the provider can detect
         it (else None → the cache uses `REQUESTS_PER_MINUTE`). Must never raise."""
+        ...
+
+    def set_credit_observer(self, cb: Callable[[int], None]) -> None:
+        """Register a callback fed the per-request remaining-budget signal
+        (Twelve Data's api-credits-left). No-op for providers without it."""
         ...
 
 
@@ -60,6 +66,9 @@ class FinnhubProvider:
 
     async def fetch_plan_limit(self) -> int | None:
         return None  # no auto-detect; the cache uses REQUESTS_PER_MINUTE (60)
+
+    def set_credit_observer(self, cb: Callable[[int], None]) -> None:
+        return  # Finnhub has no per-request credit header
 
 
 class TwelveDataProvider:
@@ -97,3 +106,6 @@ class TwelveDataProvider:
             limit,
         )
         return limit
+
+    def set_credit_observer(self, cb: Callable[[int], None]) -> None:
+        self._client._on_credits = cb
