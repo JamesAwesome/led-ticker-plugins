@@ -64,3 +64,19 @@ async def test_twelvedata_provider_fetch_plan_limit_none_on_missing_field():
 async def test_finnhub_provider_fetch_plan_limit_is_none():
     prov = FinnhubProvider(mock.Mock())
     assert await prov.fetch_plan_limit() is None
+
+
+def test_twelvedata_provider_set_credit_observer_wires_client():
+    client = mock.Mock()
+    prov = TwelveDataProvider(client)
+
+    def cb(n):
+        return None
+
+    prov.set_credit_observer(cb)
+    assert client._on_credits is cb
+
+
+def test_finnhub_provider_set_credit_observer_is_noop():
+    prov = FinnhubProvider(mock.Mock())
+    prov.set_credit_observer(lambda n: None)  # must not raise

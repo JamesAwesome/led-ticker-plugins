@@ -59,3 +59,11 @@ class AsyncRateLimiter:
         self._capacity = new_rpm
         self._tokens = 0.0
         self._last = self._clock()
+
+    def observe_credits_left(self, credits_left: int) -> None:
+        """Sync the bucket to the server's real remaining budget for this
+        window (the `api-credits-left` header). Clamps tokens DOWN only — a
+        shared key means fewer credits than we assumed, so back off; we never
+        raise tokens above what we hold (capacity is owned by the /api_usage
+        seed). A time-based refill still recovers over the minute."""
+        self._tokens = min(self._tokens, float(credits_left))

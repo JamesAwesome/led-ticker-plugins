@@ -7,13 +7,14 @@ from led_ticker_stocks.state import MarketState
 from led_ticker_stocks.twelvedata import QUOTE_URL, TwelveDataClient, parse_quote
 
 
-def _mock_session(json_body, status=200, capture=None):
+def _mock_session(json_body, status=200, capture=None, headers=None):
     """aiohttp session mock: .get(url, params=) yields an async ctx whose
     response has .status, async .json(), and a raising .raise_for_status().
     Mirrors tests/test_finnhub.py._mock_session."""
     session = mock.Mock()
     resp = mock.AsyncMock()
     resp.status = status
+    resp.headers = headers or {}  # real dict: .get() returns str or None
     resp.json = mock.AsyncMock(return_value=json_body)
 
     def _raise_for_status():
@@ -146,3 +147,37 @@ async def test_fetch_api_usage_raises_on_non_200():
     client = TwelveDataClient("tok", session=session)
     with pytest.raises(aiohttp.ClientResponseError):
         await client.fetch_api_usage()
+
+
+async def test_fetch_quote_reports_credits_left_via_callback():
+    seen = []
+    session = _mock_session(_FOREX, headers={"api-credits-left": "6"})
+    client = TwelveDataClient("tok", session=session, on_credits=seen.append)
+    await client.fetch_quote("EUR/USD")
+    assert seen == [6]  # parsed int from the header
+
+
+async def test_fetch_quote_no_header_does_not_call_back():
+    seen = []
+    session = _mock_session(_FOREX)  # no api-credits-left header
+    client = TwelveDataClient("tok", session=session, on_credits=seen.append)
+    await client.fetch_quote("EUR/USD")
+    assert seen == []  # missing header => no signal, never "0"
+
+
+async def test_fetch_quote_bad_header_is_ignored():
+    seen = []
+    session = _mock_session(_FOREX, headers={"api-credits-left": "n/a"})
+    client = TwelveDataClient("tok", session=session, on_credits=seen.append)
+    await client.fetch_quote("EUR/USD")
+    assert seen == []
+
+
+async def test_fetch_quote_negative_header_is_ignored():
+    """A nonsensical negative credits-left is defensively rejected (never fed
+    to the limiter as a real budget)."""
+    seen = []
+    session = _mock_session(_FOREX, headers={"api-credits-left": "-5"})
+    client = TwelveDataClient("tok", session=session, on_credits=seen.append)
+    await client.fetch_quote("EUR/USD")
+    assert seen == []
