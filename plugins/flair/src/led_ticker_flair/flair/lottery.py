@@ -91,6 +91,16 @@ _MAX_FONT_FACTOR = 0.45
 # enforced by ``resolve_font``).
 _MIN_FONT_SIZE = 8
 
+# Ball-face text is always SMALL (a ~13px word inside a ~56px ball), and small
+# hi-res Inter at the default rasterization threshold (128 = 50% coverage)
+# drops thin-stroke pixels — on hardware "GYRO" read as "BYRD" (halal-cart
+# sign, 2026-07-16). 80 is the ecosystem's established thin-stroke threshold
+# (the same value the reference configs use for small hi-res text); applying
+# it here keeps every stroke of every ball label. Both the fit measurement
+# (auto_font_size) and the paint (paint_face) resolve with the SAME threshold
+# so they share one font-cache entry and can never disagree.
+_FACE_THRESHOLD = 80
+
 # Style constants (spec, verbatim) — classic face is white with a dark
 # label; solid face is color-filled with a white label.
 _CLASSIC_FACE_RGB = (255, 255, 255)
@@ -239,7 +249,7 @@ def auto_font_size(word: str, diameter_px: int, font_name: str, scale: int) -> i
 
     threshold = diameter_px * _CHORD_FACTOR
     for size in range(int(diameter_px * _MAX_FONT_FACTOR), _MIN_FONT_SIZE - 1, -1):
-        font = resolve_font(font_name, size)
+        font = resolve_font(font_name, size, _FACE_THRESHOLD)
         width = get_text_width(font, word, padding=0, canvas=_REAL_SCALE1_STUB)
         if width <= threshold:
             return size
@@ -350,7 +360,7 @@ def paint_face(
             )
         return
 
-    font = resolve_font(font_name, size)
+    font = resolve_font(font_name, size, _FACE_THRESHOLD)
     real_width = get_text_width(font, word, padding=0, canvas=_REAL_SCALE1_STUB)
     x_logical = round(cx_logical - real_width / (2 * scale))
 
@@ -403,7 +413,7 @@ class Lottery(FrameAwareBase):
     ball_style: str = "classic"
     colors: Any = None
     roll_ms: int = 800
-    font: str = "Inter-Bold"
+    font: str = attrs.field(default="Inter-Bold")
     # Entry order: "rack_fill" (first entrant lands rightmost, no crossings)
     # or "roll_through" (left-to-right fill; later balls roll over settled
     # ones). See roll_order_for_slot.
@@ -417,6 +427,21 @@ class Lottery(FrameAwareBase):
     # given, else the PALETTE cycled in ball order — computed once at
     # construction so draw()/rebuilds never re-decide it.
     _resolved_colors: list[tuple[int, int, int]] = attrs.field(init=False, factory=list)
+
+    @font.validator
+    def _font_is_a_name(self, _attr, value):
+        # `font` in a TOML widget block is a core-RESERVED key: the config
+        # loader coerces it to a Font OBJECT before construction, which this
+        # widget cannot use (it re-resolves the NAME at multiple sizes for the
+        # ball-face auto-fit). Without this guard a config-set `font` crashed
+        # deep in the paint path with an unhashable/unknown-font error.
+        if not isinstance(value, str):
+            raise ValueError(
+                "flair.lottery: the 'font' config key is reserved by the core "
+                "loader and cannot select the ball font — remove it (the "
+                "lottery auto-sizes Inter-Bold at a thin-stroke threshold; "
+                "ball faces are too small for other faces to matter)."
+            )
 
     # Per-ball construct-once rotation surfaces (one per word) + the shared
     # "already settled" composite. Both are dropped (set to None) by
