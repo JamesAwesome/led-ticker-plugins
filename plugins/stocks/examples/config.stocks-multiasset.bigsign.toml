@@ -1,0 +1,73 @@
+# Multi-asset stock/forex/crypto ticker via Twelve Data (one free key).
+# Requires: pip install led-ticker-stocks==0.6.0 ; led-ticker-core >= 4.14.0
+# Set TWELVEDATA_API_KEY in .env (free key: https://twelvedata.com/pricing).
+# Run in demo mode with no key: every widget/source below still animates.
+#
+# [display] is the standard 8-panel bigsign geometry (256x64 real, folded via
+# pixel_mapper_config) — see examples/config.stocks-smoke.bigsign.toml for the
+# same block with full "what to look for" notes.
+#
+# Preflight: led-ticker validate examples/config.stocks-multiasset.bigsign.toml
+#            -> expect: No issues found.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 3
+
+[transitions]
+default = "push_left"
+between_sections = "dissolve"
+
+# --- A dashboard-style card cycling a stock, a forex pair, and crypto ---
+[[playlist.section]]
+mode = "one_at_a_time"
+hold_time = 5
+
+[[playlist.section.widget]]
+type = "stocks.ticker"
+provider = "twelvedata"
+symbols = ["AAPL", "EUR/USD", "BTC/USD"]
+layout = "card"
+# Twelve Data's free tier is ~800 credits/day (1 credit per symbol per poll)
+# and, unlike the Finnhub path, TD symbols are NOT frozen while their market
+# is closed (each polls every cycle). Keep the interval generous: 3 symbols at
+# 300s ≈ 864 fetches/day. Shorten only if you have a paid tier. Delayed data
+# (~1–15 min) means faster polling shows nothing new anyway.
+update_interval = 300
+
+# --- A mixed-color inline token line: white label + trend-colored price ---
+# NOTE: stocks.trend does not yet accept `provider` and rejects any symbol
+# containing "/" outright (see src/led_ticker_stocks/trend_color.py) — this
+# `color` line will raise until trend_color.py gets the same provider-aware
+# treatment ticker.py/source.py received. Left in place to document the
+# intended shape; see the Task 5 report for the tracked gap.
+[[source]]
+id = "eurusd"
+type = "stocks.quote"
+provider = "twelvedata"
+symbol = "EUR/USD"
+interval = 300   # see the credit-budget note on the widget above
+format = "{price}"
+color = { style = "stocks.trend", symbol = "EUR/USD" }
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "message"
+text = "EUR/USD :eurusd:"
+font = "Inter-Bold"
+font_size = 44
+font_threshold = 80
+font_color = [255, 255, 255]

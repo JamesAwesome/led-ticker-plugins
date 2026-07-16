@@ -202,9 +202,30 @@ This tints the **whole message** — it's a whole-string provider (like `color_c
 
 See [`examples/config.stocks-trend.smallsign.toml`](examples/config.stocks-trend.smallsign.toml) for a ready-to-run, token-free demo.
 
+## Multi-asset via Twelve Data
+
+Finnhub (the default) is US equities only — set `provider = "twelvedata"` on `stocks.ticker` **or** `stocks.quote` to poll [Twelve Data](https://twelvedata.com/) instead, which additionally covers forex and crypto:
+
+```toml
+[[playlist.section.widget]]
+type = "stocks.ticker"
+provider = "twelvedata"
+symbols = ["AAPL", "EUR/USD", "BTC/USD"]
+```
+
+- **Provider is per-widget/per-source, not global.** `provider = "twelvedata"` (default `"finnhub"`) is accepted on both `stocks.ticker` and `stocks.quote` — mix providers freely across widgets/sources in the same config; each just needs its own token in the environment (see below).
+- **Symbol formats route the asset class, no exchange prefix:** a bare ticker (`"AAPL"`) is a stock, a slash-separated pair (`"EUR/USD"`) is forex, and a slash-separated pair against a fiat/stable (`"BTC/USD"`) is crypto. Twelve Data infers the asset class from the symbol shape alone.
+- **Finnhub stays the default** and remains equities-only — a `/` in a symbol under `provider = "finnhub"` (or the field omitted) fails validation pointing at `provider = "twelvedata"`, same as today. Forex and crypto symbols always require the Twelve Data provider.
+- **Get a free key** at [twelvedata.com/pricing](https://twelvedata.com/pricing) and put it in `.env` as `TWELVEDATA_API_KEY` — **never** in `config.toml` (same env-only convention as `FINNHUB_API_TOKEN`; see [Rate limits & API token](#rate-limits--api-token)).
+- **Data is delayed** ~1–15 minutes on the free tier. That's fine at sign cadence — nobody is day-trading off an LED panel — but don't expect tick-by-tick accuracy.
+- **Auto-formatting needs no config:** prices pick their decimal places from magnitude — forex pairs (~1.15) render at 4 decimals, equities and larger crypto values render at 2 decimals with thousands separators (`65,432.10`). `decimals` on `stocks.quote` still overrides this per source if you want something else.
+- **Credit budget:** the free tier is ~800 credits/day (1 credit per symbol per poll). Unlike the Finnhub path, Twelve Data symbols are **not** frozen while their market is closed — each polls every cycle — so pick `update_interval` (widget) / `interval` (source) to stay in budget: roughly `interval ≥ 108 × symbol_count` seconds keeps you under 800/day. Example: 3 symbols → `update_interval = 300`.
+
+See [`examples/config.stocks-multiasset.bigsign.toml`](examples/config.stocks-multiasset.bigsign.toml) for a ready-to-run bigsign example: a `card` layout cycling a stock/forex/crypto trio plus a mixed-color inline `:eurusd:` token in its own section.
+
 ## Roadmap
 
-Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), and the `stocks.trend` color provider (v0.5.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), indices/FX, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
+Shipped so far: `crawl` (v0.1.0), `card`/`dashboard` (v0.2.0), the price-flash/pulse animation layer (v0.3.0), the `stocks.quote` inline price token + shared `QuoteCache` (v0.4.0), the `stocks.trend` color provider (v0.5.0), and [multi-asset Twelve Data support](#multi-asset-via-twelve-data) — forex + crypto via `provider = "twelvedata"` (v0.6.0). Deferred / out of scope: **per-token color** (coloring just the price segment within a mixed-color message — a core-side value-token change), stock indices, sparkline/history in a token, a change-field flash on tokens, new layouts or widgets, and `font_color`/`border`/rainbow-gradient styling knobs on the three canonical widget layouts.
 
 - **Release:** docs-site page, catalog `provides` entry, demo GIFs, `stocks-v0.5.0` release.
 
