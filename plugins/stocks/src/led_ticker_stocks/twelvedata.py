@@ -8,6 +8,7 @@ STRINGS; parse_quote coerces them. Token from TWELVEDATA_API_KEY (env only).
 """
 
 import logging
+from collections.abc import Callable
 
 from led_ticker_stocks.model import SymbolQuote, decimals_for
 from led_ticker_stocks.state import MarketState
@@ -45,9 +46,10 @@ def parse_quote(sym, payload):
 
 
 class TwelveDataClient:
-    def __init__(self, token, session):
+    def __init__(self, token, session, on_credits: Callable[[int], None] | None = None):
         self._token = token
         self._session = session
+        self._on_credits = on_credits
 
     async def fetch_quote(self, sym):
         params = {"symbol": sym, "apikey": self._token}
@@ -55,7 +57,24 @@ class TwelveDataClient:
             if resp.status != 200:
                 logging.warning("Twelve Data /quote failed: HTTP %s", resp.status)
                 resp.raise_for_status()
-            return await resp.json()
+            body = await resp.json()
+            self._report_credits(resp.headers)
+            return body
+
+    def _report_credits(self, headers) -> None:
+        """Feed `api-credits-left` (remaining in the current minute window) to
+        the observer, if set. Missing/non-integer header => no signal (never 0)."""
+        if self._on_credits is None:
+            return
+        raw = headers.get("api-credits-left")
+        if raw is None:
+            return
+        try:
+            left = int(raw)
+        except TypeError, ValueError:
+            return
+        if left >= 0:
+            self._on_credits(left)
 
     async def fetch_api_usage(self):
         """Raw /api_usage body — reports the plan's per-minute `plan_limit`,
