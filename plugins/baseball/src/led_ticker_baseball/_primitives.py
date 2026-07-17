@@ -9,14 +9,13 @@ from led_ticker.plugin import Color, make_color
 
 from led_ticker_baseball._paint import px
 from led_ticker_baseball._palette import LABEL, ORANGE, dim
+from led_ticker_baseball.teams import MLB_TEAM_CHIPS
 
 _GREY_C1 = (150, 160, 175)  # prototype unknown-team chip fallback
 _GREY_C2 = (90, 100, 115)
 
 
 def chip(real, x: int, y: int, h: int, team: str) -> None:
-    from led_ticker_baseball.teams import MLB_TEAM_CHIPS  # lazy: table lands in Task 5
-
     c1_t, c2_t = MLB_TEAM_CHIPS.get(team, (_GREY_C1, _GREY_C2))
     c1, c2 = make_color(*c1_t), make_color(*c2_t)
     rad = 2 if h >= 10 else 1
