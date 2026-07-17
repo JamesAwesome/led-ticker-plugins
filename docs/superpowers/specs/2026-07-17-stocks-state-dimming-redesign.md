@@ -41,10 +41,10 @@ clock to drive a presentation effect puts presentation logic in the data layer â
 that was #58's mistake. Dimming is a per-state constant plus one opt-out knob,
 applied at draw time.
 
-The one pre-existing clock call site stays: `StocksTicker.update()`'s Finnhub
-status-fetch **failure fallback** (`state_now_from_clock()` when the status
-endpoint is unreachable). That is a data-availability fallback, correctly placed,
-and out of scope here.
+The one pre-existing clock call site stays: the Finnhub provider's
+(`providers.py`) status-fetch **failure fallback** (`state_now_from_clock()`
+when the status endpoint is unreachable). That is a data-availability
+fallback, correctly placed, and out of scope here.
 
 ## Changes
 
