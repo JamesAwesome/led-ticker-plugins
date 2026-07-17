@@ -237,3 +237,16 @@ class TestClosedEquityClockRefinement:
         monkeypatch.setattr(td, "state_now_from_clock", _boom)
         payload = dict(self._closed("AAPL"), is_market_open=True)
         assert td.parse_quote("AAPL", payload).state is MarketState.OPEN
+
+    def test_clock_failure_degrades_to_closed_not_raising(self, monkeypatch):
+        """A clock error (e.g. missing tzdata in a stripped container) must
+        not propagate — it would abort the WHOLE poll cycle every cycle.
+        Degrade to plain CLOSED."""
+        import led_ticker_stocks.twelvedata as td
+
+        def _boom():
+            raise RuntimeError("no tzdata")
+
+        monkeypatch.setattr(td, "state_now_from_clock", _boom)
+        q = td.parse_quote("AAPL", self._closed("AAPL"))
+        assert q.state is MarketState.CLOSED

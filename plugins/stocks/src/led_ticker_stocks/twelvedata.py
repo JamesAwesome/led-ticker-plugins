@@ -39,12 +39,24 @@ def parse_quote(sym, payload):
         # dropped straight from LIVE (100%) to CLOSED (45% layout dim) at
         # 4pm ET, a brightness cliff Finnhub never had (it holds 85% "AH"
         # until 8pm). Refine a closed NON-pair symbol with the existing
-        # US/Eastern clock: PRE/AFTER when the clock says so. The clock
-        # NEVER upgrades to OPEN (a holiday is clock-open but truly closed —
-        # TD's word wins) and pairs (forex/crypto) run on their own clocks,
-        # so they are never refined.
+        # US/Eastern clock: PRE/AFTER when the clock says so; the clock is
+        # never allowed to say OPEN (TD's closed verdict wins), and pairs
+        # (forex/crypto) run on their own clocks, so they are never refined.
+        #
+        # KNOWN APPROXIMATIONS (hostile review, 2026-07-16): (1) on a US
+        # market HOLIDAY the pre/after windows still label PRE/AH (85%) for
+        # a day with no session — detecting that needs a holiday calendar
+        # TD's /quote doesn't carry; the label is soft-wrong, the guard
+        # below keeps regular hours correctly CLOSED. (2) a non-pair
+        # FOREIGN listing gets US-Eastern windows stamped on it — the
+        # refinement assumes US equities (documented in the README).
+        # Failure-tolerant: a clock error (e.g. missing tzdata) must not
+        # abort the whole poll cycle — degrade to plain CLOSED.
         if "/" not in sym:
-            clock = state_now_from_clock()
+            try:
+                clock = state_now_from_clock()
+            except Exception:
+                clock = MarketState.CLOSED
             if clock in (MarketState.PRE, MarketState.AFTER):
                 state = clock
     return SymbolQuote(
