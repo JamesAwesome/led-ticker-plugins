@@ -1,6 +1,6 @@
 """flair.poker suit-ripple transition, pure-math half.
 
-Spec: docs/superpowers/specs/2026-07-10-flair-fireworks-transition-design.md
+Spec: docs/superpowers/specs/2026-07-17-flair-poker-transition-design.md
 Mask functions for the four card suits (hearts, diamonds, clubs, spades),
 ring pixel-lists, and ring-union coverage test. No canvas, no led_ticker imports.
 """
@@ -22,11 +22,23 @@ PULSES = 2.5
 
 
 def _in_heart(x, y, r):
+    # Two lobe circles + a wedge tapering to the bottom point (y down, so the
+    # top of the heart is negative y). The classic implicit heart curve
+    # ((x²+y²−1)³ ≤ x²y³) was replaced 2026-07-17: at LED sizes it rendered
+    # near-rectangular with vertical sides and only a 1px top notch, reading
+    # as a SHIELD rather than a heart (James's review of the poker GIF). This
+    # form has rounded, clearly-separated lobes and curved sides at every
+    # radius, and fits within `r` by construction (lobe tops reach 0.8r).
     if r <= 0:
         return False
-    nx, ny = x / r, -y / r
-    v = (nx * nx + ny * ny - 1) ** 3 - nx * nx * ny * ny * ny
-    return v <= 0
+    lr = 0.5 * r
+    for cx in (-0.4 * r, 0.4 * r):
+        if (x - cx) ** 2 + (y - (-0.3 * r)) ** 2 <= lr * lr:
+            return True
+    top_y, bot_y, top_hw = -0.3 * r, r, 0.9 * r
+    if top_y <= y <= bot_y:
+        return abs(x) <= top_hw * (bot_y - y) / (bot_y - top_y)
+    return False
 
 
 def _in_diamond(x, y, r):
