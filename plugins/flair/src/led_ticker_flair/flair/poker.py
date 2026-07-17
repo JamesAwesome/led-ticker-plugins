@@ -5,7 +5,9 @@ Mask functions for the four card suits (hearts, diamonds, clubs, spades),
 ring pixel-lists, and ring-union coverage test. No canvas, no led_ticker imports.
 """
 
+import colorsys
 import math
+from dataclasses import dataclass
 
 SUITS = ("hearts", "diamonds", "clubs", "spades")
 
@@ -69,3 +71,68 @@ def interior_pixels(suit, r):
 
 def ring_pixels(suit, r, w=RING_W):
     return interior_pixels(suit, r) - interior_pixels(suit, r - w)
+
+
+_STAGGER_MAX = 0.25
+_INTRO_END = 0.25  # pulses begin after this fraction (+ per-glyph stagger)
+_MAX_R_FACTOR = 1.2
+
+
+@dataclass(frozen=True)
+class Glyph:
+    suit: str
+    cx: int
+    cy: int
+    hue: float
+    stagger: float
+
+
+def max_radius(cell_w, cell_h):
+    return _MAX_R_FACTOR * math.hypot(cell_w, cell_h)
+
+
+def plan_glyphs(panel_w, panel_h, suits, rng):
+    cols = max(1, math.ceil(panel_w / GRID))
+    rows = max(1, math.ceil(panel_h / GRID))
+    out = []
+    for i in range(cols * rows):
+        gx, gy = i % cols, i // cols
+        out.append(
+            Glyph(
+                suit=suits[i % len(suits)],
+                cx=round(gx * GRID + GRID / 2 + rng.uniform(-3, 3)),
+                cy=round(gy * GRID + GRID / 2 + rng.uniform(-2, 2)),
+                hue=rng.random(),
+                stagger=rng.uniform(0.0, _STAGGER_MAX),
+            )
+        )
+    return out
+
+
+def pulse_radius(t, stagger):
+    """(_radius_, wave_index) for the pulse active at global t, or None
+    before this glyph's pulses begin. Radius is a FRACTION of max_r
+    (0..1); the caller scales by its own max_radius."""
+    start = _INTRO_END + stagger
+    if t < start:
+        return None
+    p = (t - start) / (1.0 - start)  # 0..1 across the pulse window
+    scaled = p * PULSES
+    wave = int(scaled)
+    phase = scaled - wave  # 0..1 within the current wave
+    return phase, wave
+
+
+class RingCache:
+    def __init__(self):
+        self._cache = {}
+
+    def get(self, suit, r_int, hue_deg):
+        key = (suit, int(r_int), round(hue_deg))
+        hit = self._cache.get(key)
+        if hit is None:
+            rr, gg, bb = colorsys.hsv_to_rgb((round(hue_deg) % 360) / 360.0, 1.0, 1.0)
+            color = (int(rr * 255), int(gg * 255), int(bb * 255))
+            hit = [(x, y, color) for (x, y) in ring_pixels(suit, int(r_int))]
+            self._cache[key] = hit
+        return hit
