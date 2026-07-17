@@ -180,7 +180,7 @@ def _full_reveal_missing_pixels(
     unions every radius from 0 up to that target. Verified empirically
     against the old sweep-based assertion (identical missing-pixel sets,
     including the clubs failures this test exists to catch) before relying on
-    it here -- it's what keeps a 250-case matrix fast enough to run in CI.
+    it here -- the single-frame shortcut is what keeps the guard fast.
     """
     real = _StubCanvas(width=width, height=height)
     canvas = ScaledCanvas(real, scale=scale, content_height=16) if scale > 1 else real
