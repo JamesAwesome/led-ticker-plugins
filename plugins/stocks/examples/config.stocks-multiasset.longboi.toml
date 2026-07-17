@@ -66,11 +66,11 @@
 #                    24/7); off US-market-hours AAPL/NVDA show CLSD (and EUR/USD
 #                    closed on weekends). Two different chips in ONE rotation is
 #                    the Twelve Data upgrade over Finnhub's single global state.
-#   2b BRIGHTNESS FOLLOWS STATE — closed cards render dimmer (45%) than
-#                    LIVE ones (after-hours US equities get a gentler 85%
-#                    via the US/Eastern clock refinement). Mixed bright/dim
-#                    across the rotation is the state signal, not a fault;
-#                    set dim_by_state = false on the widget for uniform
+#   2b BRIGHTNESS FOLLOWS STATE — closed cards render dimmer (70%) than
+#                    LIVE ones (100%). Twelve Data reports only open/closed,
+#                    so there is no PRE/AH tier here. Mixed bright/dim across
+#                    the rotation is the state signal, not a fault; set
+#                    dim_by_state = false on the widget for uniform
 #                    brightness (the chip keeps the LIVE/CLSD info).
 #   3 AUTO-FORMAT [LIVE] — EUR/USD renders 4 decimals (e.g. 1.1467), BTC/USD with
 #                    a thousands separator (e.g. 64,906.62), AAPL/NVDA 2 decimals.

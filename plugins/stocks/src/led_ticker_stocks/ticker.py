@@ -110,7 +110,7 @@ class StocksTicker:
     symbols: list[str]
     layout: str | None = None
     green_up: bool = True
-    # State-based brightness (LIVE 100% / PRE·AH 85% / CLOSED 45%) is the
+    # State-based brightness (LIVE 100% / PRE·AH 85% / CLOSED 70%) is the
     # default; dim_by_state = false renders every card at full brightness
     # while the state CHIP keeps carrying the LIVE/CLSD information. With
     # per-symbol state (multi-asset), mixed open/closed rotations otherwise

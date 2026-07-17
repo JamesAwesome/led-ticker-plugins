@@ -55,7 +55,7 @@
 #                    chip + sparkline endpoint PULSE while open. Nothing should
 #                    clip at the 64px ceiling. In live mode global brightness +
 #                    the state-chip label track market state (LIVE full / PRE·AH
-#                    ~0.85 dimmer / CLOSED ~0.45 dimmest + "AT CLOSE", frozen).
+#                    ~0.85 dimmer / CLOSED ~0.70 dimmest + "AT CLOSE", frozen).
 #                    Bad symbol -> em-dash price with no sparkline.
 #
 # If anything looks wrong: docs/visual-validation.md.

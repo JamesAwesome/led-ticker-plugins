@@ -60,7 +60,7 @@
 #                    the state chip + sparkline endpoint PULSE while open.
 #                    Nothing should clip at the 64px ceiling. In live mode global
 #                    brightness + the state-chip label track market state (LIVE
-#                    full / PRE·AH ~0.85 / CLOSED ~0.45 dim, frozen). Bad symbol
+#                    full / PRE·AH ~0.85 / CLOSED ~0.70 dim, frozen). Bad symbol
 #                    -> em-dash price with no sparkline; its watch-column row
 #                    still shows the symbol.
 #
