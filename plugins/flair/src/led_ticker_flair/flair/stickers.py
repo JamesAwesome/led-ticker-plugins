@@ -1,6 +1,6 @@
 """Sticker-bomb transition: pure math half (grid plan, pacing, dilation, rotation).
 
-Spec: docs/superpowers/specs/2026-07-16-flair-stickers-transition-design.md
+Spec: docs/superpowers/specs/2026-07-17-flair-stickers-transition-design.md
 """
 
 import math

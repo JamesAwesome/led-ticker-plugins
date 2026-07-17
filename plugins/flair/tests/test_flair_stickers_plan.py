@@ -89,7 +89,11 @@ class TestPixelMath:
 
     def test_rotate_preserves_colors_and_is_hole_free(self):
         # solid 10x10 block rotated 10 deg must stay a connected solid region:
-        # pixel count can't shrink (inverse mapping guarantees no holes)
+        # pixel count can't shrink (inverse mapping guarantees no holes).
+        # NOTE: the count inequality is a proxy that holds at THIS small size;
+        # at realistic 36px footprints a rotated square legitimately loses a
+        # few CORNER pixels to discretization (still zero interior holes) —
+        # don't "strengthen" this test to a bigger block and chase a phantom.
         px = {(x, y): (9, 9, 9) for x in range(10) for y in range(10)}
         out = rotate_pixels(px, 10.0)
         assert len(out) >= len(px)
