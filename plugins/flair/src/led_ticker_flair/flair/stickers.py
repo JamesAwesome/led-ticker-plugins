@@ -154,9 +154,17 @@ def capture_sprite(slug, scale, content_height):
     return _normalize(real.pixels)
 
 
-def compose_sticker(sprite, footprint=None):
-    """Die-cut: sprite ink over a black backing + white rim (OUTLINE_PAD
-    ring). Coverage comes from the backing+rim footprint.
+def compose_sticker(sprite, footprint=None, backing="card"):
+    """Compose a sticker from sprite ink per the ``backing`` mode.
+
+    ``backing="card"`` (default): sprite over a black backing + white rim
+    (OUTLINE_PAD ring). Coverage comes from the backing+rim footprint.
+    ``backing="shadow"``: sprite over a black silhouette halo
+    (``BACKING_PAD`` dilation) — no rim, no squaring; ``footprint`` is
+    ignored. ``backing="none"``: the bare sprite. Only "card" can honor
+    the transition's full-cover-at-t=0.5 guarantee — the other two are
+    the deliberate "swarm, not wall" looks (outgoing content stays
+    visible through sprite gaps).
 
     ``footprint=None`` (default): the backing follows the sprite's own
     silhouette, dilated by ``BACKING_PAD`` — a tight die-cut look. This is
@@ -178,7 +186,13 @@ def compose_sticker(sprite, footprint=None):
     full random-assortment pool, on both panel geometries (see the
     ``Stickers`` transition's ``TestEndpoints.test_full_cover_at_half``).
     """
+    if backing == "none":
+        return dict(sprite)
     mask = set(sprite)
+    if backing == "shadow":
+        out = {p: (0, 0, 0) for p in dilate(mask, BACKING_PAD)}
+        out.update(sprite)
+        return out
     if footprint is None:
         fill = dilate(mask, BACKING_PAD)
         rim = dilate(mask, OUTLINE_PAD) - fill
@@ -200,17 +214,19 @@ def compose_sticker(sprite, footprint=None):
 
 class StickerRaster:
     """Per-run cache of composed, rotated stickers keyed by
-    (slug, whole-degree angle, scale, content_height, footprint)."""
+    (slug, whole-degree angle, scale, content_height, footprint, backing)."""
 
     def __init__(self):
         self._cache = {}
 
-    def get(self, slug, angle_deg, scale, content_height, footprint=None):
-        key = (slug, round(angle_deg), scale, content_height, footprint)
+    def get(
+        self, slug, angle_deg, scale, content_height, footprint=None, backing="card"
+    ):
+        key = (slug, round(angle_deg), scale, content_height, footprint, backing)
         hit = self._cache.get(key)
         if hit is None:
             sprite = capture_sprite(slug, scale, content_height)
-            composed = compose_sticker(sprite, footprint)
+            composed = compose_sticker(sprite, footprint, backing)
             hit = rotate_pixels(composed, round(angle_deg))
             self._cache[key] = hit
         return hit
@@ -220,11 +236,25 @@ class Stickers:
     """Sticker-bomb: emoji pop on over the outgoing widget until full cover
     at t=0.5, then pop off in an independent random order revealing the
     incoming widget. `emoji=[...]` restricts the slug pool (one slug = a
-    themed wall); omitted = random assortment across every drawable slug."""
+    themed wall); omitted = random assortment across every drawable slug.
+    ``backing`` picks the sticker body: "card" (default — tilted black card
+    with a white rim; the only mode that fully covers the panel at the
+    midpoint), "shadow" (black silhouette halo, no card), or "none" (bare
+    sprites) — the latter two read as an emoji SWARM over the content
+    rather than a wall (gaps between sprites never cover)."""
+
+    _BACKINGS = ("card", "shadow", "none")
 
     min_frames = 24
 
-    def __init__(self, emoji: Any = None, seed: int | None = None) -> None:
+    def __init__(
+        self, emoji: Any = None, seed: int | None = None, backing: str = "card"
+    ) -> None:
+        if backing not in self._BACKINGS:
+            raise ValueError(
+                f"backing must be one of {list(self._BACKINGS)!r}; got {backing!r}"
+            )
+        self.backing = backing
         if emoji is not None:
             if (
                 not isinstance(emoji, list)
@@ -288,7 +318,14 @@ class Stickers:
             # (slug, angle) combo). See
             # TestPerf.test_no_rasterization_after_first_frame.
             for s in self._plan:
-                self._raster.get(s.slug, s.angle_deg, scale, content_height, footprint)
+                self._raster.get(
+                    s.slug,
+                    s.angle_deg,
+                    scale,
+                    content_height,
+                    footprint,
+                    self.backing,
+                )
         return self._plan, scale, content_height, real
 
     def frame_at(self, t, canvas, outgoing, incoming, **kwargs):
@@ -319,7 +356,9 @@ class Stickers:
             visible = [s for s in plan if s.depart >= gone]
 
         for s in sorted(visible, key=lambda s: s.arrive):  # later arrivals on top
-            px = self._raster.get(s.slug, s.angle_deg, scale, content_height, footprint)
+            px = self._raster.get(
+                s.slug, s.angle_deg, scale, content_height, footprint, self.backing
+            )
             if not px:
                 continue
             w = max(p[0] for p in px)

@@ -287,3 +287,49 @@ class TestRegistration:
         assert "propeller" in api.animations
         assert "fisheye" in api.animations
         assert "lottery" in api.widgets
+
+
+class TestBackingKnob:
+    def test_bad_backing_raises_naming_options(self) -> None:
+        with pytest.raises(ValueError, match="backing"):
+            Stickers(emoji=["taco"], backing="halo")
+
+    def test_valid_backings_accepted(self) -> None:
+        for b in ("card", "shadow", "none"):
+            Stickers(emoji=["taco"], backing=b)
+
+    def test_none_backing_leaves_gaps_at_half(self) -> None:
+        """The documented tradeoff: without cards the panel is NOT fully
+        covered at t=0.5 — sprite gaps stay unpainted (swarm, not wall).
+        Inverse of test_full_cover_at_half_smallsign."""
+        canvas = _StubCanvas(width=160, height=16)
+        s = Stickers(emoji=["taco"], seed=3, backing="none")
+
+        s.frame_at(0.5, canvas, _make_widget(False), _make_widget(False))
+
+        missing = [
+            (x, y)
+            for y in range(16)
+            for x in range(160)
+            if (x, y) not in canvas._pixels
+        ]
+        assert missing, "bare sprites must leave gaps between their ink"
+
+    def test_shadow_backing_leaves_gaps_but_fewer(self) -> None:
+        """Shadow halos cover more than bare sprites, still less than cards."""
+
+        def _missing(backing: str) -> int:
+            canvas = _StubCanvas(width=160, height=16)
+            s = Stickers(emoji=["taco"], seed=3, backing=backing)
+            s.frame_at(0.5, canvas, _make_widget(False), _make_widget(False))
+            return sum(
+                1 for y in range(16) for x in range(160) if (x, y) not in canvas._pixels
+            )
+
+        m_none, m_shadow, m_card = (
+            _missing("none"),
+            _missing("shadow"),
+            _missing("card"),
+        )
+        assert m_card == 0
+        assert 0 < m_shadow < m_none
