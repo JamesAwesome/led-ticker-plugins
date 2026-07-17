@@ -128,6 +128,51 @@ transition = {type = "flair.fireworks", bursts = 3, colors = [[255, 60, 60], [0,
 - **Complement pass scales with the black area, not the panel.** Phase two paints black only OUTSIDE the burst union, computed per row as merged circle/x-intervals (each circle meets a row in at most one interval; merging <= 8 is trivial) — cost is `O(rows x bursts log bursts + black_pixels)`, shrinking to zero as the bloom completes. The widest late-bloom frames on a 512-wide longboi measure well under a millisecond.
 
 
+## Stickers transition
+
+`flair.stickers` holds the outgoing widget while individual emoji stickers pop on randomly across the panel in a jittered grid, building toward full coverage by `t=0.5`, then pop off in an independent order revealing the incoming widget underneath.
+
+Requires **led-ticker-core >= 4.10**.
+
+### Config
+
+Taco wall — all stickers are the same emoji:
+
+```toml
+[[playlist.section]]
+transition = {style = "flair.stickers", emoji = ["taco"]}
+```
+
+Mixed assortment — multiple distinct emoji:
+
+```toml
+[[playlist.section]]
+transition = {style = "flair.stickers", emoji = ["sun", "moon", "star_yellow"]}
+```
+
+Bare random form — random slug per sticker, drawn from the full drawable set:
+
+```toml
+[[playlist.section]]
+transition = "flair.stickers"
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `emoji` | list of strings, or omitted | omitted (random assortment) | Slug pool for stickers. Each string must be a known drawable emoji slug (e.g., `taco`, `sun`, `moon`, `star_yellow`, `heart_red`, `pride`). A single-item list (`["taco"]`) creates a themed wall of one emoji; omitting the field draws a random slug per sticker from the complete drawable set. |
+| `seed` | int, or omitted | omitted (OS entropy) | Fixes the sticker positions, angles, and arrival/departure timing for reproducible patterns. See "Determinism and re-fire" below. |
+
+### Notes
+
+- **Die-cut appearance.** Each sticker sits on a black card with a white rim outline — the cards are square and sized to fully cover the panel when arranged in a jittered grid, so `t=0.5` (full build) reaches 100% coverage regardless of emoji shape or panel geometry. Rotations tilt each card within its slot for visual variety.
+- **Full coverage at mid-transition guaranteed.** The grid layout (`plan_stickers`) is constructed from a `GRID_OVERLAP` ratio that ensures no uncovered gaps between card squares; coverage is proved across all drawable emoji and both panel geometries (smallsign and bigsign) via the test suite's seed-sweep calibration tests. If coverage ever fails, tighten `GRID_OVERLAP` in the source; do not weaken the tests.
+- **Unknown emoji slugs rejected at config-load.** Writing `emoji = ["fire"]` raises a validation error at `led-ticker validate` time (before deploy) because `"fire"` is not in the drawable slug set. Use only known slugs: `taco`, `sun`, `moon`, `star_yellow`, `heart_red`, `pride`, and any other emoji registered via `emoji_slugs()` (which includes core slugs and plugin-registered custom emoji).
+- **Determinism and re-fire.** With an explicit `seed`, two FRESH `Stickers` instances plan an identical FIRST firing. But firing the SAME instance a second time (a real display looping through its playlist) continues drawing from that same RNG stream, so consecutive firings vary at runtime even with a pinned seed. Leave `seed` unset for a real deploy.
+- **Single pass rasterization.** Stickers are captured, composed (sprite + black backing + white rim), and rotated ONCE during the first `frame_at` call for a given canvas size and scale — every subsequent frame just paints the pre-rasterized pixels at different positions and scales. The preparation is cheap compared to spinning emoji sprites mid-transition, so plan-time rasterization is preferred over per-frame capture.
+
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
