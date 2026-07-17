@@ -12,7 +12,7 @@ import pytest
 from led_ticker.plugin import SNAP_THRESHOLD, ScaledCanvas
 
 from led_ticker_flair import flair as flair_pkg
-from led_ticker_flair.flair.poker import Poker
+from led_ticker_flair.flair.poker import SUITS, Poker
 
 
 class _StubCanvas:
@@ -112,39 +112,6 @@ class TestEndpoints:
         assert canvas._pixels[(5, 5)] == (9, 9, 9)
         assert result is canvas
 
-    def _assert_full_reveal(self, real: _StubCanvas, canvas: Any) -> None:
-        """Sweep t across the wash phase (accumulating the reveal mask), then
-        at t just below SNAP assert NO panel pixel is the black complement:
-        the incoming widget fills a non-black colour, so a black pixel can only
-        be one we blacked out for being still-unrevealed. Rainbow rings are
-        never pure black, so black == unrevealed exactly."""
-        p = Poker(seed=7)
-        outgoing = _make_widget(draw_pixel=False)
-        incoming = _make_widget(draw_pixel=False, fill=(7, 7, 7))
-
-        t = 0.4
-        while t < SNAP_THRESHOLD:
-            p.frame_at(t, canvas, outgoing, incoming)
-            t += 0.02
-        p.frame_at(SNAP_THRESHOLD - 1e-4, canvas, outgoing, incoming)
-
-        black = [
-            (x, y)
-            for y in range(real.height)
-            for x in range(real.width)
-            if real._pixels.get((x, y)) == (0, 0, 0)
-        ]
-        assert black == [], f"{len(black)} panel pixels left as black complement"
-
-    def test_full_reveal_before_snap_smallsign(self) -> None:
-        real = _StubCanvas(width=160, height=16)
-        self._assert_full_reveal(real, real)
-
-    def test_full_reveal_before_snap_bigsign(self) -> None:
-        real = _StubCanvas(width=256, height=64)
-        wrapped = ScaledCanvas(real, scale=4, content_height=16)
-        self._assert_full_reveal(real, wrapped)
-
     def test_no_outgoing_paint_after_cutover(self) -> None:
         p = Poker(suits=["clubs"], seed=2)
         canvas = _StubCanvas(width=160, height=16)
@@ -155,6 +122,78 @@ class TestEndpoints:
 
         outgoing.draw.assert_not_called()
         incoming.draw.assert_called_once_with(canvas, cursor_pos=0)
+
+
+# ---------------------------------------------------------------------------
+# Full-reveal spec matrix -- both geometries x (all-suits, single-suit each)
+# x >=25 seeds. Clubs is the non-radially-monotone suit the spec calls out as
+# the trap for the full-reveal guarantee: its waist (the stem between the
+# three lobes) is narrower than the lobes at the same radius, so a glyph
+# planted right at a panel edge can leave a sliver of that waist just past
+# the last swept ring shell unrevealed. The two now-removed
+# test_full_reveal_before_snap_smallsign/_bigsign tests only ever exercised
+# the default all-suits pool, so they never hit this trap.
+# ---------------------------------------------------------------------------
+
+_FULL_REVEAL_POOLS: list[list[str]] = [
+    list(SUITS),
+    ["hearts"],
+    ["diamonds"],
+    ["clubs"],
+    ["spades"],
+]
+_FULL_REVEAL_GEOMETRIES = [
+    ("smallsign", 160, 16, 1),
+    ("bigsign", 256, 64, 4),
+]
+_FULL_REVEAL_SEEDS = range(25)
+
+
+def _full_reveal_missing_pixels(
+    suits: list[str], width: int, height: int, scale: int, seed: int
+) -> list[tuple[int, int]]:
+    """Run the wash phase to just below SNAP and return every panel pixel
+    left as the black complement: the incoming widget fills a non-black
+    colour, so a black pixel can only be one we blacked out for being
+    still-unrevealed. Rainbow rings are never pure black, so black ==
+    unrevealed exactly.
+
+    A single ``frame_at`` call at ``SNAP_THRESHOLD - 1e-4`` reproduces the
+    same accumulated reveal mask a full per-tick sweep from t=0.4 would
+    produce: ``_accumulate_reveal``'s target radius for a glyph is a pure
+    function of ``t`` and that glyph's stagger, not of how many prior ticks
+    were rendered, and ``_reveal_r`` starts at -1 so the first call already
+    unions every radius from 0 up to that target. Verified empirically
+    against the old sweep-based assertion (identical missing-pixel sets,
+    including the clubs failures this test exists to catch) before relying on
+    it here -- it's what keeps a 250-case matrix fast enough to run in CI.
+    """
+    real = _StubCanvas(width=width, height=height)
+    canvas = ScaledCanvas(real, scale=scale, content_height=16) if scale > 1 else real
+    p = Poker(suits=suits, seed=seed)
+    outgoing = _make_widget(draw_pixel=False)
+    incoming = _make_widget(draw_pixel=False, fill=(7, 7, 7))
+
+    p.frame_at(SNAP_THRESHOLD - 1e-4, canvas, outgoing, incoming)
+
+    return [
+        (x, y)
+        for y in range(real.height)
+        for x in range(real.width)
+        if real._pixels.get((x, y)) == (0, 0, 0)
+    ]
+
+
+@pytest.mark.parametrize("geometry", _FULL_REVEAL_GEOMETRIES, ids=lambda g: g[0])
+@pytest.mark.parametrize("suits", _FULL_REVEAL_POOLS, ids=lambda s: "-".join(s))
+@pytest.mark.parametrize("seed", _FULL_REVEAL_SEEDS)
+def test_full_reveal_before_snap_matrix(geometry, suits, seed) -> None:
+    _, width, height, scale = geometry
+    black = _full_reveal_missing_pixels(suits, width, height, scale, seed)
+    assert black == [], (
+        f"suits={suits} geometry={geometry[0]} seed={seed}: "
+        f"{len(black)} panel pixels left as black complement"
+    )
 
 
 class TestDeterminismAndRefire:

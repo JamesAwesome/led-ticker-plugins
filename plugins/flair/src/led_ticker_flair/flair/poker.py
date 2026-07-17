@@ -79,7 +79,7 @@ def ring_pixels(suit, r, w=RING_W):
 
 _STAGGER_MAX = 0.25
 _INTRO_END = 0.25  # pulses begin after this fraction (+ per-glyph stagger)
-_MAX_R_FACTOR = 1.2
+_MAX_R_FACTOR = 1.45
 
 
 @dataclass(frozen=True)
