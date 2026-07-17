@@ -71,6 +71,23 @@ def test_cursor_offsets_content():
     assert min(_lit_cols(real2)) <= first
 
 
+def test_positive_cursor_shifts_content_right():
+    """Load-bearing engine-scroll contract test: a mutation that ignores
+    cursor_pos (x = 0) must FAIL here. A positive offset keeps the first
+    glyph fully on-canvas (no left-edge clipping, no glyph-boundary
+    crossing), so every lit column shifts right by exactly the offset —
+    asserted as a strict >= bound (no exact freetype pin needed; the shift
+    is pure translation of whatever ink the font produced at cursor 0)."""
+    canvas, real = _bigsign()
+    render_crawl(canvas, _live_game(), TZ, 0)
+    cols0 = _lit_cols(real)
+    canvas2, real2 = _bigsign()
+    render_crawl(canvas2, _live_game(), TZ, 60)
+    cols60 = _lit_cols(real2)
+    assert cols0 != cols60
+    assert min(cols60) >= min(cols0) + 50
+
+
 def test_width_is_cursor_independent():
     canvas, _ = _bigsign()
     w0 = render_crawl(canvas, _live_game(), TZ, 0)
