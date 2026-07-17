@@ -1,3 +1,5 @@
+> **Cut releases with `uv run python scripts/cut_release.py <plugin> <patch|minor|major> --notes FILE`** — it derives the next version from the live remote at execution time and enforces the release-order guard (version order == history order) that publish.yml also enforces. Never carry a precomputed version from a plan; parallel workstreams exist (core v4.16.1/v4.17.0 incident, 2026-07-16).
+
 # Releasing led-ticker plugins to PyPI
 
 Each plugin in this monorepo is its own PyPI package (`led-ticker-<name>`) and is

@@ -32,9 +32,9 @@ uv run python -c "import tomllib,glob; [print(f, len(tomllib.load(open(f,'rb'))[
 2. **Pre-flight** (from repo root, on up-to-date `main`):
    - `git pull`; confirm the change is merged and `main`'s tip is what you want to ship; CI green on that commit (`gh run list --branch main`).
    - Plugin gate: `uv run pytest plugins/<name> --cov=plugins/<name>/src`, `uv run ruff check plugins/<name>`, `ruff format --check`, `uv run pyright plugins/<name>/src`.
-   - `git tag -l "<name>-v*" | sort -V` → the latest tag; the new one must be strictly higher, PEP 440 `X.Y.Z` (patch/minor/major by the change).
+   - Derive the version AT CUT TIME with `uv run python scripts/cut_release.py <name> <patch|minor|major> --notes <notes.md>` — it fetches tags from the LIVE remote, computes the next version, enforces the release-order guard (version order == commit-ancestry order; `check_release.check_release_order`, the same check publish.yml runs), and creates the release on origin/main's tip. NEVER carry a "vNext" from a plan or an earlier terminal: a stale pipeline once cut core v4.16.1 AFTER v4.17.0 shipped from a parallel session — a lower version on newer code, hiding a fix from resolver-latest.
    - The plugin MUST be in `scripts/check_release.py`'s `PUBLISHABLE_PLUGINS` (that file is the source of truth; RELEASING.md's prose list drifts). **New plugin?** add it there AND register a **pending** Trusted Publisher on PyPI first, or the first upload 403s.
-3. **Cut the release** — tag on the exact commit, SHORT plugin name:
+3. **Cut the release** — prefer `scripts/cut_release.py` (above), which does all of this. Manual fallback (discouraged) — tag on the exact commit, SHORT plugin name:
    ```bash
    gh release create <name>-vX.Y.Z --repo JamesAwesome/led-ticker-plugins \
      --target <main-tip-sha> --title "led-ticker-<name> X.Y.Z" --notes-file <notes.md>
