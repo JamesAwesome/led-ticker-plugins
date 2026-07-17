@@ -51,3 +51,29 @@ class TestRasterCache:
         cache.get("taco", 4.4, 1, None)
         cache.get("taco", 3.6, 1, None)  # both quantize to 4 degrees
         assert len(calls) == 1
+
+
+class TestBackingModes:
+    def test_none_is_bare_sprite(self):
+        sprite = {(2, 2): (200, 100, 0), (3, 2): (10, 10, 10)}
+        assert compose_sticker(sprite, backing="none") == sprite
+
+    def test_shadow_is_halo_no_rim_no_square(self):
+        sprite = {(2, 2): (200, 100, 0)}
+        out = compose_sticker(sprite, footprint=20, backing="shadow")
+        assert out[(2, 2)] == (200, 100, 0)  # sprite on top
+        assert out[(1, 1)] == (0, 0, 0)  # black halo
+        assert (255, 255, 255) not in out.values()  # no white rim
+        # footprint is IGNORED: no squaring — nothing beyond the halo radius
+        assert set(out) == dilate({(2, 2)}, BACKING_PAD)
+
+    def test_card_is_default_and_unchanged(self):
+        sprite = {(2, 2): (200, 100, 0)}
+        assert compose_sticker(sprite) == compose_sticker(sprite, backing="card")
+
+    def test_cache_key_separates_backing(self):
+        cache = StickerRaster()
+        card = cache.get("taco", 0, 1, None, footprint=20)
+        none = cache.get("taco", 0, 1, None, footprint=20, backing="none")
+        shadow = cache.get("taco", 0, 1, None, footprint=20, backing="shadow")
+        assert len(none) < len(shadow) < len(card)

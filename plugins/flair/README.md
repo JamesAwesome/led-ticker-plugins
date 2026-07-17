@@ -157,11 +157,26 @@ Bare random form — random slug per sticker, drawn from the full drawable set:
 transition = "flair.stickers"
 ```
 
+Swarm looks — swap the card for a lighter sticker body:
+
+```toml
+transition = {type = "flair.stickers", emoji = ["taco"], backing = "shadow"}
+transition = {type = "flair.stickers", emoji = ["taco"], backing = "none"}
+```
+
+`backing` picks the sticker body: `"card"` (default — tilted black card with a
+white rim; the only mode that fully covers the panel at the midpoint),
+`"shadow"` (black silhouette halo, no card), or `"none"` (bare sprites). The
+latter two read as an emoji **swarm** over the content rather than a wall —
+the outgoing widget stays visible through the gaps between sprites, by design.
+
+
 ### Knobs
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `emoji` | list of strings, or omitted | omitted (random assortment) | Slug pool for stickers. Each string must be a known drawable emoji slug (e.g., `taco`, `sun`, `moon`, `star_yellow`, `heart_red`, `pride`). A single-item list (`["taco"]`) creates a themed wall of one emoji; omitting the field draws a random slug per sticker from the complete drawable set. |
+| `backing` | `"card"` / `"shadow"` / `"none"` | `"card"` | Sticker body. `"card"`: tilted black card with a white rim — the only mode that fully covers the panel at the midpoint. `"shadow"`: black silhouette halo, no card. `"none"`: bare sprites. Shadow/none read as an emoji swarm over the content (gaps stay visible, by design). |
 | `seed` | int, or omitted | omitted (OS entropy) | Fixes the sticker positions, angles, and arrival/departure timing for reproducible patterns. See "Determinism and re-fire" below. |
 
 ### Notes
