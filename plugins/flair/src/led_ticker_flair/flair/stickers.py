@@ -6,6 +6,8 @@ Spec: docs/superpowers/specs/2026-07-17-flair-stickers-transition-design.md
 import math
 from dataclasses import dataclass
 
+from led_ticker.plugin import ScaledCanvas, draw_emoji_at
+
 GRID_OVERLAP = 0.7
 JITTER_FRAC = 0.1
 TILT_MAX_DEG = 10.0
@@ -98,3 +100,73 @@ def rotate_pixels(pixels, angle_deg):
             if c is not None:
                 out[(round(cx) + dx, round(cy) + dy)] = c
     return out
+
+
+class _CaptureReal:
+    """Recording stub real canvas: SetPixel into a dict; records EVERY call
+    (a sprite may legitimately ink near-black pixels)."""
+
+    def __init__(self, w, h):
+        self.width = w
+        self.height = h
+        self.pixels = {}
+
+    def SetPixel(self, x, y, r, g, b):
+        self.pixels[(int(x), int(y))] = (int(r), int(g), int(b))
+
+    def Clear(self):
+        self.pixels.clear()
+
+
+def _normalize(pixels):
+    if not pixels:
+        return {}
+    minx = min(p[0] for p in pixels)
+    miny = min(p[1] for p in pixels)
+    return {(x - minx, y - miny): c for (x, y), c in pixels.items()}
+
+
+def capture_sprite(slug, scale, content_height):
+    """Rasterize a slug through the real draw path into a pixel dict.
+
+    scale > 1 wraps the stub in the public ScaledCanvas so draw_emoji_at's
+    hires dispatch fires; scale == 1 draws the 8x8 form directly. The result
+    is bbox-normalized so placement math is anchor-independent.
+    """
+    if scale > 1:
+        real = _CaptureReal(64 * scale, (content_height or 16) * scale)
+        canvas = ScaledCanvas(real, scale=scale, content_height=content_height or 16)
+    else:
+        real = _CaptureReal(64, 16)
+        canvas = real
+    draw_emoji_at(canvas, slug, 4, 0)
+    return _normalize(real.pixels)
+
+
+def compose_sticker(sprite):
+    """Die-cut: sprite ink over black fill (BACKING_PAD) + white rim
+    (OUTLINE_PAD ring). Coverage comes from the fill+rim footprint."""
+    mask = set(sprite)
+    fill = dilate(mask, BACKING_PAD)
+    rim = dilate(mask, OUTLINE_PAD) - fill
+    out = {p: (0, 0, 0) for p in fill}
+    out.update({p: (255, 255, 255) for p in rim})
+    out.update(sprite)
+    return out
+
+
+class StickerRaster:
+    """Per-run cache of composed, rotated stickers keyed by
+    (slug, whole-degree angle, scale, content_height)."""
+
+    def __init__(self):
+        self._cache = {}
+
+    def get(self, slug, angle_deg, scale, content_height):
+        key = (slug, round(angle_deg), scale, content_height)
+        hit = self._cache.get(key)
+        if hit is None:
+            sprite = capture_sprite(slug, scale, content_height)
+            hit = rotate_pixels(compose_sticker(sprite), round(angle_deg))
+            self._cache[key] = hit
+        return hit
