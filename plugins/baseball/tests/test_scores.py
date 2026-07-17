@@ -694,11 +694,11 @@ class TestMLBTwoRowLayout:
         m = MLBScoreMonitor(session=mock.Mock(), team="PHI")
         assert m.top_row_height is None
 
-    def test_monitor_layout_default_is_ticker(self):
+    def test_monitor_layout_default_is_auto(self):
         from unittest import mock
 
         m = MLBScoreMonitor(session=mock.Mock(), team="PHI")
-        assert m.layout == "ticker"
+        assert m.layout == "auto"
 
     def test_two_row_message_type_imported(self):
         from led_ticker_baseball.scores import MLBTwoRowMessage  # noqa: F401
@@ -1587,11 +1587,11 @@ class TestScoresValidateConfig:
     """
 
     def test_valid_layouts_pass(self):
-        for layout in ("ticker", "scoreboard", "two_row"):
+        for layout in ("auto", "ticker", "scoreboard", "two_row"):
             assert MLBScoreMonitor.validate_config({"layout": layout}) == []
 
     def test_default_layout_passes(self):
-        # Omitting layout defaults to "ticker" — valid.
+        # Omitting layout defaults to "auto" — valid.
         assert MLBScoreMonitor.validate_config({}) == []
 
     def test_invalid_layout_suggests_close_match(self):
@@ -1619,11 +1619,10 @@ class TestScoresValidateConfig:
         assert "top_font_size" in msgs[0]
         assert "two_row" in msgs[0]
 
-    def test_top_field_with_default_layout_flagged(self):
-        # layout omitted (defaults ticker) → top_* still flagged.
-        msgs = MLBScoreMonitor.validate_config({"top_row_height": 6})
-        assert len(msgs) == 1
-        assert "top_row_height" in msgs[0]
+    def test_top_field_with_default_layout_ok(self):
+        # layout omitted (defaults "auto") → top_* is NOT flagged: auto can
+        # resolve to two_row at scale 1, same as an explicit layout="auto".
+        assert MLBScoreMonitor.validate_config({"top_row_height": 6}) == []
 
     def test_top_field_with_two_row_layout_ok(self):
         assert (
@@ -1643,6 +1642,13 @@ class TestScoresValidateConfig:
         # Confirms it's a classmethod usable off the class (engine calls
         # cls.validate_config(dict(cfg))).
         assert MLBScoreMonitor.validate_config({"layout": "ticker"}) == []
+
+    def test_validate_config_accepts_auto_and_default_is_auto(self):
+        assert MLBScoreMonitor.validate_config({"layout": "auto"}) == []
+        import attrs
+
+        field = {f.name: f for f in attrs.fields(MLBScoreMonitor)}["layout"]
+        assert field.default == "auto"
 
 
 # --- update() orchestration (faked session) ---
