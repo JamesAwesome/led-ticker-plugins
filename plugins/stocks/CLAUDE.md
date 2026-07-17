@@ -233,13 +233,15 @@ fetches (`fetch_quote`) are NOT wrapped this way — a per-symbol quote failure 
 propagate (see the initial-fetch tolerance note in "Phase 4: the shared `QuoteCache`" below);
 only the status call has a clock fallback.
 
-**`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.45` CLSD /
+**`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.70` CLSD /
 `0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in every layout's
-render function, and `chip_label` (`CLSD`/`PRE`/`AH`/`LIVE`) + `chip_rgb` drive the state-chip
-label `card`/`dashboard` paint bottom-right/left of the hero block (Phase 1's `crawl` has no
-room for a chip; it's consumed by `dim` only there). Don't repurpose `dim` for anything else
-without checking the README's "dims visibly lower when CLSD" claim, which is validated by
-`test_state_dimming_lowers_total_brightness` (`tests/test_render_smoke.py`).
+render function, gated by the per-widget `dim_by_state = false` opt-out (layouts compute
+`dim = STATE_META[state].dim if dim_by_state else 1.0`), and `chip_label` (`CLSD`/`PRE`/`AH`/`LIVE`)
++ `chip_rgb` drive the state-chip label `card`/`dashboard` paint bottom-right/left of the hero
+block (Phase 1's `crawl` has no room for a chip; it's consumed by `dim` only there). Don't
+repurpose `dim` for anything else without checking the README's "dims visibly lower when CLSD"
+claim, which is validated by `test_state_dimming_lowers_total_brightness`
+(`tests/test_render_smoke.py`).
 
 **Geometry auto-select happens in `draw()`, not `validate_config`** — `resolve_layout(canvas,
 override)` needs a real `canvas.width`, which does not exist at config-validation time

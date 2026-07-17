@@ -181,3 +181,34 @@ async def test_fetch_quote_negative_header_is_ignored():
     client = TwelveDataClient("tok", session=session, on_credits=seen.append)
     await client.fetch_quote("EUR/USD")
     assert seen == []
+
+
+class TestClosedIsVerbatim:
+    """TD's binary is_market_open is reported VERBATIM — the 2026-07-17
+    redesign removed the wall-clock PRE/AH refinement (state is data; the
+    gentler closed look now lives in STATE_META's 0.70 CLOSED dim). This
+    also makes parsing deterministic: the old refinement made closed-equity
+    tests time-of-day dependent."""
+
+    def _payload(self, is_open):
+        return {
+            "symbol": "AAPL",
+            "close": "208.89",
+            "previous_close": "210.35",
+            "is_market_open": is_open,
+        }
+
+    def test_closed_stays_closed_at_any_runtime_clock(self):
+        q = parse_quote("AAPL", self._payload(False))
+        assert q.state is MarketState.CLOSED
+
+    def test_open_maps_to_open(self):
+        q = parse_quote("AAPL", self._payload(True))
+        assert q.state is MarketState.OPEN
+
+    def test_module_has_no_clock_dependency(self):
+        """The parser must not import the wall clock — refinement must not
+        quietly return."""
+        import led_ticker_stocks.twelvedata as td
+
+        assert not hasattr(td, "state_now_from_clock")

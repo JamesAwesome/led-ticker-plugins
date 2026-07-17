@@ -31,6 +31,10 @@ def _f(payload, key):
 def parse_quote(sym, payload):
     price = _f(payload, "close") or 0.0
     prev = _f(payload, "previous_close") or 0.0
+    # TD reports only open/closed per symbol (no pre/after-hours sessions).
+    # That binary is reported VERBATIM — no wall-clock refinement (state is
+    # data; the closed-look policy lives in STATE_META's dim values). See
+    # docs/superpowers/specs/2026-07-17-stocks-state-dimming-redesign.md.
     state = MarketState.OPEN if payload.get("is_market_open") else MarketState.CLOSED
     return SymbolQuote(
         sym=sym,
