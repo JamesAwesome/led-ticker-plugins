@@ -69,6 +69,7 @@ New to led-ticker configs? The [first-config tutorial](https://docs.ledticker.de
 | `update_interval` | int | `60` | Seconds between Finnhub polls. The widget silently raises this to `len(symbols) + 1` if you set it lower — see [Rate limits](#rate-limits--api-token) below. |
 | `padding` | int | `6` | Horizontal spacing (logical px) after each symbol's segment, before the next symbol. Crawl layout only — `card`/`dashboard` use a fixed layout grid instead. |
 | `green_up` | bool | `true` | Set `false` to flip the up/down colors (green-down/red-up) for non-US market conventions. Applies to all three layouts. |
+| `dim_by_state` | bool | `true` | Layouts dim by market state (LIVE 100% / pre & after-hours 85% / closed 45%). With per-symbol state under Twelve Data, a mixed rotation alternates bright and dim — informative, but set `false` for uniform full brightness (the LIVE/CLSD chip still carries the state). |
 
 At least `symbols` must be a non-empty list — the widget fails at config validation otherwise (`led-ticker validate` catches this before boot).
 

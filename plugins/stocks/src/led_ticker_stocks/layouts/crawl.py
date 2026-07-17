@@ -28,8 +28,11 @@ def draw_crawl_story(
     y_offset: int = 0,
     end_padding: int = 6,
     green_up: bool = True,
+    dim_by_state: bool = True,
 ) -> int:
-    dim = STATE_META[state].dim
+    # dim_by_state=False: full brightness regardless of market state (the
+    # state CHIP still reads LIVE/CLSD — information stays, the dim goes).
+    dim = STATE_META[state].dim if dim_by_state else 1.0
     now = time.monotonic()
     baseline = compute_baseline(FONT_DEFAULT, canvas) + y_offset
     cursor = x

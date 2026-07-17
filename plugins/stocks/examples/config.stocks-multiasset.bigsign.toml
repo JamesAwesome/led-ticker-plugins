@@ -70,6 +70,12 @@
 #                    chips across the SAME rotation is the Twelve Data upgrade
 #                    over Finnhub's single global state. In LIVE, global
 #                    brightness + the chip track state (LIVE full / CLOSED dim).
+#   2b BRIGHTNESS FOLLOWS STATE — closed cards render dimmer (45%) than
+#                    LIVE ones (after-hours US equities get a gentler 85%
+#                    via the US/Eastern clock refinement). Mixed bright/dim
+#                    across the rotation is the state signal, not a fault;
+#                    set dim_by_state = false on the widget for uniform
+#                    brightness (the chip keeps the LIVE/CLSD info).
 #   3 AUTO-FORMAT [LIVE] — EUR/USD renders 4 decimals (e.g. 1.1467), BTC/USD with
 #                    a thousands separator (e.g. 64,906.62), AAPL/NVDA 2 decimals.
 #                    No per-symbol formatting was configured.

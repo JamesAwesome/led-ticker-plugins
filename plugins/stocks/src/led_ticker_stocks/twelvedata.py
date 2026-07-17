@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 
 from led_ticker_stocks.model import SymbolQuote, decimals_for
-from led_ticker_stocks.state import MarketState
+from led_ticker_stocks.state import MarketState, state_now_from_clock
 
 QUOTE_URL = "https://api.twelvedata.com/quote"
 API_USAGE_URL = "https://api.twelvedata.com/api_usage"
@@ -31,7 +31,22 @@ def _f(payload, key):
 def parse_quote(sym, payload):
     price = _f(payload, "close") or 0.0
     prev = _f(payload, "previous_close") or 0.0
-    state = MarketState.OPEN if payload.get("is_market_open") else MarketState.CLOSED
+    if payload.get("is_market_open"):
+        state = MarketState.OPEN
+    else:
+        state = MarketState.CLOSED
+        # TD reports only open/closed — no pre/after-hours — so US equities
+        # dropped straight from LIVE (100%) to CLOSED (45% layout dim) at
+        # 4pm ET, a brightness cliff Finnhub never had (it holds 85% "AH"
+        # until 8pm). Refine a closed NON-pair symbol with the existing
+        # US/Eastern clock: PRE/AFTER when the clock says so. The clock
+        # NEVER upgrades to OPEN (a holiday is clock-open but truly closed —
+        # TD's word wins) and pairs (forex/crypto) run on their own clocks,
+        # so they are never refined.
+        if "/" not in sym:
+            clock = state_now_from_clock()
+            if clock in (MarketState.PRE, MarketState.AFTER):
+                state = clock
     return SymbolQuote(
         sym=sym,
         price=price,

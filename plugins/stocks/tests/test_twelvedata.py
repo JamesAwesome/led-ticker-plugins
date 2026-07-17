@@ -181,3 +181,59 @@ async def test_fetch_quote_negative_header_is_ignored():
     client = TwelveDataClient("tok", session=session, on_credits=seen.append)
     await client.fetch_quote("EUR/USD")
     assert seen == []
+
+
+class TestClosedEquityClockRefinement:
+    """Twelve Data reports only open/closed (no pre/after-hours), so equities
+    dropped straight from LIVE (100%) to CLOSED (45% dim) at 4pm ET — a
+    visible brightness cliff Finnhub never had (it holds 85% 'AH' to 8pm).
+    For NON-pair symbols (no '/'), a TD 'closed' is refined with the existing
+    US/Eastern clock: PRE/AFTER when the clock says so, else CLOSED. The
+    clock NEVER upgrades to OPEN (a holiday is clock-open but truly closed —
+    TD's word wins); pairs (forex/crypto) are never refined."""
+
+    def _closed(self, sym):
+        return {
+            "symbol": sym,
+            "close": "208.89",
+            "previous_close": "210.35",
+            "is_market_open": False,
+        }
+
+    def test_closed_equity_becomes_after_hours_by_clock(self, monkeypatch):
+        import led_ticker_stocks.twelvedata as td
+
+        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.AFTER)
+        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.AFTER
+
+    def test_closed_equity_becomes_pre_market_by_clock(self, monkeypatch):
+        import led_ticker_stocks.twelvedata as td
+
+        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.PRE)
+        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.PRE
+
+    def test_clock_never_upgrades_closed_to_open(self, monkeypatch):
+        """Holiday: the clock says OPEN but TD says closed — stay CLOSED."""
+        import led_ticker_stocks.twelvedata as td
+
+        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.OPEN)
+        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.CLOSED
+
+    def test_pairs_are_never_clock_refined(self, monkeypatch):
+        """Forex/crypto pairs run on their own clocks — a closed pair stays
+        CLOSED even when the US clock says AFTER."""
+        import led_ticker_stocks.twelvedata as td
+
+        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.AFTER)
+        q = td.parse_quote("EUR/USD", self._closed("EUR/USD"))
+        assert q.state is MarketState.CLOSED
+
+    def test_open_from_td_is_untouched(self, monkeypatch):
+        import led_ticker_stocks.twelvedata as td
+
+        def _boom():
+            raise AssertionError("clock must not be consulted when TD says open")
+
+        monkeypatch.setattr(td, "state_now_from_clock", _boom)
+        payload = dict(self._closed("AAPL"), is_market_open=True)
+        assert td.parse_quote("AAPL", payload).state is MarketState.OPEN

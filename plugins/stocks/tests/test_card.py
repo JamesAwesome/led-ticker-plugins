@@ -202,3 +202,34 @@ def test_fit_price_size_shrinks_to_clear_a_wide_symbol():
         right_align_x(size, price, w, _MARGIN) >= sym_end + _SYM_PRICE_GAP
         or size == _PRICE_SIZES[-1]
     )
+
+
+def test_dim_by_state_false_renders_closed_at_full_brightness():
+    """The `dim_by_state = false` knob: a CLOSED card renders at the same
+    brightness as LIVE (the state CHIP still says CLSD — information stays,
+    the 45% dim goes). Compared by total luminance, not exact pixels."""
+
+    def _lum(dim_by_state):
+        canvas, real = _bigsign()
+        q = _up()
+        q.state = MarketState.CLOSED
+        draw_card_story(
+            canvas,
+            q,
+            MarketState.CLOSED,
+            {},
+            ["AAPL"],
+            focus_index=0,
+            total=1,
+            frame=0,
+            dim_by_state=dim_by_state,
+        )
+        return sum(
+            sum(real.get_pixel(x, y))
+            for y in range(real.height)
+            for x in range(real.width)
+        )
+
+    assert _lum(False) > _lum(True) * 1.5, (
+        "undimmed CLOSED card must be substantially brighter"
+    )

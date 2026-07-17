@@ -73,6 +73,7 @@ def draw_dashboard_story(
     total: int,
     frame: int,
     green_up: bool = True,
+    dim_by_state: bool = True,
     y_offset: int = 0,
 ) -> None:
     """Paint one symbol's longboi trading-dashboard view (a held layout).
@@ -84,7 +85,9 @@ def draw_dashboard_story(
     `green_up` flips the change-line + sparkline + watch-column COLORS only
     (arrow glyph stays directional) for non-US market conventions.
     """
-    dim = STATE_META[state].dim
+    # dim_by_state=False: full brightness regardless of market state (the
+    # state CHIP still reads LIVE/CLSD — information stays, the dim goes).
+    dim = STATE_META[state].dim if dim_by_state else 1.0
     now = time.monotonic()
     scale = getattr(canvas, "scale", 1)
     yoff = y_offset * scale

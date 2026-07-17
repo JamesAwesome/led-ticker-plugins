@@ -479,3 +479,22 @@ def test_story_reads_per_symbol_state(canvas, monkeypatch):
 
     assert captured["state"] is q.state
     assert captured["state"] is MarketState.OPEN
+
+
+def test_dim_by_state_flows_from_widget_to_layout(canvas, monkeypatch):
+    """The widget-level `dim_by_state = false` knob must reach the layout
+    call (per-story), so one config field kills all state dimming."""
+    import led_ticker_stocks.ticker as tk
+
+    seen = {}
+
+    def spy(canvas_, quote, state, x, **kwargs):
+        seen.update(kwargs)
+        return x
+
+    monkeypatch.setitem(tk.LAYOUTS, "crawl", spy)
+    story = tk._StockStory(
+        sym="AAPL", layout="crawl", all_symbols=["AAPL"], dim_by_state=False
+    )
+    story.draw(canvas, 0)
+    assert seen.get("dim_by_state") is False

@@ -29,6 +29,7 @@ class _StockStory(FrameAwareBase):
     sym: str
     layout: str | None
     green_up: bool = True
+    dim_by_state: bool = True
     padding: int = 6
     focus_index: int = 0
     all_symbols: list[str] = attrs.field(factory=list)
@@ -73,6 +74,7 @@ class _StockStory(FrameAwareBase):
                 y_offset=y_offset,
                 end_padding=self.padding,
                 green_up=self.green_up,
+                dim_by_state=self.dim_by_state,
             )
             return canvas, end
         # Held layouts (card/dashboard) paint in place; return a stable
@@ -89,6 +91,7 @@ class _StockStory(FrameAwareBase):
             total=len(self.all_symbols),
             frame=self.frame_for("held"),
             green_up=self.green_up,
+            dim_by_state=self.dim_by_state,
             y_offset=y_offset,
         )
         return canvas, getattr(canvas, "width", 0)
@@ -107,6 +110,13 @@ class StocksTicker:
     symbols: list[str]
     layout: str | None = None
     green_up: bool = True
+    # State-based brightness (LIVE 100% / PRE·AH 85% / CLOSED 45%) is the
+    # default; dim_by_state = false renders every card at full brightness
+    # while the state CHIP keeps carrying the LIVE/CLSD information. With
+    # per-symbol state (multi-asset), mixed open/closed rotations otherwise
+    # alternate bright/dim — informative, but at storefront distance some
+    # prefer uniform brightness.
+    dim_by_state: bool = True
     padding: int = 6
     update_interval: int = 60
     # Accepted-but-IGNORED: exists only so a v0.3.0 config with
@@ -138,6 +148,7 @@ class StocksTicker:
                 sym=s,
                 layout=self.layout,
                 green_up=self.green_up,
+                dim_by_state=self.dim_by_state,
                 padding=self.padding,
                 focus_index=i,
                 all_symbols=self.symbols,
@@ -190,6 +201,7 @@ class StocksTicker:
         session: object,
         layout: str | None = None,
         green_up: bool = True,
+        dim_by_state: bool = True,
         padding: int = 6,
         update_interval: int = 60,
         demo: bool = False,
@@ -219,6 +231,7 @@ class StocksTicker:
             symbols=list(symbols),
             layout=layout,
             green_up=green_up,
+            dim_by_state=dim_by_state,
             padding=padding,
             update_interval=update_interval,
             demo=demo,
