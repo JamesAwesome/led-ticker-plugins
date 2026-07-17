@@ -1,0 +1,217 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST — flair.stickers transition (flair >= 0.9.0)
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.18.0 (released; `git pull && make update` rebuilds)
+#   - led-ticker-flair >= 0.9.0 (PyPI pin in config/requirements-plugins.txt:
+#     led-ticker-flair==0.9.0), then `docker compose down -v && docker compose up -d`
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#   (Then try changing "taco" to "fire" in section 1 and re-validate — it must
+#    FAIL naming the slug. Put it back.)
+#
+# WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
+# and on each section's entry):
+#   1 TACO WALL          — tacos pop on one at a time (slow start, pile-on
+#                          accelerates) until the panel is a SOLID wall of
+#                          tilted taco cards at the midpoint — NO outgoing
+#                          text visible through it, anywhere. Then they pop
+#                          OFF in a different order revealing the incoming
+#                          text. White card rims crisp; no leftover pixels
+#                          after the last sticker leaves (clean snap).
+#   2 SEEDED REPEAT      — seed = 7: every firing of this section's
+#                          transition lays IDENTICAL tacos in the identical
+#                          spots/tilts. Watch it twice to confirm.
+#   3 MIXED SET          — only sun / moon / star_yellow cards, roughly even
+#                          mix, arrangement DIFFERENT every firing (no seed).
+#   4 RANDOM CHAOS       — bare form: a different random emoji per sticker
+#                          from the whole set (cats, hearts, pride flags,
+#                          weather...). New assortment every firing.
+#   5 BG HOLD            — the DARK BLUE background of the incoming widget
+#                          must be blue the instant the last stickers peel
+#                          away — no black flash, no "border on black" tick.
+#   6 SHADOW SWARM       — backing = "shadow": haloed tacos PILE OVER the
+#                          outgoing text (which stays visible through the
+#                          gaps — swarm, not wall), then peel. Then a bare
+#                          "none" pass: same, without the halos.
+#   7 PERF FEEL          — through every transition the motion stays smooth
+#                          (no stutter/hitch on the first sticker frame —
+#                          rasterization happens once up front, not per
+#                          frame). Scrolling text before/after stays fluid.
+#
+# If anything looks wrong: docs/visual-validation.md; reference renders in
+# plugins#61 (session GIFs: taco wall / random / smallsign).
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 2.5
+easing = "ease_in_out"
+between_sections = "cut"
+
+# ---------------------------------------------------------------------------
+# 1 · TACO WALL — the flagship: full cover, then peel
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["taco"]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 TACO WALL"
+font_color = [255, 190, 0]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "COVERED?"
+font_color = [80, 200, 60]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 2 · SEEDED REPEAT — same wall every firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["taco"], seed = 7}
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 SEED 7"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAME AGAIN"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 3 · MIXED SET — sun / moon / star_yellow only
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["sun", "moon", "star_yellow"]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 SUN MOON STAR"
+font_color = "rainbow"
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "MIXED"
+font_color = "color_cycle"
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 4 · RANDOM CHAOS — bare form, whole emoji set
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = "flair.stickers"
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 RANDOM"
+font_color = "rainbow"
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "CHAOS"
+font_color = "rainbow"
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 5 · BG HOLD — incoming bg must be there the instant the peel finishes
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["taco"]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 TO BLUE BG"
+font_color = [255, 190, 0]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "BLUE UNDER PEEL"
+font_color = [255, 244, 214]
+bg_color = [0, 0, 90]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 6 · SHADOW SWARM — the swarm looks (backing = "shadow", then "none")
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["taco"], backing = "shadow"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 SHADOW SWARM"
+font_color = "rainbow"
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "SEE-THROUGH?"
+font_color = [255, 190, 0]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 3
+transition = {type = "flair.stickers", emoji = ["taco"], backing = "none"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "6b BARE SPRITES"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "NO HALO"
+font_color = [80, 200, 60]
+font = "Inter-Bold"
+font_size = 44
