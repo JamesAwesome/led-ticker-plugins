@@ -51,8 +51,9 @@ identity is what makes suit-shaped rings possible at any radius:
 
 A ripple RING at radius r with thickness w is `inside(r) AND NOT inside(r−w)`.
 These live in the pure plan module exactly as the prototype validated them
-(`/tmp` prototype `proto.py` is the reference; its shapes read correctly at
-LED resolution in the gate GIFs — club and spade included).
+(the gated prototype is committed at
+`docs/superpowers/prototypes/2026-07-17-flair-poker-proto.py`; its shapes read
+correctly at LED resolution in the gate GIFs — club and spade included).
 
 ## Choreography (tuned constants from the gated prototype)
 
