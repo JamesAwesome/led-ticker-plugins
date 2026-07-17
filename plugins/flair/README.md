@@ -188,6 +188,57 @@ the outgoing widget stays visible through the gaps between sprites, by design.
 - **Single pass rasterization.** Stickers are captured, composed (sprite + black backing + white rim), and rotated ONCE during the first `frame_at` call for a given canvas size and scale — every subsequent frame just paints the pre-rasterized pixels at different positions and scales. The preparation is cheap compared to spinning emoji sprites mid-transition, so plan-time rasterization is preferred over per-frame capture.
 
 
+## Poker transition
+
+`flair.poker` holds the outgoing widget while rainbow card suits (♥ ♦ ♣ ♠) pattern in and emit suit-shaped ripple rings — an expanding heart emits heart-shaped rings, a club club-shaped ones — revealing the incoming widget through expanding ripple wakes until the whole panel is washed.
+
+Requires **led-ticker-core >= 4.18.0**.
+
+### Config
+
+All four suits (hearts, diamonds, clubs, spades cycle):
+
+```toml
+[[playlist.section]]
+transition = "flair.poker"
+```
+
+Diamonds only:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.poker", suits = ["diamonds"]}
+```
+
+Clubs only:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.poker", suits = ["clubs"]}
+```
+
+With seed for reproducibility:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.poker", suits = ["hearts", "spades"], seed = 42}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `suits` | list of strings | `["hearts", "diamonds", "clubs", "spades"]` (all four) | Suit pool to cycle. Valid names: `hearts`, `diamonds`, `clubs`, `spades`. Unknown suit names fail at config-load. |
+| `seed` | int, or omitted | omitted (OS entropy) | Fixes the glyph positions and hue ordering for reproducible patterns. See "Determinism and re-fire" below. |
+
+### Notes
+
+- **Suit shapes are pure math masks.** Each suit (heart, diamond, club, spade) is defined by an implicit curve or lobes; the same mathematical mask is used for both the resting glyph and every ripple ring, giving suit-shaped expanding waves.
+- **Two-phase design.** Phase one (first ~0.45 of the transition) paints glyphs and ripples over the outgoing widget. Phase two switches to the incoming widget and blacks out everything OUTSIDE the reveal union until the whole panel is washed — **incoming widget is revealed against black during the second half, not composited over the old content** (hardware constraint: no `GetPixel` support means no pixel-by-pixel reading and masking of the displayed content).
+- **Determinism and re-fire.** With an explicit `seed`, two FRESH `Poker` instances plan an identical FIRST firing. But firing the SAME instance a second time continues drawing from that same RNG stream, so consecutive firings vary at runtime even with a pinned seed. Leave `seed` unset for a real deploy.
+- **Plan-time ring pre-rasterization only.** Ring pixel-lists (the ripple wavefronts and glyph interiors) are computed once per firing and cached; per-frame work is SetPixel iteration only — no shape rasterization per tick. Tripwire test `test_no_ring_rasterization_after_first_frame` enforces this performance contract.
+
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
