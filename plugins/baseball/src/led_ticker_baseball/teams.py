@@ -86,6 +86,12 @@ MLB_TEAM_COLORS: dict[str, ColorTuple] = {
     "WSH": (171, 0, 3),
 }
 
+# Two-tone (c1, c2) chip colors per team, for _primitives.chip(). Placeholder
+# empty dict — Task 5 populates this from the design handoff's per-team chip
+# palette (design/…dc.html TEAMS table). Until then every key misses and
+# chip() falls back to its grey two-tone.
+MLB_TEAM_CHIPS: dict[str, tuple[ColorTuple, ColorTuple]] = {}
+
 # Full team names for display
 MLB_TEAM_NAMES: dict[str, str] = {
     "ARI": "D-backs",
