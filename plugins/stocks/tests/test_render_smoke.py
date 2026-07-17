@@ -59,7 +59,7 @@ def test_lights_pixels_and_advances_cursor():
 
 
 def test_state_dimming_lowers_total_brightness():
-    """Same quote, OPEN (dim=1.0) vs CLOSED (dim=0.45) on fresh canvases.
+    """Same quote, OPEN (dim=1.0) vs CLOSED (dim=0.70) on fresh canvases.
 
     Proves pal.dim(...) is actually applied to the rendered colors — a
     Mock-based test can't observe this because it never inspects pixel
@@ -86,12 +86,12 @@ def test_state_dimming_lowers_total_brightness():
     assert brightness_open > 0
     assert brightness_closed > 0
     assert brightness_closed < brightness_open, (
-        f"expected CLOSED (dim=0.45) brightness ({brightness_closed}) to be "
+        f"expected CLOSED (dim=0.70) brightness ({brightness_closed}) to be "
         f"measurably lower than OPEN (dim=1.0) brightness ({brightness_open})"
     )
-    # Roughly matches the 0.45/1.0 palette dim ratio; loose bound to tolerate
+    # Roughly matches the 0.70/1.0 palette dim ratio; loose bound to tolerate
     # font antialiasing / rounding — just confirms it's not a no-op scale.
-    assert brightness_closed < brightness_open * 0.75
+    assert brightness_closed < brightness_open * 0.85
 
 
 def test_up_vs_down_change_color_flips():

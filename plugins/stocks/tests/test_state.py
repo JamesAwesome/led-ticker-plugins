@@ -62,8 +62,19 @@ def test_state_now_from_clock_matches_explicit_now():
 
 def test_state_meta_dims_and_labels():
     assert STATE_META[MarketState.OPEN].dim == 1.0
-    assert STATE_META[MarketState.CLOSED].dim == 0.45
+    assert STATE_META[MarketState.CLOSED].dim == 0.70
     assert STATE_META[MarketState.PRE].dim == 0.85
     assert STATE_META[MarketState.OPEN].chip_label == "LIVE"
     assert STATE_META[MarketState.CLOSED].chip_label == "CLSD"
     assert STATE_META[MarketState.OPEN].pulses is True
+
+
+def test_state_meta_dim_ordering():
+    """Brightness semantics tripwire: LIVE brightest, extended-hours middle,
+    closed dimmest. A future dim tweak must not silently invert this."""
+    assert (
+        STATE_META[MarketState.OPEN].dim
+        > STATE_META[MarketState.PRE].dim
+        == STATE_META[MarketState.AFTER].dim
+        > STATE_META[MarketState.CLOSED].dim
+    )

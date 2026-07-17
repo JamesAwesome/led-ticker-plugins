@@ -26,7 +26,11 @@ STATE_META = {
     MarketState.PRE: StateMeta(0.85, "PRE", (255, 180, 0), False),
     MarketState.OPEN: StateMeta(1.0, "LIVE", (0, 255, 0), True),
     MarketState.AFTER: StateMeta(0.85, "AH", (170, 90, 255), False),
-    MarketState.CLOSED: StateMeta(0.45, "CLSD", (255, 60, 60), False),
+    # CLOSED at 0.70 (was 0.45): with per-symbol state under Twelve Data a
+    # mixed rotation shows LIVE and CLOSED cards side by side, and 45% read
+    # as a broken panel at storefront distance. 0.70 keeps the ordering
+    # OPEN 1.0 > PRE/AH 0.85 > CLOSED 0.70 while staying clearly readable.
+    MarketState.CLOSED: StateMeta(0.70, "CLSD", (255, 60, 60), False),
 }
 
 _SESSION_MAP = {
