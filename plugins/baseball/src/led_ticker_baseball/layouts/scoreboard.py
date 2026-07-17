@@ -4,6 +4,12 @@
 live cluster from x=176 (inning + outs pips, B/S count), bases diamonds
 right of center. next/postponed: centered matchup (full names) + time.
 
+The prototype scoreboardLong deliberately has NO paging dots — the
+promoLongCard dot position (w - n*8 - 6, h - 10) collides with the home
+score's px34 glyph box on live/final games. `story_index`/`story_total`
+are kept in the signature for the uniform layout-renderer contract
+(two_row uses them) but are intentionally unused here.
+
 Never raises on missing/None GameInfo fields — every optional numeric or
 string field is guarded with `or 0` / `or ""` rather than try/except, so a
 genuine bug in this module still surfaces in tests (render-loop breaker
@@ -14,13 +20,7 @@ from led_ticker.plugin import safe_scale
 
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._models import _format_game_time
-from led_ticker_baseball._paint import (
-    hires,
-    js_round,
-    paging_dots,
-    phys_wrap,
-    text_width,
-)
+from led_ticker_baseball._paint import hires, js_round, phys_wrap, text_width
 from led_ticker_baseball._primitives import diamond, pip, series_dashes
 from led_ticker_baseball.teams import MLB_TEAM_NAMES, _team_color
 
@@ -49,11 +49,8 @@ def render_scoreboard(
         _render_next(shim, game, tz, w, yo, ac, hc)
     else:
         _render_scored(shim, real, game, w, yo, ac, hc)
-
-    if story_total > 1:
-        dots_x = w - story_total * 8 - 6
-        dots_y = real.height - 10 + yo
-        paging_dots(real, story_total, story_index, dots_x, dots_y)
+    # No paging dots — see module docstring (prototype fidelity;
+    # score-glyph collision). story_index/story_total intentionally unused.
 
 
 def _render_next(shim, game, tz, w, yo, ac, hc):

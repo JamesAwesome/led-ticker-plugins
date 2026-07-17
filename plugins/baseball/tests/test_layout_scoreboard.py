@@ -150,20 +150,17 @@ def test_y_offset_shifts_everything():
     assert min(rows) - min(rows2) == 32
 
 
-def test_paging_dots_drawn_when_story_total_gt_1():
-    canvas, real = _longboi()
-    # preview state: no score digits reach the bottom-right corner, so the
-    # paging-dots region (w - n*8 - 6, h - 10) is unambiguous here — a live
-    # game's score glyphs can extend into this same corner (see the
-    # "no dots" test below), so region checks against a scored game would
-    # be unreliable.
-    g = _live_game(state="preview", inning=None, away_score=None, home_score=None)
-    render_scoreboard(canvas, g, TZ, story_index=0, story_total=3)
-    assert _lit_in(real, 470, 512, 54, 64)
-
-
-def test_no_paging_dots_when_story_total_1():
-    canvas, real = _longboi()
-    g = _live_game(state="preview", inning=None, away_score=None, home_score=None)
-    render_scoreboard(canvas, g, TZ, story_index=0, story_total=1)
-    assert not _lit_in(real, 470, 512, 54, 64)
+def test_no_paging_dots_even_when_story_total_gt_1():
+    """Deliberate omission: the prototype scoreboardLong has NO paging dots,
+    and the promoLongCard dot position (w - n*8 - 6, h - 10) collides with
+    the home score's px34 glyph box on live/final games. story_total > 1
+    must not change the rendered output at all — set-identity against a
+    story_total=1 render proves no dots were added anywhere (a bare region
+    check would be blind to dots hiding inside the score glyph's own
+    lit pixels)."""
+    g = _live_game(state="final", inning=None)
+    canvas1, real1 = _longboi()
+    render_scoreboard(canvas1, g, TZ, story_index=0, story_total=1)
+    canvas3, real3 = _longboi()
+    render_scoreboard(canvas3, g, TZ, story_index=0, story_total=3)
+    assert _lit_coords(real1) == _lit_coords(real3)
