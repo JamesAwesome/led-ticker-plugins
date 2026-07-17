@@ -233,7 +233,7 @@ fetches (`fetch_quote`) are NOT wrapped this way — a per-symbol quote failure 
 propagate (see the initial-fetch tolerance note in "Phase 4: the shared `QuoteCache`" below);
 only the status call has a clock fallback.
 
-**`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.45` CLSD /
+**`STATE_META` drives both label and dim, keep them paired** — `StateMeta.dim` (`0.70` CLSD /
 `0.85` PRE/AFTER / `1.0` OPEN) is applied via `_palette.dim(color, factor)` in every layout's
 render function, and `chip_label` (`CLSD`/`PRE`/`AH`/`LIVE`) + `chip_rgb` drive the state-chip
 label `card`/`dashboard` paint bottom-right/left of the hero block (Phase 1's `crawl` has no
