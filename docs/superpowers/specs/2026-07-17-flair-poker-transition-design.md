@@ -87,10 +87,16 @@ correctly at LED resolution in the gate GIFs — club and spade included).
   Tripwire mirrors stickers' mutation-verified
   `test_no_rasterization_after_first_frame`.
 - **Monotone reveal mask:** revealed pixels tracked in a per-firing
-  `bytearray(W×H)`; each frame adds the final-wave ring DELTAS (interior at
-  radius r ⊇ interior at r−1, so integer-radius ring lists ARE the deltas) —
-  every panel pixel is added exactly once across the whole transition
-  (amortized O(panel)).
+  `bytearray(W×H)`; each frame ACCUMULATES the final wave's integer-radius
+  ring pixel-lists (never removes). NOTE the correct math claim: suit
+  interiors are NOT radially monotone for every suit (a point just above a
+  club's center is inside a small club's top lobe but OUTSIDE a large
+  club's — the lobes scale outward), so "ring = delta of interiors" is
+  false in general. What the mask relies on is weaker and true for all
+  suits: the UNION of rings at every integer radius step equals the union
+  of interiors over all radii (any point ever inside has a smallest such
+  radius, and it lies in that radius's ring). Accumulation is what makes
+  the reveal monotone, not the shapes.
 - **Complement blackout:** per frame after cutover, scan the mask and
   SetPixel-black the unrevealed pixels — the count shrinks monotonically to
   zero (the fireworks complement idea; no per-row interval math needed
@@ -103,9 +109,12 @@ correctly at LED resolution in the gate GIFs — club and spade included).
 ## Testing
 
 - **Shape functions (pure):** point-in/point-out fixtures per suit (center
-  in, corners out, stem in for club/spade); ring = interior difference;
-  radius monotonicity (`inside(r1) ⊆ inside(r2)` for r1 < r2 — required by
-  the delta-mask design).
+  in for heart/diamond, stem in for club/spade, corners out); ring =
+  interior difference; **ring-union coverage** (the property the mask
+  actually needs): for each suit, the union of integer-radius rings up to R
+  covers `inside(R)` on a sampled grid — clubs are deliberately included
+  because they are NOT radially monotone and would catch a wrong
+  "delta" implementation.
 - **Plan:** determinism per seed; suit cycling respects the pool; stagger
   bounds.
 - **Full-reveal guarantee:** seed sweep (≥25 seeds) × both geometries ×
