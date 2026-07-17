@@ -183,70 +183,32 @@ async def test_fetch_quote_negative_header_is_ignored():
     assert seen == []
 
 
-class TestClosedEquityClockRefinement:
-    """Twelve Data reports only open/closed (no pre/after-hours), so equities
-    dropped straight from LIVE (100%) to CLOSED (45% dim) at 4pm ET — a
-    visible brightness cliff Finnhub never had (it holds 85% 'AH' to 8pm).
-    For NON-pair symbols (no '/'), a TD 'closed' is refined with the existing
-    US/Eastern clock: PRE/AFTER when the clock says so, else CLOSED. The
-    clock NEVER upgrades to OPEN (a holiday is clock-open but truly closed —
-    TD's word wins); pairs (forex/crypto) are never refined."""
+class TestClosedIsVerbatim:
+    """TD's binary is_market_open is reported VERBATIM — the 2026-07-17
+    redesign removed the wall-clock PRE/AH refinement (state is data; the
+    gentler closed look now lives in STATE_META's 0.70 CLOSED dim). This
+    also makes parsing deterministic: the old refinement made closed-equity
+    tests time-of-day dependent."""
 
-    def _closed(self, sym):
+    def _payload(self, is_open):
         return {
-            "symbol": sym,
+            "symbol": "AAPL",
             "close": "208.89",
             "previous_close": "210.35",
-            "is_market_open": False,
+            "is_market_open": is_open,
         }
 
-    def test_closed_equity_becomes_after_hours_by_clock(self, monkeypatch):
-        import led_ticker_stocks.twelvedata as td
-
-        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.AFTER)
-        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.AFTER
-
-    def test_closed_equity_becomes_pre_market_by_clock(self, monkeypatch):
-        import led_ticker_stocks.twelvedata as td
-
-        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.PRE)
-        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.PRE
-
-    def test_clock_never_upgrades_closed_to_open(self, monkeypatch):
-        """Holiday: the clock says OPEN but TD says closed — stay CLOSED."""
-        import led_ticker_stocks.twelvedata as td
-
-        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.OPEN)
-        assert td.parse_quote("AAPL", self._closed("AAPL")).state is MarketState.CLOSED
-
-    def test_pairs_are_never_clock_refined(self, monkeypatch):
-        """Forex/crypto pairs run on their own clocks — a closed pair stays
-        CLOSED even when the US clock says AFTER."""
-        import led_ticker_stocks.twelvedata as td
-
-        monkeypatch.setattr(td, "state_now_from_clock", lambda: MarketState.AFTER)
-        q = td.parse_quote("EUR/USD", self._closed("EUR/USD"))
+    def test_closed_stays_closed_at_any_runtime_clock(self):
+        q = parse_quote("AAPL", self._payload(False))
         assert q.state is MarketState.CLOSED
 
-    def test_open_from_td_is_untouched(self, monkeypatch):
+    def test_open_maps_to_open(self):
+        q = parse_quote("AAPL", self._payload(True))
+        assert q.state is MarketState.OPEN
+
+    def test_module_has_no_clock_dependency(self):
+        """The parser must not import the wall clock — refinement must not
+        quietly return."""
         import led_ticker_stocks.twelvedata as td
 
-        def _boom():
-            raise AssertionError("clock must not be consulted when TD says open")
-
-        monkeypatch.setattr(td, "state_now_from_clock", _boom)
-        payload = dict(self._closed("AAPL"), is_market_open=True)
-        assert td.parse_quote("AAPL", payload).state is MarketState.OPEN
-
-    def test_clock_failure_degrades_to_closed_not_raising(self, monkeypatch):
-        """A clock error (e.g. missing tzdata in a stripped container) must
-        not propagate — it would abort the WHOLE poll cycle every cycle.
-        Degrade to plain CLOSED."""
-        import led_ticker_stocks.twelvedata as td
-
-        def _boom():
-            raise RuntimeError("no tzdata")
-
-        monkeypatch.setattr(td, "state_now_from_clock", _boom)
-        q = td.parse_quote("AAPL", self._closed("AAPL"))
-        assert q.state is MarketState.CLOSED
+        assert not hasattr(td, "state_now_from_clock")

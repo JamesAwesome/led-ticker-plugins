@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 
 from led_ticker_stocks.model import SymbolQuote, decimals_for
-from led_ticker_stocks.state import MarketState, state_now_from_clock
+from led_ticker_stocks.state import MarketState
 
 QUOTE_URL = "https://api.twelvedata.com/quote"
 API_USAGE_URL = "https://api.twelvedata.com/api_usage"
@@ -31,34 +31,11 @@ def _f(payload, key):
 def parse_quote(sym, payload):
     price = _f(payload, "close") or 0.0
     prev = _f(payload, "previous_close") or 0.0
-    if payload.get("is_market_open"):
-        state = MarketState.OPEN
-    else:
-        state = MarketState.CLOSED
-        # TD reports only open/closed — no pre/after-hours — so US equities
-        # dropped straight from LIVE (100%) to CLOSED (45% layout dim) at
-        # 4pm ET, a brightness cliff Finnhub never had (it holds 85% "AH"
-        # until 8pm). Refine a closed NON-pair symbol with the existing
-        # US/Eastern clock: PRE/AFTER when the clock says so; the clock is
-        # never allowed to say OPEN (TD's closed verdict wins), and pairs
-        # (forex/crypto) run on their own clocks, so they are never refined.
-        #
-        # KNOWN APPROXIMATIONS (hostile review, 2026-07-16): (1) on a US
-        # market HOLIDAY the pre/after windows still label PRE/AH (85%) for
-        # a day with no session — detecting that needs a holiday calendar
-        # TD's /quote doesn't carry; the label is soft-wrong, the guard
-        # below keeps regular hours correctly CLOSED. (2) a non-pair
-        # FOREIGN listing gets US-Eastern windows stamped on it — the
-        # refinement assumes US equities (documented in the README).
-        # Failure-tolerant: a clock error (e.g. missing tzdata) must not
-        # abort the whole poll cycle — degrade to plain CLOSED.
-        if "/" not in sym:
-            try:
-                clock = state_now_from_clock()
-            except Exception:
-                clock = MarketState.CLOSED
-            if clock in (MarketState.PRE, MarketState.AFTER):
-                state = clock
+    # TD reports only open/closed per symbol (no pre/after-hours sessions).
+    # That binary is reported VERBATIM — no wall-clock refinement (state is
+    # data; the closed-look policy lives in STATE_META's dim values). See
+    # docs/superpowers/specs/2026-07-17-stocks-state-dimming-redesign.md.
+    state = MarketState.OPEN if payload.get("is_market_open") else MarketState.CLOSED
     return SymbolQuote(
         sym=sym,
         price=price,
