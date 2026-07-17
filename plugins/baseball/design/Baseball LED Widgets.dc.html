@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="_ds/led-ticker-flight-tracker-b0436575-c437-4b55-9f53-849d4e5692c6/_ds_bundle.js"></script>
+<style>
+  html,body{margin:0;background:#07090d;color:#e7ecf3;font-family:Inter,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#ffb400;text-decoration:none}
+  a:hover{color:#ffca4d}
+  *{box-sizing:border-box}
+</style>
+</helmet>
+<div style="max-width:1120px;margin:0 auto;padding:34px 26px 90px">
+
+  <header style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:22px;margin-bottom:8px">
+    <div>
+      <div style="font-family:Silkscreen,monospace;font-size:11px;letter-spacing:.28em;color:#465a82;margin-bottom:12px">LED-TICKER · BALLPARK EDITION</div>
+      <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.05">Baseball Widget — LED Views</h1>
+      <p style="margin:10px 0 0;max-width:560px;color:#9aa7ba;font-size:14px;line-height:1.5">Standings, promotions, Statcast and attendance rebuilt in the dot-matrix language of the flight tracker and stock ticker — one semantic hue per field, brand chips, held cards and live crawls, tuned for <b style="color:#e7ecf3">bigsign</b> and <b style="color:#e7ecf3">longboi</b>.</p>
+    </div>
+  </header>
+
+  <div style="position:sticky;top:0;z-index:20;margin:0 -26px 30px;padding:12px 26px;background:rgba(7,9,13,.82);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+    <span style="font-family:Silkscreen,monospace;font-size:10px;letter-spacing:.2em;color:#465a82">CONTROLS</span>
+    <label style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#c4cfdd">
+      SPEED
+      <input id="ctl-speed" type="range" min="0.25" max="2.5" step="0.05" value="1" style="width:150px;accent-color:#ffb400">
+      <span id="ctl-speed-val" style="font-family:Silkscreen,monospace;font-size:11px;color:#ffb400;min-width:34px">1.0×</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#c4cfdd;cursor:pointer">
+      <input id="ctl-glow" type="checkbox" checked style="accent-color:#3cdc3c;width:15px;height:15px"> GLOW
+    </label>
+    <button id="ctl-play" aria-pressed="false" style="font-family:Inter;font-size:12.5px;font-weight:600;color:#07090d;background:#e7ecf3;border:0;border-radius:7px;padding:7px 15px;cursor:pointer">❚❚ Pause</button>
+    <span style="margin-left:auto;font-family:Silkscreen,monospace;font-size:9.5px;letter-spacing:.12em;color:#2f3d55">30 FPS · SAMPLE FEED</span>
+  </div>
+
+  <section data-screen-label="Scores" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#e7ecf3">00</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">Scores</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">The default widget, rebuilt from the live-data reference. Team names in brand color, scores white; ▲/▼ inning, bases diamonds, and a color-coded count (balls green · strikes yellow · outs red). Stories rotate: live → final → next. bigsign runs the two-row layout (matchup band over a state band); longboi holds the full scoreboard.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+      <div style="width:512px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · TWO_ROW · 256×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-scores-big"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · SCOREBOARD · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-scores-long"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Standings" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#00dcff">01</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">Standings</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">Division board — brand chip, W-L, PCT, games back, streak. bigsign fits the five; longboi adds PCT and L10 columns.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+      <div style="width:512px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · 256×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-standings-big"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-standings-long"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Promotions" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#ff50ff">02</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">Promotions</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">bigsign holds one promo card and pages through the homestand; longboi runs the schedule as a live hi-res crawl.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+      <div style="width:512px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · 256×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-promo-big"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · CRAWL · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-promo-long"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · CARD · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-promo-longcard"></canvas></div>
+      </div>
+    </div>
+    <div style="margin-top:22px;padding-top:18px;border-top:1px dashed rgba(255,255,255,.1)">
+      <div style="font-family:Silkscreen,monospace;font-size:10px;letter-spacing:.14em;color:#8593a8;margin-bottom:4px">LONG-TEXT OVERFLOW</div>
+      <p style="margin:0 0 14px;color:#6f7d92;font-size:12.5px;max-width:640px">When a promo name is too wide for the card's left column (e.g. “Hawaiian Shirt &amp; Beach Towel Giveaway”), it scrolls within a fixed band, clipped so it never touches the right-hand info block.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+        <div style="width:1024px;max-width:100%">
+          <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">CARD · NAME SCROLLS · 512×64</div>
+          <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-promo-longscroll"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Statcast" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#ffb400">03</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">Statcast</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">Notable batted balls rotate hero-style. longboi breaks out exit velo, launch, pitch — and a procedural trajectory arc for distance.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+      <div style="width:512px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · 256×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-statcast-big"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-statcast-long"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Attendance" style="margin-bottom:20px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#3cdc3c">04</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">Attendance</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">Tonight's paid gate with a capacity fill bar (season-average tick), % full and vs-average.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+      <div style="width:512px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · 256×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-attend-big"></canvas></div>
+      </div>
+      <div style="width:1024px;max-width:100%">
+        <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · 512×64</div>
+        <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-attend-long"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  C = {
+    ident:[255,255,255], win:[60,220,60], loss:[255,60,60],
+    amber:[255,180,0], cyan:[0,220,255], magenta:[255,80,255],
+    violet:[170,90,255], label:[70,90,130], idx:[0,220,255], live:[0,255,0],
+  };
+  TEAMS = {
+    NYY:{c1:[28,44,92],  c2:[236,240,246]},
+    BOS:{c1:[198,42,52], c2:[30,52,110]},
+    TBR:{c1:[28,86,166], c2:[176,220,60]},
+    TOR:{c1:[34,110,206],c2:[220,52,58]},
+    BAL:{c1:[242,112,28],c2:[232,234,238]},
+    HOU:{c1:[236,110,30], c2:[24,44,92]},
+    SEA:{c1:[26,72,92],   c2:[140,196,168]},
+    LAD:{c1:[30,84,164],  c2:[236,240,246]},
+    SF: {c1:[240,110,40],  c2:[222,224,228]},
+    ATL:{c1:[200,42,56],  c2:[30,52,110]},
+    CHC:{c1:[30,74,152],  c2:[212,52,62]},
+  };
+  // SCORES — MLB Stats API /schedule?hydrate=linescore + /game/{pk}/feed/live
+  //   ar/hr = liveData.linescore.teams.away|home.runs · half = isTopInning (T/B) · inn = currentInning
+  //   balls/strikes/outs = linescore.balls|strikes|outs · b1/b2/b3 = linescore.offense.first|second|third (present = runner)
+  //   state = gameData.status (Scheduled/In Progress/Final) · start = gameData.datetime.dateTime
+  //   as/hs = series wins (schedule seriesStatus, include_series_status) — SPORTS-side, only in postseason/series context
+  GAMES = [
+    {away:"TB", an:"Rays", home:"BOS", hn:"Red Sox", ar:0, hr:10, half:"B", inn:8, b1:true,b2:false,b3:false, balls:1, strikes:2, outs:1, as:1, hs:1, state:"live"},
+    {away:"NYM",an:"Mets", home:"PHI", hn:"Phillies",ar:4, hr:1,  as:2, hs:1, state:"final"},
+    {away:"TB", an:"Rays", home:"BOS", hn:"Red Sox", start:"Today 7:10 PM", state:"next"},
+    {away:"NYM",an:"Mets", home:"PHI", hn:"Phillies",start:"Tmrw 4:05 PM",  state:"next"},
+  ];
+  SCORECOL = { TB:[0.16,0.34,0.70], BOS:[0.82,0.16,0.20], PHI:[0.88,0.13,0.16], NYM:[0.10,0.24,0.62] };
+  YEL = [1,0.85,0];
+  ORANGE = [1,0.5,0];
+  // STANDINGS — /standings?leagueId=103,104
+  //   w/l = teamRecords.wins|losses · pct = winningPercentage · gb = gamesBack
+  //   l10 = teamRecords.records.splitRecords[type=lastTen] · strk = teamRecords.streak.streakCode
+  STANDINGS = { div:"AL EAST", rows:[
+    {t:"NYY", w:58, l:39, pct:".598", gb:"\u2014", l10:"7-3", strk:"W3"},
+    {t:"BOS", w:54, l:43, pct:".557", gb:"4.0",   l10:"6-4", strk:"W1"},
+    {t:"TBR", w:52, l:45, pct:".536", gb:"6.0",   l10:"5-5", strk:"L2"},
+    {t:"TOR", w:49, l:48, pct:".505", gb:"9.0",   l10:"4-6", strk:"L1"},
+    {t:"BAL", w:44, l:53, pct:".454", gb:"14.0",  l10:"3-7", strk:"L4"},
+  ]};
+  // PROMOTIONS — /schedule?hydrate=promotions → dates[].games[].promotions[]
+  //   Real promotion object fields: name, offerType, imageUrl, imageAltText, presentedBy (sponsor).
+  //   There is NO free-text tagline/detail field — offerType is the categorical label ("Giveaway",
+  //   "Theme Night", "Fan Freebie", etc.); presentedBy is the sponsor. date/opp/time come from /schedule.
+  PROMOS = [
+    {date:"FRI JUL 18", name:"BOBBLEHEAD NIGHT",  opp:"BOS", offerType:"GIVEAWAY",    presentedBy:"CHASE",     time:"7:05"},
+    {date:"SAT JUL 19", name:"FIREWORKS NIGHT",   opp:"BOS", offerType:"THEME NIGHT", presentedBy:"",          time:"6:35"},
+    {date:"SUN JUL 20", name:"KIDS RUN THE BASES",opp:"BOS", offerType:"FAN EXPERIENCE", presentedBy:"NIKE",   time:"1:35"},
+    {date:"FRI JUL 25", name:"CAP GIVEAWAY",      opp:"TBR", offerType:"GIVEAWAY",    presentedBy:"NEW ERA",   time:"7:05"},
+    {date:"SAT JUL 26", name:"90s THROWBACK",     opp:"TBR", offerType:"THEME NIGHT", presentedBy:"",          time:"6:35"},
+  ];
+  // STATCAST — /game/{pk}/playByPlay (GUMBO) allPlays[].playEvents[]
+  //   ev = hitData.launchSpeed · la = hitData.launchAngle · dist = hitData.totalDistance
+  //   res = result.event · pv = pitchData.startSpeed · pt = details.type.code (pitch type)
+  //   p = matchup.batter.fullName. (Deeper Statcast metrics live on Baseball Savant, not statsapi.)
+  STATCAST = [
+    {p:"RAMIREZ", ev:114.2, la:28, dist:451, res:"HOME RUN", pv:94.1, pt:"SL"},
+    {p:"CARTER",  ev:112.0, la:24, dist:438, res:"HOME RUN", pv:97.8, pt:"FF"},
+    {p:"OKADA",   ev:106.4, la:9,  dist:0,   res:"LINE OUT", pv:88.4, pt:"CH"},
+    {p:"DELUCA",  ev:110.7, la:31, dist:429, res:"HOME RUN", pv:91.2, pt:"CU"},
+    {p:"BENNETT", ev:104.8, la:15, dist:0,   res:"DOUBLE",   pv:95.6, pt:"FF"},
+  ];
+  // ATTENDANCE — paid = /game/{pk}/feed/live gameData.gameInfo.attendance
+  //   cap = /venues/{id}?hydrate=fieldInfo → fieldInfo.capacity
+  //   avg = /attendance?teamId=&season= → records.attendanceAverage
+  //   home = team abbr. (100% full = sellout, no separate field.)
+  ATTEND = { paid:46537, cap:46537, avg:38112, home:"NYY" };
+
+  // ---------- primitives ----------
+  yc(px){ return Math.round((64 - px*0.74)/2); }
+  hw(sign,t,px,wt){ return sign.hiresMask(t, px, wt||"700").w; }
+  chip(sign,x,y,H,team){
+    var tm = this.TEAMS[team] || {c1:[150,160,175],c2:[90,100,115]};
+    var rad = H>=10?2:1;
+    for(var r=0;r<H;r++) for(var cx=0;cx<H;cx++){
+      var corner=(cx<rad&&r<rad)||(cx>=H-rad&&r<rad)||(cx<rad&&r>=H-rad)||(cx>=H-rad&&r>=H-rad);
+      if(corner) continue;
+      var col=(cx-r)>0?tm.c2:tm.c1;
+      sign.px(x+cx,y+r,col,1);
+    }
+  }
+  drawRecord(sign,x,y,w,l,px){
+    var cx=x;
+    cx += sign.hires(""+w, cx,y,this.C.win,px,"700");
+    cx += sign.hires("-",  cx,y,this.C.label,px,"700");
+    cx += sign.hires(""+l, cx,y,this.C.loss,px,"700");
+    return cx-x;
+  }
+  strkColor(s){ return s.charAt(0)==="W"?this.C.win:this.C.loss; }
+  resColor(r){ return /HOME RUN|HR|GRAND/.test(r)?this.C.win : /OUT|FLY|POP|GIDP/.test(r)?this.C.loss : this.C.amber; }
+  pagingDots(sign,n,cur,x,y){
+    var s=sign.scale;
+    for(var i=0;i<n;i++) sign.blit(LED.GLYPH.dot, x+i*(2*s), y, i===cur?this.C.ident:this.C.label, s, {});
+  }
+  livePulse(sign,t){ /* removed per design */ }
+  drawBar(sign,x,y,w,h,frac,fill,tickFrac){
+    for(var i=0;i<w;i++) for(var yy=0;yy<h;yy++) sign.px(x+i,y+yy,this.C.label,0.32);
+    var fw=Math.round(w*Math.max(0,Math.min(1,frac)));
+    for(var i2=0;i2<fw;i2++){ var b=0.85+0.15*(i2/Math.max(1,fw)); for(var y2=0;y2<h;y2++) sign.px(x+i2,y+y2,fill,b); }
+    if(tickFrac!=null){ var tx=x+Math.round(w*tickFrac); for(var y3=-1;y3<h+1;y3++) sign.px(tx,y+y3,this.C.ident,0.9); }
+  }
+  traj(sign,x,y,w,h,la,live){
+    for(var i=0;i<w;i++) sign.px(x+i,y+h-1,this.C.label,0.45); // ground
+    if(la<=0){ return; }
+    var peak=Math.max(4,Math.min(h-2,(la/40)*(h-1)));
+    var prev=null;
+    for(var i2=0;i2<=w;i2++){
+      var u=i2/w;
+      var py=y+h-1-Math.round(peak*4*u*(1-u));
+      sign.px(x+i2,py,this.C.magenta,1);
+      if(prev!=null){ var lo=Math.min(prev,py),hi=Math.max(prev,py); for(var yy=lo;yy<=hi;yy++) sign.px(x+i2,yy,this.C.magenta,0.6); }
+      prev=py;
+    }
+    sign.px(x,y+h-1,this.C.ident,1);
+  }
+  dim(rgb,b){ return [rgb[0]*b, rgb[1]*b, rgb[2]*b]; }
+  dotSq(sign,x,y,s,rgb,b){ for(var i=0;i<s;i++) for(var j=0;j<s;j++) sign.px(x+i,y+j,rgb,b); }
+  homeColor(){
+    var tm=this.TEAMS[this.ATTEND.home]; if(!tm) return this.C.win;
+    var c=tm.c1, mx=Math.max(c[0],c[1],c[2],0.001), k=0.92/mx; // lift to LED brightness, keep hue
+    return [Math.min(1,c[0]*k), Math.min(1,c[1]*k), Math.min(1,c[2]*k)];
+  }
+  ycP(px){ return Math.round((64 - px*0.72)/2); }
+  diamond(sign,cx,cy,r,filled,col,b){
+    b=b==null?1:b;
+    for(var dy=-r;dy<=r;dy++) for(var dx=-r;dx<=r;dx++){
+      var m=Math.abs(dx)+Math.abs(dy);
+      if(filled ? m<=r : (m<=r && m>=r-1)) sign.px(cx+dx,cy+dy,col,b);
+    }
+  }
+  pip(sign,cx,cy,r,filled,col,b){
+    b=b==null?1:b;
+    for(var dy=-r;dy<=r;dy++) for(var dx=-r;dx<=r;dx++){
+      var d=Math.round(Math.sqrt(dx*dx+dy*dy));
+      if(filled ? d<=r : d===r) sign.px(cx+dx,cy+dy,col,b);
+    }
+  }
+  dash(sign,x,y,w,col,b){ for(var i=0;i<w;i++){ sign.px(x+i,y,col,b); sign.px(x+i,y+1,col,b); } }
+  scoreColor(g,side){
+    if(g.state!=="final") return this.C.ident;
+    var win = side==="a" ? g.ar>g.hr : g.hr>g.ar;
+    return win ? this.C.win : this.C.ident;
+  }
+  basesSeg(sign,g,r){
+    var self=this, step=r*2+3, w=step*3-3;
+    return {w:w, draw:function(x,midY){
+      var occ=[g.b3,g.b2,g.b1];
+      for(var i=0;i<3;i++) self.diamond(sign, x+r+i*step, midY, r, occ[i], occ[i]?self.C.ident:self.C.label, occ[i]?1:0.7);
+    }};
+  }
+  buildTickerSegs(sign,g,px){
+    var C=this.C, segs=[], ac=this.SCORECOL[g.away]||C.ident, hc=this.SCORECOL[g.home]||C.ident, Y=this.ycP(px);
+    if(g.state==="next"){
+      segs.push({t:g.an, px:px, wt:"700", rgb:ac, y:Y}); segs.push({gap:11});
+      segs.push({t:"@", px:px, wt:"700", rgb:C.ident, y:Y}); segs.push({gap:11});
+      segs.push({t:g.hn, px:px, wt:"700", rgb:hc, y:Y}); segs.push({gap:13});
+      segs.push({t:g.start, px:px, wt:"600", rgb:C.ident, y:Y});
+      return segs;
+    }
+    segs.push({t:g.away, px:px, wt:"700", rgb:ac, y:Y}); segs.push({gap:9});
+    segs.push({t:""+g.ar, px:px, wt:"700", rgb:this.scoreColor(g,"a"), y:Y}); segs.push({gap:15});
+    segs.push({t:g.home, px:px, wt:"700", rgb:hc, y:Y}); segs.push({gap:9});
+    segs.push({t:""+g.hr, px:px, wt:"700", rgb:this.scoreColor(g,"h"), y:Y}); segs.push({gap:15});
+    if(g.state==="live"){
+      segs.push({t:(g.half==="T"?"\u25B2":"\u25BC")+g.inn, px:px, wt:"700", rgb:C.ident, y:Y}); segs.push({gap:14});
+      segs.push(this.basesSeg(sign,g,6)); segs.push({gap:14});
+      segs.push({t:""+g.balls, px:px, wt:"700", rgb:C.win, y:Y}); segs.push({gap:5});
+      segs.push({t:"\u00B7", px:px, wt:"700", rgb:C.label, y:Y}); segs.push({gap:5});
+      segs.push({t:""+g.strikes, px:px, wt:"700", rgb:this.YEL, y:Y}); segs.push({gap:5});
+      segs.push({t:"\u00B7", px:px, wt:"700", rgb:C.label, y:Y}); segs.push({gap:5});
+      segs.push({t:""+g.outs, px:px, wt:"700", rgb:C.loss, y:Y});
+    } else {
+      segs.push({t:"(Final)", px:px, wt:"600", rgb:C.ident, y:Y});
+    }
+    return segs;
+  }
+  tickerScores(sign,ctx){
+    var px = sign.physW>300 ? 30 : 28, segs=[];
+    for(var i=0;i<this.GAMES.length;i++){
+      segs = segs.concat(this.buildTickerSegs(sign,this.GAMES[i],px));
+      segs.push({gap:22});
+      segs.push({t:"\u2022", px:px, wt:"700", rgb:this.C.label, y:this.ycP(px)});
+      segs.push({gap:22});
+    }
+    var w=this.streamW(sign,segs), off=((ctx.t/1000)*46*ctx.speed)%w, x=sign.physW-off, guard=0;
+    while(x<sign.physW && guard<10){ if(x+w>0) this.drawStream(sign,segs,x); x+=w; guard++; }
+  }
+  twoRowScores(sign,ctx){
+    var C=this.C, n=this.GAMES.length, idx=Math.floor(ctx.t/(5200/ctx.speed))%n, g=this.GAMES[idx];
+    var ac=this.SCORECOL[g.away]||C.ident, hc=this.SCORECOL[g.home]||C.ident;
+    // divider between bands
+    for(var dx=4;dx<252;dx+=3) sign.px(dx, 31, C.label, 0.35);
+    if(g.state==="next"){
+      var tp=[]; tp.push({t:g.away,px:20,wt:"700",rgb:ac,y:5}); tp.push({gap:8});
+      tp.push({t:"@",px:20,wt:"700",rgb:C.ident,y:5}); tp.push({gap:8});
+      tp.push({t:g.home,px:20,wt:"700",rgb:hc,y:5});
+      var tw=this.streamW(sign,tp); this.drawStream(sign,tp,Math.round((256-tw)/2));
+      var sw=this.hw(sign,g.start,18,"700"); sign.hires(g.start, Math.round((256-sw)/2), 38, C.ident, 18, "700");
+      return;
+    }
+    // top band: away  score ......... home  score
+    var x=6;
+    x += sign.hires(g.away, x, 4, ac, 20, "700") + 7;
+    x += sign.hires(""+g.ar, x, 4, this.scoreColor(g,"a"), 20, "700");
+    this.seriesDashes(sign, x+7, 12, g.as, ac);
+    var rx=250;
+    var hsw=this.hw(sign,""+g.hr,20,"700"); rx-=hsw; sign.hires(""+g.hr, rx, 4, this.scoreColor(g,"h"), 20, "700"); rx-=7;
+    var hnw=this.hw(sign,g.home,20,"700"); rx-=hnw; sign.hires(g.home, rx, 4, hc, 20, "700");
+    this.seriesDashes(sign, rx-19, 12, g.hs, hc);
+    // bottom band: state
+    if(g.state==="live"){
+      var bx=6;
+      bx += sign.hires((g.half==="T"?"\u25B2":"\u25BC")+g.inn, bx, 35, C.loss, 18, "700") + 12;
+      // bases cluster
+      this.diamond(sign, bx+8, 39, 6, g.b2, g.b2?C.ident:C.label, g.b2?1:0.7);
+      this.diamond(sign, bx, 51, 6, g.b3, g.b3?C.ident:C.label, g.b3?1:0.7);
+      this.diamond(sign, bx+16, 51, 6, g.b1, g.b1?C.ident:C.label, g.b1?1:0.7);
+      bx += 30;
+      // count balls·strikes·outs
+      var cx=250, seq=[[""+g.outs,C.loss],["\u00B7",C.label],[""+g.strikes,this.YEL],["\u00B7",C.label],[""+g.balls,C.win]];
+      for(var i=0;i<seq.length;i++){ var w=this.hw(sign,seq[i][0],18,"700"); cx-=w; sign.hires(seq[i][0], cx, 35, seq[i][1], 18, "700"); cx-=3; }
+    } else {
+      var fw=this.hw(sign,"FINAL",18,"700"); sign.hires("FINAL", Math.round((256-fw)/2), 37, C.label, 18, "700");
+    }
+    this.pagingDots(sign, n, idx, 256-n*8-4, 60);
+  }
+  scoreboardLong(sign,ctx){
+    var C=this.C, n=this.GAMES.length, idx=Math.floor(ctx.t/(5600/ctx.speed))%n, g=this.GAMES[idx];
+    var ac=this.SCORECOL[g.away]||C.ident, hc=this.SCORECOL[g.home]||C.ident;
+    if(g.state==="next"){
+      var m=[]; m.push({t:g.an,px:24,wt:"700",rgb:ac,y:6}); m.push({gap:10}); m.push({t:"@",px:24,wt:"700",rgb:C.ident,y:6}); m.push({gap:10}); m.push({t:g.hn,px:24,wt:"700",rgb:hc,y:6});
+      var mw=this.streamW(sign,m); this.drawStream(sign,m,Math.round((sign.physW-mw)/2));
+      var tw=this.hw(sign,g.start,22,"700"); sign.hires(g.start, Math.round((sign.physW-tw)/2), 40, C.ident, 22, "700");
+      return;
+    }
+    var anw=sign.hires(g.an, 8, 6, ac, 20, "700");
+    this.seriesDashes(sign, 8+anw+8, 8, g.as, ac);
+    sign.hires(""+g.ar, 8, 28, this.scoreColor(g,"a"), 34, "700");
+    var hnw=this.hw(sign,g.hn,20,"700"); sign.hires(g.hn, 504-hnw, 6, hc, 20, "700");
+    this.seriesDashes(sign, 504-hnw-8-12, 8, g.hs, hc);
+    var hsw=this.hw(sign,""+g.hr,34,"700"); sign.hires(""+g.hr, 504-hsw, 28, this.scoreColor(g,"h"), 34, "700");
+    if(g.state==="live"){
+      var inn=(g.half==="T"?"\u25B2":"\u25BC")+g.inn;
+      var ix=176;
+      ix += sign.hires(inn, ix, 5, C.ident, 18, "700") + 11;
+      for(var o=0;o<3;o++){ var out=o<g.outs; this.pip(sign, ix+5+o*14, 14, 5, out, out?C.loss:C.label, out?1:0.7); }
+      var cx=176, cy=32;
+      cx += sign.hires(""+g.balls, cx, cy, C.win, 16, "700") + 3;
+      cx += sign.hires("B", cx, cy, C.ident, 16, "700") + 9;
+      cx += sign.hires(""+g.strikes, cx, cy, this.YEL, 16, "700") + 3;
+      sign.hires("S", cx, cy, C.ident, 16, "700");
+      // bases diamond (right of center)
+      this.diamond(sign, 340, 20, 7, g.b2, g.b2?C.ident:C.label, g.b2?1:0.7);
+      this.diamond(sign, 324, 34, 7, g.b3, g.b3?C.ident:C.label, g.b3?1:0.7);
+      this.diamond(sign, 356, 34, 7, g.b1, g.b1?C.ident:C.label, g.b1?1:0.7);
+    } else {
+      var fw=this.hw(sign,"FINAL",22,"700"); sign.hires("FINAL", Math.round((sign.physW-fw)/2), 20, C.label, 22, "700");
+    }
+  }
+  seriesDashes(sign,x,y,won,col){
+    for(var i=0;i<2;i++){ var w=i<won; this.dash(sign, x, y+i*5, 12, w?this.ORANGE:this.C.label, w?1:0.5); }
+  }
+
+  // hi-res crawl helpers (no held zone; engine clips out-of-bounds)
+  segW(sign,s){ if(s.gap!=null) return s.gap; if(s.w!=null) return s.w; if(s.chip) return s.H; return this.hw(sign,s.t,s.px,s.wt); }
+  streamW(sign,segs){ var w=0; for(var i=0;i<segs.length;i++) w+=this.segW(sign,segs[i]); return w; }
+  drawStream(sign,segs,x){
+    for(var i=0;i<segs.length;i++){ var s=segs[i], w=this.segW(sign,s);
+      if(s.gap==null){
+        if(s.draw){ s.draw(Math.round(x), 32); }
+        else if(s.chip){ if(x> -s.H && x<sign.physW) this.chip(sign,Math.round(x),s.cy,s.H,s.chip); }
+        else { var m=sign.hiresMask(s.t,s.px,s.wt); sign.blit(m,Math.round(x),s.y,s.rgb,1,{}); }
+      }
+      x+=w;
+    }
+  }
+
+  // ---------- STANDINGS ----------
+  standingsBig(sign,ctx){
+    var C=this.C, rows=this.STANDINGS.rows;
+    sign.hires(this.STANDINGS.div, 4, 1, C.idx, 8, "700");
+    sign.hires("W-L", 112, 1, C.label, 8, "700");
+    sign.hires("GB",  180, 1, C.label, 8, "700");
+    sign.hires("STRK",210, 1, C.label, 8, "700");
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], y=12+i*10;
+      sign.hires(""+(i+1), 2, y+1, C.label, 8, "700");
+      this.chip(sign, 11, y, 8, r.t);
+      sign.hires(r.t, 22, y, C.ident, 10, "700");
+      this.drawRecord(sign, 112, y, r.w, r.l, 10);
+      sign.hires(r.gb, 180, y, r.gb==="\u2014"?C.label:C.amber, 10, "700");
+      sign.hires(r.strk, 212, y, this.strkColor(r.strk), 10, "700");
+    }
+    this.livePulse(sign, ctx.t);
+  }
+  standingsLong(sign,ctx){
+    var C=this.C, rows=this.STANDINGS.rows;
+    sign.hires(this.STANDINGS.div, 6, 2, C.idx, 9, "700");
+    sign.hires("W",   158, 2, C.label, 9, "700");
+    sign.hires("L",   192, 2, C.label, 9, "700");
+    sign.hires("PCT", 224, 2, C.label, 9, "700");
+    sign.hires("GB",  292, 2, C.label, 9, "700");
+    sign.hires("L10", 350, 2, C.label, 9, "700");
+    sign.hires("STRK",420, 2, C.label, 9, "700");
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], y=14+i*10;
+      sign.hires(""+(i+1), 6, y+1, C.label, 8, "700");
+      this.chip(sign, 18, y, 9, r.t);
+      sign.hires(r.t, 32, y, C.ident, 10, "700");
+      sign.hires(""+r.w, 158, y, C.win, 10, "700");
+      sign.hires(""+r.l, 192, y, C.loss, 10, "700");
+      sign.hires(r.pct, 224, y, C.amber, 10, "700");
+      sign.hires(r.gb, 292, y, r.gb==="\u2014"?C.label:C.ident, 10, "700");
+      sign.hires(r.l10, 350, y, C.cyan, 10, "600");
+      sign.hires(r.strk, 420, y, this.strkColor(r.strk), 10, "700");
+    }
+    this.livePulse(sign, ctx.t);
+  }
+
+  // ---------- PROMOTIONS ----------
+  promoSub(p){ return p.offerType + (p.presentedBy ? " \u00B7 BY "+p.presentedBy : ""); }
+  promoBig(sign,ctx){
+    var C=this.C, ps=this.PROMOS;
+    var idx=Math.floor(ctx.t/(4200/ctx.speed))%ps.length, p=ps[idx];
+    sign.hires(p.date, 4, 1, C.amber, 9, "700");
+    sign.hires(p.name, 4, 14, C.ident, 16, "700");
+    this.chip(sign, 4, 35, 11, p.opp);
+    sign.hires("VS "+p.opp, 19, 35, C.violet, 12, "700");
+    sign.hires(this.promoSub(p), 4, 50, C.cyan, 11, "600");
+    var tw=this.hw(sign, p.time+" PM", 11, "600");
+    sign.hires(p.time+" PM", 252-tw, 50, C.amber, 11, "600");
+    this.pagingDots(sign, ps.length, idx, 256-ps.length*8-4, 2);
+  }
+  promoLong(sign,ctx){
+    var C=this.C, ps=this.PROMOS, segs=[];
+    for(var i=0;i<ps.length;i++){ var p=ps[i];
+      segs.push({t:p.date, px:13, wt:"700", rgb:C.amber, y:this.yc(13)});
+      segs.push({gap:9});
+      segs.push({t:p.name, px:17, wt:"700", rgb:C.ident, y:this.yc(17)});
+      segs.push({gap:9});
+      segs.push({chip:p.opp, H:12, cy:Math.round((64-12)/2)});
+      segs.push({gap:5});
+      segs.push({t:"VS "+p.opp, px:13, wt:"700", rgb:C.violet, y:this.yc(13)});
+      segs.push({gap:9});
+      segs.push({t:this.promoSub(p), px:12, wt:"600", rgb:C.cyan, y:this.yc(12)});
+      segs.push({gap:9});
+      segs.push({t:p.time+" PM", px:12, wt:"600", rgb:C.amber, y:this.yc(12)});
+      segs.push({gap:11});
+      segs.push({t:"\u2022", px:16, wt:"700", rgb:C.label, y:this.yc(16)});
+      segs.push({gap:16});
+    }
+    var content=this.streamW(sign,segs), period=content, off=((ctx.t/1000)*54*ctx.speed)%period;
+    var x=sign.physW-off, guard=0;
+    while(x<sign.physW && guard<8){ if(x+content>0) this.drawStream(sign,segs,x); x+=period; guard++; }
+    this.livePulse(sign, ctx.t);
+  }
+
+  clearBand(sign,x0,x1,y0,y1){ for(var x=x0;x<x1;x++) for(var yy=y0;yy<y1;yy++) sign.px(x,yy,[0,0,0],1); }
+  fitText(sign,text,maxW,px,wt){
+    if(this.hw(sign,text,px,wt)<=maxW) return text;
+    var s=text;
+    while(s.length>1 && this.hw(sign,s.replace(/\s+$/,"")+"\u2026",px,wt)>maxW) s=s.slice(0,-1);
+    return s.replace(/\s+$/,"")+"\u2026";
+  }
+  maskScroll(sign,text,x0,x1,y,rgb,px,wt,t,speed){
+    var m=sign.hiresMask(text,px,wt), region=x1-x0, clip={x0:x0,x1:x1};
+    if(m.w<=region){ sign.blit(m,x0,y,rgb,1,clip); return; }
+    var period=m.w+44, off=((t/1000)*38*speed)%period;
+    sign.blit(m,Math.round(x0-off),y,rgb,1,clip);
+    sign.blit(m,Math.round(x0-off+period),y,rgb,1,clip);
+  }
+  LONGPROMO = {date:"SAT AUG 09", name:"HAWAIIAN SHIRT & BEACH TOWEL GIVEAWAY", opp:"TBR", offerType:"GIVEAWAY", presentedBy:"CORONA", time:"6:35"};
+  promoLongScroll(sign,ctx){
+    var C=this.C, p=this.LONGPROMO;
+    this.maskScroll(sign, p.name, 6, 300, 18, C.ident, 22, "700", ctx.t, ctx.speed);
+    sign.hires(p.date, 6, 4, C.amber, 12, "700");
+    sign.hires("PROMOTION \u00B7 SCROLL", 6, 50, C.label, 9, "700");
+    var rx=308;
+    this.chip(sign, rx, 8, 13, p.opp);
+    var vx=rx+18;
+    vx += sign.hires("VS "+p.opp, vx, 8, C.violet, 16, "700") + 12;
+    sign.hires(p.time+" PM", vx, 10, C.amber, 14, "600");
+    sign.hires(this.fitText(sign,this.promoSub(p),196,14,"600"), rx, 36, C.cyan, 14, "600");
+  }
+  promoLongCard(sign,ctx){
+    var C=this.C, ps=this.PROMOS;
+    var idx=Math.floor(ctx.t/(4800/ctx.speed))%ps.length, p=ps[idx];
+    sign.hires(p.date, 6, 4, C.amber, 12, "700");
+    sign.hires(p.name, 6, 18, C.ident, 22, "700");
+    sign.hires("PROMOTION", 6, 50, C.label, 9, "700");
+    // right info block
+    var rx=308;
+    this.chip(sign, rx, 8, 13, p.opp);
+    var vx=rx+18;
+    vx += sign.hires("VS "+p.opp, vx, 8, C.violet, 16, "700") + 12;
+    sign.hires(p.time+" PM", vx, 10, C.amber, 14, "600");
+    sign.hires(this.promoSub(p), rx, 36, C.cyan, 14, "600");
+    this.livePulse(sign, ctx.t);
+    this.pagingDots(sign, ps.length, idx, sign.physW-ps.length*8-6, sign.physH-10);
+  }
+
+  // ---------- STATCAST ----------
+  statcastBig(sign,ctx){
+    var C=this.C, ds=this.STATCAST;
+    var idx=Math.floor(ctx.t/(4200/ctx.speed))%ds.length, s=ds[idx];
+    sign.hires("STATCAST", 4, 1, C.label, 8, "700");
+    var rc=this.resColor(s.res), rw=this.hw(sign,s.res,10,"700");
+    sign.hires(s.res, 206-rw, 1, rc, 10, "700");
+    sign.hires(s.p, 4, 11, C.ident, 15, "700");
+    var nw=sign.hires(s.ev.toFixed(1), 4, 26, C.amber, 26, "700");
+    var ux=4+nw+7;
+    sign.hires("MPH", ux, 28, C.amber, 11, "700");
+    sign.hires("EXIT VELO", ux, 44, C.label, 8, "700");
+    var mx=4, y=53;
+    mx += sign.hires(s.la+"\u00B0", mx, y, C.cyan, 11, "600") + 10;
+    mx += sign.hires(s.dist?s.dist+" FT":"\u2014", mx, y, C.magenta, 11, "600") + 10;
+    sign.hires(s.pv.toFixed(1)+" "+s.pt, mx, y, C.win, 11, "600");
+    this.pagingDots(sign, ds.length, idx, 256-ds.length*8-4, sign.physH-8);
+  }
+  statcastLong(sign,ctx){
+    var C=this.C, ds=this.STATCAST;
+    var idx=Math.floor(ctx.t/(4800/ctx.speed))%ds.length, s=ds[idx];
+    sign.hires(s.p, 6, 4, C.ident, 22, "700");
+    var rc=this.resColor(s.res);
+    sign.hires(s.res, 6, 34, rc, 13, "700");
+    sign.hires("STATCAST", 6, 52, C.label, 9, "700");
+    var cols=[
+      {lab:"EXIT VELO", val:s.ev.toFixed(1), sec:"MPH", c:C.amber},
+      {lab:"LAUNCH",    val:s.la+"\u00B0",  sec:"ANGLE", c:C.cyan},
+      {lab:"PITCH",     val:s.pv.toFixed(1),sec:s.pt+" MPH", c:C.win},
+    ];
+    for(var i=0;i<cols.length;i++){ var cx=176+i*72;
+      sign.hires(cols[i].lab, cx, 6, C.label, 10, "700");
+      sign.hires(cols[i].val, cx, 20, cols[i].c, 22, "700");
+      sign.hires(cols[i].sec, cx, 48, C.label, 9, "600");
+    }
+    // trajectory panel
+    var px0=396;
+    sign.hires("DISTANCE", px0, 6, C.label, 10, "700");
+    this.traj(sign, px0, 20, 106, 24, s.la);
+    sign.hires(s.dist?s.dist+" FT":"\u2014", px0, 48, s.dist?C.magenta:C.label, 13, "700");
+    this.livePulse(sign, ctx.t);
+    this.pagingDots(sign, ds.length, idx, sign.physW-ds.length*8-6, sign.physH-10);
+  }
+
+  // ---------- ATTENDANCE ----------
+  attendBig(sign,ctx){
+    var C=this.C, a=this.ATTEND, pct=a.paid/a.cap*100, vs=a.paid-a.avg;
+    sign.hires("ATTENDANCE", 4, 1, C.label, 8, "700");
+    var nw=sign.hires(a.paid.toLocaleString("en-US"), 4, 12, C.amber, 24, "700");
+    var ux=4+nw+10;
+    sign.hires("% FULL", ux, 12, C.label, 8, "700");
+    sign.hires(pct.toFixed(1)+"%", ux, 22, C.win, 13, "700");
+    var vx=ux+70;
+    sign.hires("VS AVG", vx, 12, C.label, 8, "700");
+    sign.hires((vs>=0?"+":"")+vs.toLocaleString("en-US"), vx, 22, vs>=0?C.win:C.loss, 13, "700");
+    sign.hires("PAID ATTENDANCE", 4, 40, C.label, 8, "700");
+    var capw=this.hw(sign,a.cap.toLocaleString("en-US")+" CAP",8,"700");
+    sign.hires(a.cap.toLocaleString("en-US")+" CAP", 252-capw, 40, C.label, 8, "700");
+    this.drawBar(sign, 4, 49, 248, 8, pct/100, this.homeColor(), a.avg/a.cap);
+    this.livePulse(sign, ctx.t);
+  }
+  attendLong(sign,ctx){
+    var C=this.C, a=this.ATTEND, pct=a.paid/a.cap*100, vs=a.paid-a.avg;
+    sign.hires(a.paid.toLocaleString("en-US"), 6, 3, C.amber, 30, "700");
+    sign.hires("PAID ATTENDANCE", 6, 42, C.label, 10, "700");
+    var cols=[
+      {lab:"% FULL",  val:pct.toFixed(1)+"%", c:C.win},
+      {lab:"VS AVG",  val:(vs>=0?"+":"")+vs.toLocaleString("en-US"), c:vs>=0?C.win:C.loss},
+    ];
+    for(var i=0;i<cols.length;i++){ var cx=228+i*96;
+      sign.hires(cols[i].lab, cx, 4, C.label, 10, "700");
+      sign.hires(cols[i].val, cx, 18, cols[i].c, 20, "700");
+    }
+    var capw=this.hw(sign,a.cap.toLocaleString("en-US")+" CAP",9,"700");
+    sign.hires(a.cap.toLocaleString("en-US")+" CAP", 506-capw, 40, C.label, 9, "700");
+    this.drawBar(sign, 6, 52, 500, 10, pct/100, this.homeColor(), a.avg/a.cap);
+    this.livePulse(sign, ctx.t);
+  }
+
+  // ---------- boot / loop ----------
+  DEFS = [
+    {id:"scores-big",    fn:"twoRowScores",     big:true},
+    {id:"scores-long",   fn:"scoreboardLong",  big:false},
+    {id:"standings-big", fn:"standingsBig", big:true},
+    {id:"standings-long",fn:"standingsLong",big:false},
+    {id:"promo-big",     fn:"promoBig",     big:true},
+    {id:"promo-long",    fn:"promoLong",    big:false},
+    {id:"promo-longcard",fn:"promoLongCard",big:false},
+    {id:"promo-longscroll",fn:"promoLongScroll",big:false},
+    {id:"statcast-big",  fn:"statcastBig",  big:true},
+    {id:"statcast-long", fn:"statcastLong", big:false},
+    {id:"attend-big",    fn:"attendBig",    big:true},
+    {id:"attend-long",   fn:"attendLong",   big:false},
+  ];
+  componentDidMount(){
+    this.st = {clock:0, last:0, speed:1, glow:true, playing:true};
+    var self=this;
+    function go(){
+      if(!window.LED){ setTimeout(go,60); return; }
+      var fl=[];
+      try{ fl=[document.fonts.load("8px Silkscreen"),document.fonts.load("700 26px Inter"),document.fonts.load("600 12px Inter")]; }catch(e){}
+      Promise.all(fl).catch(function(){}).then(function(){ return document.fonts?document.fonts.ready:null; }).then(function(){ self.boot(); });
+    }
+    go();
+  }
+  componentWillUnmount(){ if(this.timer) clearInterval(this.timer); }
+  cacheRaster(s){
+    var cache={}, origMask=s.hiresMask.bind(s), origHires=s.hires.bind(s);
+    function get(text,px,wt){ var k=text+"|"+px+"|"+(wt||"700"); var m=cache[k]; if(!m){ m=origMask(text,px,wt); cache[k]=m; } return m; }
+    s.hiresMask=function(text,px,wt){ return get(text,px,wt); };
+    s.hires=function(text,physX,physY,rgb,px,wt,opts){ var m=get(text,px,wt); s.blit(m,physX,physY,rgb,1,opts||{}); return m.w; };
+  }
+  boot(){
+    var self=this; this.signs=[];
+    if(!this._normed){ this._normed=true; var n=function(a){return [a[0]/255,a[1]/255,a[2]/255];};
+      for(var k in this.C) this.C[k]=n(this.C[k]);
+      for(var t in this.TEAMS){ this.TEAMS[t].c1=n(this.TEAMS[t].c1); this.TEAMS[t].c2=n(this.TEAMS[t].c2); }
+    }
+    this.DEFS.forEach(function(d){
+      var cv=document.getElementById("cv-"+d.id); if(!cv) return;
+      var s=new LED.Sign(cv,{logW:d.big?64:128, logH:16, scale:4, cell:d.big?4:3, glow:self.st.glow});
+      self.cacheRaster(s);
+      var rec={sign:s, draw:self[d.fn], cv:cv, visible:true};
+      self.signs.push(rec);
+    });
+    this.bindControls();
+    if("IntersectionObserver" in window){
+      var io=new IntersectionObserver(function(ents){ ents.forEach(function(e){
+        for(var i=0;i<self.signs.length;i++) if(self.signs[i].cv===e.target){ self.signs[i].visible=e.isIntersecting; break; }
+      }); },{rootMargin:"120px"});
+      this.signs.forEach(function(r){ io.observe(r.cv); });
+    }
+    this.st.last=performance.now();
+    this.frame();
+    this.timer=setInterval(function(){ self.frame(); }, 1000/30);
+  }
+  frame(){
+    var now=performance.now(), dt=now-this.st.last; this.st.last=now;
+    if(dt>250) dt=250;
+    if(this.st.playing) this.st.clock+=dt;
+    var ctx={t:this.st.clock, speed:this.st.speed};
+    for(var i=0;i<this.signs.length;i++){
+      var S=this.signs[i];
+      if(!S.visible) continue;
+      S.sign.glow=this.st.glow; S.sign.clear();
+      S.draw.call(this, S.sign, ctx);
+      S.sign.render();
+    }
+  }
+  bindControls(){
+    var self=this;
+    var sp=document.getElementById("ctl-speed"), spv=document.getElementById("ctl-speed-val");
+    var gl=document.getElementById("ctl-glow"), pl=document.getElementById("ctl-play");
+    if(sp) sp.addEventListener("input",function(){ self.st.speed=+sp.value; if(spv) spv.textContent=self.st.speed.toFixed(1)+"\u00D7"; });
+    if(gl){ gl.checked=self.st.glow; gl.addEventListener("change",function(){ self.st.glow=gl.checked; }); }
+    if(pl) pl.addEventListener("click",function(){
+      self.st.playing=!self.st.playing;
+      pl.textContent=self.st.playing?"\u275A\u275A Pause":"\u25B6 Play";
+    });
+  }
+  renderVals(){ return {}; }
+}
+</script>
+</body>
+</html>
