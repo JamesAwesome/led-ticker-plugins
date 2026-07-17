@@ -142,11 +142,25 @@ _FULL_REVEAL_POOLS: list[list[str]] = [
     ["clubs"],
     ["spades"],
 ]
-_FULL_REVEAL_GEOMETRIES = [
-    ("smallsign", 160, 16, 1),
-    ("bigsign", 256, 64, 4),
+_SMALLSIGN = ("smallsign", 160, 16, 1)
+_BIGSIGN = ("bigsign", 256, 64, 4)
+_FULL_REVEAL_SEEDS = range(8)
+
+# The exact (geometry, seed) pairs where single-suit CLUBS left an unrevealed
+# far-left-edge pixel at the pre-fix _MAX_R_FACTOR = 1.2 (clubs are the one
+# non-radially-monotone suit — the spec's flagged trap; found by the Task 3
+# review's seed sweep). Pinning them makes this a fast, DETERMINISTIC
+# regression guard: if _MAX_R_FACTOR is ever lowered back, these fail
+# immediately without needing a 250-case brute-force sweep (which cost ~7min
+# of RingCache pre-warming). Bigsign is ~5s/case, so we run only these known
+# bad seeds there, not a full range.
+_CLUBS_REGRESSION_CASES = [
+    (_SMALLSIGN, 2),
+    (_SMALLSIGN, 15),
+    (_SMALLSIGN, 22),
+    (_SMALLSIGN, 23),
+    (_BIGSIGN, 15),
 ]
-_FULL_REVEAL_SEEDS = range(25)
 
 
 def _full_reveal_missing_pixels(
@@ -184,15 +198,31 @@ def _full_reveal_missing_pixels(
     ]
 
 
-@pytest.mark.parametrize("geometry", _FULL_REVEAL_GEOMETRIES, ids=lambda g: g[0])
 @pytest.mark.parametrize("suits", _FULL_REVEAL_POOLS, ids=lambda s: "-".join(s))
 @pytest.mark.parametrize("seed", _FULL_REVEAL_SEEDS)
-def test_full_reveal_before_snap_matrix(geometry, suits, seed) -> None:
-    _, width, height, scale = geometry
+def test_full_reveal_before_snap_smallsign(suits, seed) -> None:
+    """General full-reveal guarantee across every pool on the cheap
+    (scale-1) geometry: at t just below SNAP no panel pixel is left as the
+    black complement."""
+    _, width, height, scale = _SMALLSIGN
     black = _full_reveal_missing_pixels(suits, width, height, scale, seed)
     assert black == [], (
-        f"suits={suits} geometry={geometry[0]} seed={seed}: "
+        f"suits={suits} smallsign seed={seed}: "
         f"{len(black)} panel pixels left as black complement"
+    )
+
+
+@pytest.mark.parametrize("geometry,seed", _CLUBS_REGRESSION_CASES, ids=lambda v: str(v))
+def test_full_reveal_clubs_regression(geometry, seed) -> None:
+    """Deterministic regression guard for the clubs far-left-edge gap: these
+    exact (geometry, seed) pairs left 1 unrevealed pixel at _MAX_R_FACTOR=1.2
+    and must stay clean. Includes the one expensive bigsign case that the
+    general smallsign sweep can't reach."""
+    _, width, height, scale = geometry
+    black = _full_reveal_missing_pixels(["clubs"], width, height, scale, seed)
+    assert black == [], (
+        f"clubs {geometry[0]} seed={seed}: {len(black)} panel pixels left "
+        "as black complement — did _MAX_R_FACTOR regress below the fix?"
     )
 
 
