@@ -11,6 +11,7 @@ plus the `_pixels` dict it serializes from — sibling plugin tests
 for "any lit pixel" checks, so we follow that precedent here.
 """
 
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
@@ -117,6 +118,43 @@ def test_postponed_state_uses_postpone_tag_label():
     render_two_row(canvas, g, TZ)
     rows = _lit_rows(real)
     assert rows & set(range(38, 56))  # tag label line lit
+
+
+def test_preview_with_start_time_renders_time_not_ppd():
+    """Regression: GameInfo.postpone_tag DEFAULTS to "PPD" (and the parser
+    sets it for every game), so a truthiness gate on the tag made every
+    ordinary preview render "PPD" instead of its start time. The label
+    branch must gate on state == "postponed", not tag truthiness.
+
+    Without exact-pinning freetype: render a preview and a postponed game
+    with identical other fields and assert their lit-pixel sets DIFFER —
+    identical sets means both rendered the same label (the bug)."""
+    start = datetime(2026, 7, 17, 19, 10, tzinfo=TZ)
+    common = dict(state="preview", inning=None, away_score=None, home_score=None)
+    canvas_p, real_p = _bigsign()
+    render_two_row(canvas_p, _live_game(**common, start_time=start), TZ)
+    canvas_x, real_x = _bigsign()
+    render_two_row(
+        canvas_x,
+        _live_game(**{**common, "state": "postponed"}, start_time=start),
+        TZ,
+    )
+    assert _lit_coords(real_p) != _lit_coords(real_x)
+
+
+def test_preview_start_time_differs_from_tbd():
+    """A preview WITH a start_time must render differently from one
+    without (which falls back to "TBD")."""
+    common = dict(state="preview", inning=None, away_score=None, home_score=None)
+    canvas_t, real_t = _bigsign()
+    render_two_row(
+        canvas_t,
+        _live_game(**common, start_time=datetime(2026, 7, 17, 19, 10, tzinfo=TZ)),
+        TZ,
+    )
+    canvas_n, real_n = _bigsign()
+    render_two_row(canvas_n, _live_game(**common, start_time=None), TZ)
+    assert _lit_coords(real_t) != _lit_coords(real_n)
 
 
 def test_paging_dots_drawn_when_story_total_gt_1():

@@ -63,9 +63,12 @@ def _render_next(shim, game, tz, yo, ac, hc):
         hires(shim, t, x, 5 + yo, c, 20)
         x += w + 8
 
-    postpone_tag = getattr(game, "postpone_tag", None)
-    if postpone_tag:
-        label = postpone_tag
+    # Gate on state, NOT tag truthiness: GameInfo.postpone_tag DEFAULTS to
+    # "PPD" (and the parser sets it for every game), so a truthiness check
+    # would label every ordinary preview "PPD" instead of its start time.
+    # Same pattern as the sibling renderers (_scoreboard.py).
+    if game.state == "postponed" and game.postpone_tag:
+        label = game.postpone_tag
     elif game.start_time:
         label = _format_game_time(game.start_time, tz)
     else:
