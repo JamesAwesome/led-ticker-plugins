@@ -29,8 +29,8 @@ tacos swallows the gyro menu, then peels away.
 ## Config surface
 
 ```toml
-transition = {style = "flair.stickers", emoji = ["taco"]}            # all-taco wall
-transition = {style = "flair.stickers", emoji = ["sun", "moon"]}     # mixed set
+transition = {type = "flair.stickers", emoji = ["taco"]}            # all-taco wall
+transition = {type = "flair.stickers", emoji = ["sun", "moon"]}     # mixed set
 transition = "flair.stickers"                                        # random assortment
 ```
 
@@ -139,7 +139,7 @@ slug list (it rots)" rule.
 2. Flair PR: `stickers.py` + transition registration + tests + README/docs
    catalog entry; floors core to the seam release → `flair-vNext`.
 3. Halal-cart config PR (core repo): Taco Tuesday sections adopt
-   `transition = {style = "flair.stickers", emoji = ["taco"]}` as the
+   `transition = {type = "flair.stickers", emoji = ["taco"]}` as the
    showcase (banner entry or between-section override — decided at
    implementation by what reads best in the GIF).
 

@@ -140,14 +140,14 @@ Taco wall — all stickers are the same emoji:
 
 ```toml
 [[playlist.section]]
-transition = {style = "flair.stickers", emoji = ["taco"]}
+transition = {type = "flair.stickers", emoji = ["taco"]}
 ```
 
 Mixed assortment — multiple distinct emoji:
 
 ```toml
 [[playlist.section]]
-transition = {style = "flair.stickers", emoji = ["sun", "moon", "star_yellow"]}
+transition = {type = "flair.stickers", emoji = ["sun", "moon", "star_yellow"]}
 ```
 
 Bare random form — random slug per sticker, drawn from the full drawable set:
