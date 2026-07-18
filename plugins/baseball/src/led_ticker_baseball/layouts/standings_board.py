@@ -25,12 +25,22 @@ straight through (draw_record itself forwards y unmodified — see its
 docstring in `_primitives.py`) so the formula can't drift per call site.
 """
 
+from typing import TYPE_CHECKING
+
 from led_ticker.plugin import safe_scale
 
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._paint import hires, js_round, phys_wrap
 from led_ticker_baseball._primitives import chip, draw_record
-from led_ticker_baseball.standings import TeamStanding
+
+if TYPE_CHECKING:
+    # Deferred: led_ticker_baseball.standings imports MLBStandingsBoard
+    # (_standings_card.py), which imports render_standings_board from this
+    # module — an eager top-level import here would be circular. TeamStanding
+    # is only used for the type hint below; PEP 649 lazy annotations (target
+    # Python 3.14) mean the bare reference below never needs to resolve at
+    # runtime, so TYPE_CHECKING alone breaks the cycle.
+    from led_ticker_baseball.standings import TeamStanding
 
 _WIDE_MIN_W = 400
 _MAX_ROWS = 5

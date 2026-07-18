@@ -28,6 +28,8 @@ from led_ticker.ticker import Ticker
 
 from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import GameInfo
+from led_ticker_baseball._standings_card import MLBStandingsBoard
+from led_ticker_baseball.standings import TeamStanding
 
 TZ = ZoneInfo("America/New_York")
 
@@ -136,3 +138,37 @@ def test_crawl_stop_position_leaves_content_visible():
         "blank-panel repro: content scrolled ~192 physical px past "
         "flush-right, leaving only the trailing bullet lit at x<=39)"
     )
+
+
+def test_held_standings_board_takes_hold_branch_no_phantom_scroll():
+    """Same Finding-1 shape as MLBGameCard's held layouts, applied to
+    MLBStandingsBoard: at scale>1 the board is a HELD physical layout
+    (`render_standings_board`) and must return the wrapper's LOGICAL
+    width so the engine's real hold-vs-scroll check (`cursor_pos >
+    canvas.width`, core ticker.py) takes the hold branch — zero scroll
+    ticks — rather than phantom-scrolling a static board for ~190 ticks."""
+    frame = _bigsign_frame()
+    rows = [
+        TeamStanding(
+            name="Yankees",
+            wins=45,
+            losses=20,
+            rank=1,
+            games_back="-",
+            division_rank=1,
+            division_id=201,
+        ),
+        TeamStanding(
+            name="Red Sox",
+            wins=40,
+            losses=25,
+            rank=5,
+            games_back="5.0",
+            division_rank=2,
+            division_id=201,
+        ),
+    ]
+    board = MLBStandingsBoard(division_name="AL EAST", rows=rows, legacy_rows=[])
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(board, frame))
+    assert cursor_pos == 64  # held cursor == the wrapper's LOGICAL width
+    assert final_pos == 0  # never entered the scroll branch
