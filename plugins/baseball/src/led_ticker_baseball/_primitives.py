@@ -7,8 +7,8 @@ for the prototype's brightness args.
 
 from led_ticker.plugin import Color, make_color
 
-from led_ticker_baseball._paint import px
-from led_ticker_baseball._palette import LABEL, ORANGE, dim
+from led_ticker_baseball._paint import hires, px
+from led_ticker_baseball._palette import LABEL, LOSS, ORANGE, WIN, dim
 from led_ticker_baseball.teams import MLB_TEAM_CHIPS
 
 _GREY_C1 = (150, 160, 175)  # prototype unknown-team chip fallback
@@ -74,3 +74,25 @@ def dotted_divider(real, x0: int, x1: int, y: int) -> None:
     c = dim(LABEL, 0.35)
     for x in range(x0, x1, 3):
         px(real, x, y, c)
+
+
+def draw_record(
+    shim, x: int, y: int, wins: int, losses: int, size: int, *, bold: bool = True
+) -> int:
+    """WIN wins, LABEL "-", LOSS losses (port of `drawRecord`, dc.html
+    237-243). The one text-COMPOSITE primitive in this module — every other
+    primitive here paints raw pixel geometry, but this one calls
+    `_paint.hires` three times, so it needs the scale-1 `shim` (from
+    `_paint.phys_wrap`) rather than the real canvas. `y` is forwarded to
+    `hires` UNMODIFIED — same convention as every other primitive taking a
+    caller-supplied coordinate; any dc.html visual-top -> ascent-box-top
+    conversion is the CALLER'S job (see `layouts/standings_board.py`'s
+    `_cap_top`/`_t`), applied once before this call, not duplicated here.
+
+    Returns the total physical-px advance (call sites do
+    `x += draw_record(...)`)."""
+    cx = x
+    cx += hires(shim, str(wins), cx, y, WIN, size, bold=bold)
+    cx += hires(shim, "-", cx, y, LABEL, size, bold=bold)
+    cx += hires(shim, str(losses), cx, y, LOSS, size, bold=bold)
+    return cx - x
