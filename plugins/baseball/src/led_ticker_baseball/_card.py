@@ -88,7 +88,7 @@ class MLBGameCard(FrameAwareBase):
                     font_color=self.font_color,
                     series_wins=series_wins,
                     series_losses=series_losses,
-                    series_total_games=1,
+                    series_total_games=self.story_total,
                 )
             else:
                 self._legacy = _build_game_message(

@@ -82,3 +82,54 @@ def test_frame_hooks_never_raise_before_first_draw():
     c.pause_frame()
     c.resume_frame()
     c.reset_frame()
+
+
+def test_scale1_two_row_final_series_text_uses_story_total():
+    """Regression: the two_row legacy-delegation branch in `_legacy_story`
+    must thread `self.story_total` through as `series_total_games` — not a
+    hardcoded 1. `_compute_final_two_row` only emits the series-leader
+    bottom-row text ("BOS leads 2-1" / "Tied 1-1") when
+    `series_total_games > 1`, so a hardcoded 1 silently drops that text for
+    every real multi-game series on a scale-1 sign with layout="two_row".
+    """
+    from led_ticker_baseball._two_row import _build_two_row_message
+
+    game = GameInfo(
+        away_abbr="TB",
+        home_abbr="BOS",
+        away_score=3,
+        home_score=5,
+        state="final",
+        series_away_wins=1,
+        series_home_wins=2,
+    )
+    card = MLBGameCard(
+        game=game,
+        team_abbr="BOS",
+        tz=TZ,
+        cfg_layout="two_row",
+        story_index=0,
+        story_total=3,
+    )
+    real = _smallsign()
+    card.draw(real)  # scale=1 -> builds + caches the legacy two_row story
+
+    # team_abbr="BOS" is the home side here, matching MLBScoreMonitor's
+    # _series_sides mapping: series_wins/losses come from the monitored
+    # team's own side (home -> series_home_wins/series_away_wins).
+    expected = _build_two_row_message(
+        game,
+        "BOS",
+        TZ,
+        series_wins=2,
+        series_losses=1,
+        series_total_games=3,
+    )
+
+    card_bottom_texts = [
+        text for text, _color in card._legacy_story("two_row").bottom_segments
+    ]
+    expected_bottom_texts = [text for text, _color in expected.bottom_segments]
+
+    assert card_bottom_texts == expected_bottom_texts
+    assert any("leads" in t for t in card_bottom_texts)
