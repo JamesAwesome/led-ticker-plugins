@@ -71,7 +71,7 @@ between_sections = "cut"
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = "flair.poker"
 
 [[playlist.section.widget]]
@@ -93,7 +93,7 @@ font_size = 44
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = {type = "flair.poker", seed = 99}
 
 [[playlist.section.widget]]
@@ -115,7 +115,7 @@ font_size = 44
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = {type = "flair.poker", suits = ["diamonds"]}
 
 [[playlist.section.widget]]
@@ -137,7 +137,7 @@ font_size = 44
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = {type = "flair.poker", suits = ["clubs"]}
 
 [[playlist.section.widget]]
@@ -159,7 +159,7 @@ font_size = 44
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = {type = "flair.poker", suits = ["hearts", "spades"]}
 
 [[playlist.section.widget]]
@@ -181,7 +181,7 @@ font_size = 44
 # ---------------------------------------------------------------------------
 [[playlist.section]]
 mode = "slideshow"
-hold_time = 3
+hold_time = 1.5
 transition = "flair.poker"
 
 [[playlist.section.widget]]

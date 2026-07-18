@@ -221,6 +221,19 @@ class Poker:
         self._max_r: float = 0.0
         self._revealed: bytearray = bytearray()  # (w*h) reveal mask per firing
         self._reveal_r: list[int] = []  # per-glyph max integer radius unioned
+        # Peel-phase complement as a SHRINKING set of (x, y) still-black pixels,
+        # so the per-frame blackout iterates only what's actually black instead
+        # of scanning all w*h pixels (the CPU sink on a Pi). Refilled per firing.
+        self._unrevealed: set[tuple[int, int]] = set()
+        # Per-firing memo of ABSOLUTE, pre-clipped pixel lists keyed by
+        # (glyph_index, integer_radius). Glyph positions are fixed for a
+        # firing, so a ring's on-panel (x, y, color) tuples (and its flat reveal
+        # indices) are constant — compute the coord-add + bounds-clip ONCE and
+        # blit thereafter, instead of re-deriving them every frame. Cleared when
+        # the plan rebuilds (new dims / re-fire).
+        self._ring_abs: dict[tuple[int, int], list[tuple[int, int, tuple]]] = {}
+        self._ring_idx: dict[tuple[int, int], list[int]] = {}
+        self._interior_abs: dict[tuple[int, int], list[tuple[int, int, tuple]]] = {}
         self._last_t = 1.0
 
     def _ring_hue(self, g, r_int):
@@ -233,6 +246,44 @@ class Poker:
         w, h = self._dims
         self._revealed = bytearray(w * h)
         self._reveal_r = [-1] * len(self._plan)
+        # Rebuild the complement set once per firing (cheap vs a per-frame scan).
+        self._unrevealed = {(x, y) for y in range(h) for x in range(w)}
+
+    def _ring_abs_lists(self, gi, r_int):
+        """Cached (paint-pixels, reveal-indices) for glyph ``gi``'s ring at
+        integer radius ``r_int`` — absolute panel coords, pre-clipped. Computed
+        once per (glyph, radius) and reused across frames."""
+        key = (gi, r_int)
+        px = self._ring_abs.get(key)
+        if px is None:
+            g = self._plan[gi]
+            w, h = self._dims
+            px = []
+            idx = []
+            for dx, dy, col in self._rings.get(g.suit, r_int, self._ring_hue(g, r_int)):
+                x, y = g.cx + dx, g.cy + dy
+                if 0 <= x < w and 0 <= y < h:
+                    px.append((x, y, col))
+                    idx.append(y * w + x)
+            self._ring_abs[key] = px
+            self._ring_idx[key] = idx
+        return px, self._ring_idx[key]
+
+    def _interior_abs_list(self, gi, gr):
+        """Cached absolute pre-clipped interior pixels for glyph ``gi`` filled
+        to radius ``gr``."""
+        key = (gi, gr)
+        px = self._interior_abs.get(key)
+        if px is None:
+            g = self._plan[gi]
+            w, h = self._dims
+            px = [
+                (g.cx + dx, g.cy + dy, col)
+                for dx, dy, col in self._rings.interior(g.suit, gr, self._glyph_hue(g))
+                if 0 <= g.cx + dx < w and 0 <= g.cy + dy < h
+            ]
+            self._interior_abs[key] = px
+        return px
 
     def _ensure_plan(self, canvas):
         # `real` is re-derived from `canvas` on EVERY call and never cached on
@@ -248,6 +299,11 @@ class Poker:
             self._plan_key = key
             self._dims = (real.width, real.height)
             self._max_r = max_radius(GRID, GRID)
+            # Absolute-coord memos depend on glyph positions + dims — stale on a
+            # rebuild.
+            self._ring_abs.clear()
+            self._ring_idx.clear()
+            self._interior_abs.clear()
             self._reset_reveal()
             # Pre-warm every ring shell and interior the paint/reveal paths can
             # request (every glyph x every integer radius, at the exact hue the
@@ -263,11 +319,11 @@ class Poker:
                     self._rings.interior(g.suit, rr, self._glyph_hue(g))
         return self._plan, real
 
-    def _current_rings(self, t):
-        """(x, y, color) shell pixels for each glyph's live pulse wavefront."""
-        w, h = self._dims
-        out = []
-        for g in self._plan:
+    def _paint_current_rings(self, real, t):
+        """SetPixel each glyph's live pulse-wavefront shell directly (from the
+        cached absolute pixel list — no per-frame coord math or list building)."""
+        set_pixel = real.SetPixel
+        for gi, g in enumerate(self._plan):
             pr = pulse_radius(t, g.stagger)
             if pr is None:
                 continue
@@ -275,19 +331,20 @@ class Poker:
             r_int = round(phase * self._max_r)
             if r_int <= 0:
                 continue
-            for dx, dy, col in self._rings.get(g.suit, r_int, self._ring_hue(g, r_int)):
-                x, y = g.cx + dx, g.cy + dy
-                if 0 <= x < w and 0 <= y < h:
-                    out.append((x, y, col))
-        return out
+            px, _idx = self._ring_abs_lists(gi, r_int)
+            for x, y, col in px:
+                set_pixel(x, y, *col)
 
     def _accumulate_reveal(self, t):
         """Union every ring shell up to each glyph's current radius into the
-        reveal mask (filled, gap-free). A completed pulse (``wave >= 1``) forces
-        the reveal out to the full ``max_radius`` even if no frame sampled the
-        outermost radius — the physical pulse did sweep it between frames."""
-        w, h = self._dims
+        reveal mask (filled, gap-free) and drop those pixels from the black
+        complement. A completed pulse (``wave >= 1``) forces the reveal out to
+        the full ``max_radius`` even if no frame sampled the outermost radius —
+        the physical pulse did sweep it between frames."""
+        w = self._dims[0]
         max_ri = int(round(self._max_r))
+        revealed = self._revealed
+        unrevealed = self._unrevealed
         for i, g in enumerate(self._plan):
             pr = pulse_radius(t, g.stagger)
             if pr is None:
@@ -298,25 +355,24 @@ class Poker:
             if target <= prev:
                 continue
             for rr in range(prev + 1, target + 1):
-                for dx, dy, _col in self._rings.get(g.suit, rr, self._ring_hue(g, rr)):
-                    x, y = g.cx + dx, g.cy + dy
-                    if 0 <= x < w and 0 <= y < h:
-                        self._revealed[y * w + x] = 1
+                _px, idx = self._ring_abs_lists(i, rr)
+                for flat in idx:
+                    if not revealed[flat]:
+                        revealed[flat] = 1
+                        unrevealed.discard((flat % w, flat // w))
             self._reveal_r[i] = target
 
     def _paint_glyphs(self, real, t):
         """Paint each glyph's resting FILLED suit body, scaling in over the
         first ``_GLYPH_SCALE_IN`` of the transition."""
-        w, h = self._dims
         scale_in = min(1.0, t / _GLYPH_SCALE_IN)
         gr = int(round(GLYPH_R * scale_in))
         if gr <= 0:
             return
-        for g in self._plan:
-            for dx, dy, col in self._rings.interior(g.suit, gr, self._glyph_hue(g)):
-                x, y = g.cx + dx, g.cy + dy
-                if 0 <= x < w and 0 <= y < h:
-                    real.SetPixel(x, y, *col)
+        set_pixel = real.SetPixel
+        for gi in range(len(self._plan)):
+            for x, y, col in self._interior_abs_list(gi, gr):
+                set_pixel(x, y, *col)
 
     def frame_at(self, t, canvas, outgoing, incoming, **kwargs):
         if t <= 0.0:
@@ -343,17 +399,15 @@ class Poker:
         if t < _CUTOVER:
             outgoing.draw(canvas, cursor_pos=kwargs.get("outgoing_scroll_pos", 0))
             self._paint_glyphs(real, t)
-            for x, y, col in self._current_rings(t):
-                real.SetPixel(x, y, *col)
+            self._paint_current_rings(real, t)
         else:
             snap_reset(canvas, kwargs.get("incoming_bg_color"))
             incoming.draw(canvas, cursor_pos=0)
             self._accumulate_reveal(t)
-            for y in range(h):
-                base = y * w
-                for x in range(w):
-                    if not self._revealed[base + x]:
-                        real.SetPixel(x, y, 0, 0, 0)
-            for x, y, col in self._current_rings(t):
-                real.SetPixel(x, y, *col)
+            # Black only the still-unrevealed complement (a shrinking set) rather
+            # than scanning all w*h pixels every frame.
+            set_pixel = real.SetPixel
+            for x, y in self._unrevealed:
+                set_pixel(x, y, 0, 0, 0)
+            self._paint_current_rings(real, t)
         return canvas
