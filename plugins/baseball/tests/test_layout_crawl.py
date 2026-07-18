@@ -9,6 +9,13 @@ plus the `_pixels` dict it serializes from — sibling plugin tests
 (test_layout_two_row.py, test_paint.py, test_primitives.py) already reach
 into `_pixels` directly for "any lit pixel" checks, so we follow that
 precedent here.
+
+`render_crawl`'s `cursor_pos` and return value are LOGICAL (same units as
+`canvas.width` on the bigsign wrapper: 64), NOT physical — see the
+function's module docstring. A cursor offset of N logical px shifts
+content N*scale (4 on bigsign) physical px; width assertions compare
+against the wrapper's logical width (64), not the real canvas's physical
+width (256).
 """
 
 from zoneinfo import ZoneInfo
@@ -52,7 +59,7 @@ def _lit_cols(real):
 def test_returns_positive_width_and_draws_at_cursor_zero():
     canvas, real = _bigsign()
     w = render_crawl(canvas, _live_game(), TZ, 0)
-    assert w > 256  # live line is wider than bigsign
+    assert w > 64  # live line is wider than bigsign's LOGICAL width (64)
     assert _lit_cols(real)
 
 
@@ -61,31 +68,33 @@ def test_cursor_offsets_content():
     render_crawl(canvas, _live_game(), TZ, 0)
     first = min(_lit_cols(real))
     canvas2, real2 = _bigsign()
-    # A small offset (well inside the first segment's own width, so the
-    # comparison can't cross into a wholly different glyph's bearing —
-    # a large offset can fully cull the first segment and expose the NEXT
-    # segment's ink, whose left-side bearing is font-dependent and would
-    # make this an inadvertent freetype pin) scrolled left: leftmost lit
-    # col moves left or clips at 0.
-    render_crawl(canvas2, _live_game(), TZ, -10)
+    # A small LOGICAL offset (-3 logical = -12 physical at scale 4 — well
+    # inside the first segment's own width, so the comparison can't cross
+    # into a wholly different glyph's bearing — a large offset can fully
+    # cull the first segment and expose the NEXT segment's ink, whose
+    # left-side bearing is font-dependent and would make this an
+    # inadvertent freetype pin) scrolled left: leftmost lit col moves left
+    # or clips at 0.
+    render_crawl(canvas2, _live_game(), TZ, -3)
     assert min(_lit_cols(real2)) <= first
 
 
 def test_positive_cursor_shifts_content_right():
     """Load-bearing engine-scroll contract test: a mutation that ignores
-    cursor_pos (x = 0) must FAIL here. A positive offset keeps the first
-    glyph fully on-canvas (no left-edge clipping, no glyph-boundary
-    crossing), so every lit column shifts right by exactly the offset —
+    cursor_pos (x = 0) must FAIL here. A positive LOGICAL offset (15 logical
+    = 60 physical at scale 4) keeps the first glyph fully on-canvas (no
+    left-edge clipping, no glyph-boundary crossing), so every lit column
+    shifts right by exactly the physical equivalent of the offset —
     asserted as a strict >= bound (no exact freetype pin needed; the shift
     is pure translation of whatever ink the font produced at cursor 0)."""
     canvas, real = _bigsign()
     render_crawl(canvas, _live_game(), TZ, 0)
     cols0 = _lit_cols(real)
     canvas2, real2 = _bigsign()
-    render_crawl(canvas2, _live_game(), TZ, 60)
-    cols60 = _lit_cols(real2)
-    assert cols0 != cols60
-    assert min(cols60) >= min(cols0) + 50
+    render_crawl(canvas2, _live_game(), TZ, 15)
+    cols15 = _lit_cols(real2)
+    assert cols0 != cols15
+    assert min(cols15) >= min(cols0) + 50
 
 
 def test_width_is_cursor_independent():

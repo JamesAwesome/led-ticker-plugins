@@ -76,7 +76,7 @@ Fetches live game state for a tracked team and renders its current series. Four 
 | scale>1, real width < 400px (bigsign) | `two_row` |
 | scale>1, real width >= 400px (longboi) | `scoreboard` |
 
-Explicit layout names skip resolution and always mean what they say — `layout = "scoreboard"` on a bigsign (256 real px) gets the physical scoreboard renderer even though `auto` would have picked `two_row` there.
+Explicit layout names skip resolution and always mean what they say, with one width-fit guard: `layout = "scoreboard"` on a panel narrower than 400 real px (bigsign, 256 real px) degrades to `two_row` instead — the physical scoreboard's fixed anchors assume a >=400px panel and would otherwise silently clip the entire home team's name/score/dashes/bases to nothing. Explicit `layout = "two_row"` (or `"ticker"`) always renders as requested at any width.
 
 > **Migration note:** before this release, the default `layout` was `"ticker"` on every sign. The new default is `"auto"`, which keeps `ticker` on smallsign but switches bigsign/longboi to the new physical `two_row`/`scoreboard` renderers unless you set `layout` explicitly. If you want the old scroll-everywhere behavior back, set `layout = "ticker"` explicitly in your config.
 

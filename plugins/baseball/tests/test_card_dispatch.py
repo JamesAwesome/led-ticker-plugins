@@ -54,20 +54,25 @@ def _smallsign():
 def test_auto_on_bigsign_holds_two_row_card():
     canvas, real = _bigsign()
     out, cursor = _card().draw(canvas)
-    assert cursor == 256  # held: cursor = physical width
+    # held: cursor = canvas.width — the WRAPPER's LOGICAL width (256
+    # physical // scale 4 = 64), matching the units the engine's
+    # `cursor_pos > canvas.width` hold-vs-scroll check (core ticker.py)
+    # actually compares against. Returning `real.width` (256) here was
+    # Finding 1 of the final review: it always took the scroll branch.
+    assert cursor == 64
     assert any(real.get_pixel(x, 31) != (0, 0, 0) for x in range(4, 252))  # divider
 
 
 def test_auto_on_longboi_holds_scoreboard():
     canvas, real = _longboi()
     out, cursor = _card().draw(canvas)
-    assert cursor == 512
+    assert cursor == 128  # longboi: 512 physical // scale 4 = 128 logical
 
 
 def test_ticker_on_bigsign_scrolls_hires_crawl():
     canvas, real = _bigsign()
     out, cursor = _card(layout="ticker").draw(canvas)
-    assert cursor > 256  # advance width, engine will scroll
+    assert cursor > 64  # logical advance width, engine will scroll
 
 
 def test_scale1_delegates_to_legacy():

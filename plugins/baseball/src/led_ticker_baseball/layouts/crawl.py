@@ -8,6 +8,20 @@ Unlike stocks' `draw_crawl_story` (which returns an absolute end position,
 `cursor + end_padding`), `render_crawl` returns the segment's total content
 WIDTH — cursor-independent by construction, so the caller can size the
 engine's per-story advance without re-deriving it from cursor arithmetic.
+
+**Units: `cursor_pos` and the return value are LOGICAL** (same units as
+`canvas.width` on the ScaledCanvas wrapper and every other engine-scrolled
+widget's cursor) — NOT physical. Segments paint at physical resolution
+(`_paint.hires`/`_primitives.diamond` write real `SetPixel`s), so this
+function is the seam: it multiplies the incoming logical `cursor_pos` by
+`scale` once to get the physical paint offset, accumulates the segment
+run's total physical width, then ceil-divides that back to logical before
+returning (`-(-total_phys // scale)` — same convention as core's
+`get_text_width` hires ceil-division in `drawing.py`). Mixing physical
+paint-space with the engine's logical stop-position math here was Finding
+2 of the final review: the crawl over-scrolled by `real.width -
+logical.width` (192 physical px on a bigsign) and held a nearly-blank
+final frame.
 """
 
 from led_ticker.plugin import safe_scale
@@ -110,12 +124,15 @@ def _seg_w(kind, payload, px_size):
 
 
 def render_crawl(canvas, game, tz, cursor_pos: int, *, y_offset: int = 0) -> int:
+    """Draw at LOGICAL `cursor_pos`; return the segment run's advance width,
+    also in LOGICAL px (see module docstring for the physical/logical seam)."""
     shim, real = phys_wrap(canvas)
-    yo = y_offset * safe_scale(canvas)
+    scale = safe_scale(canvas)
+    yo = y_offset * scale
     px_size = _px_size(real.width)
     segs, y = _segments(game, tz, px_size)
-    x = cursor_pos
-    total = 0
+    x = cursor_pos * scale  # physical paint offset
+    total_phys = 0
     for kind, payload in segs:
         w = _seg_w(kind, payload, px_size)
         # These culls are a performance guard only — hires()/px() clip
@@ -138,5 +155,5 @@ def render_crawl(canvas, game, tz, cursor_pos: int, *, y_offset: int = 0) -> int
                     1.0 if on else 0.7,
                 )
         x += w
-        total += w
-    return total
+        total_phys += w
+    return -(-total_phys // scale)  # ceil-division back to logical
