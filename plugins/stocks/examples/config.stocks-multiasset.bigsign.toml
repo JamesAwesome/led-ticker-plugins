@@ -21,7 +21,8 @@
 # — the tokens cost no extra credits).
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.14.0 (colored value tokens — the `[[source]] color`
+#   - led-ticker-core >= 4.19.0 (colored value tokens Phase 2 — the two_row row below;
+#     Phase 1 message tokens need only 4.14.0 — the `[[source]] color`
 #     that tints just the `:id:` token). On an OLDER core the source fails to
 #     build ("unexpected keyword argument 'color'") and is skipped — check your
 #     Pi's image is on 4.14.0+.
@@ -89,6 +90,13 @@
 #   6 THE MINUS — on any down symbol the signed change/percent shows a real "-"
 #                    (e.g. "-0.03%"), NOT a "?" box. This is the whole reason for
 #                    the belt + the core rasterizer fix.
+#   7 TWO-ROW COLORED TOKEN (Phase 2) — the two_row section reads
+#                    "FX  EUR/USD 1.1467 ..." held on top and "CRYPTO  <btc> ..."
+#                    scrolling on the bottom: each row's LABEL ("FX" / "CRYPTO")
+#                    is WHITE while the inline `:eurusd:` / `:btc:` token is
+#                    trend-coloured green-up / red-down — mixed colours WITHIN
+#                    one row, on BOTH rows (Phase 2 wired two_row + image; this
+#                    validates two_row on hardware).
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -176,3 +184,26 @@ symbols = ["BTC/USD", "AAPL", "EUR/USD", "ETH/USD", "NVDA"]
 update_interval = 600
 # No `demo = true`: with a TWELVEDATA_API_KEY set this runs LIVE; with no key the
 # shared cache auto-demos (synthesized feed) — see the DEMO caveat in the header.
+
+
+# --- 7: TWO-ROW mixed-colour tokens (Phase 2 hardware check) --------------------
+#        Held top row + scroll-on-overflow bottom row; each row mixes a WHITE
+#        label with its own trend-coloured inline token. Reuses the `:eurusd:` /
+#        `:btc:` sources above (no extra credits).
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FX :eurusd:"
+bottom_text = "CRYPTO :btc:"
+top_color = [255, 255, 255]      # "FX " white; :eurusd: trend-coloured
+bottom_color = [255, 255, 255]   # "CRYPTO " white; :btc: trend-coloured
+top_align = "center"
+top_row_height = 10
+top_font = "Inter-Bold"
+top_font_size = 30
+bottom_font = "Inter-Regular"
+bottom_font_size = 18
+bottom_font_threshold = 80
