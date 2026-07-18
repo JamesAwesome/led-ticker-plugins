@@ -119,8 +119,11 @@ def _segments(game, tz, px_size):
             ]
         else:
             segs.append(("text", ("(Final)", pal.IDENT, False)))
-    # trailing separator so side-by-side stories read as one stream
-    segs += [("gap", 22), ("text", ("•", pal.LABEL, True)), ("gap", 22)]
+    # Trailing gap so side-by-side (ticker-mode) stories don't butt together.
+    # The prototype's inter-game "•" bullet was dropped by request
+    # (2026-07-18): each game is its own engine story here, so in slideshow
+    # mode the bullet trailed as a lone grey dot with nothing to separate.
+    segs.append(("gap", 22))
     return segs, y
 
 
