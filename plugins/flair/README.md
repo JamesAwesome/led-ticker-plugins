@@ -132,7 +132,9 @@ transition = {type = "flair.fireworks", bursts = 3, colors = [[255, 60, 60], [0,
 
 `flair.stickers` holds the outgoing widget while individual emoji stickers pop on randomly across the panel in a jittered grid, building toward full coverage by `t=0.5`, then pop off in an independent order revealing the incoming widget underneath.
 
-Requires **led-ticker-core >= 4.10**.
+![flair.stickers — a wall of taco cards builds over the outgoing widget, then peels away to reveal the incoming one](docs/transition-stickers.gif)
+
+Requires **led-ticker-core >= 4.18.0**.
 
 ### Config
 
@@ -191,6 +193,8 @@ the outgoing widget stays visible through the gaps between sprites, by design.
 ## Poker transition
 
 `flair.poker` holds the outgoing widget while rainbow card suits (♥ ♦ ♣ ♠) pattern in and emit suit-shaped ripple rings — an expanding heart emits heart-shaped rings, a club club-shaped ones — revealing the incoming widget through expanding ripple wakes until the whole panel is washed.
+
+![flair.poker — rainbow suit glyphs emit suit-shaped ripples that wash in the incoming widget](docs/transition-poker.gif)
 
 Requires **led-ticker-core >= 4.18.0**.
 
