@@ -1,4 +1,5 @@
 """tests/test_palette.py"""
+
 from led_ticker_baseball import _palette as pal
 
 
