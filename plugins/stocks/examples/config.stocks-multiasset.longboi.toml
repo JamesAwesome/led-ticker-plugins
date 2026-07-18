@@ -21,7 +21,8 @@
 # (dedup — the tokens cost no extra credits).
 #
 # Prereqs on the sign:
-#   - led-ticker-core >= 4.14.0 (colored value tokens). For the crisp minus on
+#   - led-ticker-core >= 4.19.0 (colored value tokens Phase 2 — the two_row row below;
+#     Phase 1 message tokens need only 4.14.0). For the crisp minus on
 #     a negative, core with the hi-res U+2212 fix helps, but the plugin's own
 #     minus belt already renders "-" in the token on ANY core.
 #   - led-ticker-stocks >= 0.6.0 (this branch). Until 0.6.0 is on PyPI, install
@@ -89,6 +90,13 @@
 # NOTE (longboi colour wiring): these panels wire HUB75 G→Red, R→Blue, B→Green,
 # so led_rgb_sequence = "BRG" is REQUIRED or up/down green/red will look wrong.
 # If green reads as blue or red as green, that line is the first suspect.
+#   7 TWO-ROW COLORED TOKEN (Phase 2) — the two_row section reads
+#                    "FX  EUR/USD 1.1467 ..." held on top and "CRYPTO  <btc> ..."
+#                    scrolling on the bottom: each row's LABEL ("FX" / "CRYPTO")
+#                    is WHITE while the inline `:eurusd:` / `:btc:` token is
+#                    trend-coloured green-up / red-down — mixed colours WITHIN
+#                    one row, on BOTH rows (Phase 2 wired two_row + image; this
+#                    validates two_row on hardware).
 #
 # If anything looks wrong: docs/visual-validation.md.
 
@@ -170,3 +178,26 @@ symbols = ["BTC/USD", "AAPL", "EUR/USD", "ETH/USD", "NVDA"]
 update_interval = 600
 # No `demo = true`: with a TWELVEDATA_API_KEY set this runs LIVE; with no key the
 # shared cache auto-demos (synthesized feed) — see the DEMO caveat in the header.
+
+
+# --- 7: TWO-ROW mixed-colour tokens (Phase 2 hardware check) --------------------
+#        Held top row + scroll-on-overflow bottom row; each row mixes a WHITE
+#        label with its own trend-coloured inline token. Reuses the `:eurusd:` /
+#        `:btc:` sources above (no extra credits).
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FX :eurusd:"
+bottom_text = "CRYPTO :btc:"
+top_color = [255, 255, 255]      # "FX " white; :eurusd: trend-coloured
+bottom_color = [255, 255, 255]   # "CRYPTO " white; :btc: trend-coloured
+top_align = "center"
+top_row_height = 10
+top_font = "Inter-Bold"
+top_font_size = 30
+bottom_font = "Inter-Regular"
+bottom_font_size = 18
+bottom_font_threshold = 80
