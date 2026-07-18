@@ -24,7 +24,7 @@ logical.width` (192 physical px on a bigsign) and held a nearly-blank
 final frame.
 """
 
-from led_ticker.plugin import safe_scale
+from led_ticker.plugin import resolve_font, safe_scale
 
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._models import _format_game_time
@@ -43,7 +43,17 @@ def _px_size(real_w: int) -> int:
 
 
 def _y_for(px_size: int) -> int:
-    return js_round((64 - px_size * 0.72) / 2)
+    """Vertical top for crawl text, centering the CAP-height band on the
+    64-row panel. The prototype's ycP ((64 - px*0.72)/2, dc.html:278)
+    treats y as the glyphs' visual top; our `hires()` treats y as the
+    ASCENT-box top (baseline = y + font.ascent), and Inter's ascent is
+    taller than its cap height — porting ycP literally rendered the crawl
+    ~10px low (hardware finding, longboi 2026-07-18). Solve for the
+    baseline the prototype intended (panel center + half the cap height,
+    cap ~= px*0.72) and back the ascent out.
+    """
+    font = resolve_font("Inter-Bold", px_size, 80)
+    return js_round((64 + px_size * 0.72) / 2) - font.ascent
 
 
 def _score_color(game, side):

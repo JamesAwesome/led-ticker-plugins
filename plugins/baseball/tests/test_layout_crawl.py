@@ -141,3 +141,27 @@ def test_y_offset_shifts_content():
     render_crawl(canvas2, _live_game(), TZ, 0)
     rows2 = {y for x, y in real2._pixels if real2.get_pixel(x, y) != (0, 0, 0)}
     assert min(rows) - min(rows2) == 32
+
+
+class TestVerticalCentering:
+    """Hardware finding (longboi, 2026-07-18): the crawl rendered ~10px low.
+
+    The prototype's ycP treats y as the glyphs' visual top; our hires()
+    treats it as the ascent-box top (baseline = y + ascent), so the port
+    must back the ascent out. Guard: the lit row band of a text-only
+    (final-state) render must center on the panel's vertical middle.
+    """
+
+    def _midpoint(self, width):
+        real = HeadlessBackend(width, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        g = _live_game(state="final", inning=None)
+        render_crawl(canvas, g, TZ, 0)
+        rows = sorted({y for (_x, y) in real._pixels})
+        return (rows[0] + rows[-1]) / 2
+
+    def test_longboi_crawl_text_band_is_vertically_centered(self):
+        assert abs(self._midpoint(512) - 31.5) <= 2.5
+
+    def test_bigsign_crawl_text_band_is_vertically_centered(self):
+        assert abs(self._midpoint(256) - 31.5) <= 2.5
