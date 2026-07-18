@@ -246,9 +246,9 @@ class MLBStandingsMonitor:
             stories = self._build_board_stories(standings, standings_by_abbr)
             if not stories:
                 # Never blank the sign under the "auto" default: a
-                # divisionless API shape (division_id 0 everywhere) or
-                # names missing from MLB_NAME_TO_ABBR resolve zero
-                # divisions — degrade to the legacy per-team rows.
+                # divisionless API response (division_id == 0 everywhere).
+                # Tracked teams that fail to resolve fall back to the
+                # overall leader's division board, not here.
                 logger.info(
                     "standings: no divisions resolved; falling back to ticker rows"
                 )

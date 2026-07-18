@@ -129,7 +129,7 @@ Fetches overall MLB standings for the divisions of your tracked `teams`. Three `
 
 **Board columns** — bigsign (256px real width) shows rank, team chip, team, combined W-L record, GB, and streak; longboi (512px) adds PCT and L10 (split W/L instead of a combined record). Boards cap at 5 rows per division. **GB on a board is DIVISION games back** (each team's distance from its own division leader) — the scrolling `ticker` rows keep the overall (league) GB instead.
 
-**Division selection** — one board per division represented in your `teams` list, in config order, deduped (tracking two teams in the same division still shows that division once). With no tracked teams (`teams = []`), the board falls back to the overall leader's division.
+**Division selection** — one board per division represented in your `teams` list, in config order, deduped (tracking two teams in the same division still shows that division once). When no tracked team resolves to a division, the board falls back to the overall leader's division.
 
 **Fallback to `ticker`** — if the API response has no division data for any team (a shape the boards can't group), `auto`/`board` fall back automatically to the classic scrolling rows instead of showing nothing (logged at INFO: `standings: no divisions resolved; falling back to ticker rows`).
 

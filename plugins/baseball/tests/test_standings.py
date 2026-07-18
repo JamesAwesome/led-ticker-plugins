@@ -1150,9 +1150,9 @@ def _divisionless_session():
 
 class TestStandingsBoardEmptyFallback:
     """P0: the auto default must never blank the sign. When the board path
-    resolves zero divisions (divisionless API shapes, names missing from
-    MLB_NAME_TO_ABBR), update() falls back to the legacy ticker rows and
-    logs one INFO line."""
+    resolves zero divisions (a divisionless API response, division_id == 0
+    everywhere), update() falls back to the legacy ticker rows and logs one
+    INFO line."""
 
     @pytest.mark.asyncio
     async def test_auto_divisionless_falls_back_to_ticker_rows(self):

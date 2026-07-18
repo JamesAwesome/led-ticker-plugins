@@ -164,10 +164,11 @@ own docstring for the hardware-validated formula. Rows cap at 5 (`_MAX_ROWS`). `
 both is `division_gb` (division games back), not the overall `games_back` the scrolling rows use.
 
 **Empty-board fallback is load-bearing** (`standings.py`'s `update()`) — `_build_board_stories`
-returning an empty list (a divisionless API response, `division_id == 0` everywhere, or team
-names missing from `MLB_NAME_TO_ABBR`) falls back to `_build_ticker_stories` so the sign is never
-blanked under the `auto` default; logs at INFO (`standings: no divisions resolved; falling back
-to ticker rows`). Don't remove this fallback when touching `_build_board_stories`. Tripwire:
+returning an empty list (a divisionless API response, `division_id == 0` everywhere) falls back to
+`_build_ticker_stories` so the sign is never blanked under the `auto` default; logs at INFO
+(`standings: no divisions resolved; falling back to ticker rows`). Tracked teams that fail to
+resolve to a division fall back to the overall leader's division board, NOT to ticker rows. Don't
+remove this fallback when touching `_build_board_stories`. Tripwire:
 `test_auto_divisionless_falls_back_to_ticker_rows`.
 
 **`DIVISION_NAMES` is a static id map** (`standings.py`) — MLB Stats API division IDs 200–205 are
