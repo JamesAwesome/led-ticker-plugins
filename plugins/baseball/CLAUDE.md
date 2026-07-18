@@ -13,7 +13,7 @@ feature works*, the README wins; this file is the source of truth for *how to ke
 This plugin contributes, via the `led_ticker.plugins` entry point, an MLB feature set that
 used to live in led-ticker core (`type = "mlb"`):
 
-- `baseball.scores` — live/final/preview scores; `ticker`, `scoreboard`, or `two_row` layout.
+- `baseball.scores` — live/final/preview scores; `layout = "auto"` (default), `"ticker"`, `"scoreboard"`, or `"two_row"`. `auto` resolves per-sign (`layouts.resolve_layout`); explicit names always mean what they say. Scale 1 renders through the legacy text-glyph classes (`_scoreboard.py`, `_two_row.py`); scale>1 dispatches through `MLBGameCard` (`_card.py`) to the new physical (procedural pixel-art) renderers in `layouts/`.
 - `baseball.standings` — scrolling division standings (top-N + tracked teams), offseason-aware.
 - `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks.
 - `baseball.statcast` — daily Statcast superlatives (longest HR, hardest hit,
@@ -52,8 +52,20 @@ Python **3.14+** only.
 src/led_ticker_baseball/
   __init__.py     # register(api) entry point — the only place names are registered
   emoji.py        # :baseball.ball: — lo-res 8×8 (BALL) + procedural hi-res 32×32 (BALL_HIRES)
-  teams.py        # shared MLB team colors/names/abbr tables, lazy palette, async resolve_team_id()
-  scores.py       # baseball.scores widget (MLBScoreMonitor); ticker/scoreboard/two_row; game-state machine
+  teams.py        # shared MLB team colors/names/abbr tables, lazy palette, async resolve_team_id(),
+                  #   MLB_TEAM_CHIPS (30-team two-tone chip colors, lifted)
+  scores.py       # baseball.scores widget (MLBScoreMonitor); layout="auto"/ticker/scoreboard/two_row;
+                  #   game-state machine; builds MLBGameCard stories (update())
+  _card.py        # MLBGameCard — the scale-dispatching story: scale 1 delegates to the legacy
+                  #   classes below, scale>1 dispatches to layouts/
+  _scoreboard.py  # MLBScoreboardMessage (legacy scale-1 scoreboard text renderer) + _build_game_message
+  _two_row.py     # legacy scale-1 two_row text renderer
+  _models.py      # GameInfo / SeriesInfo dataclasses + shared formatting helpers
+  _palette.py     # semantic design-handoff palette (0-255 Color constants); one hue per data field
+  _paint.py       # physical-pixel hi-res paint helpers for layouts/ (phys_wrap, hires, js_round, …)
+  _primitives.py  # procedural pixel-art primitives (chip/diamond/pip/dash/series_dashes), ported
+                  #   coordinate-for-coordinate from design/…dc.html
+  layouts/        # new physical (scale>1) renderers: resolve_layout + crawl.py/scoreboard.py/two_row.py
   standings.py    # baseball.standings widget (MLBStandingsMonitor); top-N + tracked teams; offseason awareness
   promotions.py   # baseball.promotions widget (MLBPromotionsMonitor); home-game promos; today-first + fallback states
   statcast.py     # baseball.statcast widget (MLBStatcastMonitor); Savant day-CSV superlatives; schedule-gated
@@ -61,9 +73,10 @@ src/led_ticker_baseball/
   transition.py   # baseball.roll* family; lo-res 4-frame + procedural hi-res rotation
 ```
 
-All five widget modules import the shared tables from `teams.py` (no widget reaches into
-another widget). `transition.py` reuses the hi-res sprite generator from
-`emoji.py`. These sibling intra-package imports are allowed; see the import contract below.
+All widget modules import the shared tables from `teams.py` (no widget reaches into
+another widget's private internals). `transition.py` reuses the hi-res sprite generator from
+`emoji.py`. `_card.py` and `layouts/` import from `_palette.py`/`_paint.py`/`_primitives.py`.
+These sibling intra-package imports are allowed; see the import contract below.
 
 `register(api)` (in `__init__.py`):
 
@@ -100,9 +113,28 @@ because it isn't on the public surface.
 run pre-coercion by the engine's `validate_widget_cfg`. It **returns `list[str]`** (does NOT raise);
 the engine turns any returned message into a pre-flight `ValueError`. It reproduces the two
 guardrails core formerly applied to `type = "mlb"`: (1) `layout` must be in
-`("ticker", "scoreboard", "two_row")` (`_MLB_VALID_LAYOUTS`); (2) the per-row `top_*` knobs
-(`_TWO_ROW_ONLY`) are rejected by name when `layout != "two_row"` — named, not silently ignored,
-so stale configs surface.
+`("auto", "ticker", "scoreboard", "two_row")` (`_MLB_VALID_LAYOUTS`) — `"auto"` is the default
+since the design uplift; (2) the per-row `top_*` knobs (`_TWO_ROW_ONLY`) are rejected by name
+when `layout` isn't in `_TWO_ROW_CAPABLE_LAYOUTS = ("two_row", "auto")` — named, not silently
+ignored, so stale configs surface. `"auto"` stays two-row-capable because it can resolve TO
+`two_row` at draw time (`layouts.resolve_layout`); the config-load-time check can't know the
+canvas yet, so it admits the superset and lets the resolved-layout mismatch (if any) surface at
+draw time instead.
+
+**`MLBGameCard` scale-dispatch contract** (`_card.py`) — the one story `scores.py`'s `update()`
+builds per game, for every layout. `draw()` resolves `(cfg_layout, scale, real_width)` via
+`layouts.resolve_layout` fresh on every call (flight pattern — hot-reloads/canvas swaps always
+re-resolve), then: **scale <= 1 delegates unconditionally to the legacy classes**
+(`_build_scoreboard_message`/`_build_two_row_message`/`_build_game_message`, cached on
+`self._legacy` after first build) — unchanged smallsign behavior, byte-for-byte. **scale > 1
+dispatches to the physical renderers** in `layouts/` (`render_crawl`/`render_scoreboard`/
+`render_two_row`) and NEVER touches the legacy classes — `MLBScoreboardMessage.draw()` (with its
+`_MIN_LOGICAL_WIDTH` geometry guard) is scale<=1-only code post-uplift; a bigsign/longboi running
+`layout = "scoreboard"` cannot reach that guard. Held layouts (`scoreboard`, `two_row`, and the
+legacy path) return `cursor = real.width` — the engine holds; `ticker`'s physical crawl
+(`render_crawl`) returns its own advance width — the engine scrolls. Frame-aware hooks
+(`advance_frame`/`pause_frame`/`resume_frame`/`reset_frame`) forward to the cached `_legacy`
+story IN ADDITION TO the card's own base counters — don't drop either half when touching these.
 
 **`teams.py` lazy palette is PEP 562** — module-level `__getattr__` exports the named colors
 (`WIN_COLOR`/`LOSS_COLOR`/`LIVE_COLOR`/`CHALLENGE_COLOR`) so external code can
@@ -112,6 +144,56 @@ directly** — PEP 562 `__getattr__` does NOT fire for bare-name lookups within 
 **Team color lifting** (`_lift_color`, `teams.py`) — dark team colors are scaled so the peak RGB
 channel is ≥ 120, keeping them legible on-panel at low brightness; hue/saturation are preserved
 and already-bright teams are unchanged. Don't bypass it when adding team colors.
+
+**`MLB_TEAM_CHIPS` two-tone table must stay 30-complete and lifted** (`teams.py`) — one
+`(c1, c2)` tuple per MLB team, keyed by abbreviation, feeding `_primitives.chip`'s two-tone
+corner-radius chip render. `MLB_TEAM_CHIPS` is a derived dict comprehension over
+`_RAW_TEAM_CHIPS` that runs every entry through `_lift_color` at import time — same lifting
+rule as the rest of `teams.py` (don't add a raw, unlifted entry). `_primitives.chip` falls back
+to a fixed grey pair for any team missing from the table, so a partial table degrades silently
+instead of crashing — that makes an incomplete table easy to miss. If you touch this table,
+verify all 30 clubs are still present (`tests/test_teams_chips.py` is the tripwire).
+
+**`_paint`/`_palette`/`_primitives` are handoff ports — geometry changes need design review**
+(`_paint.py`, `_palette.py`, `_primitives.py`). These are coordinate-for-coordinate and
+color-for-color ports of the `design/…dc.html` prototype (see each module's docstring), consumed
+by `layouts/` (the new scale>1 renderers). Treat a pixel offset, radius, or color constant here
+as a design decision, not a refactor target — changing one changes the on-panel look of every
+scale>1 layout that uses it. **`js_round` — never bare `round()`** (`_paint.py`): all handoff
+geometry was authored against JS `Math.round` (half-up: `floor(v + 0.5)`), which differs from
+Python's `round()` (banker's rounding, round-half-to-even) at exact `.5` boundaries. Any new
+geometry math ported from the design prototype must use `js_round`, not `round()`, to stay
+pixel-identical to the handoff at those boundaries.
+
+**Hires text is never exact-pinned in tests** — freetype glyph rasterization is not
+byte-identical across platforms (macOS vs. Linux CI), so tests over the `_paint.hires`/hi-res
+crawl/scoreboard/two_row text output assert shape-level properties (non-empty, width ordering,
+containing/not-overlapping bands) rather than exact pixel coordinates or exact glyph bitmaps.
+The **procedural primitives** (`_primitives.py` — chips, diamonds, pips, dashes) ARE exact-pinned
+in tests, since they're pure `SetPixel` math with no font-rasterizer variance.
+
+**State-gated preview/postponed label, not tag-truthiness-gated** (`layouts/scoreboard.py`,
+`layouts/two_row.py`, `layouts/crawl.py`) — `GameInfo.postpone_tag` DEFAULTS to `"PPD"` (the
+parser sets some tag for every game, postponed or not), so `if game.postpone_tag:` would label
+every ordinary preview game "PPD" instead of its start time — a recurring bug across the three
+physical renderers before the pattern was fixed everywhere. The correct gate is
+`game.state == "postponed" and game.postpone_tag`, checking `state` first. All three renderers
+share this exact pattern; keep them in sync if `GameInfo`'s postponed-state fields change.
+
+**`render_scoreboard` draws no paging dots** (`layouts/scoreboard.py`) — a deliberate omission,
+not a missing feature: the prototype's dot position (`w - n*8 - 6, h - 10`) collides with the
+home score's px34 glyph box on live/final games. `story_index`/`story_total` are still accepted
+in the function signature (for the uniform layout-renderer contract that `two_row` and `crawl`
+use) but are intentionally unused here. Don't "complete" this by adding dots back without
+re-solving the collision first.
+
+**`layouts/crawl.py` is engine-scrolled, not self-clocked** — the design prototype's
+`tickerScores`/`buildTickerSegs` runs its own internal animation clock; `render_crawl` is
+adapted to the engine's cursor contract instead (the stocks `draw_crawl_story` precedent): the
+engine owns and advances `cursor_pos`, and `render_crawl` draws this game's segment run at
+that offset and returns the segment's total content WIDTH (not an absolute end position) so the
+engine can size its per-story advance without re-deriving it from cursor arithmetic. Don't
+reintroduce a self-driven animation loop here — it would fight the engine's scroll cadence.
 
 **Hi-res transition dispatch** — the `baseball.roll*` classes set `scale_switch_at = SNAP_THRESHOLD`
 and branch on `is_scaled(canvas)` (bigsign / `ScaledCanvas`). The hi-res path paints physical LEDs
@@ -132,7 +214,24 @@ rotations at 45° (90° reads as alternating; 22.5° reads chaotic on small pane
 - `test_smoke.py` — loads the plugin through led-ticker's real plugin loader and asserts the
   widgets/transitions/emoji register under the `baseball.*` namespace (entry-point wiring guard).
 - `test_scores.py` / `test_scoreboard.py` / `test_standings.py` / `test_promotions.py` /
-  `test_statcast.py` / `test_attendance.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage.
+  `test_statcast.py` / `test_attendance.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage. `test_scoreboard.py`'s `TestGeometryGuard` covers
+  the legacy `MLBScoreboardMessage._MIN_LOGICAL_WIDTH` raise — that class is scale<=1-only
+  post-uplift (see `MLBGameCard` scale-dispatch above), so these tests exercise a narrow
+  scale-1 canvas directly, not a bigsign/longboi path.
+- `test_resolve_layout.py` / `test_card_dispatch.py` — `layouts.resolve_layout`'s per-sign
+  resolution table and `MLBGameCard`'s scale-1-vs-scale>1 dispatch (including the held-cursor /
+  frame-hook-forwarding contracts above).
+- `test_palette.py` / `test_paint.py` / `test_primitives.py` / `test_teams_chips.py` — the
+  handoff-port foundation modules (palette constants, `js_round`, physical paint helpers,
+  procedural primitives, and the 30-team chip table).
+- `test_layout_crawl.py` / `test_layout_scoreboard.py` / `test_layout_two_row.py` — the three
+  new physical (scale>1) renderers, including the state-gated postpone-label pattern.
+- `tests/survey_layout_gaps.py` — NOT a pytest test (no `test_` prefix; run directly with
+  `uv run python tests/survey_layout_gaps.py`). An instrumented survey harness that measures
+  worst-case field extents on the legacy scale-1 scoreboard renderer and reports overlaps —
+  the tool that established `_MIN_LOGICAL_WIDTH` empirically. Re-run it if you touch
+  `_scoreboard.py`'s zone geometry; interpret its output against the render, not mechanically
+  (see the module's own docstring for known by-design "overlaps").
 
 CI (`.github/workflows/ci.yml`): checks out this repo, Python 3.14, `uv sync --extra dev`
 (led-ticker-core from PyPI), then `ruff check src tests` and `pytest -q`.

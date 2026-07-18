@@ -59,11 +59,26 @@ Each widget below is a `[[playlist.section.widget]]` block you add inside a play
 
 ### `baseball.scores`
 
-Fetches live game state for a tracked team and renders its current series. Three layouts:
+Fetches live game state for a tracked team and renders its current series. Four `layout` values:
 
-- **`layout = "ticker"` (default)** — a scrolling line. Pre-game `NYY @ BOS  Today 7:05 PM`; live `NYY 3 BOS 5 ▲6 ◇◆◇ 1·2·1` (score + inning + bases + balls·strikes·outs in color); final `NYY 4 BOS 5 (Final)` (win green, loss red); postponed `NYY @ BOS (PPD: Rain)`. Spring Training / All-Star games append `(ST)` / `(ASG)`.
-- **`layout = "scoreboard"`** — a two-column board for bigsign/longboi: away name+score left, home name+score right, center zone shows inning+outs (top) and B/S count + base diamonds (bottom). Names in brand colors; scores green/red on final; base diamonds yellow (occupied) / dim grey (empty). ABS-challenge dashes appear in the bottom corners when active.
+- **`layout = "auto"` (default)** — resolves to the best layout for the sign automatically; see the resolution table below. This is what most configs should use.
+- **`layout = "ticker"`** — a scrolling line. Pre-game `NYY @ BOS  Today 7:05 PM`; live `NYY 3 BOS 5 ▲6 ◇◆◇ 1·2·1` (score + inning + bases + balls·strikes·outs in color); final `NYY 4 BOS 5 (Final)` (win green, loss red); postponed `NYY @ BOS (PPD: Rain)`. Spring Training / All-Star games append `(ST)` / `(ASG)`.
+- **`layout = "scoreboard"`** — a two-column board: away name+score left, home name+score right, center zone shows inning+outs (top) and B/S count + base diamonds (bottom). Names in brand colors; scores green/red on final; base diamonds yellow (occupied) / dim grey (empty). ABS-challenge dashes appear in the bottom corners when active.
 - **`layout = "two_row"`** — a held top band (series title) over a scrolling bottom band (the per-game line). Use the `top_*` font options below to size the top band; sized for bigsign.
+
+**Scale-1 signs (smallsign) always use the original text-glyph renderers** for `scoreboard`/`two_row`/`ticker` — the `font`/`small_font`/`top_font` options below apply there. **Scale>1 signs (bigsign, longboi) use new physical (procedural pixel-art) renderers** for all three layouts — a coordinate-for-coordinate port of the design handoff, deliberately design-pinned (fixed Inter hires text at fixed sizes; no font-name/font-size/threshold knobs; the look isn't user-tunable on scale>1 at all, including `ticker`).
+
+`layout = "auto"` resolves like this:
+
+| Sign | Resolves to |
+|------|-------------|
+| scale 1 (smallsign) | `ticker` |
+| scale>1, real width < 400px (bigsign) | `two_row` |
+| scale>1, real width >= 400px (longboi) | `scoreboard` |
+
+Explicit layout names skip resolution and always mean what they say — `layout = "scoreboard"` on a bigsign (256 real px) gets the physical scoreboard renderer even though `auto` would have picked `two_row` there.
+
+> **Migration note:** before this release, the default `layout` was `"ticker"` on every sign. The new default is `"auto"`, which keeps `ticker` on smallsign but switches bigsign/longboi to the new physical `two_row`/`scoreboard` renderers unless you set `layout` explicitly. If you want the old scroll-everywhere behavior back, set `layout = "ticker"` explicitly in your config.
 
 ```toml
 [[playlist.section.widget]]
@@ -77,25 +92,25 @@ timezone = "America/New_York"  # set to your local timezone
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `team` | string | required | MLB team abbreviation, 2–3 letters (e.g. `"NYY"`, `"KC"`, `"SD"`) — see [Team codes](#team-codes). Case-insensitive. |
-| `layout` | string | `"ticker"` | `"ticker"`, `"scoreboard"`, or `"two_row"`. |
+| `layout` | string | `"auto"` | `"auto"`, `"ticker"`, `"scoreboard"`, or `"two_row"` — see the resolution table above. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for game-time formatting. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each message when scrolling (ticker). |
 | `final_hold_hours` | int | `6` | Hours after a game ends to keep showing the final score. |
-| `bg_color` | RGB list | none | Background fill behind all game messages. |
-| `font_color` | RGB list / string / table | unset | Override all text color; default keeps per-segment brand/win-loss colors. |
-| `font` | string | `"6x12"` | Font for names and scores. Hires name (e.g. `"Inter-Regular"`) needs `font_size`. |
-| `font_size` | int | none | Point size; required for a hires (TTF/OTF) `font`. |
-| `font_threshold` | int | `128` | Hires anti-alias threshold (0–255); `80` suits Inter Regular. |
-| `small_font` | string | same as `font` | Center-zone font (scoreboard layout). |
-| `small_font_size` | int | none | Point size for `small_font`. |
-| `small_font_threshold` | int | same as `font_threshold` | Anti-alias threshold for `small_font`. |
-| `top_font` | string | same as `font` | Top-band font (`two_row` layout only). |
-| `top_font_size` | int | none | Point size for `top_font` (`two_row` only). |
-| `top_font_threshold` | int | same as `font_threshold` | Anti-alias threshold for `top_font` (`two_row` only). |
-| `top_row_height` | int | half the canvas | Height (logical px) of the held top band (`two_row` only). |
+| `bg_color` | RGB list | none | Background fill behind all game messages. Scale-1 only — the scale>1 physical renderers paint their own fixed palette and ignore it. |
+| `font_color` | RGB list / string / table | unset | Override all text color; default keeps per-segment brand/win-loss colors. Scale-1 only, same reason. |
+| `font` | string | `"6x12"` | Font for names and scores. Hires name (e.g. `"Inter-Regular"`) needs `font_size`. Scale-1 (smallsign) only — every scale>1 layout (`ticker` included) is design-pinned and ignores all font options. |
+| `font_size` | int | none | Point size; required for a hires (TTF/OTF) `font`. Scale-1 only. |
+| `font_threshold` | int | `128` | Hires anti-alias threshold (0–255); `80` suits Inter Regular. Scale-1 only. |
+| `small_font` | string | same as `font` | Center-zone font, scale-1 `scoreboard` layout only. |
+| `small_font_size` | int | none | Point size for `small_font`. Scale-1 only. |
+| `small_font_threshold` | int | same as `font_threshold` | Anti-alias threshold for `small_font`. Scale-1 only. |
+| `top_font` | string | same as `font` | Top-band font, scale-1 `two_row` layout only. |
+| `top_font_size` | int | none | Point size for `top_font`. Scale-1 only. |
+| `top_font_threshold` | int | same as `font_threshold` | Anti-alias threshold for `top_font`. Scale-1 only. |
+| `top_row_height` | int | half the canvas | Height (logical px) of the held top band, scale-1 `two_row` layout only. |
 | `update_interval` | int | `300` | Seconds between StatsAPI fetches. |
 
-> `top_*` options apply only with `layout = "two_row"` — the widget rejects them at config-load under other layouts.
+> `top_*` options apply only with `layout = "two_row"` (or `"auto"` resolving to `two_row`) — the widget rejects them at config-load under other explicit layouts. All `font`/`small_font`/`top_font*` options are ignored on scale>1 signs (bigsign, longboi) — every layout there, including `ticker`, uses the new design-pinned physical renderers with fixed Inter text. They apply on scale-1 (smallsign) signs regardless of layout.
 
 ### `baseball.standings`
 
@@ -301,7 +316,7 @@ across all of MLB.
 
 ### Gameday ticker
 
-A minimal single-team scrolling line.
+A minimal single-team scrolling line on any sign — set `layout = "ticker"` explicitly since the default `"auto"` picks a physical `two_row`/`scoreboard` layout on bigsign/longboi instead.
 
 ```toml
 [[playlist.section]]
@@ -311,6 +326,7 @@ hold_time = 6
 [[playlist.section.widget]]
 type = "baseball.scores"
 team = "NYY"
+layout = "ticker"
 ```
 
 Shows just the tracked team's live, final, or upcoming game line.

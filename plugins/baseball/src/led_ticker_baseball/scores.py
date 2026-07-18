@@ -95,8 +95,9 @@ __all__ = [
 logger: logging.Logger = logging.getLogger(__name__)
 
 # Supported layouts and the per-row knobs that only apply to "two_row" (and
-# "auto", which can resolve to two_row at scale 1 — see MLBGameCard /
-# layouts.resolve_layout). Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY
+# "auto", which can resolve to two_row on a narrow scale>1 sign — see
+# MLBGameCard / layouts.resolve_layout; auto at scale 1 always resolves to
+# ticker, never two_row). Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY
 # (formerly checked in led_ticker.app.factories for type == "mlb"); restored
 # here as a validate_config classmethod now that baseball.scores owns the
 # widget.
@@ -171,8 +172,12 @@ class MLBScoreMonitor:
             )
 
         # Per-row knobs apply under two_row, and under auto (which can
-        # resolve to two_row at scale 1). Naming the offending field(s)
-        # instead of silently ignoring them catches stale configs.
+        # resolve to two_row on a narrow scale>1 sign, e.g. bigsign — see
+        # layouts.resolve_layout; auto never resolves to two_row at scale 1,
+        # that always resolves to ticker). Config-load time doesn't know the
+        # canvas yet, so admit the superset here and let draw-time resolution
+        # decide the actual layout. Naming the offending field(s) instead of
+        # silently ignoring them catches stale configs.
         if layout not in _TWO_ROW_CAPABLE_LAYOUTS:
             dead = [k for k in _TWO_ROW_ONLY if k in cfg]
             if dead:
