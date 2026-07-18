@@ -8,10 +8,24 @@ takes the hold branch — same phase-1 lesson as `MLBGameCard`, see its
 module docstring). scale <= 1 has no hires renderer to fall back to, so
 instead of collapsing the division onto one line, the board forwards to
 one of its pre-built `legacy_rows` (the same per-team SegmentMessages the
-"ticker" layout builds) — one row per SECTION VISIT, advancing via
-`reset_frame()` (core calls this once per visit). This keeps the
+"ticker" layout builds) — one row per SECTION VISIT. This keeps the
 smallsign UX (rows cycle one at a time, engine-scrolled via the forwarded
 cursor) without needing a canvas at `update()` time to decide anything.
+
+Row-advance semantics (visit-idempotent): core calls `reset_frame()`
+TWICE per visit when a widget transition is configured — `run_transition`'s
+`_reset_presenter(incoming)` plus `_show_one`'s own visit-entry reset (core
+documents the double reset as harmless, so this counter must tolerate it).
+A naive "+1 per reset" therefore advances by 2 per transitioned visit and
+STICKS on even-length `legacy_rows`. Instead, `reset_frame()` only ARMS a
+pending advance; the first UNPAUSED scale<=1 draw consumes it. Compositing
+draws are excluded by the pause check: `run_transition` wraps its whole
+loop in `pause_frame()` / `resume_frame()` (reset lands between pause and
+the loop), so a paused draw renders the CURRENT row without consuming the
+pending advance — the two resets collapse to exactly one advance at the
+visit's first real draw. `_legacy_idx` starts at -1 with the flag armed so
+the first-ever visit renders row 0 (paused compositing before any visit
+clamps -1 up to row 0).
 """
 
 from typing import TYPE_CHECKING, Any
@@ -34,11 +48,15 @@ if TYPE_CHECKING:
 @attrs.define
 class MLBStandingsBoard(FrameAwareBase):
     division_name: str
-    rows: list[TeamStanding]
+    # Quoted (not a bare deferred name): keeps class __annotations__ /
+    # get_type_hints-style introspection from raising NameError on the
+    # TYPE_CHECKING-only import. attrs collects string annotations fine.
+    rows: "list[TeamStanding]"  # noqa: UP037 — introspection-safe forward ref
     legacy_rows: list[Any]
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
-    _legacy_idx: int = attrs.field(init=False, default=0)
+    _legacy_idx: int = attrs.field(init=False, default=-1)
+    _pending_row_advance: bool = attrs.field(init=False, default=True)
 
     def draw(
         self,
@@ -60,11 +78,21 @@ class MLBStandingsBoard(FrameAwareBase):
             return canvas, canvas.width
         if not self.legacy_rows:
             return canvas, 0
-        idx = self._legacy_idx % len(self.legacy_rows)
+        # Consume the visit's pending advance on the first UNPAUSED draw
+        # only — paused draws are transition compositing (see module
+        # docstring) and must neither advance nor burn the advance.
+        if self._pending_row_advance and not self._frame_paused:
+            self._legacy_idx += 1
+            self._pending_row_advance = False
+        # max(): before the first visit's consume, _legacy_idx is -1; a
+        # paused compositing draw of a board's first-ever appearance
+        # clamps up to row 0 instead of -1 % len (== the LAST row).
+        idx = max(self._legacy_idx, 0) % len(self.legacy_rows)
         return self.legacy_rows[idx].draw(
             canvas, cursor_pos, y_offset=y_offset, font_color=font_color
         )
 
     def reset_frame(self) -> None:
         super().reset_frame()
-        self._legacy_idx += 1
+        # Arm (idempotently) rather than advance — see module docstring.
+        self._pending_row_advance = True

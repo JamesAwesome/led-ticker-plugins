@@ -108,9 +108,11 @@ class TestScaleOneDelegatesToLegacy:
         board.draw(real_first)
         first_pixels = _lit(real_first)
 
-        board.reset_frame()  # -> idx 1
-        board.reset_frame()  # -> idx 2 % 2 == 0, wraps back to row 0
+        board.reset_frame()  # visit 2 -> row 1
+        real_second = _smallsign()
+        board.draw(real_second)
 
+        board.reset_frame()  # visit 3 -> wraps back to row 0
         real_wrapped = _smallsign()
         board.draw(real_wrapped)
         wrapped_pixels = _lit(real_wrapped)
@@ -123,6 +125,74 @@ class TestScaleOneDelegatesToLegacy:
         out, cursor = board.draw(real)
         assert out is real
         assert cursor == 0
+
+
+class TestVisitIdempotentCycling:
+    """Core calls reset_frame() TWICE per visit when a widget transition is
+    configured (run_transition's _reset_presenter + _show_one's own reset —
+    core documents the double reset as harmless, so the row counter must
+    tolerate it). The advance must be idempotent per visit: reset arms a
+    pending advance; the first UNPAUSED draw consumes it. Compositing draws
+    (which run under pause_frame(), between the two resets) must not consume
+    the pending advance — otherwise the double reset re-arms and the row
+    sticks forever on even-length legacy_rows.
+    """
+
+    def _board(self):
+        rows = _rows()
+        legacy = [_build_standing_message(rows[0]), _build_standing_message(rows[1])]
+        return MLBStandingsBoard(division_name="AL EAST", rows=rows, legacy_rows=legacy)
+
+    def _row_pixels(self, board_action):
+        real = _smallsign()
+        board_action(real)
+        return _lit(real)
+
+    def test_first_visit_renders_row_zero(self):
+        # Engine flow: reset_frame() fires at visit entry BEFORE the first
+        # draw. The first visit must still render row 0, not row 1.
+        no_reset = self._board()
+        row0 = self._row_pixels(lambda c: no_reset.draw(c))
+
+        engine_flow = self._board()
+        engine_flow.reset_frame()
+        first_visit = self._row_pixels(lambda c: engine_flow.draw(c))
+
+        assert first_visit == row0
+
+    def test_double_reset_collapses_to_one_advance(self):
+        # Reference: single reset between draws -> row 1 on the second draw.
+        single = self._board()
+        self._row_pixels(lambda c: single.draw(c))  # visit 1: row 0
+        single.reset_frame()
+        row1 = self._row_pixels(lambda c: single.draw(c))
+
+        # Double reset between draws must land on the SAME row 1 (the
+        # reviewer's stuck repro: two advances on len-2 legacy_rows = stuck).
+        double = self._board()
+        self._row_pixels(lambda c: double.draw(c))  # visit 1: row 0
+        double.reset_frame()
+        double.reset_frame()
+        second_visit = self._row_pixels(lambda c: double.draw(c))
+
+        assert second_visit == row1
+
+    def test_paused_compositing_draw_does_not_consume_advance(self):
+        # run_transition pauses BOTH widgets, resets incoming, then draws it
+        # repeatedly for compositing. Those paused draws must neither advance
+        # the row nor burn the pending advance for the upcoming visit.
+        board = self._board()
+        row0 = self._row_pixels(lambda c: board.draw(c))  # visit 1: row 0
+
+        board.pause_frame()
+        board.reset_frame()  # run_transition's _reset_presenter
+        composited = self._row_pixels(lambda c: board.draw(c))
+        assert composited == row0  # paused draw: still the old row
+
+        board.resume_frame()
+        board.reset_frame()  # _show_one's own reset (the double)
+        visit2 = self._row_pixels(lambda c: board.draw(c))
+        assert visit2 != row0  # the visit itself advanced exactly once
 
 
 class TestFrameHooks:

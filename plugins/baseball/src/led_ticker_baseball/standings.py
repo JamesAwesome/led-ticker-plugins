@@ -244,6 +244,15 @@ class MLBStandingsMonitor:
             # Story SHAPE is decided by config only (see _STANDINGS_VALID_LAYOUTS
             # docstring) — both currently resolve identically here.
             stories = self._build_board_stories(standings, standings_by_abbr)
+            if not stories:
+                # Never blank the sign under the "auto" default: a
+                # divisionless API shape (division_id 0 everywhere) or
+                # names missing from MLB_NAME_TO_ABBR resolve zero
+                # divisions — degrade to the legacy per-team rows.
+                logger.info(
+                    "standings: no divisions resolved; falling back to ticker rows"
+                )
+                stories = self._build_ticker_stories(standings, standings_by_abbr)
 
         self.feed_stories = stories
         logger.info(

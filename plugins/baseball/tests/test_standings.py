@@ -634,14 +634,11 @@ class TestOffseason:
     @pytest.mark.asyncio
     async def test_update_skips_offseason_when_games_played(self):
         # Some non-zero records → normal path, NOT offseason. This fixture
-        # carries no division data, so it exercises layout="ticker"
-        # explicitly rather than the new "auto" default (which builds
-        # per-division boards and would legitimately yield zero stories
-        # here — there's no division to group by).
+        # carries no division data, so under the "auto" default the board
+        # path resolves zero divisions and falls back to legacy ticker rows
+        # — feed_stories must still be non-empty.
         session = self._make_session(all_zero=False)
-        widget = MLBStandingsMonitor(
-            session=session, teams=["NYM"], top_n=1, layout="ticker"
-        )
+        widget = MLBStandingsMonitor(session=session, teams=["NYM"], top_n=1)
         widget._tz = __import__("zoneinfo").ZoneInfo("America/New_York")
 
         await widget.update()
@@ -1014,3 +1011,101 @@ class TestStandingsUpdateLayoutAutoAndBoard:
         assert board.division_name == "NL WEST"
         assert len(board.legacy_rows) == len(board.rows) == 2
         assert any("Dodgers" in t for t, _ in board.legacy_rows[0].segments)
+
+
+def _divisionless_session():
+    """Real (non-zero) records but NO division data anywhere — the API
+    shape that parses every TeamStanding with division_id == 0."""
+    records = [
+        {
+            # no "division" key at all
+            "teamRecords": [
+                {
+                    "team": {"name": "Yankees"},
+                    "wins": 45,
+                    "losses": 20,
+                    "sportRank": "1",
+                    "sportGamesBack": "-",
+                },
+                {
+                    "team": {"name": "Mets"},
+                    "wins": 40,
+                    "losses": 25,
+                    "sportRank": "5",
+                    "sportGamesBack": "5.0",
+                },
+            ]
+        }
+    ]
+
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        if "/standings" in url:
+            resp.json.return_value = {"records": records}
+        else:
+            resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStandingsBoardEmptyFallback:
+    """P0: the auto default must never blank the sign. When the board path
+    resolves zero divisions (divisionless API shapes, names missing from
+    MLB_NAME_TO_ABBR), update() falls back to the legacy ticker rows and
+    logs one INFO line."""
+
+    @pytest.mark.asyncio
+    async def test_auto_divisionless_falls_back_to_ticker_rows(self):
+        widget = MLBStandingsMonitor(
+            session=_divisionless_session(),
+            teams=["NYM"],
+            layout="auto",
+            top_n=2,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert widget.feed_stories, "auto + divisionless data blanked the sign"
+        assert all(isinstance(s, SegmentMessage) for s in widget.feed_stories)
+        assert not any(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+
+    @pytest.mark.asyncio
+    async def test_fallback_logs_info(self, caplog):
+        import logging
+
+        widget = MLBStandingsMonitor(
+            session=_divisionless_session(),
+            teams=["NYM"],
+            layout="auto",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        with caplog.at_level(logging.INFO, logger="led_ticker_baseball.standings"):
+            await widget.update()
+
+        assert any(
+            "falling back to ticker" in r.message
+            for r in caplog.records
+            if r.levelno == logging.INFO
+        ), f"expected fallback INFO log; got {[r.message for r in caplog.records]}"
+
+    @pytest.mark.asyncio
+    async def test_board_layout_with_divisions_does_not_fall_back(self):
+        # Sanity inverse: division data present → boards, no fallback.
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert all(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)

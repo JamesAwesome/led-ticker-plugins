@@ -37,9 +37,10 @@ if TYPE_CHECKING:
     # Deferred: led_ticker_baseball.standings imports MLBStandingsBoard
     # (_standings_card.py), which imports render_standings_board from this
     # module — an eager top-level import here would be circular. TeamStanding
-    # is only used for the type hint below; PEP 649 lazy annotations (target
-    # Python 3.14) mean the bare reference below never needs to resolve at
-    # runtime, so TYPE_CHECKING alone breaks the cycle.
+    # is only used for the type hint below, QUOTED (a string literal): a bare
+    # deferred reference would make typing.get_type_hints() / __annotations__
+    # introspection raise NameError under PEP 649 evaluation; the string form
+    # is introspection-safe and still breaks the cycle.
     from led_ticker_baseball.standings import TeamStanding
 
 _WIDE_MIN_W = 400
@@ -64,7 +65,11 @@ def _strk_color(streak: str):
 
 
 def render_standings_board(
-    canvas, division_name: str, rows: list[TeamStanding], *, y_offset: int = 0
+    canvas,
+    division_name: str,
+    rows: "list[TeamStanding]",  # noqa: UP037 — introspection-safe forward ref
+    *,
+    y_offset: int = 0,
 ) -> None:
     shim, real = phys_wrap(canvas)
     yo = y_offset * safe_scale(canvas)
