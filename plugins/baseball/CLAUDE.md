@@ -130,9 +130,7 @@ re-resolve), then: **scale <= 1 delegates unconditionally to the legacy classes*
 dispatches to the physical renderers** in `layouts/` (`render_crawl`/`render_scoreboard`/
 `render_two_row`) and NEVER touches the legacy classes — `MLBScoreboardMessage.draw()` (with its
 `_MIN_LOGICAL_WIDTH` geometry guard) is scale<=1-only code post-uplift; a bigsign/longboi running
-`layout = "scoreboard"` cannot reach that guard. Held layouts (`scoreboard`, `two_row`, and the
-legacy path) return `cursor = real.width` — the engine holds; `ticker`'s physical crawl
-(`render_crawl`) returns its own advance width — the engine scrolls. Frame-aware hooks
+`layout = "scoreboard"` cannot reach that guard. Physical held layouts (`scoreboard`, `two_row` at scale > 1) return `cursor = real.width` — the engine holds. The `ticker` layout SCROLLS on every sign: at scale 1 the card forwards the legacy `SegmentMessage`'s scroll cursor unchanged (smallsign behavior is pre-uplift identical), at scale > 1 it returns `render_crawl`'s advance width + padding for the engine's scroll loop. Never 'fix' the legacy ticker to return `real.width` — that would freeze smallsign scrolling. Frame-aware hooks
 (`advance_frame`/`pause_frame`/`resume_frame`/`reset_frame`) forward to the cached `_legacy`
 story IN ADDITION TO the card's own base counters — don't drop either half when touching these.
 
