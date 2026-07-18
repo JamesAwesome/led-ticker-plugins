@@ -86,6 +86,7 @@ MLB_TEAM_COLORS: dict[str, ColorTuple] = {
     "WSH": (171, 0, 3),
 }
 
+
 # Full team names for display
 MLB_TEAM_NAMES: dict[str, str] = {
     "ARI": "D-backs",
@@ -141,6 +142,50 @@ def _lift_color(r: int, g: int, b: int, min_max: int = 120) -> tuple[int, int, i
         min(255, round(g * scale)),
         min(255, round(b * scale)),
     )
+
+
+# Two-tone team chip colors for the hires layouts (design/README.md "Team
+# chip colors"). c1 = primary tone (upper-left triangle), c2 = secondary
+# (lower-right). Handoff-provided entries are marked; the rest follow each
+# club's brand palette. All tones pass through _lift_color at table build so
+# chips stay legible at panel brightness (don't bypass — see CLAUDE.md).
+_RAW_TEAM_CHIPS: dict[str, tuple[ColorTuple, ColorTuple]] = {
+    "ARI": ((167, 25, 48), (227, 212, 173)),
+    "ATL": ((200, 42, 56), (30, 52, 110)),  # handoff
+    "BAL": ((242, 112, 28), (232, 234, 238)),  # handoff
+    "BOS": ((198, 42, 52), (30, 52, 110)),  # handoff
+    "CHC": ((30, 74, 152), (212, 52, 62)),  # handoff
+    "CIN": ((198, 1, 31), (236, 240, 246)),
+    "CLE": ((0, 56, 93), (212, 36, 38)),
+    "COL": ((51, 0, 111), (196, 206, 212)),
+    "CWS": ((60, 60, 66), (196, 206, 212)),
+    "DET": ((12, 35, 64), (240, 110, 30)),
+    "HOU": ((236, 110, 30), (24, 44, 92)),  # handoff
+    "KC": ((0, 70, 135), (189, 155, 96)),
+    "LAA": ((186, 0, 33), (0, 50, 99)),
+    "LAD": ((30, 84, 164), (236, 240, 246)),  # handoff
+    "MIA": ((0, 163, 224), (239, 60, 53)),
+    "MIL": ((18, 40, 75), (255, 197, 47)),
+    "MIN": ((0, 43, 92), (211, 23, 45)),
+    "NYM": ((0, 45, 114), (252, 89, 16)),
+    "NYY": ((28, 44, 92), (236, 240, 246)),  # handoff
+    "OAK": ((0, 56, 49), (239, 178, 30)),
+    "PHI": ((228, 24, 40), (0, 45, 114)),
+    "PIT": ((253, 184, 39), (60, 60, 66)),
+    "SD": ((47, 36, 28), (255, 196, 37)),
+    "SEA": ((26, 72, 92), (140, 196, 168)),  # handoff
+    "SF": ((240, 110, 40), (222, 224, 228)),  # handoff
+    "STL": ((196, 30, 58), (12, 35, 64)),
+    "TB": ((28, 86, 166), (176, 220, 60)),  # handoff (TBR)
+    "TEX": ((0, 50, 120), (192, 17, 31)),
+    "TOR": ((34, 110, 206), (220, 52, 58)),  # handoff
+    "WSH": ((171, 0, 3), (20, 34, 90)),
+}
+
+MLB_TEAM_CHIPS: dict[str, tuple[ColorTuple, ColorTuple]] = {
+    abbr: (_lift_color(*c1), _lift_color(*c2))
+    for abbr, (c1, c2) in _RAW_TEAM_CHIPS.items()
+}
 
 
 def _team_color(abbr: str) -> Color:

@@ -23,6 +23,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import (
     GameInfo,
     SeriesInfo,
@@ -85,26 +86,39 @@ __all__ = [
     "_expand_matchup_if_fits",
     # re-export from led_ticker.plugin (used by test_scoreboard.py)
     "SegmentMessage",
+    # card (scale-dispatching story)
+    "MLBGameCard",
     # monitor
     "MLBScoreMonitor",
 ]
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# Supported layouts and the per-row knobs that only apply to "two_row".
-# Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY (formerly checked in
-# led_ticker.app.factories for type == "mlb"); restored here as a
-# validate_config classmethod now that baseball.scores owns the widget.
-_MLB_VALID_LAYOUTS: tuple[str, ...] = ("ticker", "scoreboard", "two_row")
+# Supported layouts and the per-row knobs that only apply to "two_row" (and
+# "auto", which can resolve to two_row on a narrow scale>1 sign — see
+# MLBGameCard / layouts.resolve_layout; auto at scale 1 always resolves to
+# ticker, never two_row). Mirrors core's _MLB_VALID_LAYOUTS / _TWO_ROW_ONLY
+# (formerly checked in led_ticker.app.factories for type == "mlb"); restored
+# here as a validate_config classmethod now that baseball.scores owns the
+# widget.
+_MLB_VALID_LAYOUTS: tuple[str, ...] = ("auto", "ticker", "scoreboard", "two_row")
 _TWO_ROW_ONLY: tuple[str, ...] = (
     "top_font",
     "top_font_size",
     "top_font_threshold",
     "top_row_height",
 )
+# layout values under which the top_* per-row knobs are meaningful.
+_TWO_ROW_CAPABLE_LAYOUTS: tuple[str, ...] = ("two_row", "auto")
 
 
-_MLBStoryT = TickerMessage | SegmentMessage | MLBScoreboardMessage | MLBTwoRowMessage
+_MLBStoryT = (
+    TickerMessage
+    | SegmentMessage
+    | MLBScoreboardMessage
+    | MLBTwoRowMessage
+    | MLBGameCard
+)
 
 
 @attrs.define
@@ -124,7 +138,7 @@ class MLBScoreMonitor:
     # fall back to FONT_DEFAULT. See the `display_font` resolution in update().
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font = attrs.field(default=FONT_SMALL, kw_only=True)
-    layout: str = attrs.field(default="ticker", kw_only=True)
+    layout: str = attrs.field(default="auto", kw_only=True)
     top_font: Font | None = attrs.field(default=None, kw_only=True)
     top_row_height: int | None = attrs.field(default=None, kw_only=True)
     _team_id: int = attrs.field(init=False, default=0)
@@ -145,7 +159,7 @@ class MLBScoreMonitor:
         """
         msgs: list[str] = []
 
-        layout = cfg.get("layout", "ticker")
+        layout = cfg.get("layout", "auto")
         if layout not in _MLB_VALID_LAYOUTS:
             close = difflib.get_close_matches(
                 str(layout), _MLB_VALID_LAYOUTS, n=1, cutoff=0.5
@@ -157,9 +171,14 @@ class MLBScoreMonitor:
                 f"Choose one of: {valid}.{suggestion}"
             )
 
-        # Per-row knobs only apply under two_row. Naming the offending
-        # field(s) instead of silently ignoring them catches stale configs.
-        if layout != "two_row":
+        # Per-row knobs apply under two_row, and under auto (which can
+        # resolve to two_row on a narrow scale>1 sign, e.g. bigsign — see
+        # layouts.resolve_layout; auto never resolves to two_row at scale 1,
+        # that always resolves to ticker). Config-load time doesn't know the
+        # canvas yet, so admit the superset here and let draw-time resolution
+        # decide the actual layout. Naming the offending field(s) instead of
+        # silently ignoring them catches stale configs.
+        if layout not in _TWO_ROW_CAPABLE_LAYOUTS:
             dead = [k for k in _TWO_ROW_ONLY if k in cfg]
             if dead:
                 fields = ", ".join(repr(k) for k in dead)
@@ -396,49 +415,26 @@ class MLBScoreMonitor:
             )
         self.feed_title = series_title
         stories: list[_MLBStoryT] = [series_title]
-        if self.layout == "scoreboard":
-            stories.extend(
-                _build_scoreboard_message(
-                    g,
-                    self.team,
-                    tz,
-                    bg_color=self.bg_color,
-                    font=display_font,
-                    small_font=self.small_font,
-                    font_color=self.font_color,
-                )
-                for g in current.games
+        n = len(current.games)
+        for g in current.games:
+            g.series_away_wins, g.series_home_wins = self._series_sides(current, g)
+        stories.extend(
+            MLBGameCard(
+                game=g,
+                team_abbr=self.team,
+                tz=tz,
+                cfg_layout=self.layout,
+                story_index=i,
+                story_total=n,
+                bg_color=self.bg_color,
+                font=display_font,
+                small_font=self.small_font,
+                top_font=self.top_font,
+                top_row_height=self.top_row_height,
+                font_color=self.font_color,
             )
-        elif self.layout == "two_row":
-            stories.extend(
-                _build_two_row_message(
-                    g,
-                    self.team,
-                    tz,
-                    bg_color=self.bg_color,
-                    font=display_font,
-                    small_font=self.small_font,
-                    top_font=self.top_font,
-                    top_row_height=self.top_row_height,
-                    font_color=self.font_color,
-                    series_wins=current.team_wins,
-                    series_losses=current.team_losses,
-                    series_total_games=len(current.games),
-                )
-                for g in current.games
-            )
-        else:
-            stories.extend(
-                _build_game_message(
-                    g,
-                    self.team,
-                    tz,
-                    bg_color=self.bg_color,
-                    font=display_font,
-                    font_color=self.font_color,
-                )
-                for g in current.games
-            )
+            for i, g in enumerate(current.games)
+        )
         self.feed_stories = stories
         n_live = sum(1 for g in current.games if g.state == "live")
         logger.info(
@@ -600,6 +596,13 @@ class MLBScoreMonitor:
             team_wins=wins,
             team_losses=losses,
         )
+
+    def _series_sides(self, series: SeriesInfo, game: GameInfo) -> tuple[int, int]:
+        """(away_wins, home_wins) for the series, from SeriesInfo's
+        team-perspective counts."""
+        if self.team == game.away_abbr:
+            return series.team_wins, series.team_losses
+        return series.team_losses, series.team_wins
 
     def _find_current_series(
         self, series_list: list[SeriesInfo], now: datetime

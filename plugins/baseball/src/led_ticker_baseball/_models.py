@@ -39,6 +39,12 @@ class GameInfo:
     # ABS challenge counts (None = system not in effect / data unavailable)
     home_challenges: int | None = None
     away_challenges: int | None = None
+    # Series win counts by SIDE (away/home), not by monitored-team
+    # perspective — set by MLBScoreMonitor._series_sides() before handing
+    # the game to MLBGameCard, so the two_row legacy delegation can map
+    # them back onto whichever side is "our" team.
+    series_away_wins: int = 0
+    series_home_wins: int = 0
 
 
 @dataclass

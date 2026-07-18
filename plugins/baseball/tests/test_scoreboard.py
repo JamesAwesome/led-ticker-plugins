@@ -7,6 +7,7 @@ import pytest
 
 from led_ticker_baseball.scores import (
     GameInfo,
+    MLBGameCard,
     MLBScoreboardMessage,
     MLBScoreMonitor,
     SeriesInfo,
@@ -25,9 +26,9 @@ def test_gameinfo_challenge_fields_can_be_set():
     assert g.away_challenges == 1
 
 
-def test_mlb_score_monitor_layout_defaults_to_ticker():
+def test_mlb_score_monitor_layout_defaults_to_auto():
     field = next(f for f in attrs.fields(MLBScoreMonitor) if f.name == "layout")
-    assert field.default == "ticker"
+    assert field.default == "auto"
 
 
 def _make_monitor_for_parse():
@@ -467,11 +468,14 @@ def test_scoreboard_draw_off_day():
 
 @pytest.mark.asyncio
 async def test_layout_scoreboard_builds_scoreboard_messages():
+    """layout='scoreboard' stories are MLBGameCard wrappers now (#task-10);
+    the card's scale-1 delegation resolves to MLBScoreboardMessage — same
+    legacy renderer as before, just reached through the card."""
     monitor = await _run_update_with_schedule("scoreboard", _phi_nym_schedule())
-    game_stories = [
-        s for s in monitor.feed_stories if isinstance(s, MLBScoreboardMessage)
-    ]
-    assert len(game_stories) >= 1
+    cards = [s for s in monitor.feed_stories if isinstance(s, MLBGameCard)]
+    assert len(cards) >= 1
+    for card in cards:
+        assert isinstance(card._legacy_story("scoreboard"), MLBScoreboardMessage)
 
 
 @pytest.mark.asyncio
@@ -687,11 +691,11 @@ async def test_monitor_threads_small_font_to_scoreboard_messages():
 
     await monitor.update()
 
-    scoreboard_stories = [
-        s for s in monitor.feed_stories if isinstance(s, MLBScoreboardMessage)
-    ]
-    assert scoreboard_stories, "no MLBScoreboardMessage in feed_stories"
-    for story in scoreboard_stories:
+    cards = [s for s in monitor.feed_stories if isinstance(s, MLBGameCard)]
+    assert cards, "no MLBGameCard in feed_stories"
+    for card in cards:
+        story = card._legacy_story("scoreboard")
+        assert isinstance(story, MLBScoreboardMessage)
         assert story.small_font is FONT_DEFAULT, (
             f"story.small_font is {story.small_font!r}, expected FONT_DEFAULT"
         )
@@ -1016,12 +1020,10 @@ async def test_update_hydrates_abs_challenges_for_live_game():
 
     await monitor.update()
 
-    scoreboard_msgs = [
-        s for s in monitor.feed_stories if isinstance(s, MLBScoreboardMessage)
-    ]
-    assert len(scoreboard_msgs) >= 1
-    assert scoreboard_msgs[0].game.home_challenges == 2
-    assert scoreboard_msgs[0].game.away_challenges == 1
+    cards = [s for s in monitor.feed_stories if isinstance(s, MLBGameCard)]
+    assert len(cards) >= 1
+    assert cards[0].game.home_challenges == 2
+    assert cards[0].game.away_challenges == 1
 
 
 class TestMLBUpdateLogging:

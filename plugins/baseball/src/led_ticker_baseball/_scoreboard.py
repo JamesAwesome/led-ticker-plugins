@@ -9,13 +9,22 @@ Layout-collision audit 2026-07-16 (survey: tests/survey_layout_gaps.py):
   (see the half_h comment), and at width 64 the center zone (26px, halves
   of 13px) cannot hold inning+outs / B/S / the diamond cluster: the outs
   dots overlap the 2B diamond and reach the home team name, and the
-  diamonds overlap the B/S row, with TYPICAL data. ``layout =
-  "scoreboard"`` is user-selectable on any sign, so this was
-  config-reachable. GUARDED: ``draw()`` raises below
-  ``_MIN_LOGICAL_WIDTH`` (measured floor 128 — worst case is clean at
-  128/160, overlaps at 112, piles up at 64), steering narrow signs to
-  ``layout = "two_row"``/``"ticker"`` — the two_row band-guard precedent
-  (core's render breaker surfaces the message; the panel keeps running).
+  diamonds overlap the B/S row, with TYPICAL data. GUARDED: ``draw()``
+  raises below ``_MIN_LOGICAL_WIDTH`` (measured floor 128 — worst case is
+  clean at 128/160, overlaps at 112, piles up at 64), steering narrow
+  scale-1 canvases to ``layout = "two_row"``/``"ticker"`` — the two_row
+  band-guard precedent (core's render breaker surfaces the message; the
+  panel keeps running).
+
+POST-UPLIFT NOTE (baseball design uplift, 2026-07): this class is now the
+LEGACY scale-1 renderer only. ``MLBGameCard`` (see ``_card.py``) dispatches
+scale>1 canvases to the physical ``layouts.scoreboard.render_scoreboard``
+instead — a separate coordinate-authored renderer with no shared geometry
+or floor. A bigsign/longboi sign running ``layout = "scoreboard"`` never
+reaches this class or this guard; it gets the new physical scoreboard
+automatically. This guard is retained as defense-in-depth for any scale-1
+canvas narrower than the measured floor (this module is otherwise
+untouched by the uplift).
 """
 
 from datetime import datetime, timedelta
@@ -93,13 +102,18 @@ class MLBScoreboardMessage(FrameAwareBase):
         # Raise with the fix in the message — the two_row band-guard precedent:
         # core's render breaker trips this widget and surfaces the error
         # (status board / logs) while the rest of the rotation keeps running.
+        # This class only ever runs at scale<=1 post-uplift (MLBGameCard
+        # dispatches scale>1 to the physical layouts.scoreboard renderer), so
+        # the message says so — a scale>1 sign is never affected by this raise.
         if canvas.width < _MIN_LOGICAL_WIDTH:
             raise ValueError(
                 f"baseball.scores: layout='scoreboard' needs a canvas >= "
                 f"{_MIN_LOGICAL_WIDTH} logical px wide (this canvas: "
                 f"{canvas.width}) — the live center zone (inning/outs/count/"
-                f"diamond) collides below that. Use layout='two_row' or "
-                f"'ticker' on this sign."
+                f"diamond) collides below that on this legacy scale-1 "
+                f"renderer. Use layout='two_row' or 'ticker' on this sign. "
+                f"(scale>1 signs get the new physical scoreboard "
+                f"automatically and are unaffected by this guard.)"
             )
 
         scale = safe_scale(canvas)
