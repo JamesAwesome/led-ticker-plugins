@@ -194,6 +194,22 @@ class _RecordingRow:
             canvas, cursor_pos, y_offset=y_offset, font_color=font_color
         )
 
+    # MLBStandingsBoard forwards frame hooks to the active legacy row (F3,
+    # phase2-final-review.md) — delegate through to the wrapped
+    # SegmentMessage so this recording wrapper still behaves like a real
+    # legacy row instead of raising AttributeError.
+    def advance_frame(self, *, visit_id=None):
+        self._inner.advance_frame(visit_id=visit_id)
+
+    def pause_frame(self):
+        self._inner.pause_frame()
+
+    def resume_frame(self):
+        self._inner.resume_frame()
+
+    def reset_frame(self):
+        self._inner.reset_frame()
+
 
 def _recording_board(division_name, log):
     rows = [

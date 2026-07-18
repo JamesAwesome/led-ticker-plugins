@@ -282,7 +282,8 @@ class MLBStandingsMonitor:
             )
 
         for team in self.teams:
-            standing = standings_by_abbr.get(team)
+            abbr = API_TO_CANONICAL_ABBR.get(team, team)
+            standing = standings_by_abbr.get(abbr)
             if standing and standing.name not in top_names:
                 stories.append(
                     _build_standing_message(
@@ -312,7 +313,8 @@ class MLBStandingsMonitor:
         divisions: list[int] = []
         seen: set[int] = set()
         for team in self.teams:
-            standing = standings_by_abbr.get(team)
+            abbr = API_TO_CANONICAL_ABBR.get(team, team)
+            standing = standings_by_abbr.get(abbr)
             if standing and standing.division_id and standing.division_id not in seen:
                 seen.add(standing.division_id)
                 divisions.append(standing.division_id)
@@ -355,7 +357,11 @@ class MLBStandingsMonitor:
         """Parse MLB API standings response into sorted TeamStanding list."""
         all_teams: list[TeamStanding] = []
         for record in data.get("records", []):
-            division_id = record.get("division", {}).get("id", 0)
+            # `.get(key, {})`'s default only fires when the key is MISSING —
+            # an explicit JSON `"division": null` still returns None here,
+            # so `or {}` is required to survive a null-poisoned API payload
+            # (see phase2-final-review.md F4).
+            division_id = (record.get("division") or {}).get("id", 0)
             for tr in record.get("teamRecords", []):
                 team = tr.get("team", {})
                 name = team.get("name", "Unknown")
@@ -374,8 +380,12 @@ class MLBStandingsMonitor:
                     name, ""
                 )
                 abbr = API_TO_CANONICAL_ABBR.get(raw_abbr, raw_abbr)
-                pct = str(tr.get("winningPercentage", ""))
-                split_records = tr.get("records", {}).get("splitRecords", [])
+                # `or ""` / `or "-"` below: a *present-but-null* field makes
+                # `.get(key, default)` return None (not the default), which
+                # `str(...)` would otherwise render as the literal text
+                # "None" on the panel — null-check explicitly instead.
+                pct = str(tr.get("winningPercentage") or "")
+                split_records = (tr.get("records") or {}).get("splitRecords", [])
                 l10 = next(
                     (
                         f"{sr.get('wins', 0)}-{sr.get('losses', 0)}"
@@ -384,12 +394,12 @@ class MLBStandingsMonitor:
                     ),
                     "",
                 )
-                streak = tr.get("streak", {}).get("streakCode", "")
+                streak = (tr.get("streak") or {}).get("streakCode", "")
                 try:
                     division_rank = int(tr.get("divisionRank", 99))
                 except TypeError, ValueError:
                     division_rank = 99
-                division_gb = str(tr.get("divisionGamesBack", "-"))
+                division_gb = str(tr.get("divisionGamesBack") or "-")
 
                 all_teams.append(
                     TeamStanding(

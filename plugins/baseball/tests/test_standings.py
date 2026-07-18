@@ -521,6 +521,51 @@ class TestDivisionAwareParsing:
         assert s.division_gb == "-"
         assert s.division_id == 0
 
+    def test_all_five_null_fields_parse_without_raising_and_yield_defaults(self):
+        """F4: an explicit JSON null (as opposed to a MISSING key) makes
+        `.get(key, default)` return None instead of the default — a bare
+        `.get(...).get(...)` chain then raises AttributeError, and a bare
+        `str(tr.get(...))` renders the literal text "None" on the panel.
+        Covers all five nulls named in phase2-final-review.md F4:
+        streak, records, division, winningPercentage, divisionGamesBack."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = {
+            "records": [
+                {
+                    "division": None,
+                    "teamRecords": [
+                        {
+                            "team": {"name": "Mets"},
+                            "wins": 35,
+                            "losses": 30,
+                            "sportRank": "12",
+                            "sportGamesBack": "10.0",
+                            "winningPercentage": None,
+                            "divisionGamesBack": None,
+                            "streak": None,
+                            "records": None,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        standings = widget._parse_standings(data)  # must not raise
+
+        assert len(standings) == 1
+        s = standings[0]
+        assert s.division_id == 0
+        assert s.pct == ""
+        assert s.division_gb == "-"
+        assert s.streak == ""
+        assert s.l10 == ""
+
+        for field in ("pct", "l10", "streak", "division_gb", "games_back", "abbr"):
+            value = getattr(s, field)
+            assert "None" not in str(value), (
+                f"{field}={value!r} leaked the literal string 'None'"
+            )
+
     def test_legacy_fields_untouched(self):
         """Existing legacy fields keep working when constructed positionally."""
         s = TeamStanding(name="Yankees", wins=45, losses=20, rank=1, games_back="-")
@@ -1203,3 +1248,100 @@ class TestStandingsBoardEmptyFallback:
         await widget.update()
 
         assert all(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+
+
+def _ath_config_session():
+    """API response where the Athletics render under MLB's current
+    official abbreviation ("ATH") inside AL WEST (division 200), while the
+    OVERALL leader sits in AL EAST (division 201). Regression fixture for
+    F1: a config of teams=["ATH"] (or ["AZ"] for the D-backs) must resolve
+    the tracked team's OWN division board, not silently miss and fall back
+    to the leader's division — see phase2-final-review.md F1."""
+    records = [
+        {
+            "division": {"id": 201},
+            "teamRecords": [
+                _division_team_record("Yankees", "NYY", 60, 10, 1, 1),
+            ],
+        },
+        {
+            "division": {"id": 200},
+            "teamRecords": [
+                _division_team_record("Athletics", "ATH", 40, 30, 5, 1),
+            ],
+        },
+    ]
+
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        if "/standings" in url:
+            resp.json.return_value = {"records": records}
+        else:
+            resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStandingsConfigAbbrCanonicalization:
+    """F1: config `teams` entries spelled with MLB's current official
+    abbreviation (ATH, AZ) must canonicalize to the plugin's codes (OAK,
+    ARI) — the same normalization scores.py/statcast.py apply — wherever
+    tracked teams are matched against parsed standings. Without it, an
+    "ATH"/"AZ" config silently misses `standings_by_abbr` (whose keys are
+    always canonical) and, under the board layout, confidently renders a
+    DIFFERENT division's board instead."""
+
+    @pytest.mark.asyncio
+    async def test_board_layout_resolves_ath_to_oaks_own_division(self):
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL WEST"
+
+    @pytest.mark.asyncio
+    async def test_auto_layout_resolves_ath_not_leader_fallback(self):
+        # Same fixture under the default "auto" layout: must resolve AL
+        # WEST (the Athletics' own division), never AL EAST (the overall
+        # leader's division, which is what the pre-fix fallback produced).
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="auto",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL WEST"
+
+    @pytest.mark.asyncio
+    async def test_ticker_layout_resolves_ath_tracked_row(self):
+        # Legacy tracked-team path (layout="ticker") has the same
+        # standings_by_abbr lookup — cover it too.
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="ticker",
+            top_n=0,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        texts = [t for t, _ in widget.feed_stories[0].segments]
+        assert any("Athletics" in t for t in texts)
