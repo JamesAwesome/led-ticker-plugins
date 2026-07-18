@@ -22,6 +22,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_baseball.teams import (
+    API_TO_CANONICAL_ABBR,
     MLB_API,
     MLB_NAME_TO_ABBR,
     _team_color_by_name,
@@ -31,6 +32,18 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 _INTERVAL_DAILY: int = 86400
 
+# Static MLB division IDs -> display names. These are stable MLB Stats API
+# constants (sportId=1, league 103/104) so a hydrate isn't needed to label
+# division groupings.
+DIVISION_NAMES: dict[int, str] = {
+    200: "AL WEST",
+    201: "AL EAST",
+    202: "AL CENTRAL",
+    203: "NL WEST",
+    204: "NL EAST",
+    205: "NL CENTRAL",
+}
+
 
 @dataclass
 class TeamStanding:
@@ -39,6 +52,30 @@ class TeamStanding:
     losses: int
     rank: int
     games_back: str  # "-" for leader, "3.0", "10.5", etc.
+    abbr: str = ""  # canonical team abbreviation, e.g. "NYY"
+    pct: str = ""  # API winning-percentage string, e.g. ".598"
+    l10: str = ""  # last-10 record, e.g. "7-3"
+    streak: str = ""  # streak code, e.g. "W3"
+    division_rank: int = 99
+    division_gb: str = "-"  # games back within division
+    division_id: int = 0  # 0 == unknown/unset
+
+
+def _group_by_division(
+    standings: list[TeamStanding],
+) -> dict[int, list[TeamStanding]]:
+    """Group standings by division_id, each list sorted by division_rank.
+
+    Excludes division_id 0 (unknown/unset).
+    """
+    groups: dict[int, list[TeamStanding]] = {}
+    for standing in standings:
+        if standing.division_id == 0:
+            continue
+        groups.setdefault(standing.division_id, []).append(standing)
+    for teams in groups.values():
+        teams.sort(key=lambda t: t.division_rank)
+    return groups
 
 
 def _build_standing_message(
@@ -192,6 +229,7 @@ class MLBStandingsMonitor:
         """Parse MLB API standings response into sorted TeamStanding list."""
         all_teams: list[TeamStanding] = []
         for record in data.get("records", []):
+            division_id = record.get("division", {}).get("id", 0)
             for tr in record.get("teamRecords", []):
                 team = tr.get("team", {})
                 name = team.get("name", "Unknown")
@@ -199,6 +237,26 @@ class MLBStandingsMonitor:
                 losses = tr.get("losses", 0)
                 rank = int(tr.get("sportRank", 99))
                 gb = tr.get("sportGamesBack", "-")
+
+                raw_abbr = team.get("abbreviation", "")
+                abbr = API_TO_CANONICAL_ABBR.get(raw_abbr, raw_abbr)
+                pct = str(tr.get("winningPercentage", ""))
+                split_records = tr.get("records", {}).get("splitRecords", [])
+                l10 = next(
+                    (
+                        f"{sr.get('wins', 0)}-{sr.get('losses', 0)}"
+                        for sr in split_records
+                        if sr.get("type") == "lastTen"
+                    ),
+                    "",
+                )
+                streak = tr.get("streak", {}).get("streakCode", "")
+                try:
+                    division_rank = int(tr.get("divisionRank", 99))
+                except TypeError, ValueError:
+                    division_rank = 99
+                division_gb = str(tr.get("divisionGamesBack", "-"))
+
                 all_teams.append(
                     TeamStanding(
                         name=name,
@@ -206,6 +264,13 @@ class MLBStandingsMonitor:
                         losses=losses,
                         rank=rank,
                         games_back=str(gb),
+                        abbr=abbr,
+                        pct=pct,
+                        l10=l10,
+                        streak=streak,
+                        division_rank=division_rank,
+                        division_gb=division_gb,
+                        division_id=division_id,
                     )
                 )
         all_teams.sort(key=lambda t: t.rank)

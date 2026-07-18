@@ -7,9 +7,11 @@ from led_ticker.colors import RGB_WHITE
 from led_ticker.widgets.message import SegmentMessage, TickerMessage
 
 from led_ticker_baseball.standings import (
+    DIVISION_NAMES,
     MLBStandingsMonitor,
     TeamStanding,
     _build_standing_message,
+    _group_by_division,
 )
 
 # --- TeamStanding ---
@@ -268,6 +270,238 @@ class TestStandingsParsing:
         assert len(standings) == 2
         assert standings[0].name == "Yankees"
         assert standings[1].name == "Dodgers"
+
+
+# --- Division-aware parsing ---
+
+
+class TestDivisionAwareParsing:
+    def _make_division_response(self, division_id, team_records):
+        """Build a mock MLB API standings response for a single division."""
+        return {
+            "records": [
+                {
+                    "division": {"id": division_id},
+                    "teamRecords": team_records,
+                }
+            ]
+        }
+
+    def _make_full_team_record(
+        self,
+        name,
+        abbreviation,
+        wins,
+        losses,
+        rank,
+        *,
+        gb="-",
+        pct="",
+        division_rank="99",
+        division_gb="-",
+        streak_code="",
+        split_records=None,
+    ):
+        record: dict = {
+            "team": {"name": name, "abbreviation": abbreviation},
+            "wins": wins,
+            "losses": losses,
+            "sportRank": str(rank),
+            "sportGamesBack": gb,
+            "winningPercentage": pct,
+            "divisionRank": division_rank,
+            "divisionGamesBack": division_gb,
+        }
+        if streak_code:
+            record["streak"] = {"streakCode": streak_code}
+        if split_records is not None:
+            record["records"] = {"splitRecords": split_records}
+        return record
+
+    def test_all_new_fields_populate(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            201,
+            [
+                self._make_full_team_record(
+                    "Yankees",
+                    "NYY",
+                    45,
+                    20,
+                    1,
+                    gb="-",
+                    pct=".692",
+                    division_rank="1",
+                    division_gb="-",
+                    streak_code="W3",
+                    split_records=[
+                        {"type": "lastTen", "wins": 7, "losses": 3},
+                        {"type": "home", "wins": 20, "losses": 10},
+                        {"type": "away", "wins": 25, "losses": 10},
+                    ],
+                ),
+                self._make_full_team_record(
+                    "Orioles",
+                    "BAL",
+                    40,
+                    25,
+                    5,
+                    gb="5.0",
+                    pct=".615",
+                    division_rank="2",
+                    division_gb="3.0",
+                    streak_code="L2",
+                    split_records=[
+                        {"type": "lastTen", "wins": 4, "losses": 6},
+                        {"type": "home", "wins": 18, "losses": 12},
+                    ],
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert len(standings) == 2
+
+        yanks = next(s for s in standings if s.name == "Yankees")
+        assert yanks.abbr == "NYY"
+        assert yanks.pct == ".692"
+        assert yanks.l10 == "7-3"
+        assert yanks.streak == "W3"
+        assert yanks.division_rank == 1
+        assert yanks.division_gb == "-"
+        assert yanks.division_id == 201
+
+        os = next(s for s in standings if s.name == "Orioles")
+        assert os.abbr == "BAL"
+        assert os.pct == ".615"
+        assert os.l10 == "4-6"
+        assert os.streak == "L2"
+        assert os.division_rank == 2
+        assert os.division_gb == "3.0"
+        assert os.division_id == 201
+
+    def test_abbr_normalizes_az_to_ari(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            203,
+            [
+                self._make_full_team_record(
+                    "Diamondbacks",
+                    "AZ",
+                    40,
+                    25,
+                    5,
+                    division_rank="1",
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "ARI"
+
+    def test_missing_optional_fields_yield_defaults(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = {
+            "records": [
+                {
+                    "teamRecords": [
+                        {
+                            "team": {"name": "Mets"},
+                            "wins": 35,
+                            "losses": 30,
+                            "sportRank": "12",
+                            "sportGamesBack": "10.0",
+                        }
+                    ]
+                }
+            ]
+        }
+        standings = widget._parse_standings(data)
+        assert len(standings) == 1
+        s = standings[0]
+        assert s.abbr == ""
+        assert s.pct == ""
+        assert s.l10 == ""
+        assert s.streak == ""
+        assert s.division_rank == 99
+        assert s.division_gb == "-"
+        assert s.division_id == 0
+
+    def test_legacy_fields_untouched(self):
+        """Existing legacy fields keep working when constructed positionally."""
+        s = TeamStanding(name="Yankees", wins=45, losses=20, rank=1, games_back="-")
+        assert s.abbr == ""
+        assert s.pct == ""
+        assert s.l10 == ""
+        assert s.streak == ""
+        assert s.division_rank == 99
+        assert s.division_gb == "-"
+        assert s.division_id == 0
+
+
+class TestGroupByDivision:
+    def test_groups_and_sorts_by_division_rank(self):
+        standings = [
+            TeamStanding(
+                name="Orioles",
+                wins=41,
+                losses=24,
+                rank=3,
+                games_back="4.0",
+                division_id=201,
+                division_rank=2,
+            ),
+            TeamStanding(
+                name="Yankees",
+                wins=45,
+                losses=20,
+                rank=1,
+                games_back="-",
+                division_id=201,
+                division_rank=1,
+            ),
+            TeamStanding(
+                name="Dodgers",
+                wins=42,
+                losses=23,
+                rank=2,
+                games_back="3.0",
+                division_id=203,
+                division_rank=1,
+            ),
+        ]
+        groups = _group_by_division(standings)
+        assert set(groups.keys()) == {201, 203}
+        assert [s.name for s in groups[201]] == ["Yankees", "Orioles"]
+        assert [s.name for s in groups[203]] == ["Dodgers"]
+
+    def test_excludes_division_id_zero(self):
+        standings = [
+            TeamStanding(
+                name="Yankees",
+                wins=45,
+                losses=20,
+                rank=1,
+                games_back="-",
+                division_id=0,
+                division_rank=1,
+            ),
+        ]
+        groups = _group_by_division(standings)
+        assert groups == {}
+
+    def test_empty_input(self):
+        assert _group_by_division([]) == {}
+
+
+class TestDivisionNames:
+    def test_all_six_divisions_present(self):
+        assert DIVISION_NAMES == {
+            200: "AL WEST",
+            201: "AL EAST",
+            202: "AL CENTRAL",
+            203: "NL WEST",
+            204: "NL EAST",
+            205: "NL CENTRAL",
+        }
 
 
 # --- Offseason ---
