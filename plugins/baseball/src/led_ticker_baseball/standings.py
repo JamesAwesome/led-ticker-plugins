@@ -364,7 +364,15 @@ class MLBStandingsMonitor:
                 rank = int(tr.get("sportRank", 99))
                 gb = tr.get("sportGamesBack", "-")
 
-                raw_abbr = team.get("abbreviation", "")
+                # The real /standings response does NOT include
+                # team.abbreviation (only id/name/link -- it needs a
+                # hydrate we don't request); fall back to the name lookup
+                # so live data still resolves an abbr instead of rendering
+                # a blank/grey chip. Whichever source wins still goes
+                # through the API->canonical normalization below.
+                raw_abbr = team.get("abbreviation", "") or MLB_NAME_TO_ABBR.get(
+                    name, ""
+                )
                 abbr = API_TO_CANONICAL_ABBR.get(raw_abbr, raw_abbr)
                 pct = str(tr.get("winningPercentage", ""))
                 split_records = tr.get("records", {}).get("splitRecords", [])

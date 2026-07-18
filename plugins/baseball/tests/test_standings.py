@@ -304,8 +304,15 @@ class TestDivisionAwareParsing:
         streak_code="",
         split_records=None,
     ):
+        # Real /standings responses omit "abbreviation" entirely (only
+        # id/name/link -- it needs a hydrate we don't request). Pass
+        # abbreviation=None to mirror that un-hydrated shape; pass a string
+        # to mirror a hydrated response that does include it.
+        team: dict = {"name": name}
+        if abbreviation:
+            team["abbreviation"] = abbreviation
         record: dict = {
-            "team": {"name": name, "abbreviation": abbreviation},
+            "team": team,
             "wins": wins,
             "losses": losses,
             "sportRank": str(rank),
@@ -321,13 +328,19 @@ class TestDivisionAwareParsing:
         return record
 
     def test_all_new_fields_populate(self):
+        """Primary division-parsing fixture: mirrors the REAL (un-hydrated)
+        /standings response -- team objects carry no "abbreviation" field
+        (abbreviation=None below), so abbr must resolve via the
+        MLB_NAME_TO_ABBR name fallback. This is deliberately the shape that
+        caught the live-API bug (grey fallback chips, no abbr text) --
+        keeping it hydrated here previously masked that regression."""
         widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
         data = self._make_division_response(
             201,
             [
                 self._make_full_team_record(
                     "Yankees",
-                    "NYY",
+                    None,
                     45,
                     20,
                     1,
@@ -344,7 +357,7 @@ class TestDivisionAwareParsing:
                 ),
                 self._make_full_team_record(
                     "Orioles",
-                    "BAL",
+                    None,
                     40,
                     25,
                     5,
@@ -399,6 +412,82 @@ class TestDivisionAwareParsing:
         standings = widget._parse_standings(data)
         assert standings[0].abbr == "ARI"
 
+    def test_hydrated_abbreviation_takes_precedence_over_name(self):
+        """When team.abbreviation IS present (a hydrated response), it is
+        used directly rather than the name-based fallback -- proves the
+        pre-existing hydrated-response path still works alongside the new
+        un-hydrated fallback below. Uses a name that ISN'T in
+        MLB_NAME_TO_ABBR so a name-lookup would fail, isolating the
+        assertion to the abbreviation-present branch."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            201,
+            [
+                self._make_full_team_record(
+                    "Not A Real Team Name",
+                    "NYY",
+                    45,
+                    20,
+                    1,
+                    division_rank="1",
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "NYY"
+
+    def test_abbr_falls_back_to_name_lookup_when_abbreviation_absent(self):
+        """Regression: the real (un-hydrated) MLB /standings response does
+        NOT include team.abbreviation -- only id/name/link (verified via
+        live-API gif validation). _parse_standings must still resolve abbr
+        from the team name via MLB_NAME_TO_ABBR."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            204,
+            [
+                {
+                    "team": {
+                        "id": 143,
+                        "name": "Phillies",
+                        "link": "/api/v1/teams/143",
+                    },
+                    "wins": 40,
+                    "losses": 25,
+                    "sportRank": "3",
+                    "sportGamesBack": "5.0",
+                    "divisionRank": "1",
+                    "divisionGamesBack": "-",
+                },
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "PHI"
+
+    def test_abbr_stays_empty_when_name_unknown_and_no_abbreviation(self):
+        """A name absent from MLB_NAME_TO_ABBR (and no abbreviation in the
+        payload) yields "" -- unchanged from prior behavior."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            204,
+            [
+                {
+                    "team": {
+                        "id": 999,
+                        "name": "Some Unknown Team",
+                        "link": "/api/v1/teams/999",
+                    },
+                    "wins": 10,
+                    "losses": 10,
+                    "sportRank": "10",
+                    "sportGamesBack": "-",
+                    "divisionRank": "5",
+                    "divisionGamesBack": "-",
+                },
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == ""
+
     def test_missing_optional_fields_yield_defaults(self):
         widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
         data = {
@@ -419,7 +508,12 @@ class TestDivisionAwareParsing:
         standings = widget._parse_standings(data)
         assert len(standings) == 1
         s = standings[0]
-        assert s.abbr == ""
+        # "Mets" IS in MLB_NAME_TO_ABBR, so even with no "abbreviation" key
+        # abbr now resolves via the name fallback (the live-API bug fix) --
+        # it does NOT default to "" here. See
+        # test_abbr_stays_empty_when_name_unknown_and_no_abbreviation for
+        # the true "no fallback available" default case.
+        assert s.abbr == "NYM"
         assert s.pct == ""
         assert s.l10 == ""
         assert s.streak == ""
