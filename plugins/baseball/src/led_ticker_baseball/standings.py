@@ -338,7 +338,7 @@ class MLBStandingsMonitor:
         self,
         standings: list[TeamStanding],
         standings_by_abbr: dict[str, TeamStanding],
-    ) -> list[TickerMessage | SegmentMessage]:
+    ) -> list[TickerMessage | SegmentMessage | MLBStandingsBoard]:
         """layout="ticker": today's per-team SegmentMessage rows, unchanged —
         top N teams, then tracked teams not already in the top N."""
         stories: list[TickerMessage | SegmentMessage] = []
@@ -374,7 +374,7 @@ class MLBStandingsMonitor:
         self,
         standings: list[TeamStanding],
         standings_by_abbr: dict[str, TeamStanding],
-    ) -> list[MLBStandingsBoard]:
+    ) -> list[TickerMessage | SegmentMessage | MLBStandingsBoard]:
         """layout="auto"/"board": one MLBStandingsBoard per tracked
         division, in config order (deduped), each carrying its division's
         top-`board_rows` rows (with tracked-team pinning, see
