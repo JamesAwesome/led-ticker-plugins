@@ -165,3 +165,38 @@ class TestVerticalCentering:
 
     def test_bigsign_crawl_text_band_is_vertically_centered(self):
         assert abs(self._midpoint(256) - 31.5) <= 2.5
+
+
+class TestHorizontalCentering:
+    """Hardware finding (2026-07-18, PR #70 validation): a game line that FITS
+    the panel is engine-held — but rendered flush-left, unlike the legacy
+    rows which center held content. render_crawl centers when the engine
+    will hold (total logical advance + hold_padding <= logical width) and
+    keeps the scrolling left-origin otherwise.
+    """
+
+    def _mid(self, real):
+        cols = sorted({x for (x, _y) in real._pixels})
+        return (cols[0] + cols[-1]) / 2
+
+    def test_short_line_centers_on_longboi(self):
+        real = HeadlessBackend(512, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        g = _live_game(state="final", inning=None)  # short: fits 512
+        render_crawl(canvas, g, TZ, 0, hold_padding=6)
+        assert abs(self._mid(real) - 255.5) <= 14  # centered (trailing gap excluded)
+
+    def test_long_line_keeps_left_origin(self):
+        real = HeadlessBackend(256, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        g = _live_game()  # live line: wider than bigsign, will scroll
+        render_crawl(canvas, g, TZ, 0, hold_padding=6)
+        cols = sorted({x for (x, _y) in real._pixels})
+        assert cols[0] <= 4  # starts at the left edge, not centered
+
+    def test_centering_ignores_cursor_when_held(self):
+        real = HeadlessBackend(512, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        g = _live_game(state="final", inning=None)
+        w = render_crawl(canvas, g, TZ, 0, hold_padding=6)
+        assert w + 6 <= canvas.width  # sanity: this line genuinely holds
