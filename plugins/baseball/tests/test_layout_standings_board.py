@@ -488,3 +488,116 @@ def test_five_row_geometry_matches_pre_uplift_hardcoded_values():
     assert _LONG_GEOMETRY[5] == dict(
         pitch=10, text=10, rank=8, chip=9, row0=14, abbr_x=32
     )
+
+
+# ---------- rank digit shows TRUE division_rank, not row index ----------
+#
+# Live-render bug: tracked-team pinning (standings.py's
+# _select_division_rows) can put a row at LIST POSITION 2 whose true
+# division_rank is 5 (e.g. selection [1, 2, 5] on a 3-row board). The
+# renderer previously printed `str(i + 1)` (the row's position) for every
+# row, so that pinned row showed "3" instead of "5" — a faithful port of
+# the prototype (which only ever showed an unbroken top-N), but wrong once
+# rows can be non-sequential.
+
+
+def _rows_with_division_ranks(ranks):
+    """Same shape/formula as `_rows(n)` (identical abbr/wins/losses/gb/
+    streak per list position) but with an explicit `division_rank` per
+    row — mirroring what `_select_division_rows` hands the renderer after
+    pinning: list position and division_rank can diverge."""
+    abbrs = ["NYY", "BOS", "TBR", "TOR", "BAL", "SEA", "HOU"]
+    out = []
+    for i, dr in enumerate(ranks):
+        out.append(
+            _row(
+                name=abbrs[i % len(abbrs)],
+                abbr=abbrs[i % len(abbrs)],
+                rank=i + 1,
+                division_rank=dr,
+                wins=90 - i,
+                losses=40 + i,
+                division_gb="-" if i == 0 else f"{i}.0",
+                streak="W3" if i % 2 == 0 else "L1",
+            )
+        )
+    return out
+
+
+def _rank_column_pixels(real, x1):
+    return {(x, y) for x, y in _lit_coords(real) if x < x1}
+
+
+def test_big_rank_digit_differs_for_pinned_vs_sequential_ranks():
+    """[1, 2, 5] (pinned) must render a DIFFERENT rank digit than
+    [1, 2, 3] (sequential) for row index 2 — "5" vs "3". Everything else
+    about the two row sets is identical (same abbr/wins/losses/gb/streak
+    per position), so a pixel diff in the rank column is unambiguous
+    proof the digit source changed, not some other field."""
+    canvas_pinned, real_pinned = _bigsign()
+    render_standings_board(
+        canvas_pinned, "AL EAST", _rows_with_division_ranks([1, 2, 5]), max_rows=3
+    )
+    canvas_seq, real_seq = _bigsign()
+    render_standings_board(
+        canvas_seq, "AL EAST", _rows_with_division_ranks([1, 2, 3]), max_rows=3
+    )
+    assert _rank_column_pixels(real_pinned, 11) != _rank_column_pixels(real_seq, 11)
+
+
+def test_long_rank_digit_differs_for_pinned_vs_sequential_ranks():
+    canvas_pinned, real_pinned = _longboi()
+    render_standings_board(
+        canvas_pinned, "AL EAST", _rows_with_division_ranks([1, 2, 5]), max_rows=3
+    )
+    canvas_seq, real_seq = _longboi()
+    render_standings_board(
+        canvas_seq, "AL EAST", _rows_with_division_ranks([1, 2, 3]), max_rows=3
+    )
+    assert _rank_column_pixels(real_pinned, 18) != _rank_column_pixels(real_seq, 18)
+
+
+def test_big_rank_digit_matches_index_based_render_when_ranks_sequential():
+    """Backward equivalence: when `division_rank` happens to be sequential
+    (1, 2, 3, ... matching row position), the board must render byte-for-
+    byte identical to the pre-fix index-based renderer — `_rows(n)` never
+    sets `division_rank` (defaults to TeamStanding's 99, an insane value
+    that falls back to the index), so this also doubles as regression
+    coverage for every pre-existing `_rows(n)`-based pixel test."""
+    canvas_seq, real_seq = _bigsign()
+    render_standings_board(
+        canvas_seq, "AL EAST", _rows_with_division_ranks([1, 2, 3]), max_rows=3
+    )
+    canvas_default, real_default = _bigsign()
+    render_standings_board(canvas_default, "AL EAST", _rows(3), max_rows=3)
+    assert _lit_coords(real_seq) == _lit_coords(real_default)
+
+
+def test_long_rank_digit_matches_index_based_render_when_ranks_sequential():
+    canvas_seq, real_seq = _longboi()
+    render_standings_board(
+        canvas_seq, "AL EAST", _rows_with_division_ranks([1, 2, 3]), max_rows=3
+    )
+    canvas_default, real_default = _longboi()
+    render_standings_board(canvas_default, "AL EAST", _rows(3), max_rows=3)
+    assert _lit_coords(real_seq) == _lit_coords(real_default)
+
+
+def test_pinned_board_rank_reads_true_division_rank_1_2_5():
+    """Direct regression for the reported bug: a [1, 2, 5] board must
+    show "5" on row index 2, not "3" — verified by comparing against a
+    row set carrying an explicit true rank of 3 in that same slot (any
+    difference must come from the rank digit; both otherwise fall back to
+    the sane-range check identically since 3 and 5 are both sane)."""
+    canvas_five, real_five = _bigsign()
+    render_standings_board(
+        canvas_five, "AL EAST", _rows_with_division_ranks([1, 2, 5]), max_rows=3
+    )
+    canvas_three, real_three = _bigsign()
+    render_standings_board(
+        canvas_three, "AL EAST", _rows_with_division_ranks([1, 2, 3]), max_rows=3
+    )
+    rank_col_five = _rank_column_pixels(real_five, 11)
+    rank_col_three = _rank_column_pixels(real_three, 11)
+    assert rank_col_five, "rank column lit no pixels"
+    assert rank_col_five != rank_col_three

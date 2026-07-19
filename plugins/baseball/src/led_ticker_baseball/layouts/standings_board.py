@@ -103,6 +103,30 @@ def _strk_color(streak: str):
     return pal.WIN if streak[:1] == "W" else pal.LOSS
 
 
+# Sane range for a real MLB division_rank. TeamStanding defaults it to 99
+# (unknown/unset) for synthetic/legacy rows; anything outside 1-15 is
+# treated as "not a real rank" and falls back to row index instead of
+# printing a nonsense digit.
+_SANE_RANK_MAX = 15
+
+
+def _rank_label(row: "TeamStanding", index: int) -> str:  # noqa: UP037
+    """The board's rank digit is the team's TRUE `division_rank`, not the
+    row's position in the (post-pinning) list — `standings.py`'s
+    `_select_division_rows` can select rows [1, 2, 5] for a 3-row board
+    (tracked-team pinning keeps a lower-ranked tracked team visible), and
+    printing the row INDEX there mislabels the pinned team "3" instead of
+    "5". Falls back to `index + 1` (the pre-#72 behavior — a faithful port
+    of the prototype, which only ever rendered an unbroken top-N) when
+    `division_rank` is outside the sane 1-`_SANE_RANK_MAX` range — covers
+    synthetic/legacy rows carrying TeamStanding's `division_rank: int = 99`
+    default.
+    """
+    if 1 <= row.division_rank <= _SANE_RANK_MAX:
+        return str(row.division_rank)
+    return str(index + 1)
+
+
 def render_standings_board(
     canvas,
     division_name: str,
@@ -146,7 +170,7 @@ def _render_big(shim, real, division_name, rows, yo, geo):
     abbr_x, gb_x, strk_x = geo["abbr_x"], geo["gb_x"], geo["strk_x"]
     for i, r in enumerate(rows):
         y = row0 + i * pitch + yo
-        _t(shim, str(i + 1), 2, y + 1, pal.LABEL, rank)
+        _t(shim, _rank_label(r, i), 2, y + 1, pal.LABEL, rank)
         chip(real, 11, y, chip_h, r.abbr)
         _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
         draw_record(shim, 112, _cap_top(y, text), r.wins, r.losses, text)
@@ -175,7 +199,7 @@ def _render_long(shim, real, division_name, rows, yo, geo):
     abbr_x = geo["abbr_x"]
     for i, r in enumerate(rows):
         y = row0 + i * pitch + yo
-        _t(shim, str(i + 1), 6, y + 1, pal.LABEL, rank)
+        _t(shim, _rank_label(r, i), 6, y + 1, pal.LABEL, rank)
         chip(real, 18, y, chip_h, r.abbr)
         _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
         _t(shim, str(r.wins), 158, y, pal.WIN, text)
