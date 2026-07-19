@@ -457,3 +457,48 @@ class TestNoCutoverBacklogSpike:
             f"first peel frame advanced a glyph {worst} radii — the backlog "
             "was deferred to the cutover instead of accumulating incrementally"
         )
+
+
+class TestWarmWorker:
+    """First-firing warm stall (2026-07-19): geometry warming moves off the
+    render path into a background thread started at construction. The worker
+    must cover EVERY radius a firing can request — a gap would surface as
+    lazy rasterization mid-transition on the Pi."""
+
+    def test_worker_covers_every_radius_a_firing_needs(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        try:
+            # Cold-start the process for one suit, warm it via the worker
+            # ONLY, then spy the masks: any rasterization during a full
+            # firing afterwards is a coverage gap in the worker.
+            m._ring_geom.cache_clear()
+            m._interior_geom.cache_clear()
+            m._warm_suit_geometry.cache_clear()
+            m._warm_worker(["diamonds"], yield_s=0)
+
+            calls = TestNoPerFiringRasterization._mask_spy(monkeypatch)
+            canvas = _StubCanvas(width=256, height=64)
+            o = _make_widget(draw_pixel=False)
+            i = _make_widget(draw_pixel=False)
+            p = Poker(suits=["diamonds"], seed=5)
+            t = 0.02
+            while t < 1.0:
+                p.frame_at(round(t, 3), canvas, o, i)
+                t += 0.02
+            assert not calls, (
+                f"firing rasterized {len(calls)} mask points after a full "
+                "worker warm — _warm_worker's radius range has a gap"
+            )
+        finally:
+            # Restore the fully-warmed-process invariant for later tests.
+            m._warm_worker(list(m.SUITS), yield_s=0)
+
+    def test_worker_swallows_exceptions(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        def _boom(suit, r_int):
+            raise RuntimeError("rasterizer exploded")
+
+        monkeypatch.setattr(m, "_ring_geom", _boom)
+        m._warm_worker(["hearts"], yield_s=0)  # must not raise

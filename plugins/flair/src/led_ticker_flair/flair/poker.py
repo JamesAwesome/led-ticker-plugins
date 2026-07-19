@@ -7,8 +7,10 @@ ring pixel-lists, and ring-union coverage test. No canvas, no led_ticker imports
 
 import colorsys
 import functools
+import logging
 import math
 import random
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -167,6 +169,40 @@ def _ring_geom(suit: str, r_int: int) -> tuple:
     return tuple(p for p in _interior_geom(suit, r_int) if p not in inner)
 
 
+# Radius bounds are process CONSTANTS (panel-independent): _max_r is always
+# max_radius(GRID, GRID), so the warm needs nothing from the canvas.
+_MAX_RI = int(math.ceil(max_radius(GRID, GRID)))
+_GLYPH_RI = int(math.ceil(GLYPH_R))
+
+
+def _warm_worker(suits: list[str], yield_s: float = 0.005) -> None:
+    """Synchronously warm the process-wide geometry caches for ``suits``.
+
+    Runs as the body of the background warm thread (see
+    _start_background_warm) and, with ``yield_s=0``, as the test suite's
+    session pre-warm. Interiors first (glyph bodies render earliest), then
+    rings ascending (pulse consumption order). Calls the per-radius cache
+    functions DIRECTLY — not _warm_suit_geometry — so a concurrent sync
+    fallback in _ensure_plan only pays whatever radii remain uncached.
+    ``yield_s`` sleeps between radii keep GIL impact on the render loop
+    invisible. A warm failure must never crash the app (the sync fallback
+    still guarantees correctness), hence the blanket except."""
+    try:
+        for suit in suits:
+            for rr in range(0, _GLYPH_RI + 1):
+                _interior_geom(suit, rr)
+                if yield_s:
+                    time.sleep(yield_s)
+            for rr in range(0, _MAX_RI + 1):
+                _ring_geom(suit, rr)
+                if yield_s:
+                    time.sleep(yield_s)
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "poker background geometry warm failed", exc_info=True
+        )
+
+
 @functools.cache
 def _warm_suit_geometry(suit: str, max_ri: int, glyph_ri: int) -> bool:
     """Rasterize every radius a transition can request for ``suit`` — once
@@ -282,10 +318,8 @@ class Poker:
             # every frame of every firing costs the same (the cutover-frame
             # memo-build spike read as a dropped frame on the Pi). See
             # TestNoPerFiringRasterization + TestNoCutoverBacklogSpike.
-            max_ri = int(math.ceil(self._max_r))
-            glyph_ri = int(math.ceil(GLYPH_R))
             for suit in {g.suit for g in self._plan}:
-                _warm_suit_geometry(suit, max_ri, glyph_ri)
+                _warm_suit_geometry(suit, _MAX_RI, _GLYPH_RI)
         return self._plan, real
 
     def _paint_current_rings(self, real, t):
