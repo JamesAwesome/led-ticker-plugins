@@ -411,3 +411,49 @@ class TestNoPerFiringRasterization:
             f"a second Poker instance rasterized {len(calls) - after_first} "
             "mask points — geometry must be shared process-wide"
         )
+
+
+class TestNoCutoverBacklogSpike:
+    """The 'explosion start' hitch (2026-07-18, on-sign): reveal accumulation
+    only ran in the peel branch, so the FIRST peel frame paid every glyph's
+    entire ring backlog (0..~36 radii x 16 glyphs, ~1M ops — measured 34ms on
+    dev vs 0.5ms neighbors; a dropped frame on the Pi). The reveal mask must
+    accumulate INCREMENTALLY from pulse start so the cutover frame's
+    remaining backlog is bounded (a couple of radii per glyph, same as any
+    other frame)."""
+
+    def test_reveal_accumulates_during_build_phase(self) -> None:
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Poker(seed=3)
+        # Build-phase frames only (t < cutover 0.45), pulses active from ~0.25.
+        for t in (0.05, 0.2, 0.3, 0.38, 0.44):
+            p.frame_at(t, canvas, o, i)
+        assert any(r > -1 for r in p._reveal_r), (
+            "reveal must accumulate during the build phase — deferring it all "
+            "to the first peel frame is the cutover backlog spike"
+        )
+        # And the accumulated radius tracks the wavefront (not still-zero).
+        assert max(p._reveal_r) >= 5
+
+    def test_cutover_frame_backlog_is_bounded(self) -> None:
+        """After stepping the build phase at engine-like cadence, the first
+        peel frame's per-glyph catch-up must be a few radii, not the whole
+        pulse history."""
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Poker(seed=3)
+        t = 0.02
+        while t < 0.45:
+            p.frame_at(round(t, 3), canvas, o, i)
+            t += 0.02
+        before = list(p._reveal_r)
+        p.frame_at(0.46, canvas, o, i)  # first peel frame
+        after = p._reveal_r
+        worst = max(a - b for a, b in zip(after, before, strict=True))
+        assert worst <= 6, (
+            f"first peel frame advanced a glyph {worst} radii — the backlog "
+            "was deferred to the cutover instead of accumulating incrementally"
+        )

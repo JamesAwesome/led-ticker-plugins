@@ -1,7 +1,7 @@
 import random
 
 from led_ticker_flair.flair.poker import (
-    RingCache,
+    _hue_color,
     plan_glyphs,
     pulse_radius,
 )
@@ -46,16 +46,18 @@ class TestPulseTimeline:
         assert w >= 1  # multiple waves have passed by the end
 
 
-class TestRingCache:
+class TestHueColor:
     def test_quantizes_and_caches(self):
-        # Hue quantizes to whole degrees at the COLORIZE layer: two gets at
-        # 40.0 / 40.4 share one cache entry (same object). Geometry itself is
-        # process-cached in _ring_geom, so no rasterization spy is meaningful
-        # here anymore.
-        cache = RingCache()
-        a = cache.get("hearts", 12, 40.0)
-        b = cache.get("hearts", 12, 40.4)  # same int r, same whole-deg hue
+        # Hue quantizes to whole degrees at the colorize layer: 40.0 / 40.4
+        # share one process-cached entry (same tuple object); 41.0 is a new
+        # entry. Geometry is process-cached separately in _ring_geom — the
+        # colorized-pixel-list layer (the old RingCache) is gone; painting
+        # takes ONE color per (glyph, ring) and iterates geometry directly.
+        a = _hue_color(40.0)
+        b = _hue_color(40.4)  # same whole-degree hue
         assert a is b
-        assert a  # non-empty pixel list
-        c = cache.get("hearts", 12, 41.0)  # different whole degree -> new entry
+        assert a != (0, 0, 0)
+        c = _hue_color(41.0)  # different whole degree -> distinct entry
         assert c is not a
+        d = _hue_color(400.0)  # wraps mod 360 -> same color value as 40.0
+        assert d == a
