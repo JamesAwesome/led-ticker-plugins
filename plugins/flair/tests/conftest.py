@@ -30,4 +30,5 @@ def _prewarm_poker_geometry():
     from led_ticker_flair.flair import poker
 
     poker._warm_worker(list(poker.SUITS), yield_s=0)
+    poker._warm_dispatched.update(poker.SUITS)
     yield

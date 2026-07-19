@@ -502,3 +502,65 @@ class TestWarmWorker:
 
         monkeypatch.setattr(m, "_ring_geom", _boom)
         m._warm_worker(["hearts"], yield_s=0)  # must not raise
+
+
+class TestBackgroundWarm:
+    """Construction dispatches the geometry warm to a daemon thread — once
+    per suit per process — so the first firing renders like every other
+    firing instead of stalling ~2-3s on the Pi."""
+
+    def test_saturated_process_spawns_no_thread(self) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        # The session fixture saturated _warm_dispatched, so constructions
+        # here must not spawn threads (this is also what keeps every other
+        # test in the suite free of live warm threads).
+        before = len(m._warm_threads)
+        Poker(seed=1)
+        Poker(suits=["hearts", "clubs"], seed=2)
+        assert len(m._warm_threads) == before
+
+    def test_new_suits_spawn_single_daemon_thread(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        started: list = []
+
+        class _SpyThread:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+            def start(self):
+                started.append(self)
+
+        monkeypatch.setattr(m.threading, "Thread", _SpyThread)
+        monkeypatch.setattr(m, "_warm_dispatched", set())
+        monkeypatch.setattr(m, "_warm_threads", [])
+
+        Poker(seed=3)  # default pool = all four suits
+        assert len(started) == 1
+        assert started[0].kwargs["daemon"] is True
+        assert started[0].kwargs["target"] is m._warm_worker
+        assert sorted(started[0].kwargs["args"][0]) == sorted(SUITS)
+
+        Poker(seed=4)  # same pool again -> deduped, nothing new
+        assert len(started) == 1
+
+    def test_partial_overlap_dispatches_only_new_suits(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        started: list = []
+
+        class _SpyThread:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+            def start(self):
+                started.append(self)
+
+        monkeypatch.setattr(m.threading, "Thread", _SpyThread)
+        monkeypatch.setattr(m, "_warm_dispatched", {"hearts", "spades"})
+        monkeypatch.setattr(m, "_warm_threads", [])
+
+        Poker(suits=["hearts", "diamonds"], seed=6)
+        assert len(started) == 1
+        assert started[0].kwargs["args"][0] == ["diamonds"]

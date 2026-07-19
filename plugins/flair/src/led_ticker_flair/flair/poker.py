@@ -10,6 +10,7 @@ import functools
 import logging
 import math
 import random
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -203,6 +204,33 @@ def _warm_worker(suits: list[str], yield_s: float = 0.005) -> None:
         )
 
 
+_warm_lock = threading.Lock()
+_warm_dispatched: set[str] = set()
+_warm_threads: list[threading.Thread] = []
+
+
+def _start_background_warm(suits: list[str]) -> None:
+    """Dispatch a daemon thread warming any not-yet-dispatched suits.
+
+    Called from Poker.__init__ — i.e. at CONFIG LOAD, many seconds before
+    the first firing (there is no entry transition into the first boot
+    section), so the warm wins its race against first use by a wide
+    margin. Each suit is dispatched once per process no matter how many
+    poker sections the config declares. Threads are kept in _warm_threads
+    so tests can inspect/join; a firing that somehow beats the warm still
+    falls back to the synchronous _warm_suit_geometry in _ensure_plan."""
+    with _warm_lock:
+        new = [s for s in suits if s not in _warm_dispatched]
+        if not new:
+            return
+        _warm_dispatched.update(new)
+        thread = threading.Thread(
+            target=_warm_worker, args=(new,), daemon=True, name="poker-geom-warm"
+        )
+        _warm_threads.append(thread)
+        thread.start()
+
+
 @functools.cache
 def _warm_suit_geometry(suit: str, max_ri: int, glyph_ri: int) -> bool:
     """Rasterize every radius a transition can request for ``suit`` — once
@@ -282,6 +310,8 @@ class Poker:
         # of scanning all w*h pixels (the CPU sink on a Pi). Refilled per firing.
         self._unrevealed: set[tuple[int, int]] = set()
         self._last_t = 1.0
+        # Warm suit geometry off the render path — see _start_background_warm.
+        _start_background_warm(self.suits)
 
     def _ring_hue(self, g, r_int):
         return g.hue * 360.0 + r_int * _RING_HUE_STEP
