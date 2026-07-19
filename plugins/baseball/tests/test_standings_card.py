@@ -51,6 +51,31 @@ class TestScaleGreaterThanOne:
         assert cursor == 64  # wrapper's LOGICAL width, not real.width (256)
         assert _lit(real), "board draw lit no pixels"
 
+    def test_board_rows_defaults_to_five(self):
+        board = MLBStandingsBoard(division_name="AL EAST", rows=_rows(), legacy_rows=[])
+        assert board.board_rows == 5
+
+    def test_board_rows_forwarded_to_renderer_geometry(self):
+        # board_rows changes the row pitch (see layouts/standings_board.py's
+        # geometry table), so a 3-row board's SECOND row lands at a
+        # different y than a 5-row board's second row — proof the value
+        # reaches render_standings_board's max_rows, not just stored inert.
+        five_canvas, five_real = _bigsign()
+        five = MLBStandingsBoard(
+            division_name="AL EAST", rows=_rows(), legacy_rows=[], board_rows=5
+        )
+        five.draw(five_canvas)
+
+        three_canvas, three_real = _bigsign()
+        three = MLBStandingsBoard(
+            division_name="AL EAST", rows=_rows(), legacy_rows=[], board_rows=3
+        )
+        three.draw(three_canvas)
+
+        five_ys = {y for _x, y in _lit(five_real)}
+        three_ys = {y for _x, y in _lit(three_real)}
+        assert five_ys != three_ys
+
     def test_legacy_rows_ignored_at_scale_greater_than_one(self):
         # Even with legacy_rows populated, scale>1 always renders the
         # physical board — legacy is only a scale<=1 fallback.

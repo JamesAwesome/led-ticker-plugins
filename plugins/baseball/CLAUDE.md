@@ -157,11 +157,54 @@ advance. Never regress to a bare counter increment in `reset_frame`. Tripwire:
 **Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
 routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
 ascent-box-top y formula as the scores physical renderers) so a row mixing multiple font sizes
-(rank/abbr/record on one 10px pitch) doesn't bleed into its neighbor's band — see the module's
-own docstring for the hardware-validated formula. Rows cap at 5 (`_MAX_ROWS`). `standingsLong`
-(longboi, real width >= 400px) adds PCT and L10 columns and splits W/L into separate columns;
-`standingsBig` (bigsign) has neither and shows a combined W-L record instead. The GB column on
-both is `division_gb` (division games back), not the overall `games_back` the scrolling rows use.
+(rank/abbr/record on one row's pitch) doesn't bleed into its neighbor's band — see the module's
+own docstring for the hardware-validated formula. Rows cap at 5 (`_MAX_ROWS`; `_MIN_ROWS` = 3).
+`standingsLong` (longboi, real width >= 400px) adds PCT and L10 columns and splits W/L into
+separate columns; `standingsBig` (bigsign) has neither and shows a combined W-L record instead.
+The GB column on both is `division_gb` (division games back), not the overall `games_back` the
+scrolling rows use.
+
+**`board_rows` geometry table** (`layouts/standings_board.py`'s `_BIG_GEOMETRY`/`_LONG_GEOMETRY`,
+keyed 3-5) — `render_standings_board`'s `max_rows` param selects a table entry instead of reading
+config: the renderer stays config-agnostic, `_standings_card.MLBStandingsBoard.board_rows`
+(forwarded from `MLBStandingsMonitor.board_rows`, validated 3-5 in `standings.py`'s
+`validate_config` — bool explicitly excluded, mirrors core's `font_threshold` convention) is what
+carries the widget's config through. **The 5-row table entries are the pre-#72 hardcoded values,
+BYTE-IDENTICAL** — the pre-existing 5-row layout tests assert this unchanged, and
+`test_five_row_geometry_matches_pre_uplift_hardcoded_values` pins the table entries directly so a
+future edit can't silently drift them while still passing the pixel tests by compensating
+elsewhere. 4/3-row entries scale `pitch`/`text`/`rank`/`chip` up (bigger text for fewer rows); the
+header (division name + column labels) is drawn separately in `_render_big`/`_render_long` and
+NEVER changes with row count. `abbr_x = chip_x + chip_h + 3` (chip_x fixed per variant: 11 big, 18
+long) for every entry EXCEPT long's 5-row, which keeps the pre-#72 handoff value (32) exactly —
+the formula would give 30 there; this is a preserved pre-existing handoff quirk, not something
+introduced by the row-count feature. `gb_x`/`strk_x` (big only — long's column x positions are
+fixed across every count) move from 180/212 to 172/216 ONLY at 3 rows: at that size (px15), "16.0"
+(worst-case GB) would otherwise run up against a fixed STRK column. A `max_rows` outside the table
+(3-5) falls back to 5 rather than `KeyError`ing — defensive only, since `validate_config` is the
+real gate. **Collision test is the tripwire for this whole table**
+(`test_layout_standings_board.py`): for every (variant, row-count) pair it renders worst-case row
+content (record `"100-62"`, gb `"16.0"`, pct `".1000"`, l10 `"10-0"`, strk `"W12"`, abbr `"WSH"`)
+and asserts no two columns' measured extents overlap (via `text_width` — the same function
+`hires`/`draw_record` use to advance their own cursors, not a pixel-clustering heuristic, which
+turned out to be too fragile: individual glyphs within one field routinely have a couple px of
+dark kerning between them, at a similar magnitude to some of the tighter cross-column gaps) and
+that no row's content bleeds into the next row's vertical band. Any new per-count geometry value
+must pass this test before shipping.
+
+**Row selection + tracked-team pinning** (`standings.py`'s `_select_division_rows`) — a board's
+`rows` are the top `board_rows` teams by `division_rank`, then any TRACKED team in that division
+NOT already included is pinned in by displacing row(s) from the BOTTOM of that top-N selection
+(one displaced slot per missing tracked team, best-ranked missing team kept first if there isn't
+room for all of them) — re-sorted back into `division_rank` order afterward. The rank digit shown
+is always the TRUE `division_rank`, never renumbered 1..N — a board reading `1, 2, 5` is
+self-explanatory. `board_rows=5` is a no-op versus pre-#72 behavior whenever a division has <=5
+teams (the common case), since every team is already in the top-5 selection and nothing needs
+pinning. `_build_board_stories` uses this for both `MLBStandingsBoard.rows` (forwarded to the
+scale>1 renderer) and `legacy_rows` (the scale<=1 fallback) — both get the SAME selected rows, so
+neither degrades to a different division slice. Tripwires: `TestSelectDivisionRows`
+(`tests/test_standings.py`, unit-level on the selection function itself) plus
+`test_board_rows_pins_tracked_team_outside_cutoff` (integration, through `update()`).
 
 **Empty-board fallback is load-bearing** (`standings.py`'s `update()`) — `_build_board_stories`
 returning an empty list (a divisionless API response, `division_id == 0` everywhere) falls back to

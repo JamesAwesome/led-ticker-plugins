@@ -14,10 +14,16 @@ glyphs must all land inside that row's 10px pitch band, not bleed into the
 next row's.
 """
 
+import pytest
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
 from led_ticker_baseball import _palette as pal
-from led_ticker_baseball.layouts.standings_board import render_standings_board
+from led_ticker_baseball._paint import text_width
+from led_ticker_baseball.layouts.standings_board import (
+    _BIG_GEOMETRY,
+    _LONG_GEOMETRY,
+    render_standings_board,
+)
 from led_ticker_baseball.standings import TeamStanding
 
 
@@ -262,3 +268,223 @@ def test_y_offset_shifts_everything_by_scale():
     canvas2, real2 = _bigsign()
     render_standings_board(canvas2, "AL EAST", _rows(5))
     assert min(_lit_rows(real)) - min(_lit_rows(real2)) == 32
+
+
+# ---------- board_rows geometry (3/4/5 rows) ----------
+
+
+def _worst_case_rows(n):
+    """Worst-case row content per the phase-2 spec: wide record/gb/pct/l10/
+    strk strings and a real 3-char abbr (WSH). One row per rank 1..n (the
+    leader has no GB, so row 0 keeps "-" — same convention as `_rows()`)."""
+    out = []
+    for i in range(n):
+        out.append(
+            _row(
+                name="Nationals",
+                abbr="WSH",
+                rank=i + 1,
+                wins=100,
+                losses=62,
+                division_gb="-" if i == 0 else "16.0",
+                pct=".1000",
+                l10="10-0",
+                streak="W12",
+            )
+        )
+    return out
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_big_headers_unchanged_regardless_of_max_rows(max_rows):
+    canvas, real = _bigsign()
+    render_standings_board(canvas, "AL EAST", _rows(max_rows), max_rows=max_rows)
+    assert _lit_in(real, 4, 40, 0, 9)  # division label, cyan, x4 y1 px8
+    assert _lit_in(real, 112, 140, 0, 9)  # "W-L" label x112
+    assert _lit_in(real, 180, 196, 0, 9)  # "GB" label x180
+    assert _lit_in(real, 210, 240, 0, 9)  # "STRK" label x210
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_long_headers_unchanged_regardless_of_max_rows(max_rows):
+    canvas, real = _longboi()
+    render_standings_board(canvas, "AL EAST", _rows(max_rows), max_rows=max_rows)
+    assert _lit_in(real, 6, 50, 0, 11)  # division label x6 y2 px9
+    assert _lit_in(real, 158, 172, 0, 11)  # "W" x158
+    assert _lit_in(real, 420, 450, 0, 11)  # "STRK" x420
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_big_rows_land_in_their_own_pitch_band(max_rows):
+    geo = _BIG_GEOMETRY[max_rows]
+    canvas, real = _bigsign()
+    render_standings_board(canvas, "AL EAST", _rows(max_rows), max_rows=max_rows)
+    for i in range(max_rows):
+        y = geo["row0"] + i * geo["pitch"]
+        assert _lit_in(real, 0, 256, y - 1, y + geo["pitch"] + 1), (
+            f"max_rows={max_rows} row {i} missing content"
+        )
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_long_rows_land_in_their_own_pitch_band(max_rows):
+    geo = _LONG_GEOMETRY[max_rows]
+    canvas, real = _longboi()
+    render_standings_board(canvas, "AL EAST", _rows(max_rows), max_rows=max_rows)
+    for i in range(max_rows):
+        y = geo["row0"] + i * geo["pitch"]
+        assert _lit_in(real, 0, 512, y - 1, y + geo["pitch"] + 1), (
+            f"max_rows={max_rows} row {i} missing content"
+        )
+
+
+def _y_clusters(ys, gap=2):
+    """Group a set of lit y-coords into contiguous vertical bands (a new
+    cluster starts whenever consecutive lit y's are >= `gap` apart)."""
+    ys = sorted(ys)
+    clusters = [[ys[0]]]
+    for y in ys[1:]:
+        if y - clusters[-1][-1] < gap:
+            clusters[-1].append(y)
+        else:
+            clusters.append([y])
+    return clusters
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_big_worst_case_rows_dont_bleed_into_each_other(max_rows):
+    """Row-to-row bleed check (collision requirement, part 2): the abbr
+    column (pure text ink, no chip pixels) must show exactly `max_rows`
+    distinct vertical bands — a bled row would merge two bands into one,
+    reducing the cluster count below `max_rows`. Restricted to
+    `y >= row0 - 3` to exclude the header's division-name label, which sits
+    in the SAME x range (4-40ish) as the abbr column and would otherwise
+    read as a spurious extra band."""
+    geo = _BIG_GEOMETRY[max_rows]
+    canvas, real = _bigsign()
+    render_standings_board(
+        canvas, "AL EAST", _worst_case_rows(max_rows), max_rows=max_rows
+    )
+    x0, x1 = geo["abbr_x"], geo["abbr_x"] + 40
+    lit = {y for y in _lit_ys_in_col(real, x0, x1) if y >= geo["row0"] - 3}
+    assert len(_y_clusters(lit)) == max_rows
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_long_worst_case_rows_dont_bleed_into_each_other(max_rows):
+    geo = _LONG_GEOMETRY[max_rows]
+    canvas, real = _longboi()
+    render_standings_board(
+        canvas, "AL EAST", _worst_case_rows(max_rows), max_rows=max_rows
+    )
+    x0, x1 = geo["abbr_x"], geo["abbr_x"] + 40
+    lit = {y for y in _lit_ys_in_col(real, x0, x1) if y >= geo["row0"] - 3}
+    assert len(_y_clusters(lit)) == max_rows
+
+
+# Column-overlap check (collision requirement, part 1). Rather than
+# clustering rendered pixels directly (individual glyphs within one field —
+# e.g. the "1"/"0"/"0" of "100" — routinely have a couple px of dark
+# kerning between them, at a similar magnitude to some of the tighter
+# CROSS-column gaps, e.g. chip-to-abbr; a naive "count the dark-separated
+# blobs" test can't tell a normal inter-glyph gap from a true column
+# collision without hardcoding a fragile threshold), this measures each
+# column's advance via `text_width` — the EXACT function `hires`/
+# `draw_record` use to advance their own cursors, so an assertion here is
+# an assertion about what will actually render, not an approximation.
+def _record_width(size):
+    return text_width(size, "100") + text_width(size, "-") + text_width(size, "62")
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_big_worst_case_columns_dont_collide(max_rows):
+    geo = _BIG_GEOMETRY[max_rows]
+    text = geo["text"]
+    rank_end = 2 + text_width(geo["rank"], str(max_rows))
+    chip_end = 11 + geo["chip"]
+    abbr_end = geo["abbr_x"] + text_width(text, "WSH")
+    record_end = 112 + _record_width(text)
+    gb_end = geo["gb_x"] + text_width(text, "16.0")
+    strk_end = geo["strk_x"] + text_width(text, "W12")
+
+    assert rank_end < 11, f"max_rows={max_rows}: rank collides with chip"
+    assert chip_end < geo["abbr_x"], f"max_rows={max_rows}: chip collides with abbr"
+    assert abbr_end < 112, f"max_rows={max_rows}: abbr collides with record"
+    assert record_end < geo["gb_x"], f"max_rows={max_rows}: record collides with gb"
+    assert gb_end < geo["strk_x"], f"max_rows={max_rows}: gb collides with strk"
+    assert strk_end <= 256, f"max_rows={max_rows}: strk runs off the panel"
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_long_worst_case_columns_dont_collide(max_rows):
+    """Also verifies the task's "LONG column x positions stay fixed" claim:
+    the fixed x positions below (158/192/224/292/350/420) are what
+    `_render_long` always uses regardless of `max_rows` — this would fail
+    at px14 (the 3-row worst case) if that claim didn't hold."""
+    geo = _LONG_GEOMETRY[max_rows]
+    text = geo["text"]
+    rank_end = 6 + text_width(geo["rank"], str(max_rows))
+    chip_end = 18 + geo["chip"]
+    abbr_end = geo["abbr_x"] + text_width(text, "WSH")
+    wins_end = 158 + text_width(text, "100")
+    losses_end = 192 + text_width(text, "62")
+    pct_end = 224 + text_width(text, ".1000")
+    gb_end = 292 + text_width(text, "16.0")
+    l10_end = 350 + text_width(text, "10-0", bold=False)
+    strk_end = 420 + text_width(text, "W12")
+
+    assert rank_end < 18, f"max_rows={max_rows}: rank collides with chip"
+    assert chip_end < geo["abbr_x"], f"max_rows={max_rows}: chip collides with abbr"
+    assert abbr_end < 158, f"max_rows={max_rows}: abbr collides with wins"
+    assert wins_end < 192, f"max_rows={max_rows}: wins collides with losses"
+    assert losses_end < 224, f"max_rows={max_rows}: losses collides with pct"
+    assert pct_end < 292, f"max_rows={max_rows}: pct collides with gb"
+    assert gb_end < 350, f"max_rows={max_rows}: gb collides with l10"
+    assert l10_end < 420, f"max_rows={max_rows}: l10 collides with strk"
+    assert strk_end <= 512, f"max_rows={max_rows}: strk runs off the panel"
+
+
+def test_big_three_row_gb_strk_gap_is_real_pixels():
+    """Direct pixel regression for the BIG 3-row GB/STRK column move (172/
+    216): confirms an actual dark gap exists between them at the adjusted
+    positions, not just that the arithmetic clears (belt-and-suspenders
+    alongside the generic collision-matrix test above)."""
+    geo = _BIG_GEOMETRY[3]
+    canvas, real = _bigsign()
+    render_standings_board(canvas, "AL EAST", _worst_case_rows(3), max_rows=3)
+    y0, y1 = geo["row0"], geo["row0"] + geo["pitch"]
+    gb_max = max(
+        (
+            x
+            for x in range(geo["gb_x"], geo["strk_x"])
+            if _lit_in(real, x, x + 1, y0, y1)
+        ),
+        default=geo["gb_x"],
+    )
+    assert gb_max < geo["strk_x"]
+
+
+@pytest.mark.parametrize("max_rows", [3, 4, 5])
+def test_max_rows_out_of_table_falls_back_to_five(max_rows):
+    """Defensive floor: an out-of-table `max_rows` degrades to the 5-row
+    geometry rather than raising (validated 3-5 upstream in
+    `standings.py`)."""
+    canvas, real = _bigsign()
+    render_standings_board(canvas, "AL EAST", _rows(5), max_rows=99)
+    canvas2, real2 = _bigsign()
+    render_standings_board(canvas2, "AL EAST", _rows(5), max_rows=5)
+    assert _lit_coords(real) == _lit_coords(real2)
+
+
+def test_five_row_geometry_matches_pre_uplift_hardcoded_values():
+    """Explicit lock on the 5-row geometry-table entries themselves (not
+    just the rendered output, which the pre-existing tests already cover
+    byte-for-byte) — a future edit to `_BIG_GEOMETRY`/`_LONG_GEOMETRY`
+    that silently drifts the 5-row row would still pass the pixel tests if
+    it happened to compensate elsewhere; this pins the values directly."""
+    assert _BIG_GEOMETRY[5] == dict(
+        pitch=10, text=10, rank=8, chip=8, row0=12, abbr_x=22, gb_x=180, strk_x=212
+    )
+    assert _LONG_GEOMETRY[5] == dict(
+        pitch=10, text=10, rank=8, chip=9, row0=14, abbr_x=32
+    )

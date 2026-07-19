@@ -14,6 +14,7 @@ from led_ticker_baseball.standings import (
     TeamStanding,
     _build_standing_message,
     _group_by_division,
+    _select_division_rows,
 )
 
 # --- TeamStanding ---
@@ -103,6 +104,21 @@ class TestMLBStandingsMonitor:
             top_n=5,
         )
         assert widget.top_n == 5
+
+    def test_default_board_rows(self):
+        widget = MLBStandingsMonitor(
+            session=mock.Mock(),
+            teams=["NYM"],
+        )
+        assert widget.board_rows == 5
+
+    def test_custom_board_rows(self):
+        widget = MLBStandingsMonitor(
+            session=mock.Mock(),
+            teams=["NYM"],
+            board_rows=3,
+        )
+        assert widget.board_rows == 3
 
     def test_default_title(self):
         widget = MLBStandingsMonitor(
@@ -645,6 +661,62 @@ class TestDivisionNames:
         }
 
 
+# --- _select_division_rows (board_rows + tracked-team pinning) ---
+
+
+def _at_division_rank(division_rank, abbr=None):
+    abbr = abbr or f"T{division_rank}"
+    return TeamStanding(
+        name=abbr,
+        wins=50 - division_rank,
+        losses=20 + division_rank,
+        rank=division_rank,
+        games_back="-",
+        abbr=abbr,
+        division_rank=division_rank,
+        division_id=201,
+    )
+
+
+class TestSelectDivisionRows:
+    """Rank digit shown on the board is always the TRUE division_rank —
+    never re-numbered — so the assertions below check `division_rank`
+    directly, not list position."""
+
+    def _division(self, n=5):
+        return [_at_division_rank(i) for i in range(1, n + 1)]
+
+    def test_board_rows_five_all_unchanged(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 5, {"T1"})
+        assert [r.division_rank for r in selected] == [1, 2, 3, 4, 5]
+
+    def test_tracked_already_in_top_n_is_plain_top_n(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T2"})
+        assert [r.division_rank for r in selected] == [1, 2, 3]
+
+    def test_single_tracked_team_below_cutoff_is_pinned(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T5"})
+        assert [r.division_rank for r in selected] == [1, 2, 5]
+
+    def test_two_tracked_teams_below_cutoff_are_both_pinned(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T4", "T5"})
+        assert [r.division_rank for r in selected] == [1, 4, 5]
+
+    def test_no_tracked_teams_is_plain_top_n(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, set())
+        assert [r.division_rank for r in selected] == [1, 2, 3]
+
+    def test_division_smaller_than_board_rows_returns_all_teams(self):
+        division = self._division(2)
+        selected = _select_division_rows(division, 5, {"T1"})
+        assert [r.division_rank for r in selected] == [1, 2]
+
+
 # --- Offseason ---
 
 
@@ -957,6 +1029,46 @@ class TestStandingsValidateConfig:
         assert MLBStandingsMonitor.validate_config({"layout": "auto"}) == []
 
 
+class TestStandingsValidateConfigBoardRows:
+    """`board_rows` must be an int in 3..5 — bool explicitly excluded even
+    though it's an int subclass (mirrors core's `font_threshold`
+    convention)."""
+
+    def test_valid_board_rows_pass(self):
+        for n in (3, 4, 5):
+            assert MLBStandingsMonitor.validate_config({"board_rows": n}) == []
+
+    def test_default_omitted_passes(self):
+        assert MLBStandingsMonitor.validate_config({}) == []
+
+    def test_out_of_range_low(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 2})
+        assert len(msgs) == 1
+        assert "board_rows=2" in msgs[0]
+        assert "is not valid" in msgs[0]
+
+    def test_out_of_range_high(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 6})
+        assert len(msgs) == 1
+        assert "board_rows=6" in msgs[0]
+
+    def test_bool_true_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": True})
+        assert len(msgs) == 1
+
+    def test_bool_false_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": False})
+        assert len(msgs) == 1
+
+    def test_string_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": "3"})
+        assert len(msgs) == 1
+
+    def test_float_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 3.0})
+        assert len(msgs) == 1
+
+
 # --- update() layout="auto"/"board" wiring ---
 
 
@@ -1075,6 +1187,39 @@ class TestStandingsUpdateLayoutAutoAndBoard:
         al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
         assert len(al_east.rows) == 5
         assert len(al_east.legacy_rows) == 5
+
+    @pytest.mark.asyncio
+    async def test_board_rows_forwarded_to_board_and_caps_rows(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+            board_rows=3,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
+        assert al_east.board_rows == 3
+        assert len(al_east.rows) == 3
+        assert len(al_east.legacy_rows) == 3
+
+    @pytest.mark.asyncio
+    async def test_board_rows_pins_tracked_team_outside_cutoff(self):
+        # AL EAST fixture (_two_division_session): NYY div_rank1, TOR div_rank5.
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY", "TOR"],
+            layout="board",
+            board_rows=3,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
+        assert [r.division_rank for r in al_east.rows] == [1, 2, 5]
 
     @pytest.mark.asyncio
     async def test_dedups_tracked_teams_in_same_division(self):

@@ -45,10 +45,49 @@ if TYPE_CHECKING:
 
 _WIDE_MIN_W = 400
 _MAX_ROWS = 5
+_MIN_ROWS = 3
 # Leader has no games-back figure. Our model defaults `division_gb` to "-"
 # (hyphen); the dc.html prototype's own STANDINGS fixture used "—" (em
 # dash). Treat both as "leader" so real API data and our default agree.
 _LEADER_GB = ("-", "—")
+
+# Per-`board_rows` geometry. The 5-row entries are BYTE-IDENTICAL to the
+# pre-#72 hardcoded values (pitch/text/rank/chip/row0/abbr_x/gb_x/strk_x) —
+# the 5-row layout tests assert this unchanged. 4/3-row entries scale
+# pitch/text/rank/chip up as `board_rows` shrinks so fewer rows still fill
+# the panel readably; row0 (first row's y) and the header (division name +
+# column labels, drawn separately in `_render_big`/`_render_long`) are
+# UNTOUCHED by row count except where noted.
+#
+# `abbr_x` = chip_x + chip_h + 3 (chip_x is fixed per variant: 11 for big,
+# 18 for long) for every entry EXCEPT long's 5-row, which is the pre-#72
+# handoff value (32) preserved exactly for byte-identical output — the
+# formula would give 30 there; the discrepancy is a pre-existing handoff
+# quirk, not a bug introduced here.
+#
+# `gb_x`/`strk_x` (big only; long's column x positions are fixed across all
+# counts, verified by the collision test below) default to the original
+# 180/212 and only move for 3-row: at px15, "16.0" (worst-case GB) run up
+# against a fixed STRK column at the original x — both columns are nudged
+# out to 172/216 to keep a dark gap between them (verified empirically by
+# the collision test, not just the arithmetic).
+_BIG_GEOMETRY: dict[int, dict[str, int]] = {
+    5: dict(
+        pitch=10, text=10, rank=8, chip=8, row0=12, abbr_x=22, gb_x=180, strk_x=212
+    ),
+    4: dict(
+        pitch=13, text=12, rank=9, chip=10, row0=12, abbr_x=24, gb_x=180, strk_x=212
+    ),
+    3: dict(
+        pitch=17, text=15, rank=10, chip=13, row0=13, abbr_x=27, gb_x=172, strk_x=216
+    ),
+}
+
+_LONG_GEOMETRY: dict[int, dict[str, int]] = {
+    5: dict(pitch=10, text=10, rank=8, chip=9, row0=14, abbr_x=32),
+    4: dict(pitch=12, text=12, rank=9, chip=11, row0=14, abbr_x=32),
+    3: dict(pitch=16, text=14, rank=10, chip=13, row0=14, abbr_x=34),
+}
 
 
 def _cap_top(y_target: int, size: int) -> int:
@@ -70,35 +109,55 @@ def render_standings_board(
     rows: "list[TeamStanding]",  # noqa: UP037 — introspection-safe forward ref
     *,
     y_offset: int = 0,
+    max_rows: int = _MAX_ROWS,
 ) -> None:
+    """Renderer stays config-agnostic: `max_rows` selects a geometry-table
+    entry (`_BIG_GEOMETRY`/`_LONG_GEOMETRY`, keyed 3-5) rather than reading
+    config itself — the card (`_standings_card.py`) is what forwards the
+    widget's `board_rows` through. A `max_rows` outside 3-5 falls back to 5
+    (validated upstream in `standings.py`'s `validate_config`; this is just
+    a defensive floor so a bad direct call degrades instead of KeyError'ing).
+    """
     shim, real = phys_wrap(canvas)
     yo = y_offset * safe_scale(canvas)
-    capped_rows = rows[:_MAX_ROWS]
+    if max_rows not in _BIG_GEOMETRY:
+        max_rows = _MAX_ROWS
+    capped_rows = rows[:max_rows]
     if real.width >= _WIDE_MIN_W:
-        _render_long(shim, real, division_name, capped_rows, yo)
+        _render_long(
+            shim, real, division_name, capped_rows, yo, _LONG_GEOMETRY[max_rows]
+        )
     else:
-        _render_big(shim, real, division_name, capped_rows, yo)
+        _render_big(shim, real, division_name, capped_rows, yo, _BIG_GEOMETRY[max_rows])
 
 
-def _render_big(shim, real, division_name, rows, yo):
+def _render_big(shim, real, division_name, rows, yo, geo):
     _t(shim, division_name, 4, 1 + yo, pal.CYAN, 8)
     _t(shim, "W-L", 112, 1 + yo, pal.LABEL, 8)
     _t(shim, "GB", 180, 1 + yo, pal.LABEL, 8)
     _t(shim, "STRK", 210, 1 + yo, pal.LABEL, 8)
+    pitch, text, rank, chip_h, row0 = (
+        geo["pitch"],
+        geo["text"],
+        geo["rank"],
+        geo["chip"],
+        geo["row0"],
+    )
+    abbr_x, gb_x, strk_x = geo["abbr_x"], geo["gb_x"], geo["strk_x"]
     for i, r in enumerate(rows):
-        y = 12 + i * 10 + yo
-        _t(shim, str(i + 1), 2, y + 1, pal.LABEL, 8)
-        chip(real, 11, y, 8, r.abbr)
-        _t(shim, r.abbr, 22, y, pal.IDENT, 10)
-        draw_record(shim, 112, _cap_top(y, 10), r.wins, r.losses, 10)
+        y = row0 + i * pitch + yo
+        _t(shim, str(i + 1), 2, y + 1, pal.LABEL, rank)
+        chip(real, 11, y, chip_h, r.abbr)
+        _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
+        draw_record(shim, 112, _cap_top(y, text), r.wins, r.losses, text)
         gb = r.division_gb or "-"
         gb_color = pal.LABEL if gb in _LEADER_GB else pal.AMBER
-        _t(shim, gb, 180, y, gb_color, 10)
+        _t(shim, gb, gb_x, y, gb_color, text)
         streak = r.streak or ""
-        _t(shim, streak, 212, y, _strk_color(streak), 10)
+        _t(shim, streak, strk_x, y, _strk_color(streak), text)
 
 
-def _render_long(shim, real, division_name, rows, yo):
+def _render_long(shim, real, division_name, rows, yo, geo):
     _t(shim, division_name, 6, 2 + yo, pal.CYAN, 9)
     _t(shim, "W", 158, 2 + yo, pal.LABEL, 9)
     _t(shim, "L", 192, 2 + yo, pal.LABEL, 9)
@@ -106,17 +165,25 @@ def _render_long(shim, real, division_name, rows, yo):
     _t(shim, "GB", 292, 2 + yo, pal.LABEL, 9)
     _t(shim, "L10", 350, 2 + yo, pal.LABEL, 9)
     _t(shim, "STRK", 420, 2 + yo, pal.LABEL, 9)
+    pitch, text, rank, chip_h, row0 = (
+        geo["pitch"],
+        geo["text"],
+        geo["rank"],
+        geo["chip"],
+        geo["row0"],
+    )
+    abbr_x = geo["abbr_x"]
     for i, r in enumerate(rows):
-        y = 14 + i * 10 + yo
-        _t(shim, str(i + 1), 6, y + 1, pal.LABEL, 8)
-        chip(real, 18, y, 9, r.abbr)
-        _t(shim, r.abbr, 32, y, pal.IDENT, 10)
-        _t(shim, str(r.wins), 158, y, pal.WIN, 10)
-        _t(shim, str(r.losses), 192, y, pal.LOSS, 10)
-        _t(shim, r.pct or "", 224, y, pal.AMBER, 10)
+        y = row0 + i * pitch + yo
+        _t(shim, str(i + 1), 6, y + 1, pal.LABEL, rank)
+        chip(real, 18, y, chip_h, r.abbr)
+        _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
+        _t(shim, str(r.wins), 158, y, pal.WIN, text)
+        _t(shim, str(r.losses), 192, y, pal.LOSS, text)
+        _t(shim, r.pct or "", 224, y, pal.AMBER, text)
         gb = r.division_gb or "-"
         gb_color = pal.LABEL if gb in _LEADER_GB else pal.IDENT
-        _t(shim, gb, 292, y, gb_color, 10)
-        _t(shim, r.l10 or "", 350, y, pal.CYAN, 10, bold=False)
+        _t(shim, gb, 292, y, gb_color, text)
+        _t(shim, r.l10 or "", 350, y, pal.CYAN, text, bold=False)
         streak = r.streak or ""
-        _t(shim, streak, 420, y, _strk_color(streak), 10)
+        _t(shim, streak, 420, y, _strk_color(streak), text)

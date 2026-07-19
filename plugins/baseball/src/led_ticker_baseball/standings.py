@@ -45,10 +45,14 @@ _INTERVAL_DAILY: int = 86400
 # division, so both names route through the same story-build path).
 _STANDINGS_VALID_LAYOUTS: tuple[str, ...] = ("auto", "ticker", "board")
 
-# Mirrors layouts/standings_board.py's own _MAX_ROWS — capped here too so
-# `MLBStandingsBoard.legacy_rows` (the scale<=1 fallback) shows the same
-# division slice the physical board renders, not the division's full roster.
+# Mirrors layouts/standings_board.py's own _MAX_ROWS/_MIN_ROWS — the
+# `board_rows` config knob's valid range (validated in `validate_config`
+# below). `MLBStandingsBoard.legacy_rows` (the scale<=1 fallback) is capped
+# to the same `board_rows` count so it shows the same division slice the
+# physical board renders, not the division's full roster.
 _STANDINGS_BOARD_MAX_ROWS: int = 5
+_STANDINGS_BOARD_MIN_ROWS: int = 3
+_STANDINGS_BOARD_DEFAULT_ROWS: int = 5
 
 # Static MLB division IDs -> display names. These are stable MLB Stats API
 # constants (sportId=1, league 103/104) so a hydrate isn't needed to label
@@ -96,6 +100,50 @@ def _group_by_division(
     return groups
 
 
+def _select_division_rows(
+    division_rows: list[TeamStanding],
+    board_rows: int,
+    tracked_abbrs: set[str],
+) -> list[TeamStanding]:
+    """Select up to `board_rows` rows from one division's team list
+    (`division_rows`, already sorted by `division_rank` — see
+    `_group_by_division`): the top `board_rows` by rank, then pin in any
+    TRACKED team not already included by displacing rows from the BOTTOM
+    of that top-N selection (division_rank order) — one displaced slot per
+    missing tracked team. The rank digit the board shows is always the
+    TRUE `division_rank` (a 1, 2, 5 board reads as self-explanatory), never
+    a re-numbered 1..N.
+
+    `board_rows=5` (the default) is a no-op versus the pre-#72 behavior
+    whenever the division has <=5 teams (the common case: MLB divisions
+    have 5 teams) — every team is already in the top-5 selection, so
+    `missing` is always empty.
+
+    Bounded to at most `len(selected)` (<= `board_rows`) missing tracked
+    teams displacing existing rows, best-ranked first — a division with
+    more tracked-but-unranked teams than board slots is not a case any
+    real MLB division (5 teams per division) can hit, but this keeps the
+    return value from ever exceeding `board_rows`.
+    """
+    selected = division_rows[:board_rows]
+    selected_ids = {id(r) for r in selected}
+    missing = [
+        r
+        for r in division_rows
+        if r.abbr in tracked_abbrs and id(r) not in selected_ids
+    ]
+    if not missing:
+        return selected
+
+    missing.sort(key=lambda t: t.division_rank)
+    budget = len(selected)
+    missing = missing[:budget]
+    keep = selected[: max(0, budget - len(missing))]
+    final = keep + missing
+    final.sort(key=lambda t: t.division_rank)
+    return final
+
+
 def _build_standing_message(
     standing: TeamStanding,
     bg_color: Color | None = None,
@@ -133,6 +181,11 @@ class MLBStandingsMonitor:
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
+    # Board layouts (`auto`/`board`) only — `layout = "ticker"` ignores this
+    # and always shows the ticker's own top_n/tracked-team row shape.
+    # Validated to 3-5 in `validate_config`; fewer rows scale text/chip up
+    # (see layouts/standings_board.py's geometry table).
+    board_rows: int = attrs.field(default=_STANDINGS_BOARD_DEFAULT_ROWS, kw_only=True)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
     feed_title: TickerMessage | None = attrs.field(init=False, default=None)
     feed_stories: list[TickerMessage | SegmentMessage | MLBStandingsBoard] = (
@@ -148,6 +201,12 @@ class MLBStandingsMonitor:
         suggestion for a near-miss. Returns message strings (does NOT
         raise); the engine turns any returned messages into a pre-flight
         ValueError.
+
+        ``board_rows`` must be an int in 3..5 — bool is explicitly excluded
+        even though it's an int subclass (mirrors core's `font_threshold`
+        convention: `True`/`False` would silently coerce to 1/0, both
+        outside range, but the exclusion is explicit rather than relying on
+        the range check alone to document intent).
         """
         msgs: list[str] = []
 
@@ -162,6 +221,21 @@ class MLBStandingsMonitor:
                 f"standings layout={layout!r} is not valid. "
                 f"Choose one of: {valid}.{suggestion}"
             )
+
+        if "board_rows" in cfg:
+            board_rows = cfg["board_rows"]
+            if (
+                isinstance(board_rows, bool)
+                or not isinstance(board_rows, int)
+                or not (
+                    _STANDINGS_BOARD_MIN_ROWS <= board_rows <= _STANDINGS_BOARD_MAX_ROWS
+                )
+            ):
+                msgs.append(
+                    f"standings board_rows={board_rows!r} is not valid. "
+                    f"Must be an integer from {_STANDINGS_BOARD_MIN_ROWS} to "
+                    f"{_STANDINGS_BOARD_MAX_ROWS}."
+                )
 
         return msgs
 
@@ -303,8 +377,9 @@ class MLBStandingsMonitor:
     ) -> list[MLBStandingsBoard]:
         """layout="auto"/"board": one MLBStandingsBoard per tracked
         division, in config order (deduped), each carrying its division's
-        top-5 rows plus the equivalent legacy SegmentMessage rows for the
-        scale<=1 fallback (see _standings_card.MLBStandingsBoard).
+        top-`board_rows` rows (with tracked-team pinning, see
+        `_select_division_rows`) plus the equivalent legacy SegmentMessage
+        rows for the scale<=1 fallback (see _standings_card.MLBStandingsBoard).
 
         Fallback when `self.teams` is empty or none resolve to a division:
         the overall leader's division (`standings` is rank-sorted, so
@@ -324,10 +399,12 @@ class MLBStandingsMonitor:
             if leader.division_id:
                 divisions = [leader.division_id]
 
+        tracked_abbrs = {API_TO_CANONICAL_ABBR.get(t, t) for t in self.teams}
         groups = _group_by_division(standings)
         stories: list[MLBStandingsBoard] = []
         for division_id in divisions:
-            rows = groups.get(division_id, [])[:_STANDINGS_BOARD_MAX_ROWS]
+            division_rows = groups.get(division_id, [])
+            rows = _select_division_rows(division_rows, self.board_rows, tracked_abbrs)
             if not rows:
                 continue
             legacy_rows = [
@@ -346,6 +423,7 @@ class MLBStandingsMonitor:
                     legacy_rows=legacy_rows,
                     bg_color=self.bg_color,
                     font_color=self.font_color,
+                    board_rows=self.board_rows,
                 )
             )
         return stories

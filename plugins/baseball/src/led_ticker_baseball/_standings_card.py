@@ -55,6 +55,12 @@ class MLBStandingsBoard(FrameAwareBase):
     legacy_rows: list[Any]
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
+    # Forwarded verbatim to `render_standings_board`'s `max_rows` — the
+    # renderer stays config-agnostic (geometry-table lookup only); this
+    # field is how the widget's `board_rows` config knob reaches it.
+    # Defaults to 5 so direct-construction call sites/tests (pre-#72) are
+    # unaffected.
+    board_rows: int = attrs.field(default=5, kw_only=True)
     _legacy_idx: int = attrs.field(init=False, default=-1)
     _pending_row_advance: bool = attrs.field(init=False, default=True)
 
@@ -69,7 +75,11 @@ class MLBStandingsBoard(FrameAwareBase):
         scale = safe_scale(canvas)
         if scale > 1:
             render_standings_board(
-                canvas, self.division_name, self.rows, y_offset=y_offset
+                canvas,
+                self.division_name,
+                self.rows,
+                y_offset=y_offset,
+                max_rows=self.board_rows,
             )
             # Held layout: return the WRAPPER's logical width (not the real
             # canvas width) so the engine's `cursor_pos > canvas.width`
