@@ -124,7 +124,14 @@ class MLBGameCard(FrameAwareBase):
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
         if layout == "ticker":
-            w = render_crawl(canvas, self.game, self.tz, cursor_pos, y_offset=y_offset)
+            w = render_crawl(
+                canvas,
+                self.game,
+                self.tz,
+                cursor_pos,
+                y_offset=y_offset,
+                hold_padding=self.padding,
+            )
             return canvas, w + self.padding
         if layout == "scoreboard":
             render_scoreboard(
