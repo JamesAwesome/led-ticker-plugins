@@ -214,6 +214,76 @@ def test_long_empty_fields_never_raise():
     )
 
 
+class TestEmojiSanitization:
+    """F1 (final review): the name always routes through `_mask.mask_scroll`,
+    whose offscreen mask canvas is sized from the MEASURED width
+    (`text_width`, low-res-emoji-width fallback for a MAPPED Unicode emoji —
+    `_paint.text_width`'s scale=1 probe isn't a `ScaledCanvas`, so
+    `measure_width` can't take the hi-res branch) — but the actual paint
+    (`hires()`, whose shim IS a real `ScaledCanvas`) draws the SAME mapped
+    emoji as a much wider hi-res sprite, so the sprite's trailing pixels
+    (and any letters after it) get cropped by the offscreen canvas edge, and
+    `mask.w` itself understates the name's true width. Sanitizing the emoji
+    out before either call means an emoji-bearing name must render
+    BYTE-IDENTICAL to the same name with the emoji (and its trailing space)
+    removed — a cropped/truncated mask would show up as a mismatch here.
+    Uses '⭐' throughout: it IS in core's `_UNICODE_EMOJI_MAP` (-> hi-res
+    "star") — an unmapped emoji is already stripped uniformly by core on
+    both the measure and paint side, so it wouldn't exercise this drift.
+    """
+
+    def test_big_emoji_name_matches_sanitized_plain_name(self):
+        canvas_a, real_a = _bigsign()
+        render_promo_card(canvas_a, _promo(name="Cap Giveaway"), 0)
+        canvas_b, real_b = _bigsign()
+        render_promo_card(canvas_b, _promo(name="Cap Giveaway ⭐"), 0)
+        assert real_a._pixels == real_b._pixels
+
+    def test_long_emoji_name_matches_sanitized_plain_name(self):
+        canvas_a, real_a = _longboi()
+        render_promo_card(canvas_a, _promo(name="Cap Giveaway"), 0)
+        canvas_b, real_b = _longboi()
+        render_promo_card(canvas_b, _promo(name="Cap Giveaway ⭐"), 0)
+        assert real_a._pixels == real_b._pixels
+
+    def test_long_overflowing_emoji_name_feeds_sanitized_text_to_scroll(
+        self, monkeypatch
+    ):
+        """The scrolling (overflow) branch is where a cropped mask would
+        actually lose the name's tail. A full-render byte comparison at an
+        arbitrary clock isn't reliable here (whether the scrolled window
+        happens to overlap the cropped tail depends on the clock value and
+        both variants' periods) — so instead assert directly on what text
+        reaches `_mask.mask_scroll`: it must be the sanitized name, with no
+        emoji left in it, matching the `_promo_card` module's own call
+        target (patched by NAME so the layout's `from ... import
+        mask_scroll` binding is what's replaced)."""
+        import led_ticker_baseball.layouts.promo_card as promo_card_mod
+
+        captured: dict[str, str] = {}
+
+        def _spy(real, text, x0, x1, y, color, size, clock_ms, **kw):
+            captured["text"] = text
+
+        monkeypatch.setattr(promo_card_mod, "mask_scroll", _spy)
+        canvas, _real = _longboi()
+        long_name = "Hawaiian Shirt & Beach Towel Giveaway"
+        render_promo_card(canvas, _promo(name=f"{long_name} ⭐"), 3000)
+        assert captured["text"] == long_name.upper()
+        assert "⭐" not in captured["text"]
+
+    def test_emoji_sub_matches_sanitized_plain_sub(self):
+        canvas_a, real_a = _longboi()
+        render_promo_card(canvas_a, _promo(presented_by="New Era"), 0)
+        canvas_b, real_b = _longboi()
+        render_promo_card(canvas_b, _promo(presented_by="New Era ⭐"), 0)
+        assert real_a._pixels == real_b._pixels
+
+    def test_promo_sub_strips_emoji(self):
+        p = _promo(offer_type="Giveaway ⭐", presented_by="Chase")
+        assert "⭐" not in _promo_sub(p)
+
+
 def test_long_y_offset_shifts_content():
     canvas, real = _longboi()
     render_promo_card(canvas, _promo(), 0)

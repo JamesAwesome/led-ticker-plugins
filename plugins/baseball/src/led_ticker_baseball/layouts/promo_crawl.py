@@ -24,7 +24,13 @@ constant for the same reason.
 from led_ticker.plugin import resolve_font, safe_scale
 
 from led_ticker_baseball import _palette as pal
-from led_ticker_baseball._paint import hires, js_round, phys_wrap, text_width
+from led_ticker_baseball._paint import (
+    _hires_safe,
+    hires,
+    js_round,
+    phys_wrap,
+    text_width,
+)
 from led_ticker_baseball._primitives import chip
 
 # Trailing inter-story gap — see module docstring ("bullet dropped").
@@ -37,9 +43,15 @@ def _promo_sub(promo) -> str:
     `_score_color` being defined separately in `crawl.py`/`two_row.py`;
     each renderer stays self-contained. See `promo_card._promo_sub`'s
     docstring for the "never a bare '· BY X'" rationale.
+
+    `offer`/`sponsor` are sanitized through `_paint._hires_safe` (F1: a
+    mapped Unicode emoji paints wider than it measures — see that
+    function's docstring) before composing the returned string, so this
+    segment's hi-res measure/paint stay in agreement regardless of what a
+    live feed's `offer_type`/`presented_by` strings contain.
     """
-    offer = promo.offer_type.upper() if promo.offer_type else ""
-    sponsor = promo.presented_by.upper() if promo.presented_by else ""
+    offer = _hires_safe(promo.offer_type.upper()) if promo.offer_type else ""
+    sponsor = _hires_safe(promo.presented_by.upper()) if promo.presented_by else ""
     if offer and sponsor:
         return f"{offer} · BY {sponsor}"
     if sponsor:
@@ -67,7 +79,9 @@ def _segments(promo):
     """Yield (kind, payload) segments; kind in {'text','gap','chip'}.
     text payload = (string, color, bold, size); chip payload = (team, h)."""
     opp = (promo.opponent_abbr or "").upper()
-    name = (promo.name or "").upper()
+    # F1: sanitize free-form promo text (name) before it reaches
+    # `_seg_w`/`hires` — see `_paint._hires_safe`'s docstring.
+    name = _hires_safe((promo.name or "").upper())
     time_text = f"{promo.time_label} {promo.am_pm}".strip()
     return [
         ("text", (promo.date_label, pal.AMBER, True, 13)),

@@ -140,3 +140,8 @@ class MLBPromoCard(FrameAwareBase):
     # `MLBStandingsBoard`, whose `legacy_rows[idx]` cycling is real
     # per-visit selection state (`_pending_row_advance`) — see
     # `_standings_card.py`'s module docstring for that contrast.
+    # This is safe TODAY only because `SegmentMessage` is not a
+    # `FrameAwareBase` subclass and so never enforces `_visit_owner` —
+    # if core ever migrates `SegmentMessage` onto `FrameAwareBase`, the
+    # skipped forward becomes a second-visit `RuntimeError` and this method
+    # must start forwarding `reset_frame()` too.

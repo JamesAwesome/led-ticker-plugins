@@ -40,6 +40,7 @@ from led_ticker.plugin import safe_scale
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._mask import mask_scroll
 from led_ticker_baseball._paint import (
+    _hires_safe,
     cap_top,
     fit_text,
     hires,
@@ -80,9 +81,15 @@ def _promo_sub(promo: "PromoInfo") -> str:  # noqa: UP037 — introspection-safe
     before it). Guarded here: the dot separator only appears when BOTH
     sides are present; sponsor-only degrades to "BY SPONSOR" (no dot),
     offer-only to "OFFER", and both-empty to "" (never raises).
+
+    `offer`/`sponsor` are sanitized through `_paint._hires_safe` (F1: a
+    mapped Unicode emoji paints wider than it measures — see that
+    function's docstring) before composing the returned string, so this
+    line's `fit_text`/`hires` calls stay measure/paint-consistent regardless
+    of what a live feed's `offer_type`/`presented_by` strings contain.
     """
-    offer = promo.offer_type.upper() if promo.offer_type else ""
-    sponsor = promo.presented_by.upper() if promo.presented_by else ""
+    offer = _hires_safe(promo.offer_type.upper()) if promo.offer_type else ""
+    sponsor = _hires_safe(promo.presented_by.upper()) if promo.presented_by else ""
     if offer and sponsor:
         return f"{offer} · BY {sponsor}"
     if sponsor:
@@ -115,7 +122,9 @@ def render_promo_card(
 
 def _render_big(shim, real, promo, clock_ms, yo, story_index, story_total):
     opp = (promo.opponent_abbr or "").upper()
-    name = (promo.name or "").upper()
+    # F1: sanitize free-form promo text (name) before it reaches
+    # `mask_scroll` — see `_paint._hires_safe`'s docstring.
+    name = _hires_safe((promo.name or "").upper())
     time_text = f"{promo.time_label} {promo.am_pm}".strip()
 
     _t(shim, promo.date_label, 4, 1 + yo, pal.AMBER, 9)
@@ -136,7 +145,9 @@ def _render_big(shim, real, promo, clock_ms, yo, story_index, story_total):
 
 def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
     opp = (promo.opponent_abbr or "").upper()
-    name = (promo.name or "").upper()
+    # F1: sanitize free-form promo text (name) before it reaches
+    # `mask_scroll` — see `_paint._hires_safe`'s docstring.
+    name = _hires_safe((promo.name or "").upper())
     time_text = f"{promo.time_label} {promo.am_pm}".strip()
 
     _t(shim, promo.date_label, 6, 4 + yo, pal.AMBER, 12)

@@ -224,10 +224,10 @@ game if there is one, else the next home game with matching promos (the
 widget's longstanding semantics, unchanged by this layout work). A design
 mock paged through a whole homestand's worth of games; a lookahead knob for
 that is a possible future addition, not present today. Also: a doubleheader
-whose two games carry the same-named promo now shows two entries (previously
-merged into one under the legacy scrolling-lines view) — each game gets its
-own card/line/crawl segment, matching the per-game data the API actually
-returns.
+whose two games carry same-named or near-duplicate (prefix) promos now shows
+two entries (previously merged into one under the legacy scrolling-lines
+view, with the shorter name winning) — each game gets its own card/line/crawl
+segment, matching the per-game data the API actually returns.
 
 ### `baseball.statcast`
 

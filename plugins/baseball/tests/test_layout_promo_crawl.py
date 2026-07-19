@@ -9,7 +9,11 @@ scores sibling this mirrors).
 
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
-from led_ticker_baseball.layouts.promo_crawl import _promo_sub, render_promo_crawl
+from led_ticker_baseball.layouts.promo_crawl import (
+    _promo_sub,
+    _segments,
+    render_promo_crawl,
+)
 from led_ticker_baseball.promotions import PromoInfo
 
 
@@ -165,6 +169,51 @@ class TestHeldCentering:
         render_promo_crawl(canvas, _promo(), 0, hold_padding=6)
         cols = sorted({x for x, _y in real._pixels})
         assert cols[0] <= 4  # starts at the left edge, not centered
+
+
+class TestEmojiSanitization:
+    """F1 (final review): `hires()`/core `draw_text` paints a MAPPED Unicode
+    emoji as a hi-res sprite (its shim IS a real `ScaledCanvas`), but
+    `text_width()`/core `measure_width` counts it at the low-res-emoji-width
+    fallback (`_paint.text_width`'s scale=1 probe isn't a `ScaledCanvas`, so
+    `measure_width` can't take the hi-res branch) — the segment loop
+    advances `x` by the (too-narrow) measured width, so the actual (wider)
+    sprite paint bleeds into the following gap/chip segments. Sanitizing the
+    emoji out of name/offer/sponsor before EITHER call means an
+    emoji-bearing string must render BYTE-IDENTICAL to the same string with
+    the emoji (and the space it leaves behind) removed — any overpaint into
+    the next segment would show up as a pixel-set mismatch here. Uses '⭐'
+    throughout: it IS in core's `_UNICODE_EMOJI_MAP` (-> hi-res "star") — an
+    unmapped emoji is already stripped uniformly by core on both the
+    measure and paint side, so it wouldn't exercise this drift.
+    """
+
+    def test_emoji_name_matches_sanitized_plain_name(self):
+        canvas_a, real_a = _bigsign()
+        render_promo_crawl(canvas_a, _promo(name="Bobblehead Night"), 0)
+        canvas_b, real_b = _bigsign()
+        render_promo_crawl(canvas_b, _promo(name="Bobblehead Night ⭐"), 0)
+        assert real_a._pixels == real_b._pixels
+
+    def test_emoji_offer_segment_is_sanitized(self):
+        """The sub-line segment sits far enough into the run (after date +
+        name + chip + 'VS') that at cursor 0 on a 256-real-px canvas it's
+        already off the visible edge — a full-render byte comparison can't
+        exercise the bug there, so assert directly on the segment payload
+        `_segments()` produces instead."""
+        p = _promo(offer_type="Giveaway ⭐")
+        segs = _segments(p)
+        sub_text = next(
+            payload[0]
+            for kind, payload in segs
+            if kind == "text" and "GIVEAWAY" in payload[0]
+        )
+        assert "⭐" not in sub_text
+        assert sub_text == "GIVEAWAY · BY CHASE"
+
+    def test_promo_sub_strips_emoji(self):
+        p = _promo(offer_type="Giveaway ⭐", presented_by="Chase")
+        assert "⭐" not in _promo_sub(p)
 
 
 class TestVerticalCentering:
