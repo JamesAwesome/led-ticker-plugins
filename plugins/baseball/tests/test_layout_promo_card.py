@@ -131,7 +131,7 @@ def test_big_sub_never_collides_with_time_worst_case():
 
 def test_big_empty_offer_and_sponsor_never_raises():
     canvas, _real = _bigsign()
-    render_promo_card(canvas, _promo(offer_type="", presented_by=""), 0)
+    render_promo_card(canvas, PromoInfo(name=""), 0)
 
 
 def test_big_sponsor_only_has_no_bare_dot():

@@ -165,3 +165,25 @@ class TestHeldCentering:
         render_promo_crawl(canvas, _promo(), 0, hold_padding=6)
         cols = sorted({x for x, _y in real._pixels})
         assert cols[0] <= 4  # starts at the left edge, not centered
+
+
+class TestVerticalCentering:
+    """Hardware finding (longboi, 2026-07-18): the promo crawl must center
+    vertically like the scores crawl. The hires() ascent-correction via 0.74
+    factor in _y_for pins promo centering (scores uses 0.72 — a future mixup
+    must fail these tests). Guard: the lit row band of a short-content
+    (held) promo render must center on the panel's vertical middle.
+    """
+
+    def _midpoint(self, width):
+        real = HeadlessBackend(width, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        render_promo_crawl(canvas, _minimal_promo(), 0)
+        rows = sorted({y for (_x, y) in real._pixels})
+        return (rows[0] + rows[-1]) / 2
+
+    def test_longboi_promo_crawl_text_band_is_vertically_centered(self):
+        assert abs(self._midpoint(512) - 31.5) <= 2.5
+
+    def test_bigsign_promo_crawl_text_band_is_vertically_centered(self):
+        assert abs(self._midpoint(256) - 31.5) <= 2.5
