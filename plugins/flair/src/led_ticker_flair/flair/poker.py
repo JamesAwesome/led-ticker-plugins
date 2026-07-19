@@ -6,6 +6,7 @@ ring pixel-lists, and ring-union coverage test. No canvas, no led_ticker imports
 """
 
 import colorsys
+import functools
 import math
 import random
 from dataclasses import dataclass
@@ -139,11 +140,50 @@ def pulse_radius(t, stagger):
     return phase, wave
 
 
+# ---------------------------------------------------------------------------
+# Process-wide suit GEOMETRY cache.
+#
+# ROOT CAUSE of the on-sign CPU spin (2026-07-18): ring geometry was cached
+# per (suit, radius, HUE) — but hue varies per glyph, so 16 glyphs each
+# re-rasterized the same suit shapes (~12.6M mask evals per bigsign firing,
+# ~3 s dev / ~10 s Pi), and a seed-less transition re-paid the whole stall on
+# EVERY firing. Geometry does not depend on hue AT ALL — only the painted
+# color does. Rasterize each (suit, radius) ONCE PER PROCESS here; colorize
+# cheaply downstream. `functools.cache` keys survive across firings and
+# Poker instances, so only the first-ever firing in a process rasterizes.
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def _interior_geom(suit: str, r: float) -> tuple:
+    """Process-wide interior (dx, dy) geometry at radius ``r``."""
+    return tuple(interior_pixels(suit, r))
+
+
+@functools.cache
+def _ring_geom(suit: str, r_int: int) -> tuple:
+    """Process-wide ring-shell (dx, dy) geometry at integer radius ``r_int``."""
+    inner = frozenset(_interior_geom(suit, r_int - RING_W))
+    return tuple(p for p in _interior_geom(suit, r_int) if p not in inner)
+
+
+@functools.cache
+def _warm_suit_geometry(suit: str, max_ri: int, glyph_ri: int) -> bool:
+    """Rasterize every radius a transition can request for ``suit`` — once
+    per process (the @cache makes repeat calls free)."""
+    for rr in range(0, max_ri + 1):
+        _ring_geom(suit, rr)
+    for rr in range(0, glyph_ri + 1):
+        _interior_geom(suit, rr)
+    return True
+
+
 class RingCache:
     """Per-run cache of (x, y, color) pixel lists for both ring SHELLS (the
     moving pulse wavefront) and FILLED interiors (the resting suit glyphs).
-    Both quantize hue to whole degrees so a continuously-cycling hue still
-    hits a bounded key set (pre-warmed once per plan)."""
+    Colorizes the process-wide `_ring_geom`/`_interior_geom` GEOMETRY — this
+    layer never rasterizes. Hue quantizes to whole degrees so a continuously-
+    cycling hue still hits a bounded key set."""
 
     def __init__(self):
         self._cache = {}
@@ -159,7 +199,7 @@ class RingCache:
         hit = self._cache.get(key)
         if hit is None:
             color = self._color(hue_deg)
-            hit = [(x, y, color) for (x, y) in ring_pixels(suit, int(r_int))]
+            hit = [(x, y, color) for (x, y) in _ring_geom(suit, int(r_int))]
             self._cache[key] = hit
         return hit
 
@@ -169,7 +209,7 @@ class RingCache:
         hit = self._interior_cache.get(key)
         if hit is None:
             color = self._color(hue_deg)
-            hit = [(x, y, color) for (x, y) in interior_pixels(suit, int(r_int))]
+            hit = [(x, y, color) for (x, y) in _interior_geom(suit, int(r_int))]
             self._interior_cache[key] = hit
         return hit
 
@@ -305,18 +345,16 @@ class Poker:
             self._ring_idx.clear()
             self._interior_abs.clear()
             self._reset_reveal()
-            # Pre-warm every ring shell and interior the paint/reveal paths can
-            # request (every glyph x every integer radius, at the exact hue the
-            # paint path derives from that radius) so a warm plan does zero
-            # rasterization per frame. See
-            # TestPerf.test_no_ring_rasterization_after_first_frame.
+            # Warm the process-wide GEOMETRY for the suits in play — a no-op
+            # after the first-ever firing in this process (functools.cache).
+            # Colorized/absolute per-glyph lists build lazily per frame from
+            # that geometry (cheap tuple work, no rasterization) — so no
+            # per-firing pre-warm stall. See
+            # TestNoPerFiringRasterization + TestPerf.
             max_ri = int(math.ceil(self._max_r))
             glyph_ri = int(math.ceil(GLYPH_R))
-            for g in self._plan:
-                for rr in range(0, max_ri + 1):
-                    self._rings.get(g.suit, rr, self._ring_hue(g, rr))
-                for rr in range(0, glyph_ri + 1):
-                    self._rings.interior(g.suit, rr, self._glyph_hue(g))
+            for suit in {g.suit for g in self._plan}:
+                _warm_suit_geometry(suit, max_ri, glyph_ri)
         return self._plan, real
 
     def _paint_current_rings(self, real, t):

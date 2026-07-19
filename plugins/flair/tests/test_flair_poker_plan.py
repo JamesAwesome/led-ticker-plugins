@@ -47,16 +47,15 @@ class TestPulseTimeline:
 
 
 class TestRingCache:
-    def test_quantizes_and_caches(self, monkeypatch):
-        import led_ticker_flair.flair.poker as m
-
-        calls = []
-        real = m.ring_pixels
-        monkeypatch.setattr(
-            m, "ring_pixels", lambda *a, **k: calls.append(a) or real(*a, **k)
-        )
+    def test_quantizes_and_caches(self):
+        # Hue quantizes to whole degrees at the COLORIZE layer: two gets at
+        # 40.0 / 40.4 share one cache entry (same object). Geometry itself is
+        # process-cached in _ring_geom, so no rasterization spy is meaningful
+        # here anymore.
         cache = RingCache()
-        cache.get("hearts", 12, 40.0)
-        cache.get("hearts", 12, 40.4)  # same int r, same whole-deg hue
-        assert len(calls) == 1
-        assert cache.get("hearts", 12, 40.0)  # non-empty pixel list
+        a = cache.get("hearts", 12, 40.0)
+        b = cache.get("hearts", 12, 40.4)  # same int r, same whole-deg hue
+        assert a is b
+        assert a  # non-empty pixel list
+        c = cache.get("hearts", 12, 41.0)  # different whole degree -> new entry
+        assert c is not a

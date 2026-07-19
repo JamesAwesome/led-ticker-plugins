@@ -274,13 +274,15 @@ class TestPerf:
         incoming = _make_widget(draw_pixel=False)
 
         p.frame_at(0.5, canvas, outgoing, incoming)
-        assert calls  # cache warm on the first frame
+        # NOTE: `calls` may be EMPTY here — geometry is cached process-wide
+        # (_ring_geom / _warm_suit_geometry), so an earlier test in this
+        # process may have already rasterized these suits. The invariant is
+        # only that frames AFTER the first do zero rasterization; the
+        # stronger per-firing/per-instance guard lives in
+        # TestNoPerFiringRasterization.
         first_call_count = len(calls)
 
         p.frame_at(0.6, canvas, outgoing, incoming)
-        # No NEW rasterization on the second frame -- every ring shell (every
-        # glyph x every integer radius, not just the ones live at t=0.5) was
-        # pre-warmed when the plan was built.
         assert len(calls) == first_call_count
 
 
@@ -341,3 +343,71 @@ class TestRegistration:
         assert "propeller" in api.animations
         assert "fisheye" in api.animations
         assert "lottery" in api.widgets
+
+
+class TestNoPerFiringRasterization:
+    """ROOT-CAUSE guard for the on-sign CPU spin (2026-07-18): the per-firing
+    pre-warm rasterized ~1,072 rings (~12.6M mask evals, ~3s dev / ~10s Pi)
+    because the ring cache keyed on each glyph's HUE — so every glyph re-
+    rasterized the same suit geometry, and a seed-less transition re-paid the
+    whole stall on EVERY firing. Geometry must be rasterized once per PROCESS
+    per (suit, radius): a second firing — and a second Poker instance — must
+    do ZERO mask-function work."""
+
+    @staticmethod
+    def _mask_spy(monkeypatch):
+        import led_ticker_flair.flair.poker as m
+
+        calls: list = []
+        for name in ("_in_heart", "_in_diamond", "_in_club", "_in_spade"):
+            real = getattr(m, name)
+
+            def _wrap(x, y, r, _real=real, _n=name):
+                calls.append(_n)
+                return _real(x, y, r)
+
+            monkeypatch.setattr(m, name, _wrap)
+            # _MASKS holds direct references — repoint them too so lookups
+            # through the dispatch table are also counted.
+            suit = {
+                "_in_heart": "hearts",
+                "_in_diamond": "diamonds",
+                "_in_club": "clubs",
+                "_in_spade": "spades",
+            }[name]
+            monkeypatch.setitem(m._MASKS, suit, _wrap)
+        return calls
+
+    def test_second_firing_does_zero_rasterization(self, monkeypatch) -> None:
+        calls = self._mask_spy(monkeypatch)
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+
+        p = Poker()  # seed=None: replans EVERY firing (the smoke-config shape)
+        p.frame_at(0.3, canvas, o, i)
+        p.frame_at(0.96, canvas, o, i)  # finish firing 1
+        after_first = len(calls)
+        assert after_first >= 0  # first-ever firing may rasterize
+
+        p.frame_at(0.05, canvas, o, i)  # firing 2 begins (replan, new entropy)
+        p.frame_at(0.5, canvas, o, i)
+        assert len(calls) == after_first, (
+            f"firing 2 rasterized {len(calls) - after_first} mask points — "
+            "geometry must be cached per process, not per firing"
+        )
+
+    def test_second_instance_does_zero_rasterization(self, monkeypatch) -> None:
+        calls = self._mask_spy(monkeypatch)
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+
+        Poker(seed=5).frame_at(0.5, canvas, o, i)
+        after_first = len(calls)
+
+        Poker(seed=9).frame_at(0.5, canvas, o, i)  # fresh instance, same panel
+        assert len(calls) == after_first, (
+            f"a second Poker instance rasterized {len(calls) - after_first} "
+            "mask points — geometry must be shared process-wide"
+        )
