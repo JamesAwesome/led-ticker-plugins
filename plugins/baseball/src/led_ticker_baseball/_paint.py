@@ -90,6 +90,26 @@ def text_width(size: int, text: str, *, bold: bool = True) -> int:
     return measure_width(font, _subst(text), _PROBE)
 
 
+def fit_text(text: str, max_w: int, size: int, *, bold: bool = True) -> str:
+    """Port of dc.html `fitText` (~514-518): ellipsize `text` down to fit
+    `max_w` physical px at `size`/`bold`, else return it unchanged.
+
+    Truncates one character at a time (not a binary search — matches the
+    prototype exactly, and every caller's strings are short promo/sub-line
+    text) and appends U+2026 HORIZONTAL ELLIPSIS, which IS present in Inter
+    (verified: `getbbox` returns a non-degenerate box, no tofu). Never
+    raises: an empty `text` or a non-positive `max_w` both degrade to a
+    short/empty result rather than an index error or infinite loop (the
+    `len(s) > 1` guard is the same floor the prototype's `while` uses).
+    """
+    if text_width(size, text, bold=bold) <= max_w:
+        return text
+    s = text
+    while len(s) > 1 and text_width(size, s.rstrip() + "…", bold=bold) > max_w:
+        s = s[:-1]
+    return s.rstrip() + "…"
+
+
 def px(real, x: int, y: int, color: Color) -> None:
     if 0 <= x < real.width and 0 <= y < real.height:
         real.SetPixel(x, y, color.red, color.green, color.blue)
