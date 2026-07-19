@@ -135,15 +135,11 @@ class TestFullReveal:
     gap bound is a pure function of t (no frame sweep needed)."""
 
     @pytest.mark.parametrize("seed", range(8))
-    @pytest.mark.parametrize(
-        ("width", "height", "scale"), [(160, 16, 1), (256, 64, 4)]
-    )
+    @pytest.mark.parametrize(("width", "height", "scale"), [(160, 16, 1), (256, 64, 4)])
     def test_full_reveal_before_snap(self, width, height, scale, seed) -> None:
         real = _StubCanvas(width=width, height=height)
         canvas = (
-            ScaledCanvas(real, scale=scale, content_height=16)
-            if scale > 1
-            else real
+            ScaledCanvas(real, scale=scale, content_height=16) if scale > 1 else real
         )
         p = Lightning(seed=seed)
         o = _make_widget(draw_pixel=False)
@@ -200,3 +196,81 @@ class TestPhysicalResolution:
         rows = [y for (x, y) in real._pixels if x == 5]
         assert rows
         assert len(rows) <= 3
+
+
+class _RecordingAPI:
+    """Minimal PluginAPI stand-in recording registrations."""
+
+    def __init__(self) -> None:
+        self.animations: dict[str, type] = {}
+        self.transitions: dict[str, type] = {}
+        self.widgets: dict[str, type] = {}
+
+    def animation(self, name):
+        def _dec(cls):
+            self.animations[name] = cls
+            return cls
+
+        return _dec
+
+    def transition(self, name):
+        def _dec(cls):
+            self.transitions[name] = cls
+            return cls
+
+        return _dec
+
+    def widget(self, name):
+        def _dec(cls):
+            self.widgets[name] = cls
+            return cls
+
+        return _dec
+
+
+class TestRegistration:
+    def test_lightning_registered(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert api.transitions["lightning"] is Lightning
+
+
+class TestPerfUniformity:
+    """Spec's committed CI-safe perf gate: count WORK per frame, not time.
+    A poker-style deferred-backlog bug (one frame paying accumulated state)
+    fails the absolute bound deterministically."""
+
+    def test_per_frame_paint_volume_bounded(self) -> None:
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Lightning(seed=4)
+        counts = []
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            counts.append((round(t, 2), len(canvas.calls) - before))
+            t += 0.02
+        panel = 160 * 16
+        worst_t, worst = max(counts, key=lambda c: c[1])
+        assert worst <= int(1.5 * panel), (
+            f"frame at t={worst_t} painted {worst} px (> 1.5x panel {panel}) — "
+            "per-frame work must stay bounded by panel size"
+        )
+
+    def test_refire_frames_equally_bounded(self) -> None:
+        # Poker's root cause only showed on RE-fires (seed=None replans).
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Lightning()  # seed=None
+        for t in (0.3, 0.6, 0.96):
+            p.frame_at(t, canvas, o, i)
+        panel = 160 * 16
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            assert len(canvas.calls) - before <= int(1.5 * panel)
+            t += 0.02
