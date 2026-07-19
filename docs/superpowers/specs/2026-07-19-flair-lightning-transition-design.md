@@ -102,6 +102,29 @@ Signature: `frame_at(t, canvas, outgoing, incoming, **kwargs)` honoring
 - Registration: `flair.lightning` appears in the plugin's transition
   registrations.
 
+## Performance verification (mandatory, lessons from the poker arc)
+
+The poker CPU spin shipped because nothing measured frame times before
+hardware. Lightning does not merge without:
+
+1. **Frame-time sweep (dev benchmark, reported in the PR body):** simulate a
+   full firing at engine-like 0.02 t-steps on bigsign dims (256×64, scale 4,
+   fresh instance), report avg / worst frame ms and the worst frame's t.
+   Gate: worst ≤ ~5× avg and no single-frame outlier at the cutover or
+   anywhere else (poker's bug signature was 34ms vs 2.6ms avg at t=0.46).
+   Repeat for a REFIRE (second firing, seed=None) — poker's root cause only
+   showed on re-fires.
+2. **First-ever firing in a fresh process:** time construction (must be ~0,
+   nothing heavy in `__init__`) and the first frame (must be ms-class —
+   lightning has no warm by design; this check proves no hidden import-time
+   or first-touch cost crept in).
+3. **CI-safe uniformity tripwire (committed test):** wall-clock asserts are
+   flaky, so the committed guard counts WORK, not time: sweep a firing on a
+   stub canvas recording SetPixel calls per frame; assert the worst frame's
+   count ≤ ~1.5× the panel pixel count and (excluding the cutover frame's
+   legitimate step) within a small factor of the median. A poker-style
+   deferred-backlog bug fails this deterministically in CI.
+
 ## Visual gate
 
 Before the implementation is finalized: render smallsign + bigsign smoke
