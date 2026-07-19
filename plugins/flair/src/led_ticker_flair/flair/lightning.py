@@ -27,9 +27,11 @@ def plan_bolt(w: int, h: int, scale: int, rng: random.Random) -> list[int]:
     """Per-REAL-column crack y for a fresh bolt.
 
     Random-walk zigzag: a vertex every _SEG_MIN.._SEG_MAX logical px with
-    strictly alternating vertical direction, y confined to the center third
-    of the panel (h/2 ± h/6). Piecewise-linear between vertices."""
-    band_half = h / 6.0
+    strictly alternating vertical direction, y confined to the center HALF
+    of the panel (h/2 ± h/4 — James's visual-gate pick: even peaks at the
+    A-variant pitch, B-variant prominence). Piecewise-linear between
+    vertices."""
+    band_half = h / 4.0
     cy = h / 2.0
     xs = [0]
     while xs[-1] < w - 1:

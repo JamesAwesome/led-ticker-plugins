@@ -35,8 +35,10 @@ apart carrying their content" is infeasible; this is the honest best shape).
 
 - The bolt is a seeded random-walk polyline in LOGICAL panel space: a vertex
   every ~6–10 logical px with alternating slope sign (true zigzag), y
-  confined to the center third of the panel height. Piecewise-linear
-  `crack(x)` between vertices gives a y for every column.
+  confined to the center HALF of the panel height (h/2 ± h/4 — visual-gate
+  outcome 2026-07-19: even peaks at the original pitch, but more pronounced;
+  the original center-third band read as a gentle mountain range).
+  Piecewise-linear `crack(x)` between vertices gives a y for every column.
 - Planned ONCE per firing. `seed = None` (default) replans a fresh bolt on
   every firing, detected via `t < last_t` — exactly poker's refire pattern.
   `seed = <int>` pins the bolt for tests/demos.

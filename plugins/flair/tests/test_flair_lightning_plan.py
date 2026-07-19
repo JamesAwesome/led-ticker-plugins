@@ -17,11 +17,12 @@ class TestPlanBolt:
             crack = plan_bolt(w, h, s, random.Random(1))
             assert len(crack) == w
 
-    def test_y_confined_to_center_third(self):
+    def test_y_confined_to_center_half(self):
+        # Band = h/2 ± h/4 (visual-gate pick: pronounced peaks).
         for w, h, s in (BIG, SMALL):
             for seed in range(10):
                 crack = plan_bolt(w, h, s, random.Random(seed))
-                lo, hi = h / 2 - h / 6 - 1, h / 2 + h / 6 + 1  # ±1 rounding slack
+                lo, hi = h / 2 - h / 4 - 1, h / 2 + h / 4 + 1  # ±1 rounding slack
                 assert all(lo <= y <= hi for y in crack), (w, h, seed)
 
     def test_zigzags_direction_alternates(self):
