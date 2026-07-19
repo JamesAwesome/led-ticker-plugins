@@ -23,12 +23,14 @@ from zoneinfo import ZoneInfo
 
 from led_ticker.backends.headless import HeadlessBackend
 from led_ticker.frame import LedFrame
-from led_ticker.plugin import ScaledCanvas
+from led_ticker.plugin import ScaledCanvas, SegmentMessage, colors
 from led_ticker.ticker import Ticker
 
 from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import GameInfo
+from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball._standings_card import MLBStandingsBoard
+from led_ticker_baseball.promotions import PromoInfo
 from led_ticker_baseball.standings import TeamStanding
 
 TZ = ZoneInfo("America/New_York")
@@ -55,6 +57,12 @@ def _live_game(**over):
 
 def _bigsign_frame() -> LedFrame:
     frame = LedFrame(backend=HeadlessBackend(256, 64))
+    frame.setup()
+    return frame
+
+
+def _longboi_frame() -> LedFrame:
+    frame = LedFrame(backend=HeadlessBackend(512, 64))
     frame.setup()
     return frame
 
@@ -289,3 +297,95 @@ def test_scale1_row_cycling_survives_double_reset_per_visit():
             "section cycles — the double reset per transitioned visit is "
             "collapsing to an even advance and sticking the row"
         )
+
+
+def _promo(**over):
+    kw = dict(
+        name="Bobblehead Night",
+        offer_type="Giveaway",
+        presented_by="Chase",
+        opponent_abbr="BOS",
+        date_label="FRI JUL 18",
+        time_label="7:05",
+        am_pm="PM",
+        game_date="2026-07-18",
+    )
+    kw.update(over)
+    return PromoInfo(**kw)
+
+
+def _promo_legacy():
+    return SegmentMessage(
+        [("TOR ", colors.RGB_WHITE), ("Bobblehead Night", colors.RGB_WHITE)],
+        center=True,
+    )
+
+
+def test_held_promo_card_takes_hold_branch_no_phantom_scroll():
+    """Same Finding-1 shape as MLBGameCard's held layouts (see module
+    docstring), applied to MLBPromoCard: at scale>1 on a narrow (bigsign)
+    panel, `layout="auto"` resolves to the held card
+    (`layouts.resolve_promo_layout`), and the card must return the
+    WRAPPER's LOGICAL width so the engine's real hold-vs-scroll check
+    (`cursor_pos > canvas.width`, core ticker.py) takes the hold branch —
+    zero scroll ticks — rather than phantom-scrolling a static card."""
+    frame = _bigsign_frame()
+    card = MLBPromoCard(
+        promo=_promo(), story_index=0, story_total=1, legacy=_promo_legacy()
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos == 64  # held cursor == the wrapper's LOGICAL width
+    assert final_pos == 0  # never entered the scroll branch
+
+
+def test_promo_crawl_scrolls_on_longboi_under_auto():
+    """`layout="auto"` on a WIDE (longboi, 512 physical px) panel resolves
+    to the hires crawl (`layouts.resolve_promo_layout`'s `phys_w >= 400`
+    branch); the crawl's logical cursor must overflow `canvas.width` so the
+    engine actually takes the scroll branch (Finding-2 shape: a crawl that
+    never gets fed back through the real engine can hide a stop-position
+    bug — see module docstring)."""
+    frame = _longboi_frame()
+    card = MLBPromoCard(
+        promo=_promo(), story_index=0, story_total=1, legacy=_promo_legacy()
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos > 128  # overflowed the logical width -> scroll branch ran
+    assert final_pos < 0  # did scroll (sanity check the branch actually ran)
+
+
+def test_clock_ticks_advance_only_unpaused_and_survive_reset_frame():
+    """Phase-3 plan's per-card clock lesson (flight precedent): `advance_frame`
+    only ticks the clock while unpaused (a paused advance is transition
+    compositing and must not tick it), and — unlike `MLBStandingsBoard`'s
+    `_legacy_idx`, which DOES arm/consume across `reset_frame()` — this
+    clock must be COMPLETELY untouched by `reset_frame()`, including the
+    documented double-call-per-transitioned-visit (core calls it twice when
+    a widget transition is configured). A clock that resets on section
+    re-entry would snap the clipped name-scroll back to its start every
+    time this promo card reappears."""
+    card = MLBPromoCard(
+        promo=_promo(), story_index=0, story_total=1, legacy=_promo_legacy()
+    )
+
+    card.advance_frame()
+    card.advance_frame()
+    assert card._clock_ticks == 2
+
+    card.pause_frame()
+    card.advance_frame()  # paused -> must not tick
+    card.advance_frame()
+    assert card._clock_ticks == 2
+
+    card.resume_frame()
+    card.advance_frame()
+    assert card._clock_ticks == 3
+
+    # reset_frame can fire twice per visit (core's documented shape) — the
+    # clock must survive BOTH calls untouched.
+    card.reset_frame()
+    card.reset_frame()
+    assert card._clock_ticks == 3
+
+    card.advance_frame()
+    assert card._clock_ticks == 4

@@ -533,6 +533,72 @@ class TestParsePromoInfos:
         infos = self._parse(data, today)
         assert len(infos) == 2
 
+    def test_doubleheader_same_name_kept_separate(self):
+        """Task 4 carry-forward pin (Task 1 review): a doubleheader whose
+        TWO games offer the identically-named promo must NOT collapse into
+        one `PromoInfo` — `_dedupe_indices` runs PER GAME (this function's
+        own per-`g` loop), never across games sharing a date, unlike
+        `_parse_home_games`'s date-level merge. `MLBPromotionsMonitor.update`
+        relies on this: it scopes `_parse_promo_infos`'s full-window result
+        down to one target date and uses THAT as the card/crawl story
+        count, so a same-name doubleheader must surface as two cards, not
+        a silently-deduped one."""
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Bobblehead Night")],
+                game_time="17:05:00Z",
+            ),
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Bobblehead Night")],
+                game_time="23:05:00Z",
+            ),
+        )
+        infos = self._parse(data, today)
+        assert len(infos) == 2
+        assert all(i.name == "Bobblehead Night" for i in infos)
+        assert {i.time_label for i in infos} == {"1:05", "7:05"}
+
+    def test_date_label_respects_official_date_across_utc_boundary(self):
+        """Task 4 carry-forward pin (Task 1 review): `officialDate` and a
+        naive UTC-calendar-date reading of `gameDate` can disagree across
+        midnight UTC. A late first pitch — 10:15pm July 18 Eastern — has
+        `gameDate="2026-07-19T02:15:00Z"` (already past midnight UTC) while
+        MLB's own `officialDate` still says "2026-07-18" (the LOCAL game
+        day). `_game_local_date` (which this parse's `date_label`/
+        `game_date` both route through) must keep preferring `officialDate`
+        over a naive UTC-date slice of `gameDate` — otherwise a promo at a
+        late-starting home game would mislabel as "tomorrow" (or fail the
+        "TODAY" match) purely from the UTC day-rollover.
+
+        Built directly (not via `make_rich_game`, whose `gameDate` is
+        always the SAME calendar date as `officialDate` by construction) so
+        the two fields can genuinely diverge.
+        """
+        today = dt.date(2026, 7, 18)
+        g = {
+            "officialDate": "2026-07-18",
+            "gameDate": "2026-07-19T02:15:00Z",  # UTC calendar date: the 19th
+            "teams": {
+                "home": {"team": {"id": 141}},
+                "away": {"team": {"id": 999, "abbreviation": "NYY"}},
+            },
+            "promotions": [raw_promo("Fireworks Night")],
+        }
+        infos = self._parse(make_schedule(g), today)
+        assert len(infos) == 1
+        assert infos[0].game_date == "2026-07-18"
+        assert infos[0].date_label == "TODAY"
+        # Sanity: the local WALL-CLOCK time is late evening on the 18th,
+        # not the UTC-date's 2am — confirms the divergence is real, not an
+        # accidental same-day fixture.
+        assert infos[0].time_label == "10:15"
+        assert infos[0].am_pm == "PM"
+
 
 def gp(day, promos):
     """GamePromos in June 2026 shorthand."""
@@ -774,7 +840,9 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        texts = [t for t, _ in widget.feed_stories[0].segments]
+        # feed_stories now holds MLBPromoCard (Task 4) — .legacy is the
+        # per-promo SegmentMessage the scale<=1 draw path forwards to.
+        texts = [t for t, _ in widget.feed_stories[0].legacy.segments]
         assert texts == ["TOR ", "Today · ", "Loonie Dogs Night"]
         assert widget.feed_title is not None
 
@@ -786,7 +854,7 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        texts = [t for t, _ in widget.feed_stories[0].segments]
+        texts = [t for t, _ in widget.feed_stories[0].legacy.segments]
         assert texts[0] == "TOR "
         assert texts[1] == f"{future.strftime('%b %-d')} · "
 
@@ -855,6 +923,127 @@ class TestUpdate:
         assert matching, f"expected INFO log; got {[r.message for r in caplog.records]}"
 
 
+class TestPromoCardStoryBuild:
+    """Task 4: `update()` builds one `MLBPromoCard` per displayed promo,
+    `legacy` (the SegmentMessage) and `promo` (the `PromoInfo`) paired 1:1
+    from a SINGLE ordered pass — `highlight`/`limit` apply identically to
+    both views by construction (Task 1's report flagged `self._promos` as
+    un-highlighted/un-limited; this is the fix)."""
+
+    def _widget(self, schedule_payload, **kwargs):
+        widget = make_widget(
+            session=make_session({"hydrate=game(promotions)": schedule_payload}),
+            **kwargs,
+        )
+        widget._tz = NY
+        return widget
+
+    async def test_feed_stories_are_promo_cards(self):
+        from led_ticker_baseball._promo_card import MLBPromoCard
+
+        patcher, today = _freeze_today()
+        widget = self._widget(
+            make_schedule(
+                make_rich_game(
+                    141, today.isoformat(), promos=[raw_promo("Loonie Dogs Night")]
+                )
+            )
+        )
+        with patcher:
+            await widget.update()
+        assert len(widget.feed_stories) == 1
+        card = widget.feed_stories[0]
+        assert isinstance(card, MLBPromoCard)
+        assert card.story_index == 0
+        assert card.story_total == 1
+        assert card.promo.name == "Loonie Dogs Night"
+
+    async def test_promos_field_matches_feed_stories_order(self):
+        """`self._promos` (Task 1) must line up 1:1, in order, with the
+        `.promo` each `MLBPromoCard` in `feed_stories` carries — no
+        index-guessing between the two."""
+        patcher, today = _freeze_today()
+        widget = self._widget(
+            make_schedule(
+                make_rich_game(
+                    141,
+                    today.isoformat(),
+                    promos=[
+                        raw_promo("Loonie Dogs Night"),
+                        raw_promo("Pride Night"),
+                    ],
+                )
+            )
+        )
+        with patcher:
+            await widget.update()
+        assert len(widget._promos) == 2
+        assert len(widget.feed_stories) == 2
+        for info, card in zip(widget._promos, widget.feed_stories, strict=True):
+            assert card.promo is info
+
+    async def test_highlight_sorts_first_in_both_legacy_and_promo_view(self):
+        patcher, today = _freeze_today()
+        widget = self._widget(
+            make_schedule(
+                make_rich_game(
+                    141,
+                    today.isoformat(),
+                    promos=[
+                        raw_promo("Pride Night"),
+                        raw_promo("Loonie Dogs Night"),
+                    ],
+                )
+            ),
+            highlight=["loonie"],
+        )
+        with patcher:
+            await widget.update()
+        first = widget.feed_stories[0]
+        legacy_texts = [t for t, _ in first.legacy.segments]
+        assert legacy_texts[-1] == "Loonie Dogs Night"
+        assert first.promo.name == "Loonie Dogs Night"
+        assert widget._promos[0].name == "Loonie Dogs Night"
+
+    async def test_limit_caps_both_legacy_and_promo_view(self):
+        patcher, today = _freeze_today()
+        widget = self._widget(
+            make_schedule(
+                make_rich_game(
+                    141,
+                    today.isoformat(),
+                    promos=[
+                        raw_promo("Loonie Dogs Night"),
+                        raw_promo("Pride Night"),
+                    ],
+                )
+            ),
+            limit=1,
+        )
+        with patcher:
+            await widget.update()
+        assert len(widget.feed_stories) == 1
+        assert len(widget._promos) == 1
+        assert widget.feed_stories[0].story_total == 1
+
+    async def test_layout_and_padding_threaded_through_to_cards(self):
+        patcher, today = _freeze_today()
+        widget = self._widget(
+            make_schedule(
+                make_rich_game(
+                    141, today.isoformat(), promos=[raw_promo("Loonie Dogs Night")]
+                )
+            ),
+            layout="ticker",
+            padding=10,
+        )
+        with patcher:
+            await widget.update()
+        card = widget.feed_stories[0]
+        assert card.cfg_layout == "ticker"
+        assert card.padding == 10
+
+
 class TestValidateConfig:
     def _validate(self, cfg):
         from led_ticker_baseball.promotions import MLBPromotionsMonitor
@@ -890,6 +1079,23 @@ class TestValidateConfig:
     def test_messages_returned_not_raised(self):
         msgs = self._validate({"team": "TOR", "limit": -1, "filter": "x"})
         assert len(msgs) == 2
+
+    def test_default_layout_passes(self):
+        assert self._validate({"team": "TOR"}) == []
+
+    def test_auto_ticker_card_all_pass(self):
+        for layout in ("auto", "ticker", "card"):
+            assert self._validate({"team": "TOR", "layout": layout}) == []
+
+    def test_invalid_layout_rejected(self):
+        msgs = self._validate({"team": "TOR", "layout": "scoreboard"})
+        assert len(msgs) == 1
+        assert "layout" in msgs[0]
+
+    def test_invalid_layout_suggests_close_match(self):
+        msgs = self._validate({"team": "TOR", "layout": "crad"})
+        assert len(msgs) == 1
+        assert "Did you mean 'card'?" in msgs[0]
 
 
 class TestStart:

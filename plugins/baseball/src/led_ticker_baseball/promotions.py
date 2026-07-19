@@ -7,11 +7,13 @@ how many hot dogs were eaten.
 """
 
 import contextlib
+import difflib
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Self
+from typing import Any, Self, TypeVar
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -29,6 +31,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
     MLB_API,
@@ -40,6 +43,17 @@ from led_ticker_baseball.teams import (
 logger: logging.Logger = logging.getLogger(__name__)
 
 _INTERVAL_SIX_HOURS: int = 21600
+
+# Supported values for MLBPromotionsMonitor.layout — mirrors the
+# scores.py/standings.py precedent (each widget keeps its own local
+# validate_config tuple rather than importing a shared one; see those
+# modules' own comments for why). "auto" resolves per-sign at draw time via
+# `layouts.resolve_promo_layout` (bigsign -> held card, longboi -> hires
+# crawl); "ticker"/"card" pin one shape explicitly at scale > 1. scale <= 1
+# always forwards to the legacy SegmentMessage regardless of this value.
+_PROMO_VALID_LAYOUTS: tuple[str, ...] = ("auto", "ticker", "card")
+
+_PromoT = TypeVar("_PromoT")
 
 # "Loonie Dogs Night presented by Schneiders" → "Loonie Dogs Night"
 _SPONSOR_RE: re.Pattern[str] = re.compile(
@@ -182,12 +196,13 @@ class MLBPromotionsMonitor:
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
+    layout: str = attrs.field(default="auto", kw_only=True)
     _team_id: int = attrs.field(init=False, default=0)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
     feed_title: TickerMessage | SegmentMessage | None = attrs.field(
         init=False, default=None
     )
-    feed_stories: list[TickerMessage | SegmentMessage] = attrs.field(
+    feed_stories: list[TickerMessage | SegmentMessage | MLBPromoCard] = attrs.field(
         init=False, factory=list
     )
     _promos: list[PromoInfo] = attrs.field(init=False, factory=list)
@@ -205,6 +220,18 @@ class MLBPromotionsMonitor:
         limit = cfg.get("limit", 0)
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
             msgs.append(f"promotions limit={limit!r} must be a non-negative integer.")
+
+        layout = cfg.get("layout", "auto")
+        if layout not in _PROMO_VALID_LAYOUTS:
+            close = difflib.get_close_matches(
+                str(layout), _PROMO_VALID_LAYOUTS, n=1, cutoff=0.5
+            )
+            suggestion = f" Did you mean {close[0]!r}?" if close else ""
+            valid = ", ".join(repr(v) for v in _PROMO_VALID_LAYOUTS)
+            msgs.append(
+                f"promotions layout={layout!r} is not valid. "
+                f"Choose one of: {valid}.{suggestion}"
+            )
 
         for key in ("filter", "highlight"):
             if key not in cfg:
@@ -267,7 +294,8 @@ class MLBPromotionsMonitor:
             async with self.session.get(url) as resp:
                 data = await resp.json()
             games, had_games = self._parse_home_games(data, tz)
-            self._promos = self._parse_promo_infos(data, tz, today)
+            all_infos = self._parse_promo_infos(data, tz, today)
+            self._promos = all_infos
         except Exception:
             logger.exception("MLB Promotions API error for %s", self.team)
             self._set_error_state()
@@ -284,7 +312,41 @@ class MLBPromotionsMonitor:
             self._set_next_home_state(games[0].game_date, today)
             return
 
-        self.feed_stories = self._build_promo_stories(target, today)
+        # Scope the richer structured parse (all_infos, whole lookahead
+        # window) down to the SAME date `_pick_target` picked — see
+        # `_build_promo_card_stories`'s docstring for why this scoping
+        # (rather than a separate re-parse) is what keeps the legacy
+        # SegmentMessage story order and the PromoInfo/card order aligned.
+        target_infos = [
+            p for p in all_infos if p.game_date == target.game_date.isoformat()
+        ]
+        if not target_infos:
+            # Defensive only: _pick_target found this date via the
+            # date-merged/deduped name view (_parse_home_games); the
+            # per-game view (_parse_promo_infos) filters with the same
+            # keyword match, so it should never come up empty here. Degrade
+            # the same way an unmatched date would rather than build a
+            # zero-story rotation.
+            self._set_next_home_state(target.game_date, today)
+            return
+
+        label = self._promo_line_date_label(target.game_date, today)
+        legacy_msgs, ordered_infos = self._build_promo_card_stories(target_infos, label)
+        self._promos = ordered_infos
+        story_total = len(ordered_infos)
+        self.feed_stories = [
+            MLBPromoCard(
+                promo=info,
+                story_index=i,
+                story_total=story_total,
+                legacy=legacy_msgs[i],
+                cfg_layout=self.layout,
+                padding=self.padding,
+                bg_color=self.bg_color,
+                font_color=self.font_color,
+            )
+            for i, info in enumerate(ordered_infos)
+        ]
         logger.info(
             "MLB Promotions %s updated: %d stories",
             self.team,
@@ -398,6 +460,46 @@ class MLBPromotionsMonitor:
                 return GamePromos(game_date=game.game_date, promos=matches)
         return None
 
+    def _order_and_limit(
+        self, items: list[_PromoT], key: Callable[[_PromoT], str]
+    ) -> tuple[list[_PromoT], list[_PromoT]]:
+        """Stable partition (highlight-matches first) then `self.limit`
+        truncation — the ONE implementation shared by the legacy
+        SegmentMessage builder (`_build_promo_stories`, `list[str]`) and the
+        card/crawl `PromoInfo` builder (`_build_promo_card_stories`), so
+        `highlight`/`limit` can never apply differently to the two story
+        shapes (Task 1's report flagged `self._promos` as un-highlighted
+        and un-limited — this closes that gap by construction rather than
+        by re-deriving the ordering twice).
+
+        `key` extracts the text to match against `self.highlight`;
+        membership below uses full VALUE equality on the item itself (not
+        identity or a set of `id()`s) — correct even when two items share
+        the same `key()` result but differ elsewhere (e.g. a doubleheader's
+        two games offering the identically-named promo: both `PromoInfo`s
+        match `_match_any` the same way and both partition into
+        `highlighted` together; neither collapses into the other since
+        they're never treated as interchangeable, just co-classified).
+        Returns `(ordered, highlighted)` — callers use membership in
+        `highlighted` to color the matching lines/cards.
+        """
+        highlighted = [it for it in items if _match_any(key(it), self.highlight)]
+        rest = [it for it in items if it not in highlighted]
+        ordered = highlighted + rest
+        if self.limit > 0:
+            ordered = ordered[: self.limit]
+        return ordered, highlighted
+
+    def _promo_line_date_label(self, game_date: date, today: date) -> str:
+        """'Today' or e.g. 'Jun 23' — the legacy SegmentMessage's date
+        lead-in. Deliberately a DIFFERENT format from `PromoInfo.date_label`
+        ("TODAY" / "FRI JUL 24", uppercase — feeds the card/crawl
+        renderers, which upper-case at render time per the handoff's
+        all-caps fixtures); this is the pre-Phase-3 ticker-text format,
+        unchanged.
+        """
+        return "Today" if game_date == today else game_date.strftime("%b %-d")
+
     def _build_promo_stories(
         self, target: GamePromos, today: date
     ) -> list[TickerMessage | SegmentMessage]:
@@ -409,21 +511,13 @@ class MLBPromotionsMonitor:
         sort first; ``limit`` truncates AFTER that sort so highlights are
         never the lines dropped.
         """
-        label = (
-            "Today"
-            if target.game_date == today
-            else target.game_date.strftime("%b %-d")
-        )
+        label = self._promo_line_date_label(target.game_date, today)
         team_c = _team_color(self.team)
         date_c = make_color(150, 150, 150)  # grey — date label
         highlight_c = make_color(255, 200, 60)  # amber — highlighted promo
         body_c = self._plain_body_color()
 
-        highlighted = [p for p in target.promos if _match_any(p, self.highlight)]
-        rest = [p for p in target.promos if p not in highlighted]
-        ordered = highlighted + rest
-        if self.limit > 0:
-            ordered = ordered[: self.limit]
+        ordered, highlighted = self._order_and_limit(target.promos, key=lambda n: n)
 
         return [
             SegmentMessage(
@@ -442,6 +536,46 @@ class MLBPromotionsMonitor:
             )
             for name in ordered
         ]
+
+    def _build_promo_card_stories(
+        self, infos: list[PromoInfo], label: str
+    ) -> tuple[list[SegmentMessage], list[PromoInfo]]:
+        """One legacy SegmentMessage + one `PromoInfo`, per displayed promo,
+        built from a SINGLE ordered pass over `infos` — the pairing
+        `MLBPromoCard` needs (`legacy` at scale<=1, `promo` at scale>1) can
+        never drift apart because both come from the same `ordered` list at
+        the same index, rather than being computed separately and zipped
+        by position after the fact.
+
+        `infos` must already be scoped to the picked target date (see
+        `update()` — this method only orders/limits within that date, it
+        does not re-scope across dates). `label` is the legacy line's date
+        lead-in (`_promo_line_date_label`'s output for that date) — passed
+        in rather than recomputed here since every entry in `infos` shares
+        the same target date already.
+        """
+        team_c = _team_color(self.team)
+        date_c = make_color(150, 150, 150)  # grey — date label
+        highlight_c = make_color(255, 200, 60)  # amber — highlighted promo
+        body_c = self._plain_body_color()
+
+        ordered, highlighted = self._order_and_limit(infos, key=lambda p: p.name)
+
+        legacy = [
+            SegmentMessage(
+                [
+                    (f"{self.team} ", team_c),
+                    (f"{label} · ", date_c),
+                    (info.name, highlight_c if info in highlighted else body_c),
+                ],
+                center=True,
+                bg_color=self.bg_color,
+                font=self.font,
+                font_color=self.font_color,
+            )
+            for info in ordered
+        ]
+        return legacy, ordered
 
     def _set_title(self) -> None:
         """Team-colored '<Team> Promos' title, or the configured override."""
