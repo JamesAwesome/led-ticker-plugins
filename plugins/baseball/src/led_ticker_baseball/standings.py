@@ -341,7 +341,7 @@ class MLBStandingsMonitor:
     ) -> list[TickerMessage | SegmentMessage | MLBStandingsBoard]:
         """layout="ticker": today's per-team SegmentMessage rows, unchanged —
         top N teams, then tracked teams not already in the top N."""
-        stories: list[TickerMessage | SegmentMessage] = []
+        stories: list[TickerMessage | SegmentMessage | MLBStandingsBoard] = []
 
         top_names: set[str] = set()
         for standing in standings[: self.top_n]:
@@ -401,7 +401,7 @@ class MLBStandingsMonitor:
 
         tracked_abbrs = {API_TO_CANONICAL_ABBR.get(t, t) for t in self.teams}
         groups = _group_by_division(standings)
-        stories: list[MLBStandingsBoard] = []
+        stories: list[TickerMessage | SegmentMessage | MLBStandingsBoard] = []
         for division_id in divisions:
             division_rows = groups.get(division_id, [])
             rows = _select_division_rows(division_rows, self.board_rows, tracked_abbrs)
