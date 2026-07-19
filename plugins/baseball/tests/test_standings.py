@@ -1,15 +1,20 @@
 """Tests for MLB standings widget."""
 
 import unittest.mock as mock
+from zoneinfo import ZoneInfo
 
 import pytest
 from led_ticker.colors import RGB_WHITE
 from led_ticker.widgets.message import SegmentMessage, TickerMessage
 
+from led_ticker_baseball._standings_card import MLBStandingsBoard
 from led_ticker_baseball.standings import (
+    DIVISION_NAMES,
     MLBStandingsMonitor,
     TeamStanding,
     _build_standing_message,
+    _group_by_division,
+    _select_division_rows,
 )
 
 # --- TeamStanding ---
@@ -99,6 +104,21 @@ class TestMLBStandingsMonitor:
             top_n=5,
         )
         assert widget.top_n == 5
+
+    def test_default_board_rows(self):
+        widget = MLBStandingsMonitor(
+            session=mock.Mock(),
+            teams=["NYM"],
+        )
+        assert widget.board_rows == 5
+
+    def test_custom_board_rows(self):
+        widget = MLBStandingsMonitor(
+            session=mock.Mock(),
+            teams=["NYM"],
+            board_rows=3,
+        )
+        assert widget.board_rows == 3
 
     def test_default_title(self):
         widget = MLBStandingsMonitor(
@@ -270,6 +290,433 @@ class TestStandingsParsing:
         assert standings[1].name == "Dodgers"
 
 
+# --- Division-aware parsing ---
+
+
+class TestDivisionAwareParsing:
+    def _make_division_response(self, division_id, team_records):
+        """Build a mock MLB API standings response for a single division."""
+        return {
+            "records": [
+                {
+                    "division": {"id": division_id},
+                    "teamRecords": team_records,
+                }
+            ]
+        }
+
+    def _make_full_team_record(
+        self,
+        name,
+        abbreviation,
+        wins,
+        losses,
+        rank,
+        *,
+        gb="-",
+        pct="",
+        division_rank="99",
+        division_gb="-",
+        streak_code="",
+        split_records=None,
+    ):
+        # Real /standings responses omit "abbreviation" entirely (only
+        # id/name/link -- it needs a hydrate we don't request). Pass
+        # abbreviation=None to mirror that un-hydrated shape; pass a string
+        # to mirror a hydrated response that does include it.
+        team: dict = {"name": name}
+        if abbreviation:
+            team["abbreviation"] = abbreviation
+        record: dict = {
+            "team": team,
+            "wins": wins,
+            "losses": losses,
+            "sportRank": str(rank),
+            "sportGamesBack": gb,
+            "winningPercentage": pct,
+            "divisionRank": division_rank,
+            "divisionGamesBack": division_gb,
+        }
+        if streak_code:
+            record["streak"] = {"streakCode": streak_code}
+        if split_records is not None:
+            record["records"] = {"splitRecords": split_records}
+        return record
+
+    def test_all_new_fields_populate(self):
+        """Primary division-parsing fixture: mirrors the REAL (un-hydrated)
+        /standings response -- team objects carry no "abbreviation" field
+        (abbreviation=None below), so abbr must resolve via the
+        MLB_NAME_TO_ABBR name fallback. This is deliberately the shape that
+        caught the live-API bug (grey fallback chips, no abbr text) --
+        keeping it hydrated here previously masked that regression."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            201,
+            [
+                self._make_full_team_record(
+                    "Yankees",
+                    None,
+                    45,
+                    20,
+                    1,
+                    gb="-",
+                    pct=".692",
+                    division_rank="1",
+                    division_gb="-",
+                    streak_code="W3",
+                    split_records=[
+                        {"type": "lastTen", "wins": 7, "losses": 3},
+                        {"type": "home", "wins": 20, "losses": 10},
+                        {"type": "away", "wins": 25, "losses": 10},
+                    ],
+                ),
+                self._make_full_team_record(
+                    "Orioles",
+                    None,
+                    40,
+                    25,
+                    5,
+                    gb="5.0",
+                    pct=".615",
+                    division_rank="2",
+                    division_gb="3.0",
+                    streak_code="L2",
+                    split_records=[
+                        {"type": "lastTen", "wins": 4, "losses": 6},
+                        {"type": "home", "wins": 18, "losses": 12},
+                    ],
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert len(standings) == 2
+
+        yanks = next(s for s in standings if s.name == "Yankees")
+        assert yanks.abbr == "NYY"
+        assert yanks.pct == ".692"
+        assert yanks.l10 == "7-3"
+        assert yanks.streak == "W3"
+        assert yanks.division_rank == 1
+        assert yanks.division_gb == "-"
+        assert yanks.division_id == 201
+
+        os = next(s for s in standings if s.name == "Orioles")
+        assert os.abbr == "BAL"
+        assert os.pct == ".615"
+        assert os.l10 == "4-6"
+        assert os.streak == "L2"
+        assert os.division_rank == 2
+        assert os.division_gb == "3.0"
+        assert os.division_id == 201
+
+    def test_abbr_normalizes_az_to_ari(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            203,
+            [
+                self._make_full_team_record(
+                    "Diamondbacks",
+                    "AZ",
+                    40,
+                    25,
+                    5,
+                    division_rank="1",
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "ARI"
+
+    def test_hydrated_abbreviation_takes_precedence_over_name(self):
+        """When team.abbreviation IS present (a hydrated response), it is
+        used directly rather than the name-based fallback -- proves the
+        pre-existing hydrated-response path still works alongside the new
+        un-hydrated fallback below. Uses a name that ISN'T in
+        MLB_NAME_TO_ABBR so a name-lookup would fail, isolating the
+        assertion to the abbreviation-present branch."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            201,
+            [
+                self._make_full_team_record(
+                    "Not A Real Team Name",
+                    "NYY",
+                    45,
+                    20,
+                    1,
+                    division_rank="1",
+                ),
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "NYY"
+
+    def test_abbr_falls_back_to_name_lookup_when_abbreviation_absent(self):
+        """Regression: the real (un-hydrated) MLB /standings response does
+        NOT include team.abbreviation -- only id/name/link (verified via
+        live-API gif validation). _parse_standings must still resolve abbr
+        from the team name via MLB_NAME_TO_ABBR."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            204,
+            [
+                {
+                    "team": {
+                        "id": 143,
+                        "name": "Phillies",
+                        "link": "/api/v1/teams/143",
+                    },
+                    "wins": 40,
+                    "losses": 25,
+                    "sportRank": "3",
+                    "sportGamesBack": "5.0",
+                    "divisionRank": "1",
+                    "divisionGamesBack": "-",
+                },
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == "PHI"
+
+    def test_abbr_stays_empty_when_name_unknown_and_no_abbreviation(self):
+        """A name absent from MLB_NAME_TO_ABBR (and no abbreviation in the
+        payload) yields "" -- unchanged from prior behavior."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = self._make_division_response(
+            204,
+            [
+                {
+                    "team": {
+                        "id": 999,
+                        "name": "Some Unknown Team",
+                        "link": "/api/v1/teams/999",
+                    },
+                    "wins": 10,
+                    "losses": 10,
+                    "sportRank": "10",
+                    "sportGamesBack": "-",
+                    "divisionRank": "5",
+                    "divisionGamesBack": "-",
+                },
+            ],
+        )
+        standings = widget._parse_standings(data)
+        assert standings[0].abbr == ""
+
+    def test_missing_optional_fields_yield_defaults(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = {
+            "records": [
+                {
+                    "teamRecords": [
+                        {
+                            "team": {"name": "Mets"},
+                            "wins": 35,
+                            "losses": 30,
+                            "sportRank": "12",
+                            "sportGamesBack": "10.0",
+                        }
+                    ]
+                }
+            ]
+        }
+        standings = widget._parse_standings(data)
+        assert len(standings) == 1
+        s = standings[0]
+        # "Mets" IS in MLB_NAME_TO_ABBR, so even with no "abbreviation" key
+        # abbr now resolves via the name fallback (the live-API bug fix) --
+        # it does NOT default to "" here. See
+        # test_abbr_stays_empty_when_name_unknown_and_no_abbreviation for
+        # the true "no fallback available" default case.
+        assert s.abbr == "NYM"
+        assert s.pct == ""
+        assert s.l10 == ""
+        assert s.streak == ""
+        assert s.division_rank == 99
+        assert s.division_gb == "-"
+        assert s.division_id == 0
+
+    def test_all_five_null_fields_parse_without_raising_and_yield_defaults(self):
+        """F4: an explicit JSON null (as opposed to a MISSING key) makes
+        `.get(key, default)` return None instead of the default — a bare
+        `.get(...).get(...)` chain then raises AttributeError, and a bare
+        `str(tr.get(...))` renders the literal text "None" on the panel.
+        Covers all five nulls named in phase2-final-review.md F4:
+        streak, records, division, winningPercentage, divisionGamesBack."""
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        data = {
+            "records": [
+                {
+                    "division": None,
+                    "teamRecords": [
+                        {
+                            "team": {"name": "Mets"},
+                            "wins": 35,
+                            "losses": 30,
+                            "sportRank": "12",
+                            "sportGamesBack": "10.0",
+                            "winningPercentage": None,
+                            "divisionGamesBack": None,
+                            "streak": None,
+                            "records": None,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        standings = widget._parse_standings(data)  # must not raise
+
+        assert len(standings) == 1
+        s = standings[0]
+        assert s.division_id == 0
+        assert s.pct == ""
+        assert s.division_gb == "-"
+        assert s.streak == ""
+        assert s.l10 == ""
+
+        for field in ("pct", "l10", "streak", "division_gb", "games_back", "abbr"):
+            value = getattr(s, field)
+            assert "None" not in str(value), (
+                f"{field}={value!r} leaked the literal string 'None'"
+            )
+
+    def test_legacy_fields_untouched(self):
+        """Existing legacy fields keep working when constructed positionally."""
+        s = TeamStanding(name="Yankees", wins=45, losses=20, rank=1, games_back="-")
+        assert s.abbr == ""
+        assert s.pct == ""
+        assert s.l10 == ""
+        assert s.streak == ""
+        assert s.division_rank == 99
+        assert s.division_gb == "-"
+        assert s.division_id == 0
+
+
+class TestGroupByDivision:
+    def test_groups_and_sorts_by_division_rank(self):
+        standings = [
+            TeamStanding(
+                name="Orioles",
+                wins=41,
+                losses=24,
+                rank=3,
+                games_back="4.0",
+                division_id=201,
+                division_rank=2,
+            ),
+            TeamStanding(
+                name="Yankees",
+                wins=45,
+                losses=20,
+                rank=1,
+                games_back="-",
+                division_id=201,
+                division_rank=1,
+            ),
+            TeamStanding(
+                name="Dodgers",
+                wins=42,
+                losses=23,
+                rank=2,
+                games_back="3.0",
+                division_id=203,
+                division_rank=1,
+            ),
+        ]
+        groups = _group_by_division(standings)
+        assert set(groups.keys()) == {201, 203}
+        assert [s.name for s in groups[201]] == ["Yankees", "Orioles"]
+        assert [s.name for s in groups[203]] == ["Dodgers"]
+
+    def test_excludes_division_id_zero(self):
+        standings = [
+            TeamStanding(
+                name="Yankees",
+                wins=45,
+                losses=20,
+                rank=1,
+                games_back="-",
+                division_id=0,
+                division_rank=1,
+            ),
+        ]
+        groups = _group_by_division(standings)
+        assert groups == {}
+
+    def test_empty_input(self):
+        assert _group_by_division([]) == {}
+
+
+class TestDivisionNames:
+    def test_all_six_divisions_present(self):
+        assert DIVISION_NAMES == {
+            200: "AL WEST",
+            201: "AL EAST",
+            202: "AL CENTRAL",
+            203: "NL WEST",
+            204: "NL EAST",
+            205: "NL CENTRAL",
+        }
+
+
+# --- _select_division_rows (board_rows + tracked-team pinning) ---
+
+
+def _at_division_rank(division_rank, abbr=None):
+    abbr = abbr or f"T{division_rank}"
+    return TeamStanding(
+        name=abbr,
+        wins=50 - division_rank,
+        losses=20 + division_rank,
+        rank=division_rank,
+        games_back="-",
+        abbr=abbr,
+        division_rank=division_rank,
+        division_id=201,
+    )
+
+
+class TestSelectDivisionRows:
+    """Rank digit shown on the board is always the TRUE division_rank —
+    never re-numbered — so the assertions below check `division_rank`
+    directly, not list position."""
+
+    def _division(self, n=5):
+        return [_at_division_rank(i) for i in range(1, n + 1)]
+
+    def test_board_rows_five_all_unchanged(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 5, {"T1"})
+        assert [r.division_rank for r in selected] == [1, 2, 3, 4, 5]
+
+    def test_tracked_already_in_top_n_is_plain_top_n(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T2"})
+        assert [r.division_rank for r in selected] == [1, 2, 3]
+
+    def test_single_tracked_team_below_cutoff_is_pinned(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T5"})
+        assert [r.division_rank for r in selected] == [1, 2, 5]
+
+    def test_two_tracked_teams_below_cutoff_are_both_pinned(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, {"T1", "T4", "T5"})
+        assert [r.division_rank for r in selected] == [1, 4, 5]
+
+    def test_no_tracked_teams_is_plain_top_n(self):
+        division = self._division(5)
+        selected = _select_division_rows(division, 3, set())
+        assert [r.division_rank for r in selected] == [1, 2, 3]
+
+    def test_division_smaller_than_board_rows_returns_all_teams(self):
+        division = self._division(2)
+        selected = _select_division_rows(division, 5, {"T1"})
+        assert [r.division_rank for r in selected] == [1, 2]
+
+
 # --- Offseason ---
 
 
@@ -397,7 +844,10 @@ class TestOffseason:
 
     @pytest.mark.asyncio
     async def test_update_skips_offseason_when_games_played(self):
-        # Some non-zero records → normal path, NOT offseason.
+        # Some non-zero records → normal path, NOT offseason. This fixture
+        # carries no division data, so under the "auto" default the board
+        # path resolves zero divisions and falls back to legacy ticker rows
+        # — feed_stories must still be non-empty.
         session = self._make_session(all_zero=False)
         widget = MLBStandingsMonitor(session=session, teams=["NYM"], top_n=1)
         widget._tz = __import__("zoneinfo").ZoneInfo("America/New_York")
@@ -532,3 +982,511 @@ class TestStart:
         assert widget.feed_stories  # update() ran
         loop.assert_called_once_with(widget, 88)
         spawn.assert_called_once_with("LOOP")
+
+
+# --- layout field + validate_config ---
+
+
+class TestStandingsLayoutField:
+    def test_default_is_auto(self):
+        widget = MLBStandingsMonitor(session=mock.Mock(), teams=["NYM"])
+        assert widget.layout == "auto"
+
+    def test_accepts_ticker_and_board(self):
+        for layout in ("auto", "ticker", "board"):
+            widget = MLBStandingsMonitor(
+                session=mock.Mock(), teams=["NYM"], layout=layout
+            )
+            assert widget.layout == layout
+
+
+class TestStandingsValidateConfig:
+    """Mirrors MLBScoreMonitor.validate_config's layout-value guardrail
+    pattern (see test_scores.py TestScoresValidateConfig)."""
+
+    def test_valid_layouts_pass(self):
+        for layout in ("auto", "ticker", "board"):
+            assert MLBStandingsMonitor.validate_config({"layout": layout}) == []
+
+    def test_default_layout_passes(self):
+        assert MLBStandingsMonitor.validate_config({}) == []
+
+    def test_invalid_layout_suggests_close_match(self):
+        msgs = MLBStandingsMonitor.validate_config({"layout": "bord"})
+        assert len(msgs) == 1
+        assert "Did you mean 'board'?" in msgs[0]
+        assert "'auto'" in msgs[0]
+        assert "'ticker'" in msgs[0]
+        assert "'board'" in msgs[0]
+
+    def test_invalid_layout_no_close_match(self):
+        msgs = MLBStandingsMonitor.validate_config({"layout": "zzzzz"})
+        assert len(msgs) == 1
+        assert "is not valid" in msgs[0]
+        assert "Did you mean" not in msgs[0]
+
+    def test_callable_as_classmethod(self):
+        assert MLBStandingsMonitor.validate_config({"layout": "auto"}) == []
+
+
+class TestStandingsValidateConfigBoardRows:
+    """`board_rows` must be an int in 3..5 — bool explicitly excluded even
+    though it's an int subclass (mirrors core's `font_threshold`
+    convention)."""
+
+    def test_valid_board_rows_pass(self):
+        for n in (3, 4, 5):
+            assert MLBStandingsMonitor.validate_config({"board_rows": n}) == []
+
+    def test_default_omitted_passes(self):
+        assert MLBStandingsMonitor.validate_config({}) == []
+
+    def test_out_of_range_low(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 2})
+        assert len(msgs) == 1
+        assert "board_rows=2" in msgs[0]
+        assert "is not valid" in msgs[0]
+
+    def test_out_of_range_high(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 6})
+        assert len(msgs) == 1
+        assert "board_rows=6" in msgs[0]
+
+    def test_bool_true_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": True})
+        assert len(msgs) == 1
+
+    def test_bool_false_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": False})
+        assert len(msgs) == 1
+
+    def test_string_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": "3"})
+        assert len(msgs) == 1
+
+    def test_float_rejected(self):
+        msgs = MLBStandingsMonitor.validate_config({"board_rows": 3.0})
+        assert len(msgs) == 1
+
+
+# --- update() layout="auto"/"board" wiring ---
+
+
+def _division_team_record(
+    name, abbreviation, wins, losses, rank, division_rank, division_gb="-"
+):
+    return {
+        "team": {"name": name, "abbreviation": abbreviation},
+        "wins": wins,
+        "losses": losses,
+        "sportRank": str(rank),
+        "sportGamesBack": "-",
+        "divisionRank": str(division_rank),
+        "divisionGamesBack": division_gb,
+    }
+
+
+def _two_division_session():
+    """API response spanning two divisions: AL EAST (201, 6 teams — to
+    verify the top-5 cap) and NL WEST (203, 2 teams)."""
+    al_east_teams = [
+        ("Yankees", "NYY"),
+        ("Red Sox", "BOS"),
+        ("Orioles", "BAL"),
+        ("Rays", "TB"),
+        ("Blue Jays", "TOR"),
+        ("Guardians", "CLE"),  # 6th team — must be excluded by the top-5 cap
+    ]
+    nl_west_teams = [
+        ("Dodgers", "LAD"),
+        ("Padres", "SD"),
+    ]
+    records = [
+        {
+            "division": {"id": 201},
+            "teamRecords": [
+                _division_team_record(name, abbr, 50 - i, 20 + i, i + 1, i + 1)
+                for i, (name, abbr) in enumerate(al_east_teams)
+            ],
+        },
+        {
+            "division": {"id": 203},
+            "teamRecords": [
+                _division_team_record(name, abbr, 48 - i, 22 + i, i + 1, i + 1)
+                for i, (name, abbr) in enumerate(nl_west_teams)
+            ],
+        },
+    ]
+
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        if "/standings" in url:
+            resp.json.return_value = {"records": records}
+        else:
+            resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStandingsUpdateLayoutTicker:
+    """layout="ticker" must build the legacy story shape exactly as
+    before — untouched by the board wiring."""
+
+    @pytest.mark.asyncio
+    async def test_ticker_builds_legacy_segment_messages(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY", "LAD"],
+            layout="ticker",
+            top_n=1,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert widget.feed_stories
+        assert all(isinstance(s, SegmentMessage) for s in widget.feed_stories)
+        assert not any(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+
+
+class TestStandingsUpdateLayoutAutoAndBoard:
+    @pytest.mark.parametrize("layout", ["auto", "board"])
+    @pytest.mark.asyncio
+    async def test_builds_one_board_per_tracked_division_in_config_order(self, layout):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY", "LAD"],
+            layout=layout,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 2
+        assert all(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+        assert widget.feed_stories[0].division_name == "AL EAST"
+        assert widget.feed_stories[1].division_name == "NL WEST"
+
+    @pytest.mark.asyncio
+    async def test_rows_capped_at_five(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
+        assert len(al_east.rows) == 5
+        assert len(al_east.legacy_rows) == 5
+
+    @pytest.mark.asyncio
+    async def test_board_rows_forwarded_to_board_and_caps_rows(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+            board_rows=3,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
+        assert al_east.board_rows == 3
+        assert len(al_east.rows) == 3
+        assert len(al_east.legacy_rows) == 3
+
+    @pytest.mark.asyncio
+    async def test_board_rows_pins_tracked_team_outside_cutoff(self):
+        # AL EAST fixture (_two_division_session): NYY div_rank1, TOR div_rank5.
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY", "TOR"],
+            layout="board",
+            board_rows=3,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        al_east = next(s for s in widget.feed_stories if s.division_name == "AL EAST")
+        assert [r.division_rank for r in al_east.rows] == [1, 2, 5]
+
+    @pytest.mark.asyncio
+    async def test_dedups_tracked_teams_in_same_division(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY", "BOS"],  # both AL EAST
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL EAST"
+
+    @pytest.mark.asyncio
+    async def test_config_order_preserved_regardless_of_team_rank(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["LAD", "NYY"],  # NL WEST first in config order
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert [s.division_name for s in widget.feed_stories] == [
+            "NL WEST",
+            "AL EAST",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_empty_teams_falls_back_to_overall_leader_division(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=[],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL EAST"  # overall leader
+
+    @pytest.mark.asyncio
+    async def test_feed_title_unchanged(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+            title="MLB Standings",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert isinstance(widget.feed_title, TickerMessage)
+        assert widget.feed_title.text == "MLB Standings"
+
+    @pytest.mark.asyncio
+    async def test_legacy_rows_built_from_same_rows(self):
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["LAD"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        board = widget.feed_stories[0]
+        assert board.division_name == "NL WEST"
+        assert len(board.legacy_rows) == len(board.rows) == 2
+        assert any("Dodgers" in t for t, _ in board.legacy_rows[0].segments)
+
+
+def _divisionless_session():
+    """Real (non-zero) records but NO division data anywhere — the API
+    shape that parses every TeamStanding with division_id == 0."""
+    records = [
+        {
+            # no "division" key at all
+            "teamRecords": [
+                {
+                    "team": {"name": "Yankees"},
+                    "wins": 45,
+                    "losses": 20,
+                    "sportRank": "1",
+                    "sportGamesBack": "-",
+                },
+                {
+                    "team": {"name": "Mets"},
+                    "wins": 40,
+                    "losses": 25,
+                    "sportRank": "5",
+                    "sportGamesBack": "5.0",
+                },
+            ]
+        }
+    ]
+
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        if "/standings" in url:
+            resp.json.return_value = {"records": records}
+        else:
+            resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStandingsBoardEmptyFallback:
+    """P0: the auto default must never blank the sign. When the board path
+    resolves zero divisions (a divisionless API response, division_id == 0
+    everywhere), update() falls back to the legacy ticker rows and logs one
+    INFO line."""
+
+    @pytest.mark.asyncio
+    async def test_auto_divisionless_falls_back_to_ticker_rows(self):
+        widget = MLBStandingsMonitor(
+            session=_divisionless_session(),
+            teams=["NYM"],
+            layout="auto",
+            top_n=2,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert widget.feed_stories, "auto + divisionless data blanked the sign"
+        assert all(isinstance(s, SegmentMessage) for s in widget.feed_stories)
+        assert not any(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+
+    @pytest.mark.asyncio
+    async def test_fallback_logs_info(self, caplog):
+        import logging
+
+        widget = MLBStandingsMonitor(
+            session=_divisionless_session(),
+            teams=["NYM"],
+            layout="auto",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        with caplog.at_level(logging.INFO, logger="led_ticker_baseball.standings"):
+            await widget.update()
+
+        assert any(
+            "falling back to ticker" in r.message
+            for r in caplog.records
+            if r.levelno == logging.INFO
+        ), f"expected fallback INFO log; got {[r.message for r in caplog.records]}"
+
+    @pytest.mark.asyncio
+    async def test_board_layout_with_divisions_does_not_fall_back(self):
+        # Sanity inverse: division data present → boards, no fallback.
+        widget = MLBStandingsMonitor(
+            session=_two_division_session(),
+            teams=["NYY"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert all(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+
+
+def _ath_config_session():
+    """API response where the Athletics render under MLB's current
+    official abbreviation ("ATH") inside AL WEST (division 200), while the
+    OVERALL leader sits in AL EAST (division 201). Regression fixture for
+    F1: a config of teams=["ATH"] (or ["AZ"] for the D-backs) must resolve
+    the tracked team's OWN division board, not silently miss and fall back
+    to the leader's division — see phase2-final-review.md F1."""
+    records = [
+        {
+            "division": {"id": 201},
+            "teamRecords": [
+                _division_team_record("Yankees", "NYY", 60, 10, 1, 1),
+            ],
+        },
+        {
+            "division": {"id": 200},
+            "teamRecords": [
+                _division_team_record("Athletics", "ATH", 40, 30, 5, 1),
+            ],
+        },
+    ]
+
+    session = mock.MagicMock()
+
+    def make_ctx(url, *args, **kwargs):
+        resp = mock.AsyncMock()
+        if "/standings" in url:
+            resp.json.return_value = {"records": records}
+        else:
+            resp.json.return_value = {}
+        ctx = mock.AsyncMock()
+        ctx.__aenter__.return_value = resp
+        return ctx
+
+    session.get.side_effect = make_ctx
+    return session
+
+
+class TestStandingsConfigAbbrCanonicalization:
+    """F1: config `teams` entries spelled with MLB's current official
+    abbreviation (ATH, AZ) must canonicalize to the plugin's codes (OAK,
+    ARI) — the same normalization scores.py/statcast.py apply — wherever
+    tracked teams are matched against parsed standings. Without it, an
+    "ATH"/"AZ" config silently misses `standings_by_abbr` (whose keys are
+    always canonical) and, under the board layout, confidently renders a
+    DIFFERENT division's board instead."""
+
+    @pytest.mark.asyncio
+    async def test_board_layout_resolves_ath_to_oaks_own_division(self):
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="board",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL WEST"
+
+    @pytest.mark.asyncio
+    async def test_auto_layout_resolves_ath_not_leader_fallback(self):
+        # Same fixture under the default "auto" layout: must resolve AL
+        # WEST (the Athletics' own division), never AL EAST (the overall
+        # leader's division, which is what the pre-fix fallback produced).
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="auto",
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].division_name == "AL WEST"
+
+    @pytest.mark.asyncio
+    async def test_ticker_layout_resolves_ath_tracked_row(self):
+        # Legacy tracked-team path (layout="ticker") has the same
+        # standings_by_abbr lookup — cover it too.
+        widget = MLBStandingsMonitor(
+            session=_ath_config_session(),
+            teams=["ATH"],
+            layout="ticker",
+            top_n=0,
+        )
+        widget._tz = ZoneInfo("America/New_York")
+
+        await widget.update()
+
+        assert len(widget.feed_stories) == 1
+        texts = [t for t, _ in widget.feed_stories[0].segments]
+        assert any("Athletics" in t for t in texts)

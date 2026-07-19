@@ -1,8 +1,13 @@
 """tests/test_primitives.py — procedural primitives ARE pinned pixel-exact
-(they are deterministic; no freetype involved)."""
+(they are deterministic; no freetype involved).
+
+`draw_record` is the one exception (it composites freetype hi-res text via
+`_paint.hires`) — asserted by advance-sum and by-column color class only,
+same convention as tests/test_paint.py and the layout test suites."""
 
 from led_ticker.plugin import HeadlessBackend
 
+from led_ticker_baseball import _paint
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball import _primitives as prim
 
@@ -78,3 +83,41 @@ def test_dotted_divider_every_third_pixel():
     assert real.get_pixel(4, 31) != (0, 0, 0)
     assert real.get_pixel(5, 31) == (0, 0, 0)
     assert real.get_pixel(7, 31) != (0, 0, 0)
+
+
+def _lit(real):
+    return {xy for xy, v in real._pixels.items() if v != (0, 0, 0)}
+
+
+def test_draw_record_advance_equals_sum_of_parts():
+    real = _real(200, 32)
+    shim, _ = _paint.phys_wrap(real)
+    advance = prim.draw_record(shim, 10, 10, 12, 34, 10)
+    expected = (
+        _paint.text_width(10, "12")
+        + _paint.text_width(10, "-")
+        + _paint.text_width(10, "34")
+    )
+    assert advance == expected
+    assert advance > 0
+
+
+def test_draw_record_colors_win_dash_loss_left_to_right():
+    real = _real(200, 32)
+    shim, _ = _paint.phys_wrap(real)
+    x = 10
+    w1 = _paint.text_width(10, "12")
+    w2 = _paint.text_width(10, "-")
+    prim.draw_record(shim, x, 10, 12, 34, 10)
+    lit = _lit(real)
+
+    def _colors_in(x0, x1):
+        return {real.get_pixel(px_, y) for px_, y in lit if x0 <= px_ < x1}
+
+    win_region = _colors_in(x, x + w1)
+    dash_region = _colors_in(x + w1, x + w1 + w2)
+    loss_region = _colors_in(x + w1 + w2, x + w1 + w2 + 20)
+
+    assert (pal.WIN.red, pal.WIN.green, pal.WIN.blue) in win_region
+    assert (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue) in dash_region
+    assert (pal.LOSS.red, pal.LOSS.green, pal.LOSS.blue) in loss_region

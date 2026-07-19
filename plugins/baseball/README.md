@@ -114,7 +114,30 @@ timezone = "America/New_York"  # set to your local timezone
 
 ### `baseball.standings`
 
-Fetches overall MLB standings and scrolls them as `rank. TeamName W-L GB`, each name in its brand color. Shows the top-N plus any tracked `teams` not already in that list. Offseason-aware: before the season starts it shows `Opens Mar 27`; between the World Series and Spring Training it keeps the prior final standings.
+Fetches overall MLB standings for the divisions of your tracked `teams`. Three `layout` values:
+
+- **`layout = "auto"` (default)** — resolves per-sign, same idea as `baseball.scores`; see the resolution table below.
+- **`layout = "ticker"`** — the original behavior: scrolls `rank. TeamName W-L GB`, each name in its brand color, one row per section visit for a division's teams (top-N plus any tracked `teams` not already in that list, everywhere). Offseason-aware: before the season starts it shows `Opens Mar 27`; between the World Series and Spring Training it keeps the prior final standings.
+- **`layout = "board"`** — same as `auto`: a held physical division board (see below). Kept as an explicit synonym alongside `auto` in case a future release gives `auto` its own per-canvas resolution logic; today the two behave identically.
+
+`layout = "auto"` resolves like this:
+
+| Sign | Resolves to |
+|------|-------------|
+| scale 1 (smallsign) | One scrolling row per section visit, cycling through the division's teams — visually unchanged from the classic `ticker` look. |
+| scale>1 (bigsign, longboi) | A held division board (see columns below). |
+
+**Board columns** — bigsign (256px real width) shows rank, team chip, team, combined W-L record, GB, and streak; longboi (512px) adds PCT and L10 (split W/L instead of a combined record). Boards show up to `board_rows` rows per division (default 5). **GB on a board is DIVISION games back** (each team's distance from its own division leader) — the scrolling `ticker` rows keep the overall (league) GB instead.
+
+**Fewer rows, bigger text** — `board_rows` (3-5, default 5) controls how many rows a board shows. Dropping to 4 or 3 rows scales the text/chip size up so a smaller board still fills the panel readably; 5 rows is the original, unscaled size. Ignored by `layout = "ticker"` (it always scrolls one row per section visit regardless of `board_rows`).
+
+**Division selection** — one board per division represented in your `teams` list, in config order, deduped (tracking two teams in the same division still shows that division once). When no tracked team resolves to a division, the board falls back to the overall leader's division.
+
+**Tracked-team pinning** — when `board_rows` cuts a division down (e.g. 3 of its 5 teams), the board still always shows every tracked team in that division: it takes the top `board_rows` by division rank, then swaps in any tracked team outside that cutoff (displacing the lowest-ranked team(s) already selected). The rank digit shown is always the team's TRUE division rank — a board reading `1, 2, 5` is a normal, self-explanatory result of that swap, not a bug.
+
+**Fallback to `ticker`** — if the API response has no division data for any team (a shape the boards can't group), `auto`/`board` fall back automatically to the classic scrolling rows instead of showing nothing (logged at INFO: `standings: no divisions resolved; falling back to ticker rows`).
+
+> **Migration note:** before this release, `baseball.standings` always scrolled rows. The new default `layout = "auto"` keeps that on smallsign but switches bigsign/longboi to the held division board. Set `layout = "ticker"` explicitly to keep the old scrolling-rows behavior on every sign.
 
 ```toml
 [[playlist.section.widget]]
@@ -126,14 +149,16 @@ teams = ["NYY", "BOS"]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `teams` | list of strings | required | Tracked team abbreviations (e.g. `["NYY", "BOS"]`); always shown even outside top-N. |
-| `top_n` | int | `3` | Overall top teams to show before tracked teams. `0` = tracked only. |
+| `teams` | list of strings | required | Tracked team abbreviations (e.g. `["NYY", "BOS"]`); always shown even outside top-N, and determine which division(s) a board covers. |
+| `layout` | string | `"auto"` | `"auto"`, `"ticker"`, or `"board"` — see above. |
+| `top_n` | int | `3` | Overall top teams to show before tracked teams. `0` = tracked only. `layout = "ticker"` only — boards always show a division's full (capped) roster. |
+| `board_rows` | int | `5` | Rows per division board, 3-5. Fewer rows scale the text/chip size up. Tracked teams outside the cutoff are pinned in, displacing the lowest-ranked selected row(s); the rank digit shown is always the true division rank. `layout = "board"`/`"auto"` only — ignored by `"ticker"`. |
 | `title` | string | `"MLB Standings"` | Section header before the list. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for offseason detection / opening-day date. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each message. |
-| `bg_color` | RGB list | none | Background fill behind the standings. |
-| `font_color` | RGB list / string / table | unset | Override all text color; default keeps rank white + team brand colors. |
-| `font` | string | `"6x12"` | BDF or hires font for standings text. |
+| `bg_color` | RGB list | none | Background fill behind the standings. Applies to `layout = "ticker"` and the scale-1 legacy-row fallback; a scale>1 physical board ignores it, same as `baseball.scores`. |
+| `font_color` | RGB list / string / table | unset | Override all text color; default keeps rank white + team brand colors. Same scale-1-only scope as `bg_color` above. **Known limitation:** an animated provider (`"rainbow"`/`"color_cycle"`) renders static on `auto`/`board` layouts at scale 1 — the per-visit row cycling doesn't forward frame-advance hooks to the cycled row. Use `layout = "ticker"` for animated colors on smallsign. |
+| `font` | string | `"6x12"` | BDF or hires font for standings text. Applies to `layout = "ticker"` and to the scale-1 legacy-row fallback under `auto`/`board`; a scale>1 physical board ignores it and uses fixed design-pinned text, same as the `baseball.scores` physical renderers. |
 | `update_interval` | int | `86400` | Seconds between fetches (24 h default; standings move slowly). |
 
 ### `baseball.promotions`

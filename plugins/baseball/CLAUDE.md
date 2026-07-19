@@ -14,7 +14,7 @@ This plugin contributes, via the `led_ticker.plugins` entry point, an MLB featur
 used to live in led-ticker core (`type = "mlb"`):
 
 - `baseball.scores` — live/final/preview scores; `layout = "auto"` (default), `"ticker"`, `"scoreboard"`, or `"two_row"`. `auto` resolves per-sign (`layouts.resolve_layout`); explicit names mean what they say, with ONE width-fit guard: explicit `"scoreboard"` at scale>1 on a panel narrower than 400 physical px (bigsign) degrades to `"two_row"` instead — the physical scoreboard's hardcoded anchors assume >=400px and would otherwise silently clip the whole home side (see `layouts/resolve_layout`'s docstring). Scale 1 renders through the legacy text-glyph classes (`_scoreboard.py`, `_two_row.py`); scale>1 dispatches through `MLBGameCard` (`_card.py`) to the new physical (procedural pixel-art) renderers in `layouts/`.
-- `baseball.standings` — scrolling division standings (top-N + tracked teams), offseason-aware.
+- `baseball.standings` — MLB standings for the divisions of your tracked `teams`; `layout = "auto"` (default), `"ticker"`, or `"board"`. `ticker` is the original scrolling-rows behavior (top-N + tracked teams, everywhere); `auto`/`board` build one held physical division board per tracked division at scale>1, degrading to one legacy scrolling row per section visit at scale<=1 (same shape as `ticker`'s rows). Offseason-aware.
 - `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks.
 - `baseball.statcast` — daily Statcast superlatives (longest HR, hardest hit,
   fastest/slowest pitch), league-wide or scoped to one team's players via an
@@ -65,8 +65,11 @@ src/led_ticker_baseball/
   _paint.py       # physical-pixel hi-res paint helpers for layouts/ (phys_wrap, hires, js_round, …)
   _primitives.py  # procedural pixel-art primitives (chip/diamond/pip/dash/series_dashes), ported
                   #   coordinate-for-coordinate from design/…dc.html
-  layouts/        # new physical (scale>1) renderers: resolve_layout + crawl.py/scoreboard.py/two_row.py
-  standings.py    # baseball.standings widget (MLBStandingsMonitor); top-N + tracked teams; offseason awareness
+  layouts/        # new physical (scale>1) renderers: resolve_layout + crawl.py/scoreboard.py/two_row.py/standings_board.py
+  standings.py    # baseball.standings widget (MLBStandingsMonitor); layout="auto"/ticker/board;
+                  #   builds MLBStandingsBoard stories per division (update())
+  _standings_card.py  # MLBStandingsBoard — the scale-dispatching story: scale>1 dispatches to
+                      #   layouts/standings_board.py, scale<=1 forwards one legacy_rows[idx] per visit
   promotions.py   # baseball.promotions widget (MLBPromotionsMonitor); home-game promos; today-first + fallback states
   statcast.py     # baseball.statcast widget (MLBStatcastMonitor); Savant day-CSV superlatives; schedule-gated
   attendance.py   # baseball.attendance widget (MLBAttendanceMonitor); league superlatives + team mode; schedule-gated
@@ -133,6 +136,88 @@ dispatches to the physical renderers** in `layouts/` (`render_crawl`/`render_sco
 `layout = "scoreboard"` cannot reach that guard (though `resolve_layout` now degrades an explicit `"scoreboard"` below 400 phys px to `"two_row"` before the card ever dispatches there — see the layout-table entry above). **Physical held layouts (`scoreboard`, `two_row` at scale > 1) return `cursor = canvas.width`** — the WRAPPER's LOGICAL width (`real.width // scale`), NOT `real.width`. The engine's hold-vs-scroll decision (`cursor_pos > canvas.width`, core `ticker.py`) compares against the wrapper's logical width, so returning `real.width` (a final-review Finding-1 bug) always took the scroll branch — the panel showed a frozen card while the engine "scrolled" nowhere for the padding-to-real-width distance, then held a SECOND time. The `ticker` layout SCROLLS on every sign: at scale 1 the card forwards the legacy `SegmentMessage`'s scroll cursor unchanged (smallsign behavior is pre-uplift identical); at scale > 1 `render_crawl` treats `cursor_pos` as LOGICAL throughout (matching the engine's own units) — it paints at physical `x = cursor_pos * scale` and returns its advance ceil-divided back to logical (core's `get_text_width` hires convention) — and the card adds `self.padding` (also logical) on top for the engine's scroll loop. Mixing physical paint offsets with the engine's logical cursor arithmetic here was final-review Finding 2 (over-scrolled past flush-right by `real.width - logical.width`). Never 'fix' the legacy ticker to return `canvas.width`/`real.width` — that would freeze smallsign scrolling (scale 1 has no wrapper; its cursor contract is the legacy `SegmentMessage`'s own). Frame-aware hooks
 (`advance_frame`/`pause_frame`/`resume_frame`/`reset_frame`) forward to the cached `_legacy`
 story IN ADDITION TO the card's own base counters — don't drop either half when touching these.
+
+**`MLBStandingsBoard` scale-dispatch contract** (`_standings_card.py`) — the one story
+`standings.py`'s `update()` builds per tracked division, for `layout = "auto"`/`"board"`.
+**scale > 1 is held**: dispatches to `layouts/standings_board.py`'s `render_standings_board` and
+returns `cursor = canvas.width` — the WRAPPER's LOGICAL width, same held-cursor convention as
+`MLBGameCard` (see above); returning `real.width` would take the scroll branch instead of holding.
+**scale <= 1 forwards `legacy_rows[idx]` verbatim** — one pre-built legacy `SegmentMessage` per
+division team (the same shape `_build_ticker_stories` builds), one row advance per SECTION VISIT.
+Row cycling is **visit-idempotent** via a `_pending_row_advance` arm/consume flag gated on
+`not self._frame_paused`: core calls `reset_frame()` TWICE per visit when a widget transition is
+configured (`run_transition`'s `_reset_presenter` plus `_show_one`'s own visit-entry reset — core
+documents this double reset as harmless), so a raw `+= 1` in `reset_frame` is the bug class that
+was fixed here — it would advance by 2 per transitioned visit and stick on even-length
+`legacy_rows`. `reset_frame` only ARMS the flag; the first UNPAUSED scale<=1 draw consumes it,
+since paused draws are transition compositing and must neither advance nor burn the pending
+advance. Never regress to a bare counter increment in `reset_frame`. Tripwire:
+`test_scale1_row_cycling_survives_double_reset_per_visit`.
+
+**Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
+routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
+ascent-box-top y formula as the scores physical renderers) so a row mixing multiple font sizes
+(rank/abbr/record on one row's pitch) doesn't bleed into its neighbor's band — see the module's
+own docstring for the hardware-validated formula. Rows cap at 5 (`_MAX_ROWS`; `_MIN_ROWS` = 3).
+`standingsLong` (longboi, real width >= 400px) adds PCT and L10 columns and splits W/L into
+separate columns; `standingsBig` (bigsign) has neither and shows a combined W-L record instead.
+The GB column on both is `division_gb` (division games back), not the overall `games_back` the
+scrolling rows use.
+
+**`board_rows` geometry table** (`layouts/standings_board.py`'s `_BIG_GEOMETRY`/`_LONG_GEOMETRY`,
+keyed 3-5) — `render_standings_board`'s `max_rows` param selects a table entry instead of reading
+config: the renderer stays config-agnostic, `_standings_card.MLBStandingsBoard.board_rows`
+(forwarded from `MLBStandingsMonitor.board_rows`, validated 3-5 in `standings.py`'s
+`validate_config` — bool explicitly excluded, mirrors core's `font_threshold` convention) is what
+carries the widget's config through. **The 5-row table entries are the pre-#72 hardcoded values,
+BYTE-IDENTICAL** — the pre-existing 5-row layout tests assert this unchanged, and
+`test_five_row_geometry_matches_pre_uplift_hardcoded_values` pins the table entries directly so a
+future edit can't silently drift them while still passing the pixel tests by compensating
+elsewhere. 4/3-row entries scale `pitch`/`text`/`rank`/`chip` up (bigger text for fewer rows); the
+header (division name + column labels) is drawn separately in `_render_big`/`_render_long` and
+NEVER changes with row count. `abbr_x = chip_x + chip_h + 3` (chip_x fixed per variant: 11 big, 18
+long) for every entry EXCEPT long's 5-row, which keeps the pre-#72 handoff value (32) exactly —
+the formula would give 30 there; this is a preserved pre-existing handoff quirk, not something
+introduced by the row-count feature. `gb_x`/`strk_x` (big only — long's column x positions are
+fixed across every count) move from 180/212 to 172/216 ONLY at 3 rows: at that size (px15), "16.0"
+(worst-case GB) would otherwise run up against a fixed STRK column. A `max_rows` outside the table
+(3-5) falls back to 5 rather than `KeyError`ing — defensive only, since `validate_config` is the
+real gate. **Collision test is the tripwire for this whole table**
+(`test_layout_standings_board.py`): for every (variant, row-count) pair it renders worst-case row
+content (record `"100-62"`, gb `"16.0"`, pct `".1000"`, l10 `"10-0"`, strk `"W12"`, abbr `"WSH"`)
+and asserts no two columns' measured extents overlap (via `text_width` — the same function
+`hires`/`draw_record` use to advance their own cursors, not a pixel-clustering heuristic, which
+turned out to be too fragile: individual glyphs within one field routinely have a couple px of
+dark kerning between them, at a similar magnitude to some of the tighter cross-column gaps) and
+that no row's content bleeds into the next row's vertical band. Any new per-count geometry value
+must pass this test before shipping.
+
+**Row selection + tracked-team pinning** (`standings.py`'s `_select_division_rows`) — a board's
+`rows` are the top `board_rows` teams by `division_rank`, then any TRACKED team in that division
+NOT already included is pinned in by displacing row(s) from the BOTTOM of that top-N selection
+(one displaced slot per missing tracked team, best-ranked missing team kept first if there isn't
+room for all of them) — re-sorted back into `division_rank` order afterward. The rank digit shown
+is always the TRUE `division_rank`, never renumbered 1..N — a board reading `1, 2, 5` is
+self-explanatory. `board_rows=5` is a no-op versus pre-#72 behavior whenever a division has <=5
+teams (the common case), since every team is already in the top-5 selection and nothing needs
+pinning. `_build_board_stories` uses this for both `MLBStandingsBoard.rows` (forwarded to the
+scale>1 renderer) and `legacy_rows` (the scale<=1 fallback) — both get the SAME selected rows, so
+neither degrades to a different division slice. Tripwires: `TestSelectDivisionRows`
+(`tests/test_standings.py`, unit-level on the selection function itself) plus
+`test_board_rows_pins_tracked_team_outside_cutoff` (integration, through `update()`).
+
+**Empty-board fallback is load-bearing** (`standings.py`'s `update()`) — `_build_board_stories`
+returning an empty list (a divisionless API response, `division_id == 0` everywhere) falls back to
+`_build_ticker_stories` so the sign is never blanked under the `auto` default; logs at INFO
+(`standings: no divisions resolved; falling back to ticker rows`). Tracked teams that fail to
+resolve to a division fall back to the overall leader's division board, NOT to ticker rows. Don't
+remove this fallback when touching `_build_board_stories`. Tripwire:
+`test_auto_divisionless_falls_back_to_ticker_rows`.
+
+**`DIVISION_NAMES` is a static id map** (`standings.py`) — MLB Stats API division IDs 200–205 are
+stable constants (sportId=1, league 103/104), so labeling a division grouping doesn't need a
+hydrate call. `_group_by_division` excludes `division_id == 0` (unknown/unset) — don't drop that
+guard, since an ungrouped team would otherwise pollute a division's row list.
 
 **`teams.py` lazy palette is PEP 562** — module-level `__getattr__` exports the named colors
 (`WIN_COLOR`/`LOSS_COLOR`/`LIVE_COLOR`/`CHALLENGE_COLOR`) so external code can
@@ -215,7 +300,12 @@ rotations at 45° (90° reads as alternating; 22.5° reads chaotic on small pane
   `test_statcast.py` / `test_attendance.py` / `test_transition.py` / `test_emoji.py` / `test_lazy_palette.py` — behavior + rendering coverage. `test_scoreboard.py`'s `TestGeometryGuard` covers
   the legacy `MLBScoreboardMessage._MIN_LOGICAL_WIDTH` raise — that class is scale<=1-only
   post-uplift (see `MLBGameCard` scale-dispatch above), so these tests exercise a narrow
-  scale-1 canvas directly, not a bigsign/longboi path.
+  scale-1 canvas directly, not a bigsign/longboi path. `test_standings.py` also covers
+  `layout` validation, per-division board story building/dedup/fallback, and offseason states.
+- `test_standings_card.py` / `test_layout_standings_board.py` — `MLBStandingsBoard`'s
+  scale-dispatch (held cursor at scale>1, visit-idempotent `legacy_rows` cycling under the
+  double-reset-per-visit contract at scale<=1) and the physical board renderer (`standingsBig`
+  vs `standingsLong` column sets, row cap, cap-top text conversion).
 - `test_resolve_layout.py` / `test_card_dispatch.py` — `layouts.resolve_layout`'s per-sign
   resolution table and `MLBGameCard`'s scale-1-vs-scale>1 dispatch (including the held-cursor /
   frame-hook-forwarding contracts above).
