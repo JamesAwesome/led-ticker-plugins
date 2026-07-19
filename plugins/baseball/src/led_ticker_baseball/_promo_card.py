@@ -131,8 +131,12 @@ class MLBPromoCard(FrameAwareBase):
     # documented double-call-per-transitioned-visit (see
     # `_standings_card.py`'s module docstring) — and the clipped name-scroll
     # never snaps back to its start on section re-entry. (2)
-    # `self.legacy.reset_frame()` is NOT forwarded — unlike MLBGameCard /
-    # MLBStandingsBoard, `self.legacy` here isn't a per-visit-selected
-    # story (it's the one fixed SegmentMessage for this card, present for
-    # the card's whole lifetime), so there's no stale per-visit state on it
-    # that a reset would need to clear.
+    # `self.legacy.reset_frame()` is NOT forwarded, and that's harmless:
+    # `SegmentMessage._frame_count` only feeds a continuous font_color phase
+    # (rainbow/color_cycle), never any per-visit story-selection state.
+    # `MLBGameCard._legacy` is ALSO whole-life cached (built once, never
+    # re-selected per visit) — the same shape as `self.legacy` here. The
+    # ONE place a skipped reset would actually be a bug is
+    # `MLBStandingsBoard`, whose `legacy_rows[idx]` cycling is real
+    # per-visit selection state (`_pending_row_advance`) — see
+    # `_standings_card.py`'s module docstring for that contrast.

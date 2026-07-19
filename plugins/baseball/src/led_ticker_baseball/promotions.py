@@ -401,7 +401,12 @@ class MLBPromotionsMonitor:
         rule ``_dedupe_promos`` uses — so the two views can't disagree on
         what counts as a promo. Sorted by date, then ``self.filter`` applied
         last (same semantics as ``_apply_filter``) so the structured list
-        matches what the crawl would show.
+        matches what the crawl would show. The per-game dedup granularity
+        also means prefix-related names across DIFFERENT games stay
+        separate: a doubleheader's game 1 "Bobblehead Night" and game 2
+        "Bobblehead Night Giveaway" both survive as distinct ``PromoInfo``
+        entries, even though ``_dedupe_indices`` would collapse that same
+        pair within a single game's own list.
         """
         infos: list[PromoInfo] = []
         for date_entry in data.get("dates", []):
