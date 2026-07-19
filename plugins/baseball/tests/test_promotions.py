@@ -193,6 +193,33 @@ def make_game(home_id, official_date, promos=()):
     }
 
 
+def make_rich_game(
+    home_id,
+    official_date,
+    promos=(),
+    *,
+    away_abbr="NYY",
+    game_time="19:05:00Z",
+):
+    """Schedule-game payload shaped like the real hydrated response.
+
+    ``promos`` items are raw promo dicts (name/offerType/presentedBy), as
+    returned when the request hydrates ``game(promotions),team`` — mirrors
+    what `_parse_promo_infos` consumes. `away_abbr` requires `team` hydration
+    (only present when the real request adds `,team`, confirmed against a
+    live API response during Phase 3 Task 1).
+    """
+    return {
+        "officialDate": official_date,
+        "gameDate": f"{official_date}T{game_time}",
+        "teams": {
+            "home": {"team": {"id": home_id}},
+            "away": {"team": {"id": 999, "abbreviation": away_abbr}},
+        },
+        "promotions": list(promos),
+    }
+
+
 def make_schedule(*games):
     return {"dates": [{"games": list(games)}]}
 
@@ -273,6 +300,238 @@ class TestParseHomeGames:
         games, had_games = self._parse(data)
         assert games == []
         assert had_games is True
+
+
+class TestDedupeIndices:
+    def test_survivor_indices_match_dedupe_promos(self):
+        from led_ticker_baseball.promotions import _dedupe_indices
+
+        names = [
+            "Dylan Cease Bobblehead Giveaway Night",
+            "Dylan Cease Bobblehead Giveaway",
+        ]
+        assert _dedupe_indices(names) == [1]
+
+    def test_no_duplicates_keeps_all_indices(self):
+        from led_ticker_baseball.promotions import _dedupe_indices
+
+        assert _dedupe_indices(["Loonie Dogs Night", "Pride Night"]) == [0, 1]
+
+
+class TestResolveOpponentAbbr:
+    def test_canonicalizes_athletics(self):
+        from led_ticker_baseball.promotions import _resolve_opponent_abbr
+
+        assert _resolve_opponent_abbr({"abbreviation": "ATH"}) == "OAK"
+
+    def test_canonicalizes_diamondbacks(self):
+        from led_ticker_baseball.promotions import _resolve_opponent_abbr
+
+        assert _resolve_opponent_abbr({"abbreviation": "AZ"}) == "ARI"
+
+    def test_passthrough_for_already_canonical(self):
+        from led_ticker_baseball.promotions import _resolve_opponent_abbr
+
+        assert _resolve_opponent_abbr({"abbreviation": "NYY"}) == "NYY"
+
+    def test_missing_abbreviation_returns_empty(self):
+        from led_ticker_baseball.promotions import _resolve_opponent_abbr
+
+        assert _resolve_opponent_abbr({}) == ""
+
+
+class TestGameLocalDatetime:
+    def test_parses_gamedate_in_target_timezone(self):
+        from led_ticker_baseball.promotions import _game_local_datetime
+
+        g = {"gameDate": "2026-07-18T23:05:00Z"}
+        local = _game_local_datetime(g, NY)
+        assert (local.hour, local.minute) == (19, 5)
+
+    def test_missing_gamedate_returns_none(self):
+        from led_ticker_baseball.promotions import _game_local_datetime
+
+        assert _game_local_datetime({}, NY) is None
+
+    def test_malformed_gamedate_returns_none(self):
+        from led_ticker_baseball.promotions import _game_local_datetime
+
+        assert _game_local_datetime({"gameDate": "not-a-date"}, NY) is None
+
+
+def raw_promo(name, offer_type=None, presented_by=None):
+    """A single raw promo dict as the real API sends it (hydrate=game(promotions))."""
+    p = {"name": name}
+    if offer_type is not None:
+        p["offerType"] = offer_type
+    if presented_by is not None:
+        p["presentedBy"] = presented_by
+    return p
+
+
+class TestParsePromoInfos:
+    def _parse(self, data, today, **kwargs):
+        widget = make_widget(**kwargs)
+        return widget._parse_promo_infos(data, NY, today)
+
+    def test_home_game_promo_fields(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Loonie Dogs Night", "Theme Days")],
+                away_abbr="NYY",
+                game_time="23:05:00Z",
+            )
+        )
+        infos = self._parse(data, today)
+        assert len(infos) == 1
+        info = infos[0]
+        assert info.name == "Loonie Dogs Night"
+        assert info.offer_type == "Theme Days"
+        assert info.presented_by == ""
+        assert info.opponent_abbr == "NYY"
+        assert info.date_label == "TODAY"
+        assert info.time_label == "7:05"
+        assert info.am_pm == "PM"
+        assert info.game_date == "2026-07-18"
+
+    def test_presented_by_populated_when_present(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-26",
+                promos=[
+                    raw_promo(
+                        "Kids Run the Bases", "Day of Game Highlights", "L.L.Bean"
+                    )
+                ],
+            )
+        )
+        infos = self._parse(data, today)
+        assert infos[0].presented_by == "L.L.Bean"
+
+    def test_missing_offer_type_and_presented_by_default_empty(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(141, "2026-07-19", promos=[raw_promo("Work From Dome")])
+        )
+        infos = self._parse(data, today)
+        assert infos[0].offer_type == ""
+        assert infos[0].presented_by == ""
+
+    def test_future_date_label_is_uppercase_weekday_month_day(self):
+        # 2026-07-24 is a Friday.
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(141, "2026-07-24", promos=[raw_promo("Work From Dome")])
+        )
+        infos = self._parse(data, today)
+        assert infos[0].date_label == "FRI JUL 24"
+
+    def test_away_game_skipped(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(999, "2026-07-18", promos=[raw_promo("Bobblehead Giveaway")])
+        )
+        infos = self._parse(data, today)
+        assert infos == []
+
+    def test_game_without_promotions_yields_no_entries(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(make_rich_game(141, "2026-07-18", promos=[]))
+        infos = self._parse(data, today)
+        assert infos == []
+
+    def test_dedupe_collapses_night_variant_within_game(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-20",
+                promos=[
+                    raw_promo(
+                        "Kazuma Okamoto T-Shirt Giveaway Night",
+                        "Day of Game Highlights",
+                    ),
+                    raw_promo("Kazuma Okamoto T-Shirt Giveaway", "Giveaway"),
+                ],
+            )
+        )
+        infos = self._parse(data, today)
+        assert len(infos) == 1
+        assert infos[0].name == "Kazuma Okamoto T-Shirt Giveaway"
+        assert infos[0].offer_type == "Giveaway"
+
+    def test_opponent_abbr_canonicalized(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Work From Dome")],
+                away_abbr="ATH",
+            )
+        )
+        infos = self._parse(data, today)
+        assert infos[0].opponent_abbr == "OAK"
+
+    def test_sorted_by_date(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(141, "2026-07-24", promos=[raw_promo("Later Promo")]),
+            make_rich_game(141, "2026-07-19", promos=[raw_promo("Sooner Promo")]),
+        )
+        infos = self._parse(data, today)
+        assert [i.game_date for i in infos] == ["2026-07-19", "2026-07-24"]
+
+    def test_doubleheader_games_stay_separate_entries(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Game 1 Promo")],
+                game_time="17:05:00Z",
+            ),
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Game 2 Promo")],
+                game_time="23:05:00Z",
+            ),
+        )
+        infos = self._parse(data, today)
+        assert len(infos) == 2
+        assert {i.name for i in infos} == {"Game 1 Promo", "Game 2 Promo"}
+        assert {i.time_label for i in infos} == {"1:05", "7:05"}
+
+    def test_filter_applied_to_structured_list(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Loonie Dogs Night"), raw_promo("Pride Night")],
+            )
+        )
+        infos = self._parse(data, today, filter=["pride"])
+        assert len(infos) == 1
+        assert infos[0].name == "Pride Night"
+
+    def test_no_filter_returns_all(self):
+        today = dt.date(2026, 7, 18)
+        data = make_schedule(
+            make_rich_game(
+                141,
+                "2026-07-18",
+                promos=[raw_promo("Loonie Dogs Night"), raw_promo("Pride Night")],
+            )
+        )
+        infos = self._parse(data, today)
+        assert len(infos) == 2
 
 
 def gp(day, promos):

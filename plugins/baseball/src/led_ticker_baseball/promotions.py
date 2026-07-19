@@ -30,6 +30,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_baseball.teams import (
+    API_TO_CANONICAL_ABBR,
     MLB_API,
     MLB_TEAM_NAMES,
     _team_color,
@@ -51,31 +52,41 @@ def _clean_promo_name(name: str) -> str:
     return _SPONSOR_RE.sub("", name).strip()
 
 
-def _dedupe_promos(names: list[str]) -> list[str]:
-    """Collapse duplicate promo names, keeping feed order.
+def _dedupe_indices(names: list[str]) -> list[int]:
+    """Indices of ``names`` surviving the prefix/exact-duplicate rule below.
 
-    Exact duplicates (casefolded) are dropped; when one name is a prefix of
-    another (the feed lists both "Dylan Cease Bobblehead Giveaway Night" and
-    "Dylan Cease Bobblehead Giveaway"), the shorter name wins. Pairwise only:
-    three-way prefix chains within one game's promo list aren't fully
-    collapsed — the feed has never produced one.
+    Shared primitive behind both ``_dedupe_promos`` (works on cleaned name
+    strings, for the SegmentMessage story path) and ``_parse_promo_infos``
+    (works on raw promo dicts, for the structured ``PromoInfo`` path) — one
+    definition means the two views can't disagree on what counts as a
+    duplicate. Exact duplicates (casefolded) are dropped; when one name is a
+    prefix of another (the feed lists both "Dylan Cease Bobblehead Giveaway
+    Night" and "Dylan Cease Bobblehead Giveaway"), the shorter name wins.
+    Pairwise only: three-way prefix chains within one game's promo list
+    aren't fully collapsed — the feed has never produced one.
     """
-    kept: list[str] = []
-    for name in names:
+    kept: list[tuple[int, str]] = []
+    for i, name in enumerate(names):
         cf = name.casefold()
         dominated = False
-        for i, other in enumerate(kept):
+        for k, (_, other) in enumerate(kept):
             ocf = other.casefold()
             if cf.startswith(ocf):
                 dominated = True  # a shorter-or-equal name is already kept
                 break
             if ocf.startswith(cf):
-                kept[i] = name  # new name is shorter; it wins
+                kept[k] = (i, name)  # new name is shorter; it wins
                 dominated = True
                 break
         if not dominated:
-            kept.append(name)
-    return kept
+            kept.append((i, name))
+    return [i for i, _ in kept]
+
+
+def _dedupe_promos(names: list[str]) -> list[str]:
+    """Collapse duplicate promo names, keeping feed order. See ``_dedupe_indices``."""
+    idx = _dedupe_indices(names)
+    return [names[i] for i in idx]
 
 
 def _match_any(name: str, keywords: list[str]) -> bool:
@@ -97,10 +108,61 @@ def _game_local_date(g: dict[str, Any], tz: ZoneInfo) -> date | None:
     return None
 
 
+def _game_local_datetime(g: dict[str, Any], tz: ZoneInfo) -> datetime | None:
+    """Local start time of a schedule game, from ``gameDate`` (UTC ISO8601).
+
+    Unlike ``_game_local_date`` this has no ``officialDate`` fallback —
+    ``officialDate`` is a date-only field with no clock time to offer.
+    """
+    game_date = g.get("gameDate")
+    if not game_date:
+        return None
+    with contextlib.suppress(ValueError, TypeError):
+        return datetime.fromisoformat(game_date).astimezone(tz)
+    return None
+
+
+def _resolve_opponent_abbr(team_data: dict[str, Any]) -> str:
+    """Away-team abbreviation from schedule ``team`` data, canonicalized.
+
+    The schedule endpoint only returns ``abbreviation`` when the request
+    hydrates ``team`` (``update()`` requests ``hydrate=game(promotions),team``
+    for exactly this). StatsAPI's own spelling ("ATH"/"AZ") is normalized to
+    the plugin's canonical code ("OAK"/"ARI") via the same table
+    ``resolve_team_id`` uses in the other direction.
+    """
+    abbr: str = team_data.get("abbreviation") or ""
+    return API_TO_CANONICAL_ABBR.get(abbr, abbr)
+
+
 @dataclass
 class GamePromos:
     game_date: date  # local calendar date of the home game
     promos: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PromoInfo:
+    """Structured per-promo fields for the upcoming card/crawl layouts.
+
+    Built alongside (not instead of) the ``SegmentMessage`` crawl stories —
+    see ``MLBPromotionsMonitor._parse_promo_infos``. ``time_label`` is the
+    bare "H:MM" clock reading with no meridiem; ``am_pm`` ("AM"/"PM") is kept
+    separate so a renderer can be honest about a rare AM start instead of
+    hardcoding " PM" (design README "Promotions": bigsign start time is
+    amber "7:05" + " PM" appended at draw). ``date_label`` is "TODAY" or an
+    uppercase "FRI JUL 18"; ``game_date`` is the ISO date, for sorting/dedup
+    once a later task holds several of these at once.
+    """
+
+    name: str
+    offer_type: str = ""
+    presented_by: str = ""
+    opponent_abbr: str = ""
+    date_label: str = ""
+    time_label: str = ""
+    am_pm: str = ""
+    game_date: str = ""
 
 
 @attrs.define
@@ -128,6 +190,7 @@ class MLBPromotionsMonitor:
     feed_stories: list[TickerMessage | SegmentMessage] = attrs.field(
         init=False, factory=list
     )
+    _promos: list[PromoInfo] = attrs.field(init=False, factory=list)
 
     @classmethod
     def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
@@ -181,6 +244,9 @@ class MLBPromotionsMonitor:
         tz = self._tz or ZoneInfo(self.timezone)
         today = datetime.now(tz).date()
         self._set_title()
+        # Reset on every call so a failed/short-circuited fetch below can't
+        # leave a previous update's structured promos stale on the widget.
+        self._promos = []
 
         if not self._team_id:
             self._set_error_state()
@@ -191,12 +257,17 @@ class MLBPromotionsMonitor:
         url = (
             f"{MLB_API}/schedule?teamId={self._team_id}"
             f"&startDate={start}&endDate={end}&sportId=1"
-            f"&hydrate=game(promotions)"
+            # ``,team`` hydrates teams.away.team.abbreviation, needed for
+            # PromoInfo.opponent_abbr; kept AFTER "game(promotions)" so the
+            # substring "hydrate=game(promotions)" stays intact for anything
+            # (tests included) matching on it.
+            f"&hydrate=game(promotions),team"
         )
         try:
             async with self.session.get(url) as resp:
                 data = await resp.json()
             games, had_games = self._parse_home_games(data, tz)
+            self._promos = self._parse_promo_infos(data, tz, today)
         except Exception:
             logger.exception("MLB Promotions API error for %s", self.team)
             self._set_error_state()
@@ -251,6 +322,65 @@ class MLBPromotionsMonitor:
             for d, names in sorted(by_date.items())
         ]
         return games, had_games
+
+    def _parse_promo_infos(
+        self, data: dict[str, Any], tz: ZoneInfo, today: date
+    ) -> list[PromoInfo]:
+        """Structured per-promo entries for every upcoming home game.
+
+        Feeds the card/crawl layouts (later tasks) — a richer companion to
+        ``_parse_home_games``'s ``list[str]`` names, NOT a replacement; the
+        SegmentMessage story path is untouched. Only home games carry
+        promotions for this team, matching ``_parse_home_games`` (an away
+        game is skipped even if it has its own promotions). Unlike
+        ``_parse_home_games``, a doubleheader's two home games stay separate
+        entries here (each keeps its own start time) rather than merging by
+        date. Cleaned + deduped per game via ``_dedupe_indices`` — the same
+        rule ``_dedupe_promos`` uses — so the two views can't disagree on
+        what counts as a promo. Sorted by date, then ``self.filter`` applied
+        last (same semantics as ``_apply_filter``) so the structured list
+        matches what the crawl would show.
+        """
+        infos: list[PromoInfo] = []
+        for date_entry in data.get("dates", []):
+            for g in date_entry.get("games", []):
+                home = g.get("teams", {}).get("home", {}).get("team", {})
+                if home.get("id") != self._team_id:
+                    continue
+                d = _game_local_date(g, tz)
+                if d is None:
+                    continue
+                raw = [p for p in g.get("promotions", []) if p and p.get("name")]
+                if not raw:
+                    continue
+                names = [_clean_promo_name(p["name"]) for p in raw]
+                survivors = _dedupe_indices(names)
+
+                opponent_abbr = _resolve_opponent_abbr(
+                    g.get("teams", {}).get("away", {}).get("team", {})
+                )
+                date_label = "TODAY" if d == today else d.strftime("%a %b %-d").upper()
+                local_dt = _game_local_datetime(g, tz)
+                time_label = local_dt.strftime("%-I:%M") if local_dt else ""
+                am_pm = local_dt.strftime("%p") if local_dt else ""
+
+                for i in survivors:
+                    infos.append(
+                        PromoInfo(
+                            name=names[i],
+                            offer_type=raw[i].get("offerType") or "",
+                            presented_by=raw[i].get("presentedBy") or "",
+                            opponent_abbr=opponent_abbr,
+                            date_label=date_label,
+                            time_label=time_label,
+                            am_pm=am_pm,
+                            game_date=d.isoformat(),
+                        )
+                    )
+        infos.sort(key=lambda p: p.game_date)
+        if self.filter:
+            infos = [p for p in infos if _match_any(p.name, self.filter)]
+        return infos
 
     def _apply_filter(self, promos: list[str]) -> list[str]:
         """Keep only promos matching the filter keywords (all when unset)."""
