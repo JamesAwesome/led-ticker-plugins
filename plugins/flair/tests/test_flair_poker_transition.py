@@ -274,13 +274,15 @@ class TestPerf:
         incoming = _make_widget(draw_pixel=False)
 
         p.frame_at(0.5, canvas, outgoing, incoming)
-        assert calls  # cache warm on the first frame
+        # NOTE: `calls` may be EMPTY here — geometry is cached process-wide
+        # (_ring_geom / _warm_suit_geometry), so an earlier test in this
+        # process may have already rasterized these suits. The invariant is
+        # only that frames AFTER the first do zero rasterization; the
+        # stronger per-firing/per-instance guard lives in
+        # TestNoPerFiringRasterization.
         first_call_count = len(calls)
 
         p.frame_at(0.6, canvas, outgoing, incoming)
-        # No NEW rasterization on the second frame -- every ring shell (every
-        # glyph x every integer radius, not just the ones live at t=0.5) was
-        # pre-warmed when the plan was built.
         assert len(calls) == first_call_count
 
 
@@ -341,3 +343,224 @@ class TestRegistration:
         assert "propeller" in api.animations
         assert "fisheye" in api.animations
         assert "lottery" in api.widgets
+
+
+class TestNoPerFiringRasterization:
+    """ROOT-CAUSE guard for the on-sign CPU spin (2026-07-18): the per-firing
+    pre-warm rasterized ~1,072 rings (~12.6M mask evals, ~3s dev / ~10s Pi)
+    because the ring cache keyed on each glyph's HUE — so every glyph re-
+    rasterized the same suit geometry, and a seed-less transition re-paid the
+    whole stall on EVERY firing. Geometry must be rasterized once per PROCESS
+    per (suit, radius): a second firing — and a second Poker instance — must
+    do ZERO mask-function work."""
+
+    @staticmethod
+    def _mask_spy(monkeypatch):
+        import led_ticker_flair.flair.poker as m
+
+        calls: list = []
+        for name in ("_in_heart", "_in_diamond", "_in_club", "_in_spade"):
+            real = getattr(m, name)
+
+            def _wrap(x, y, r, _real=real, _n=name):
+                calls.append(_n)
+                return _real(x, y, r)
+
+            monkeypatch.setattr(m, name, _wrap)
+            # _MASKS holds direct references — repoint them too so lookups
+            # through the dispatch table are also counted.
+            suit = {
+                "_in_heart": "hearts",
+                "_in_diamond": "diamonds",
+                "_in_club": "clubs",
+                "_in_spade": "spades",
+            }[name]
+            monkeypatch.setitem(m._MASKS, suit, _wrap)
+        return calls
+
+    def test_second_firing_does_zero_rasterization(self, monkeypatch) -> None:
+        calls = self._mask_spy(monkeypatch)
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+
+        p = Poker()  # seed=None: replans EVERY firing (the smoke-config shape)
+        p.frame_at(0.3, canvas, o, i)
+        p.frame_at(0.96, canvas, o, i)  # finish firing 1
+        after_first = len(calls)
+        assert after_first >= 0  # first-ever firing may rasterize
+
+        p.frame_at(0.05, canvas, o, i)  # firing 2 begins (replan, new entropy)
+        p.frame_at(0.5, canvas, o, i)
+        assert len(calls) == after_first, (
+            f"firing 2 rasterized {len(calls) - after_first} mask points — "
+            "geometry must be cached per process, not per firing"
+        )
+
+    def test_second_instance_does_zero_rasterization(self, monkeypatch) -> None:
+        calls = self._mask_spy(monkeypatch)
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+
+        Poker(seed=5).frame_at(0.5, canvas, o, i)
+        after_first = len(calls)
+
+        Poker(seed=9).frame_at(0.5, canvas, o, i)  # fresh instance, same panel
+        assert len(calls) == after_first, (
+            f"a second Poker instance rasterized {len(calls) - after_first} "
+            "mask points — geometry must be shared process-wide"
+        )
+
+
+class TestNoCutoverBacklogSpike:
+    """The 'explosion start' hitch (2026-07-18, on-sign): reveal accumulation
+    only ran in the peel branch, so the FIRST peel frame paid every glyph's
+    entire ring backlog (0..~36 radii x 16 glyphs, ~1M ops — measured 34ms on
+    dev vs 0.5ms neighbors; a dropped frame on the Pi). The reveal mask must
+    accumulate INCREMENTALLY from pulse start so the cutover frame's
+    remaining backlog is bounded (a couple of radii per glyph, same as any
+    other frame)."""
+
+    def test_reveal_accumulates_during_build_phase(self) -> None:
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Poker(seed=3)
+        # Build-phase frames only (t < cutover 0.45), pulses active from ~0.25.
+        for t in (0.05, 0.2, 0.3, 0.38, 0.44):
+            p.frame_at(t, canvas, o, i)
+        assert any(r > -1 for r in p._reveal_r), (
+            "reveal must accumulate during the build phase — deferring it all "
+            "to the first peel frame is the cutover backlog spike"
+        )
+        # And the accumulated radius tracks the wavefront (not still-zero).
+        assert max(p._reveal_r) >= 5
+
+    def test_cutover_frame_backlog_is_bounded(self) -> None:
+        """After stepping the build phase at engine-like cadence, the first
+        peel frame's per-glyph catch-up must be a few radii, not the whole
+        pulse history."""
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Poker(seed=3)
+        t = 0.02
+        while t < 0.45:
+            p.frame_at(round(t, 3), canvas, o, i)
+            t += 0.02
+        before = list(p._reveal_r)
+        p.frame_at(0.46, canvas, o, i)  # first peel frame
+        after = p._reveal_r
+        worst = max(a - b for a, b in zip(after, before, strict=True))
+        assert worst <= 6, (
+            f"first peel frame advanced a glyph {worst} radii — the backlog "
+            "was deferred to the cutover instead of accumulating incrementally"
+        )
+
+
+class TestWarmWorker:
+    """First-firing warm stall (2026-07-19): geometry warming moves off the
+    render path into a background thread started at construction. The worker
+    must cover EVERY radius a firing can request — a gap would surface as
+    lazy rasterization mid-transition on the Pi."""
+
+    def test_worker_covers_every_radius_a_firing_needs(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        try:
+            # Cold-start the process for one suit, warm it via the worker
+            # ONLY, then spy the masks: any rasterization during a full
+            # firing afterwards is a coverage gap in the worker.
+            m._ring_geom.cache_clear()
+            m._interior_geom.cache_clear()
+            m._warm_suit_geometry.cache_clear()
+            m._warm_worker(["diamonds"], yield_s=0)
+
+            calls = TestNoPerFiringRasterization._mask_spy(monkeypatch)
+            canvas = _StubCanvas(width=256, height=64)
+            o = _make_widget(draw_pixel=False)
+            i = _make_widget(draw_pixel=False)
+            p = Poker(suits=["diamonds"], seed=5)
+            t = 0.02
+            while t < 1.0:
+                p.frame_at(round(t, 3), canvas, o, i)
+                t += 0.02
+            assert not calls, (
+                f"firing rasterized {len(calls)} mask points after a full "
+                "worker warm — _warm_worker's radius range has a gap"
+            )
+        finally:
+            # Restore the fully-warmed-process invariant for later tests.
+            m._warm_worker(list(m.SUITS), yield_s=0)
+
+    def test_worker_swallows_exceptions(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        def _boom(suit, r_int):
+            raise RuntimeError("rasterizer exploded")
+
+        monkeypatch.setattr(m, "_ring_geom", _boom)
+        m._warm_worker(["hearts"], yield_s=0)  # must not raise
+
+
+class TestBackgroundWarm:
+    """Construction dispatches the geometry warm to a daemon thread — once
+    per suit per process — so the first firing renders like every other
+    firing instead of stalling ~2-3s on the Pi."""
+
+    def test_saturated_process_spawns_no_thread(self) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        # The session fixture saturated _warm_dispatched, so constructions
+        # here must not spawn threads (this is also what keeps every other
+        # test in the suite free of live warm threads).
+        before = len(m._warm_threads)
+        Poker(seed=1)
+        Poker(suits=["hearts", "clubs"], seed=2)
+        assert len(m._warm_threads) == before
+
+    def test_new_suits_spawn_single_daemon_thread(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        started: list = []
+
+        class _SpyThread:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+            def start(self):
+                started.append(self)
+
+        monkeypatch.setattr(m.threading, "Thread", _SpyThread)
+        monkeypatch.setattr(m, "_warm_dispatched", set())
+        monkeypatch.setattr(m, "_warm_threads", [])
+
+        Poker(seed=3)  # default pool = all four suits
+        assert len(started) == 1
+        assert started[0].kwargs["daemon"] is True
+        assert started[0].kwargs["target"] is m._warm_worker
+        assert sorted(started[0].kwargs["args"][0]) == sorted(SUITS)
+
+        Poker(seed=4)  # same pool again -> deduped, nothing new
+        assert len(started) == 1
+
+    def test_partial_overlap_dispatches_only_new_suits(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.poker as m
+
+        started: list = []
+
+        class _SpyThread:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+            def start(self):
+                started.append(self)
+
+        monkeypatch.setattr(m.threading, "Thread", _SpyThread)
+        monkeypatch.setattr(m, "_warm_dispatched", {"hearts", "spades"})
+        monkeypatch.setattr(m, "_warm_threads", [])
+
+        Poker(suits=["hearts", "diamonds"], seed=6)
+        assert len(started) == 1
+        assert started[0].kwargs["args"][0] == ["diamonds"]

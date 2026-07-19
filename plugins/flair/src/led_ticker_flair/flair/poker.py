@@ -6,8 +6,12 @@ ring pixel-lists, and ring-union coverage test. No canvas, no led_ticker imports
 """
 
 import colorsys
+import functools
+import logging
 import math
 import random
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -139,39 +143,120 @@ def pulse_radius(t, stagger):
     return phase, wave
 
 
-class RingCache:
-    """Per-run cache of (x, y, color) pixel lists for both ring SHELLS (the
-    moving pulse wavefront) and FILLED interiors (the resting suit glyphs).
-    Both quantize hue to whole degrees so a continuously-cycling hue still
-    hits a bounded key set (pre-warmed once per plan)."""
+# ---------------------------------------------------------------------------
+# Process-wide suit GEOMETRY cache.
+#
+# ROOT CAUSE of the on-sign CPU spin (2026-07-18): ring geometry was cached
+# per (suit, radius, HUE) — but hue varies per glyph, so 16 glyphs each
+# re-rasterized the same suit shapes (~12.6M mask evals per bigsign firing,
+# ~3 s dev / ~10 s Pi), and a seed-less transition re-paid the whole stall on
+# EVERY firing. Geometry does not depend on hue AT ALL — only the painted
+# color does. Rasterize each (suit, radius) ONCE PER PROCESS here; colorize
+# cheaply downstream. `functools.cache` keys survive across firings and
+# Poker instances, so only the first-ever firing in a process rasterizes.
+# ---------------------------------------------------------------------------
 
-    def __init__(self):
-        self._cache = {}
-        self._interior_cache = {}
 
-    @staticmethod
-    def _color(hue_deg):
-        rr, gg, bb = colorsys.hsv_to_rgb((round(hue_deg) % 360) / 360.0, 1.0, 1.0)
-        return (int(rr * 255), int(gg * 255), int(bb * 255))
+@functools.cache
+def _interior_geom(suit: str, r: float) -> tuple:
+    """Process-wide interior (dx, dy) geometry at radius ``r``."""
+    return tuple(interior_pixels(suit, r))
 
-    def get(self, suit, r_int, hue_deg):
-        key = (suit, int(r_int), round(hue_deg))
-        hit = self._cache.get(key)
-        if hit is None:
-            color = self._color(hue_deg)
-            hit = [(x, y, color) for (x, y) in ring_pixels(suit, int(r_int))]
-            self._cache[key] = hit
-        return hit
 
-    def interior(self, suit, r_int, hue_deg):
-        """Filled-suit pixel list (the resting glyph body)."""
-        key = (suit, int(r_int), round(hue_deg))
-        hit = self._interior_cache.get(key)
-        if hit is None:
-            color = self._color(hue_deg)
-            hit = [(x, y, color) for (x, y) in interior_pixels(suit, int(r_int))]
-            self._interior_cache[key] = hit
-        return hit
+@functools.cache
+def _ring_geom(suit: str, r_int: int) -> tuple:
+    """Process-wide ring-shell (dx, dy) geometry at integer radius ``r_int``."""
+    inner = frozenset(_interior_geom(suit, r_int - RING_W))
+    return tuple(p for p in _interior_geom(suit, r_int) if p not in inner)
+
+
+# Radius bounds are process CONSTANTS (panel-independent): _max_r is always
+# max_radius(GRID, GRID), so the warm needs nothing from the canvas.
+_MAX_RI = int(math.ceil(max_radius(GRID, GRID)))
+_GLYPH_RI = int(math.ceil(GLYPH_R))
+
+
+def _warm_worker(suits: list[str], yield_s: float = 0.005) -> None:
+    """Synchronously warm the process-wide geometry caches for ``suits``.
+
+    Runs as the body of the background warm thread (see
+    _start_background_warm) and, with ``yield_s=0``, as the test suite's
+    session pre-warm. Interiors first (glyph bodies render earliest), then
+    rings ascending (pulse consumption order). Calls the per-radius cache
+    functions DIRECTLY — not _warm_suit_geometry — so a concurrent sync
+    fallback in _ensure_plan only pays whatever radii remain uncached.
+    ``yield_s`` sleeps between radii keep GIL impact on the render loop
+    invisible. A warm failure must never crash the app (the sync fallback
+    still guarantees correctness), hence the blanket except."""
+    try:
+        for suit in suits:
+            for rr in range(0, _GLYPH_RI + 1):
+                _interior_geom(suit, rr)
+                if yield_s:
+                    time.sleep(yield_s)
+            for rr in range(0, _MAX_RI + 1):
+                _ring_geom(suit, rr)
+                if yield_s:
+                    time.sleep(yield_s)
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "poker background geometry warm failed", exc_info=True
+        )
+
+
+_warm_lock = threading.Lock()
+_warm_dispatched: set[str] = set()
+_warm_threads: list[threading.Thread] = []
+
+
+def _start_background_warm(suits: list[str]) -> None:
+    """Dispatch a daemon thread warming any not-yet-dispatched suits.
+
+    Called from Poker.__init__ — i.e. at CONFIG LOAD, many seconds before
+    the first firing (there is no entry transition into the first boot
+    section), so the warm wins its race against first use by a wide
+    margin. Each suit is dispatched once per process no matter how many
+    poker sections the config declares. Threads are kept in _warm_threads
+    so tests can inspect/join; a firing that somehow beats the warm still
+    falls back to the synchronous _warm_suit_geometry in _ensure_plan."""
+    with _warm_lock:
+        new = [s for s in suits if s not in _warm_dispatched]
+        if not new:
+            return
+        _warm_dispatched.update(new)
+        thread = threading.Thread(
+            target=_warm_worker, args=(new,), daemon=True, name="poker-geom-warm"
+        )
+        _warm_threads.append(thread)
+        thread.start()
+
+
+@functools.cache
+def _warm_suit_geometry(suit: str, max_ri: int, glyph_ri: int) -> bool:
+    """Rasterize every radius a transition can request for ``suit`` — once
+    per process (the @cache makes repeat calls free)."""
+    for rr in range(0, max_ri + 1):
+        _ring_geom(suit, rr)
+    for rr in range(0, glyph_ri + 1):
+        _interior_geom(suit, rr)
+    return True
+
+
+@functools.cache
+def _hue_color_deg(deg: int) -> tuple[int, int, int]:
+    rr, gg, bb = colorsys.hsv_to_rgb((deg % 360) / 360.0, 1.0, 1.0)
+    return (int(rr * 255), int(gg * 255), int(bb * 255))
+
+
+def _hue_color(hue_deg: float) -> tuple[int, int, int]:
+    """Hue (degrees, any range) -> RGB tuple, quantized to whole degrees so a
+    continuously-cycling hue hits a bounded, process-cached key set. This is
+    the ONLY colorize layer left: paint paths take one color per (glyph, ring)
+    and iterate the process-cached `_ring_geom`/`_interior_geom` geometry
+    directly. (The former ``RingCache`` colorized-pixel-list layer was removed
+    with the per-firing absolute-coord memos — building those lists on first
+    touch was itself a frame-time spike.)"""
+    return _hue_color_deg(round(hue_deg))
 
 
 _CUTOVER = 0.45  # t at which we cut from outgoing to washing the incoming in
@@ -211,17 +296,22 @@ class Poker:
                     f"unknown suit(s) {unknown!r}; valid: {list(SUITS)!r} "
                     "(hearts, diamonds, clubs, spades)"
                 )
-        self.suits = list(suits) if suits else list(SUITS)
+        self.suits: list[str] = list(suits) if suits else list(SUITS)
         self.seed = seed
         self._rng = random.Random(seed) if seed is not None else random.Random()
         self._plan: list[Glyph] = []  # empty == needs (re)build
         self._plan_key: tuple[int, int, int] | None = None
-        self._rings = RingCache()
         self._dims: tuple[int, int] = (0, 0)
         self._max_r: float = 0.0
         self._revealed: bytearray = bytearray()  # (w*h) reveal mask per firing
         self._reveal_r: list[int] = []  # per-glyph max integer radius unioned
+        # Peel-phase complement as a SHRINKING set of (x, y) still-black pixels,
+        # so the per-frame blackout iterates only what's actually black instead
+        # of scanning all w*h pixels (the CPU sink on a Pi). Refilled per firing.
+        self._unrevealed: set[tuple[int, int]] = set()
         self._last_t = 1.0
+        # Warm suit geometry off the render path — see _start_background_warm.
+        _start_background_warm(self.suits)
 
     def _ring_hue(self, g, r_int):
         return g.hue * 360.0 + r_int * _RING_HUE_STEP
@@ -233,6 +323,8 @@ class Poker:
         w, h = self._dims
         self._revealed = bytearray(w * h)
         self._reveal_r = [-1] * len(self._plan)
+        # Rebuild the complement set once per firing (cheap vs a per-frame scan).
+        self._unrevealed = {(x, y) for y in range(h) for x in range(w)}
 
     def _ensure_plan(self, canvas):
         # `real` is re-derived from `canvas` on EVERY call and never cached on
@@ -249,24 +341,23 @@ class Poker:
             self._dims = (real.width, real.height)
             self._max_r = max_radius(GRID, GRID)
             self._reset_reveal()
-            # Pre-warm every ring shell and interior the paint/reveal paths can
-            # request (every glyph x every integer radius, at the exact hue the
-            # paint path derives from that radius) so a warm plan does zero
-            # rasterization per frame. See
-            # TestPerf.test_no_ring_rasterization_after_first_frame.
-            max_ri = int(math.ceil(self._max_r))
-            glyph_ri = int(math.ceil(GLYPH_R))
-            for g in self._plan:
-                for rr in range(0, max_ri + 1):
-                    self._rings.get(g.suit, rr, self._ring_hue(g, rr))
-                for rr in range(0, glyph_ri + 1):
-                    self._rings.interior(g.suit, rr, self._glyph_hue(g))
+            # Warm the process-wide GEOMETRY for the suits in play — a no-op
+            # after the first-ever firing in this process (functools.cache).
+            # Paint/reveal paths iterate that geometry directly with one
+            # hoisted color per (glyph, ring) — no per-firing list builds, so
+            # every frame of every firing costs the same (the cutover-frame
+            # memo-build spike read as a dropped frame on the Pi). See
+            # TestNoPerFiringRasterization + TestNoCutoverBacklogSpike.
+            for suit in {g.suit for g in self._plan}:
+                _warm_suit_geometry(suit, _MAX_RI, _GLYPH_RI)
         return self._plan, real
 
-    def _current_rings(self, t):
-        """(x, y, color) shell pixels for each glyph's live pulse wavefront."""
+    def _paint_current_rings(self, real, t):
+        """SetPixel each glyph's live pulse-wavefront shell straight from the
+        process-cached geometry: one color per (glyph, ring), inline coord-add
+        + bounds check per pixel. No list building anywhere in the frame."""
         w, h = self._dims
-        out = []
+        set_pixel = real.SetPixel
         for g in self._plan:
             pr = pulse_radius(t, g.stagger)
             if pr is None:
@@ -275,19 +366,32 @@ class Poker:
             r_int = round(phase * self._max_r)
             if r_int <= 0:
                 continue
-            for dx, dy, col in self._rings.get(g.suit, r_int, self._ring_hue(g, r_int)):
-                x, y = g.cx + dx, g.cy + dy
+            cr, cg, cb = _hue_color(self._ring_hue(g, r_int))
+            cx, cy = g.cx, g.cy
+            for dx, dy in _ring_geom(g.suit, r_int):
+                x = cx + dx
+                y = cy + dy
                 if 0 <= x < w and 0 <= y < h:
-                    out.append((x, y, col))
-        return out
+                    set_pixel(x, y, cr, cg, cb)
 
     def _accumulate_reveal(self, t):
         """Union every ring shell up to each glyph's current radius into the
-        reveal mask (filled, gap-free). A completed pulse (``wave >= 1``) forces
-        the reveal out to the full ``max_radius`` even if no frame sampled the
-        outermost radius — the physical pulse did sweep it between frames."""
+        reveal mask (filled, gap-free) and drop those pixels from the black
+        complement. A completed pulse (``wave >= 1``) forces the reveal out to
+        the full ``max_radius`` even if no frame sampled the outermost radius —
+        the physical pulse did sweep it between frames.
+
+        Called EVERY frame (build phase included), not just past ``_CUTOVER``:
+        the mask isn't consumed before the peel, but maintaining it from pulse
+        start spreads the union work to a couple of radii per glyph per frame.
+        Deferring it all to the first peel frame was the 'explosion start'
+        hitch (~40 rings x every glyph in one frame — 34 ms dev, a visibly
+        dropped frame on the Pi). Reveal needs no color, so it walks the raw
+        geometry."""
         w, h = self._dims
         max_ri = int(round(self._max_r))
+        revealed = self._revealed
+        unrevealed = self._unrevealed
         for i, g in enumerate(self._plan):
             pr = pulse_radius(t, g.stagger)
             if pr is None:
@@ -297,26 +401,35 @@ class Poker:
             prev = self._reveal_r[i]
             if target <= prev:
                 continue
+            cx, cy = g.cx, g.cy
             for rr in range(prev + 1, target + 1):
-                for dx, dy, _col in self._rings.get(g.suit, rr, self._ring_hue(g, rr)):
-                    x, y = g.cx + dx, g.cy + dy
+                for dx, dy in _ring_geom(g.suit, rr):
+                    x = cx + dx
+                    y = cy + dy
                     if 0 <= x < w and 0 <= y < h:
-                        self._revealed[y * w + x] = 1
+                        flat = y * w + x
+                        if not revealed[flat]:
+                            revealed[flat] = 1
+                            unrevealed.discard((x, y))
             self._reveal_r[i] = target
 
     def _paint_glyphs(self, real, t):
         """Paint each glyph's resting FILLED suit body, scaling in over the
         first ``_GLYPH_SCALE_IN`` of the transition."""
-        w, h = self._dims
         scale_in = min(1.0, t / _GLYPH_SCALE_IN)
         gr = int(round(GLYPH_R * scale_in))
         if gr <= 0:
             return
+        w, h = self._dims
+        set_pixel = real.SetPixel
         for g in self._plan:
-            for dx, dy, col in self._rings.interior(g.suit, gr, self._glyph_hue(g)):
-                x, y = g.cx + dx, g.cy + dy
+            cr, cg, cb = _hue_color(self._glyph_hue(g))
+            cx, cy = g.cx, g.cy
+            for dx, dy in _interior_geom(g.suit, gr):
+                x = cx + dx
+                y = cy + dy
                 if 0 <= x < w and 0 <= y < h:
-                    real.SetPixel(x, y, *col)
+                    set_pixel(x, y, cr, cg, cb)
 
     def frame_at(self, t, canvas, outgoing, incoming, **kwargs):
         if t <= 0.0:
@@ -338,22 +451,21 @@ class Poker:
         plan, real = self._ensure_plan(canvas)
         if refired:
             self._reset_reveal()  # each firing washes in from scratch
-        w, h = self._dims
+        # Maintain the reveal mask from pulse start (see _accumulate_reveal) —
+        # in the build phase it's bookkeeping only, nothing reads it yet.
+        self._accumulate_reveal(t)
 
         if t < _CUTOVER:
             outgoing.draw(canvas, cursor_pos=kwargs.get("outgoing_scroll_pos", 0))
             self._paint_glyphs(real, t)
-            for x, y, col in self._current_rings(t):
-                real.SetPixel(x, y, *col)
+            self._paint_current_rings(real, t)
         else:
             snap_reset(canvas, kwargs.get("incoming_bg_color"))
             incoming.draw(canvas, cursor_pos=0)
-            self._accumulate_reveal(t)
-            for y in range(h):
-                base = y * w
-                for x in range(w):
-                    if not self._revealed[base + x]:
-                        real.SetPixel(x, y, 0, 0, 0)
-            for x, y, col in self._current_rings(t):
-                real.SetPixel(x, y, *col)
+            # Black only the still-unrevealed complement (a shrinking set) rather
+            # than scanning all w*h pixels every frame.
+            set_pixel = real.SetPixel
+            for x, y in self._unrevealed:
+                set_pixel(x, y, 0, 0, 0)
+            self._paint_current_rings(real, t)
         return canvas

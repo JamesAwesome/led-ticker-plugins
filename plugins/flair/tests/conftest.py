@@ -19,3 +19,16 @@ def make_widget():
         return widget
 
     return _factory
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _prewarm_poker_geometry():
+    """Warm ALL poker suit geometry synchronously before any test runs, so
+    the background warm introduced for the first-firing stall never has a
+    live thread during tests (a mid-test thread would pollute the mask-spy
+    counts in TestNoPerFiringRasterization)."""
+    from led_ticker_flair.flair import poker
+
+    poker._warm_worker(list(poker.SUITS), yield_s=0)
+    poker._warm_dispatched.update(poker.SUITS)
+    yield
