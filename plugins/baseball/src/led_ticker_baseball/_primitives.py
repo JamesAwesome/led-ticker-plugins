@@ -86,8 +86,9 @@ def draw_record(
     `_paint.phys_wrap`) rather than the real canvas. `y` is forwarded to
     `hires` UNMODIFIED — same convention as every other primitive taking a
     caller-supplied coordinate; any dc.html visual-top -> ascent-box-top
-    conversion is the CALLER'S job (see `layouts/standings_board.py`'s
-    `_cap_top`/`_t`), applied once before this call, not duplicated here.
+    conversion is the CALLER'S job (see `_paint.cap_top` and
+    `layouts/standings_board.py`'s `_t`), applied once before this call, not
+    duplicated here.
 
     Returns the total physical-px advance (call sites do
     `x += draw_record(...)`)."""

@@ -33,6 +33,23 @@ def js_round(v: float) -> int:
     return math.floor(v + 0.5)
 
 
+def cap_top(y_target: int, size: int) -> int:
+    """dc.html visual-cap-top y -> `hires()`'s ascent-box-top y.
+
+    Every dc.html handoff coordinate is the glyph's VISUAL top (roughly cap
+    height) under the prototype's own rasterizer; `hires()` treats its `y`
+    argument as the ASCENT-box top (baseline = y + font.ascent). Inter's
+    ascent is taller than its cap height, so a naive 1:1 port renders text
+    low. This is the ONE conversion formula (originally derived + hardware
+    validated in `layouts/standings_board.py`, see that module's docstring
+    for the full derivation) — every caller that receives a cap-top target
+    from the design handoff routes through this before calling `hires()`
+    directly. `layouts/crawl.py`'s `_y_for` is a deliberate exception (see
+    its own docstring) and must NOT be migrated to this helper.
+    """
+    return y_target - size + js_round(size * 0.72)
+
+
 def _subst(text: str) -> str:
     for missing, safe in _HIRES_GLYPH_SUBSTITUTIONS.items():
         text = text.replace(missing, safe)
