@@ -296,7 +296,7 @@ class Poker:
                     f"unknown suit(s) {unknown!r}; valid: {list(SUITS)!r} "
                     "(hearts, diamonds, clubs, spades)"
                 )
-        self.suits = list(suits) if suits else list(SUITS)
+        self.suits: list[str] = list(suits) if suits else list(SUITS)
         self.seed = seed
         self._rng = random.Random(seed) if seed is not None else random.Random()
         self._plan: list[Glyph] = []  # empty == needs (re)build
