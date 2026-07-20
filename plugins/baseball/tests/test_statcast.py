@@ -91,6 +91,27 @@ class TestRowHelpers:
         assert _format_value("hardest_hit", 113.4) == "113.4 mph"
 
 
+def _row(**over):
+    """Savant row with enriched play-context fields."""
+    base = dict(
+        events="home_run",
+        description="hit_into_play",
+        bb_type="fly_ball",
+        launch_speed="114.2",
+        launch_angle="28",
+        hit_distance_sc="451",
+        release_speed="94.1",
+        pitch_name="Slider",
+        batter="111",
+        pitcher="222",
+        home_team="PHI",
+        away_team="LAD",
+        inning_topbot="Bot",
+    )
+    base.update(over)
+    return base
+
+
 class TestDeriveRecords:
     def _derive(self, rows, stats=None):
         from led_ticker_baseball.statcast import _STAT_KEYS, _derive_records
@@ -152,6 +173,15 @@ class TestDeriveRecords:
 
     def test_empty_rows_empty_records(self):
         assert self._derive([]) == {}
+
+    def test_derive_captures_play_context_for_longest_hr(self):
+        rec = self._derive([_row()], ["longest_hr"])["longest_hr"]
+        assert rec.distance == 451.0
+        assert rec.exit_velo == 114.2
+        assert rec.launch_angle == 28.0
+        assert rec.bb_type == "fly_ball"
+        assert rec.result == "HOME RUN"
+        assert rec.pitch_velo == 94.1
 
 
 def make_widget(**kwargs):

@@ -117,12 +117,49 @@ def _format_value(key: str, value: float) -> str:
     return f"{value:.1f} mph"
 
 
+_RESULT_COPY: dict[str, str] = {
+    "home_run": "HOME RUN",
+    "double": "DOUBLE",
+    "triple": "TRIPLE",
+    "single": "SINGLE",
+    "field_out": "OUT",
+    "sac_fly": "SAC FLY",
+    "force_out": "FORCE OUT",
+    "grounded_into_double_play": "GIDP",
+    "double_play": "DOUBLE PLAY",
+}
+_BB_TYPE_OUT_COPY: dict[str, str] = {
+    "fly_ball": "FLY OUT",
+    "line_drive": "LINE OUT",
+    "popup": "POP OUT",
+    "ground_ball": "GROUND OUT",
+}
+
+
+def _result_label(events: str, bb_type: str) -> str:
+    """Prettify the Savant `events` for display. A generic out
+    (`field_out`) is refined by `bb_type` (FLY/LINE/POP/GROUND OUT); a
+    known event maps directly; anything unmapped Title-cases the raw
+    token. Never invents copy beyond this table."""
+    if events == "field_out" and bb_type in _BB_TYPE_OUT_COPY:
+        return _BB_TYPE_OUT_COPY[bb_type]
+    if events in _RESULT_COPY:
+        return _RESULT_COPY[events]
+    return (events or "").replace("_", " ").upper()
+
+
 @dataclass(frozen=True)
 class StatRecord:
     value: float
     person_id: int
     team_abbr: str
     pitch_name: str = ""
+    exit_velo: float | None = None
+    launch_angle: float | None = None
+    distance: float | None = None
+    bb_type: str = ""
+    result: str = ""
+    pitch_velo: float | None = None
 
 
 def _derive_records(
@@ -152,11 +189,19 @@ def _derive_records(
         cur = records.get(key)
         if cur is not None and (value >= cur.value if lower else value <= cur.value):
             return
+        events_str = (r.get("events") or "").strip()
+        bb_type_str = (r.get("bb_type") or "").strip()
         records[key] = StatRecord(
             value=value,
             person_id=_to_id(r, who),
             team_abbr=_row_team(r, who),
             pitch_name=(r.get("pitch_name") or "").strip(),
+            exit_velo=_to_float(r, "launch_speed"),
+            launch_angle=_to_float(r, "launch_angle"),
+            distance=_to_float(r, "hit_distance_sc"),
+            bb_type=bb_type_str,
+            result=_result_label(events_str, bb_type_str),
+            pitch_velo=_to_float(r, "release_speed"),
         )
 
     for r in rows:
