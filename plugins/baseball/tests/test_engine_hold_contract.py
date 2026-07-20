@@ -493,3 +493,35 @@ def test_held_statcast_long_card_takes_hold_branch_no_phantom_scroll():
     cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
     assert cursor_pos == 128  # wrapper logical width -> hold branch
     assert final_pos == 0  # never scrolled
+
+
+def test_held_statcast_big_card_takes_hold_branch():
+    """Same Finding-1 shape as the long card, but on a BIGSIGN (256 physical
+    px, scale 4 -> 64 logical). `cfg_layout="big"` forces the held big card;
+    its returned cursor must be the wrapper's LOGICAL width (64) so the
+    engine's real hold-vs-scroll check takes the hold branch. The big/long
+    branches share the `return canvas, canvas.width` line, so this closes the
+    coverage gap the long-card test left (the big renderer was untested at
+    the engine level)."""
+    frame = _bigsign_frame()
+    card = MLBStatcastCard(
+        record=StatRecord(
+            value=451,
+            person_id=1,
+            team_abbr="PHI",
+            exit_velo=114.2,
+            launch_angle=28,
+            distance=451,
+            bb_type="fly_ball",
+            result="HOME RUN",
+            pitch_velo=94.1,
+        ),
+        player_name="RAMIREZ",
+        legacy=_statcast_legacy(),
+        story_index=0,
+        story_total=1,
+        cfg_layout="big",
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos == 64  # wrapper logical width -> hold branch
+    assert final_pos == 0  # never scrolled

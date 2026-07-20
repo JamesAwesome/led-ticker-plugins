@@ -12,6 +12,7 @@ from the full day so far.
 import csv
 import io
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Self
@@ -78,11 +79,17 @@ def _to_float(row: dict[str, Any], key: str) -> float | None:
     values are always strings via DictReader, so the falsy-zero edge of the
     ``or ""`` guard only applies to a literal int/float 0, which CSV rows
     never carry.)
+
+    Non-finite readings (``"nan"`` / ``"inf"`` / ``"-inf"``, which ``float()``
+    happily parses) are treated as malformed → None, so ``plan_arc`` and the
+    layouts' ``int(record.distance)`` never see a value that would raise
+    ValueError/OverflowError into the render loop.
     """
     try:
-        return float(row.get(key) or "")
+        v = float(row.get(key) or "")
     except ValueError:
         return None
+    return v if math.isfinite(v) else None
 
 
 def _to_id(row: dict[str, Any], key: str) -> int:

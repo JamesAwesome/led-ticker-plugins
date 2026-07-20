@@ -26,6 +26,26 @@ _APEX_LA_SHIFT = 0.14  # higher LA apexes earlier by up to this
 _EV_FLATTEN = 0.12  # high exit velo lowers the apex (line-drive carry)
 _EV_REF = 115.0  # exit velo at which _EV_FLATTEN fully applies
 
+# HR apex teeth: distance lifts the apex so a no-doubter visibly out-climbs a
+# wall-scraper at equal LA/EV. All HRs still clear the SAME wall (wall_x);
+# height is the differentiator.
+_HR_DIST_MIN = 360.0  # a wall-scraper HR; below this the distance lift is 0
+_HR_DIST_LIFT = 0.45  # fraction of (h-2) a REF_FT HR adds on top of its LA/EV peak
+
+# bb_type reshapes EVERY non-grounder silhouette (teeth level 2): a line_drive
+# is a flat rope (lower peak, apex later), a fly_ball the rounded reference, a
+# popup steep (higher peak, apex earlier). Unknown/empty bb_type is neutral.
+_BB_PEAK_MULT: dict[str, float] = {
+    "line_drive": 0.55,
+    "fly_ball": 1.0,
+    "popup": 1.35,
+}
+_BB_APEX_SHIFT: dict[str, float] = {
+    "line_drive": 0.10,  # apexes later (carries flat, drops late)
+    "fly_ball": 0.0,
+    "popup": -0.12,  # apexes earlier (up fast, steep drop)
+}
+
 
 def res_color(result: str) -> Color:
     """Map a batted-ball result string to a palette color.
@@ -90,17 +110,26 @@ def plan_arc(launch_angle, exit_velo, distance, bb_type, result, w, h):
         end_x = int(round(w * frac))
     end_x = max(6, min(w, end_x))
 
-    # apex height from LA, flattened by high EV; liner barely rises
+    # apex height from LA, flattened by high EV; bb_type reshapes the
+    # silhouette (rope / moonshot / pop); a HR's apex towers with distance so
+    # a no-doubter visibly out-climbs a wall-scraper at equal LA/EV.
     peak_frac = max(0.0, min(1.0, la / 45.0))
     peak = peak_frac * (h - 2)
     if ev > 0:
         peak *= 1.0 - _EV_FLATTEN * min(1.0, ev / _EV_REF)
-    peak = max(2.0, min(float(h - 2), peak))
+    peak *= _BB_PEAK_MULT.get(bb_type, 1.0)
+    if act == "clears":
+        dist_factor = max(
+            0.0, min(1.0, (dist - _HR_DIST_MIN) / (REF_FT - _HR_DIST_MIN))
+        )
+        peak += dist_factor * _HR_DIST_LIFT * (h - 2)
+    peak = max(2.0, min(float(h - 2), peak))  # keep the arc inside the box
     if liner:
         peak = min(peak, 4.0)
 
-    # apex position: higher LA apexes earlier; drag => steeper descent
-    a = _APEX_BASE - _APEX_LA_SHIFT * peak_frac
+    # apex position: higher LA apexes earlier; drag => steeper descent;
+    # bb_type nudges it (rope apexes later, pop earlier)
+    a = _APEX_BASE - _APEX_LA_SHIFT * peak_frac + _BB_APEX_SHIFT.get(bb_type, 0.0)
     a = max(0.35, min(0.7, a))
 
     span = max(1, end_x)

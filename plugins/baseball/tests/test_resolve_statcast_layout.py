@@ -19,8 +19,16 @@ def test_auto_big_vs_long_by_width():
 
 
 def test_explicit_layout_respected_at_scale_gt_1():
-    assert resolve_statcast_layout("long", 4, 256) == "long"
+    assert resolve_statcast_layout("long", 4, 512) == "long"
     assert resolve_statcast_layout("big", 4, 512) == "big"
+
+
+def test_explicit_long_degrades_on_narrow_panel():
+    """render_statcast_long draws its columns/trajectory out to x~502, mostly
+    off a 256px bigsign. Mirror resolve_layout's Finding-3 degrade guard: an
+    explicit long on a <400px panel degrades to big rather than render near-
+    blank."""
+    assert resolve_statcast_layout("long", 4, 256) == "big"
 
 
 def test_res_color_maps_outcome():

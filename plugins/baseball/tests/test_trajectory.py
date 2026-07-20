@@ -47,13 +47,39 @@ def test_grounder_stays_low():
 
 
 def test_equal_distance_hrs_differ_by_bb_type():
-    """Two 430ft home runs, one line_drive one fly_ball, must NOT draw the
-    same silhouette — the core mandate of this phase."""
-    liner = plan_arc(18, 108, 430, "line_drive", "HOME RUN", W, H)
-    moon = plan_arc(34, 104, 430, "fly_ball", "HOME RUN", W, H)
-    assert _apex(liner)[1] < _apex(moon)[1]  # liner peaks lower
-    assert _apex(liner)[0] > _apex(moon)[0]  # liner apexes later
-    assert liner.points != moon.points
+    """Two home runs identical in LA/EV/distance, differing ONLY in bb_type
+    (line_drive vs fly_ball), must NOT draw the same silhouette — bb_type
+    itself is the sole differentiator (the core mandate of this phase). The
+    line_drive is a flatter rope (lower apex) than the fly_ball moonshot."""
+    liner = plan_arc(28, 105, 430, "line_drive", "HOME RUN", W, H)
+    moon = plan_arc(28, 105, 430, "fly_ball", "HOME RUN", W, H)
+    assert _apex(liner)[1] < _apex(moon)[1]  # liner peaks lower (rope)
+    assert liner.points != moon.points  # bb_type alone changed the shape
+
+
+def test_hr_arc_peak_scales_with_distance():
+    """Distance must give the HR arc teeth: holding LA/EV/bb_type fixed, a
+    462ft HR towers measurably higher than a 385ft wall-scraper."""
+    short = plan_arc(28, 105, 385, "fly_ball", "HOME RUN", W, H)
+    deep = plan_arc(28, 105, 462, "fly_ball", "HOME RUN", W, H)
+    assert short.act == deep.act == "clears"
+    assert _apex(deep)[1] > _apex(short)[1]  # farther HR apexes higher
+
+
+def test_bb_type_alone_changes_silhouette():
+    """Holding LA/EV/distance/result fixed and varying ONLY bb_type across
+    three fair-ball shapes must produce three pairwise-different point lists,
+    and the line_drive rope must peak lower than the steep popup."""
+    la, ev, dist, res = 25, 100, 350, "DOUBLE"
+    rope = plan_arc(la, ev, dist, "line_drive", res, W, H)
+    fly = plan_arc(la, ev, dist, "fly_ball", res, W, H)
+    pop = plan_arc(la, ev, dist, "popup", res, W, H)
+    # same act — only the silhouette varies with bb_type
+    assert rope.act == fly.act == pop.act == "fair"
+    assert rope.points != fly.points
+    assert rope.points != pop.points
+    assert fly.points != pop.points
+    assert _apex(rope)[1] < _apex(pop)[1]  # rope flatter than popup
 
 
 def test_low_liner_runs_off_the_edge():

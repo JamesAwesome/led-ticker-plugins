@@ -53,6 +53,20 @@ class TestRowHelpers:
         assert _to_float({"x": "null"}, "x") is None
         assert _to_float({}, "x") is None
 
+    def test_to_float_rejects_non_finite(self):
+        """nan/inf slip past float() but violate the docstring's "None when
+        malformed" contract — and reach render as an unguarded int(distance)
+        that raises ValueError/OverflowError into the engine loop. Guard at
+        the source so plan_arc and the layouts never see them."""
+        from led_ticker_baseball.statcast import _to_float
+
+        assert _to_float({"x": "nan"}, "x") is None
+        assert _to_float({"x": "inf"}, "x") is None
+        assert _to_float({"x": "-inf"}, "x") is None
+        # finite values still parse (including the falsy-zero edge)
+        assert _to_float({"x": "451"}, "x") == 451.0
+        assert _to_float({"x": "0"}, "x") == 0.0
+
     def test_to_id(self):
         from led_ticker_baseball.statcast import _to_id
 

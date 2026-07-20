@@ -91,9 +91,19 @@ def resolve_statcast_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
     EXPLICIT `cfg_layout` ("big" / "long") passes through unchanged; "auto"
     maps by physical width — narrow (bigsign, 256px) uses "big", wide
     (longboi, 512px) uses "long".
+
+    **Width-fit degrade for explicit `long`** (mirrors `resolve_layout`'s
+    Finding-3 guard): `layouts/statcast_long.py` hardcodes anchors and draws
+    its trajectory out to x~502, assuming a >=400 physical-px panel (longboi).
+    An explicit `layout = "long"` on a narrower panel (e.g. bigsign, 256px)
+    would render mostly off-panel — near-blank, no error, no log. So an
+    explicit `long` at `scale > 1` and `phys_w < _STATCAST_AUTO_WIDE_MIN_W`
+    degrades to `big` — the same landing spot `auto` would already pick.
     """
     if scale <= 1:
         return "legacy"
+    if cfg_layout == "long" and scale > 1 and phys_w < _STATCAST_AUTO_WIDE_MIN_W:
+        return "big"
     if cfg_layout != "auto":
         return cfg_layout
     return "big" if phys_w < _STATCAST_AUTO_WIDE_MIN_W else "long"
