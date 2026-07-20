@@ -88,3 +88,14 @@ def test_never_raises_off_box_progress():
     real = _canvas()
     p = plan_arc(8, 106, 0, "line_drive", "LINE OUT", 106, 24)
     draw_trajectory(real, (396, 20, 106, 24), p, 2.0)  # clamps
+
+
+def test_track_marker_stays_within_box():
+    real = _canvas()
+    # a deep flyout that carries to the warning track (out + distance >= 370)
+    p = plan_arc(30, 101, 395, "fly_ball", "FLY OUT", 106, 24)
+    assert p.act == "track"  # sanity: this fixture really is a track act
+    draw_trajectory(real, (396, 20, 106, 24), p, 1.0)
+    lit = _lit(real)
+    # nothing may paint above the box top (y0=20) or below its bottom (y0+h-1=43)
+    assert not any(y < 20 or y > 43 for (x, y) in lit)

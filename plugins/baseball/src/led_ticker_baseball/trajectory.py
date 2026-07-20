@@ -135,17 +135,21 @@ def draw_trajectory(
                 px(real, x0 + cx, y0 + yy, trail)
         prev = (cx, cy)
 
-    # the ball: 2px bright dot at the leading edge
+    # the ball: 2px bright dot at the leading edge, clamped to the box
+    # bottom — the parabola's final point always lands at local y=h-1
+    # (ground), so the unclamped dy=1 row would bleed 1px below the box
     bx, by = plan.points[shown - 1]
     for dx in range(2):
         for dy in range(2):
-            px(real, x0 + bx + dx, y0 + by + dy, pal.MAGENTA)
+            px(real, x0 + bx + dx, min(y0 + by + dy, ground), pal.MAGENTA)
 
     if progress < 1.0:
         return  # act markers only at rest
 
     lx, ly = plan.landing
     if plan.act == "clears" and plan.wall_x is not None:
+        # intentional 1px over/under-bleed above/below the box (full-bleed
+        # look for the wall tick) — do NOT clamp this to [0, h) as a "fix"
         for yy in range(-1, h + 1):
             px(real, x0 + plan.wall_x, y0 + yy, pal.IDENT)
     elif plan.act == "caught":
@@ -154,7 +158,9 @@ def draw_trajectory(
                 if abs(dx) + abs(dy) == 1:
                     px(real, x0 + lx + dx, y0 + ly + dy, pal.dim(pal.LABEL, 0.9))
     elif plan.act == "track":
-        for i in range(0, w // 4):  # dotted warning-track line near the wall
+        # dotted warning-track line near the wall; row count clamped to the
+        # box height so it can't bleed above the box top (was unclamped)
+        for i in range(0, min(w // 4, h - 1)):
             px(real, x0 + w - 6 + (i % 2), ground - 1 - i, pal.dim(pal.AMBER, 0.6))
     elif plan.act == "fair":
         px(real, x0 + lx, ground, pal.MAGENTA)
