@@ -162,8 +162,28 @@ def test_long_regions_present():
     assert _lit_in(real, 6, 300, 16, 44)  # name band [6,300) y18 px22
     assert _lit_in(real, 6, 100, 48, 62)  # "PROMOTION" label x6 y50 px9
     assert _lit_in(real, 308, 322, 6, 25)  # chip rx=308 y8 h13
-    assert _lit_in(real, 326, 460, 6, 28)  # "VS BOS" + time, right block
+    assert _lit_in(real, 326, 440, 6, 28)  # "VS BOS", right block
+    assert _lit_in(real, 440, 507, 2, 26)  # time, right-anchored at 506
     assert _lit_in(real, 308, 460, 34, 54)  # sub line rx=308 y36 px14
+
+
+def test_long_time_right_anchored():
+    """Hardware finding (longboi, 2026-07-20): the prototype left-flows the
+    time after "VS OPP" (`promoLongCard` dc.html ~548), which strands ~50
+    physical px of dead panel at the right edge — glaring when the cyan sub
+    line below is empty (live promos are sparse; `presented_by`/`offer_type`
+    are often missing). Deliberate deviation from the prototype: the time is
+    right-anchored at `width - 6` (margin mirroring the left column's x=6 and
+    the BIG layout's own `252 - tw` anchor)."""
+    canvas, real = _longboi()
+    render_promo_card(canvas, _promo(), 0)
+    lit = _lit_coords(real)
+    # Time occupies the top band hard against the right margin (old
+    # left-flowed position topped out near x=432)...
+    assert any(x >= 470 for x, y in lit if y < 30)
+    # ...and respects the 6px right margin (paging dots are off at
+    # story_total=1; nothing may cross x=506).
+    assert not any(x > 506 for x, _y in lit)
 
 
 def test_long_name_outside_band_never_lit():

@@ -156,9 +156,16 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
 
     rx = 308
     chip(real, rx, 8 + yo, 13, opp)
-    vx = rx + 18
-    vx += _t(shim, f"VS {opp}", vx, 8 + yo, pal.VIOLET, 16) + 12
-    _t(shim, time_text, vx, 10 + yo, pal.AMBER, 14, bold=False)
+    _t(shim, f"VS {opp}", rx + 18, 8 + yo, pal.VIOLET, 16)
+    # Deliberate deviation from the prototype (`promoLongCard` dc.html ~548
+    # left-flows the time 12px after "VS OPP"): right-anchor it at width-6
+    # instead, mirroring the BIG layout's `252 - tw` anchor and the left
+    # column's x=6 margin. Left-flowed, a typical line topped out near
+    # x=432 and stranded ~50 physical px of dead panel at the right edge —
+    # glaring when the cyan sub line below is empty, which live promos
+    # often are (hardware finding, longboi 2026-07-20).
+    tw = text_width(14, time_text, bold=False)
+    _t(shim, time_text, real.width - 6 - tw, 10 + yo, pal.AMBER, 14, bold=False)
     sub = fit_text(_promo_sub(promo), 196, 14, bold=False)
     _t(shim, sub, rx, 36 + yo, pal.CYAN, 14, bold=False)
 
