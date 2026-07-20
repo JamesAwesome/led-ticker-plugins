@@ -219,6 +219,16 @@ SAME index, so `highlight`/`limit` can never apply differently to the two. Tripw
 `test_promos_field_matches_feed_stories_order` plus the highlight/limit tests that assert both
 shapes (`test_promotions.py`).
 
+**Statcast trajectory** — `trajectory.plan_arc(...)` is a PURE deterministic
+function of the ball's (launch_angle, exit_velo, distance, bb_type, result):
+a given ball always draws the SAME arc, different balls diverge (the
+anti-"same arc" mandate — tripwire `test_equal_distance_hrs_differ_by_bb_type`).
+The landing `act` (clears/fair/track/caught/grounder) is result-driven. The
+arc is LONGBOI-ONLY (statcastBig shows la/dist as text). `MLBStatcastCard`'s
+flight clock RESTARTS on visit (`reset_frame` zeroes `_flight_ticks`) — the
+OPPOSITE of `_promo_card.py` (survives) and unlike `_standings_card.py`
+(arm/consume). Never cargo-cult the three onto each other.
+
 **Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
 routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
 ascent-box-top y formula as the scores physical renderers) so a row mixing multiple font sizes

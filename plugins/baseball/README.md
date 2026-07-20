@@ -252,6 +252,7 @@ type = "baseball.statcast"
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `team` | string | unset | Scope superlatives to this team's own players (e.g. a Phillies batter for `longest_hr`, a Phillies pitcher for `fastest_pitch`). Omit for league-wide. Case-insensitive — see [Team codes](#team-codes). |
+| `layout` | string | `"auto"` | `"auto"`, `"big"`, or `"long"` — see [Hero card + trajectory](#hero-card--trajectory-bigsignlongboi) below. Scale-1 signs ignore this and always render the classic scrolling line. |
 | `stats` | list of strings | all four | Which lines to show, in display order: `"longest_hr"`, `"hardest_hit"`, `"fastest_pitch"`, `"slowest_pitch"`. |
 | `update_interval` | int | `1800` | Seconds between refreshes (30 min). A ~10 KB schedule check skips the ~3 MB data pull when nothing changed. |
 | `title` | string | `"Statcast"` | Section title override. |
@@ -271,6 +272,65 @@ With a team set, lines lead with the team abbreviation in its brand color and
 drop the (now-redundant) trailing one:
 `PHI Today · Longest HR 472 ft — Schwarber`. The off-day fallback then names
 the team's next game (`Next game: Jun 20`) rather than the league slate.
+
+#### Hero card + trajectory (bigsign/longboi)
+
+**Scale-1 signs (smallsign) always render the classic scrolling line above**,
+unchanged by `layout`. **Scale>1 signs (bigsign, longboi) render one story per
+superlative as a physical (procedural pixel-art) hero card** instead — a
+coordinate-for-coordinate port of the design handoff, same design-pinned
+convention as the `baseball.scores`/`baseball.standings`/`baseball.promotions`
+physical renderers: player name, the result in its outcome color (green HR,
+red out, amber otherwise), exit velo, and — on the wide card — launch angle
+and pitch columns alongside a DISTANCE panel.
+
+Two card shapes, chosen by `layout`:
+
+- **`layout = "auto"` (default)** — resolves to the best card for the sign automatically; see the resolution table below. This is what most configs should use.
+- **`layout = "big"`** — the narrow (bigsign) card, forced regardless of sign width.
+- **`layout = "long"`** — the wide (longboi) card with the animated trajectory panel, forced regardless of sign width.
+
+`layout = "auto"` resolves like this:
+
+| Sign | Resolves to |
+|------|-------------|
+| scale 1 (smallsign) | classic scrolling line |
+| scale>1, real width < 400px (bigsign) | big card |
+| scale>1, real width >= 400px (longboi) | long card |
+
+**The big card (bigsign)** is text-only: player, result, exit velo, then a
+line with launch angle, distance, and pitch (name + velo, when the
+superlative is a pitch rather than a batted ball) — no arc panel.
+
+**The long card (longboi)** adds an animated trajectory panel in the
+DISTANCE slot for batted-ball superlatives (`longest_hr`, `hardest_hit`): the
+ball FLIES the arc over ~1.5s from a standing start each time the card is
+shown, then rests at its landing act — one of five, driven by the play's
+actual result, never guessed:
+
+- **clears** — a home run; the ball flies past a white wall tick at the
+  panel's far edge.
+- **fair** — a non-homer hit; the ball comes to rest on the ground mid-panel.
+- **track** — a deep out (distance at or past the warning track); the ball
+  is caught in front of a dotted amber warning-track line.
+- **caught** — a shallower out; the ball rests inside a small grey glove
+  ring.
+- **grounder** — a ground ball or a launch angle at or below zero; a low
+  skip along the ground to a short landing, no arc.
+
+The arc's shape — apex height, where it peaks, how steeply it drops — comes
+from the ball's real launch angle, exit velo, and distance, so two home runs
+land at genuinely different curves (a lofted moonshot vs. a flatter liner
+that runs off the panel edge), while the *same* ball always draws the exact
+same arc on replay. **Pitch superlatives (`fastest_pitch`, `slowest_pitch`)
+have no launch angle or distance, so the long card skips the arc panel
+entirely** and shows the pitch type large in that slot instead.
+
+**The trajectory arc is LONGBOI-ONLY** — the narrower bigsign card has no
+room for a flight panel and always shows launch angle + distance as plain
+text, same as the classic line. Re-entering the section (a new visit) always
+flies the ball again from the start; it never resumes mid-flight or skips
+straight to the resting pose.
 
 ### `baseball.attendance`
 
