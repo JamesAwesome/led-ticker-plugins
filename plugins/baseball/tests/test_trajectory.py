@@ -1,8 +1,18 @@
 """tests/test_trajectory.py"""
 
-from led_ticker_baseball.trajectory import ArcPlan, plan_arc
+from led_ticker.plugin import HeadlessBackend
+
+from led_ticker_baseball.trajectory import ArcPlan, draw_trajectory, plan_arc
 
 W, H = 106, 24
+
+
+def _canvas():
+    return HeadlessBackend(512, 64).create_canvas()
+
+
+def _lit(real):
+    return {xy for xy, v in real._pixels.items() if v != (0, 0, 0)}
 
 
 def _apex(plan):
@@ -53,3 +63,28 @@ def test_low_liner_runs_off_the_edge():
 
 def test_never_raises_on_missing_values():
     assert isinstance(plan_arc(None, None, None, "", "", W, H), ArcPlan)
+
+
+def test_progress_zero_shows_less_than_full():
+    real0 = _canvas()
+    real1 = _canvas()
+    p = plan_arc(28, 114, 451, "fly_ball", "HOME RUN", 106, 24)
+    draw_trajectory(real0, (396, 20, 106, 24), p, 0.15)
+    draw_trajectory(real1, (396, 20, 106, 24), p, 1.0)
+    assert len(_lit(real0)) < len(_lit(real1))  # ball hasn't flown the whole path
+
+
+def test_clears_paints_wall_tick_at_rest():
+    real = _canvas()
+    p = plan_arc(28, 114, 451, "fly_ball", "HOME RUN", 106, 24)
+    draw_trajectory(real, (396, 20, 106, 24), p, 1.0)
+    # a bright vertical run near the wall column
+    wall_col = 396 + p.wall_x
+    col_hits = sum(1 for (x, y) in _lit(real) if x == wall_col)
+    assert col_hits >= 6
+
+
+def test_never_raises_off_box_progress():
+    real = _canvas()
+    p = plan_arc(8, 106, 0, "line_drive", "LINE OUT", 106, 24)
+    draw_trajectory(real, (396, 20, 106, 24), p, 2.0)  # clamps

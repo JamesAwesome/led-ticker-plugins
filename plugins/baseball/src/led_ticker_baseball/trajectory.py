@@ -12,6 +12,9 @@ invariant shape). Pure geometry: no canvas, no palette, no frame state.
 import math
 from dataclasses import dataclass
 
+from led_ticker_baseball import _palette as pal
+from led_ticker_baseball._paint import px
+
 # Tunables (hardware-adjustable constants, one rationale each):
 WARNING_TRACK_FT = 370.0  # an out carrying >= this is "caught at the track"
 REF_FT = 470.0  # distance that reaches the wall (landing frac 1.0)
@@ -97,3 +100,61 @@ def plan_arc(launch_angle, exit_velo, distance, bb_type, result, w, h):
         pts.append((i, max(0, min(ground, y))))
     landing = pts[-1]
     return ArcPlan(pts, landing, act, wall_x)
+
+
+def draw_trajectory(
+    real, box: tuple[int, int, int, int], plan: ArcPlan, progress: float
+) -> None:
+    """Paint `plan`'s arc onto the REAL (physical-px) canvas within `box`.
+
+    `box = (x, y, w, h)` is the panel origin+size in physical px. `progress`
+    is the flight fraction, clamped to [0, 1] — 1.0 draws the full path plus
+    the result's landing-act marker (wall tick / glove / warning track /
+    fair splash); any earlier fraction draws a partial trail with a bright
+    2px ball at the leading edge and no act marker yet."""
+    x0, y0, w, h = box
+    ground = y0 + h - 1
+    progress = max(0.0, min(1.0, progress))
+
+    # faint ground line
+    for i in range(w):
+        px(real, x0 + i, ground, pal.dim(pal.LABEL, 0.45))
+
+    n = len(plan.points)
+    if n == 0:
+        return
+    shown = max(1, int(round(n * progress)))
+    trail = pal.dim(pal.MAGENTA, 0.5)
+    prev = None
+    for idx in range(shown):
+        cx, cy = plan.points[idx]
+        px(real, x0 + cx, y0 + cy, pal.MAGENTA if idx == shown - 1 else trail)
+        if prev is not None and idx != shown - 1:
+            plo, phi = sorted((prev[1], cy))
+            for yy in range(plo, phi + 1):
+                px(real, x0 + cx, y0 + yy, trail)
+        prev = (cx, cy)
+
+    # the ball: 2px bright dot at the leading edge
+    bx, by = plan.points[shown - 1]
+    for dx in range(2):
+        for dy in range(2):
+            px(real, x0 + bx + dx, y0 + by + dy, pal.MAGENTA)
+
+    if progress < 1.0:
+        return  # act markers only at rest
+
+    lx, ly = plan.landing
+    if plan.act == "clears" and plan.wall_x is not None:
+        for yy in range(-1, h + 1):
+            px(real, x0 + plan.wall_x, y0 + yy, pal.IDENT)
+    elif plan.act == "caught":
+        for dx in range(-1, 2):  # small glove ring, dim grey
+            for dy in range(-1, 2):
+                if abs(dx) + abs(dy) == 1:
+                    px(real, x0 + lx + dx, y0 + ly + dy, pal.dim(pal.LABEL, 0.9))
+    elif plan.act == "track":
+        for i in range(0, w // 4):  # dotted warning-track line near the wall
+            px(real, x0 + w - 6 + (i % 2), ground - 1 - i, pal.dim(pal.AMBER, 0.6))
+    elif plan.act == "fair":
+        px(real, x0 + lx, ground, pal.MAGENTA)
