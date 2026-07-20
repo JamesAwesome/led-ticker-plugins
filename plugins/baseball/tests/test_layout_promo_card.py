@@ -161,9 +161,10 @@ def test_long_regions_present():
     assert _lit_in(real, 6, 300, 2, 20)  # date, x6 y4 px12
     assert _lit_in(real, 6, 300, 16, 46)  # name band [6,300) y21 px26
     assert _lit_in(real, 6, 100, 48, 62)  # "PROMOTION" label x6 y50 px9
-    assert _lit_in(real, 322, 440, 6, 28)  # chip + "VS BOS", anchored off time
-    assert _lit_in(real, 440, 507, 2, 26)  # time, right-anchored at 506
-    assert _lit_in(real, 308, 507, 34, 54)  # sub line, right-anchored, y36 px14
+    assert _lit_in(real, 308, 320, 6, 22)  # chip rx=308 y8 h11
+    assert _lit_in(real, 322, 440, 6, 26)  # "VS BOS" px14, right block
+    assert _lit_in(real, 440, 507, 2, 26)  # time px12, right-anchored at 506
+    assert _lit_in(real, 308, 460, 34, 52)  # sub line px12, left at rx y36
 
 
 def test_long_time_right_anchored():
@@ -205,23 +206,23 @@ def test_long_left_column_gaps_consistent():
     )
 
 
-def test_long_vs_block_sits_near_time():
-    """Hardware feedback (longboi, 2026-07-20, round 2): with the time
-    right-anchored, the chip + "VS OPP" block left at the prototype's fixed
-    rx=308 stranded ~67px of dead space before the time. The block now
-    anchors off the time's x (fixed 14px gap). Isolate "VS OPP" from the
-    date (also amber-adjacent rows) by color: hires threshold rasterization
-    paints the palette color exactly."""
+def test_long_right_block_sizes_reduced():
+    """Hardware feedback (longboi, 2026-07-20, round 3): round 2's packing
+    of the right block against the time was rolled back — the block sits
+    at the prototype's fixed rx=308 with the sub left-aligned under the
+    chip — and the right side is instead one size notch SMALLER (chip
+    h13->11, VS px16->14, time px14->12, sub px14->12) so it reads as a
+    quieter info column next to the px26 marquee. Guard: "VS OPP" (violet,
+    px14) must render SHORTER than the px26 name's cap band — relative,
+    freetype-safe."""
     canvas, real = _longboi()
     render_promo_card(canvas, _promo(), 0)
     violet = (pal.VIOLET.red, pal.VIOLET.green, pal.VIOLET.blue)
-    amber = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
-    vs_end = max(x for (x, y), v in real._pixels.items() if v == violet)
-    time_start = min(
-        x for (x, y), v in real._pixels.items() if v == amber and x > 300 and y < 30
-    )
-    dead = time_start - vs_end - 1
-    assert dead <= 20, f"{dead}px of dead space between 'VS OPP' and the time"
+    vs_rows = sorted(y for (x, y), v in real._pixels.items() if v == violet)
+    vs_cols = sorted(x for (x, y), v in real._pixels.items() if v == violet)
+    assert vs_cols[0] >= 320  # block anchored at rx=308 (chip first, then VS)
+    vs_cap = vs_rows[-1] - vs_rows[0] + 1
+    assert vs_cap <= 11  # px14 cap ~10 rows; px16 measured 12
 
 
 def test_long_name_outside_band_never_lit():

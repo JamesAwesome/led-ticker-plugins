@@ -162,27 +162,23 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
     mask_scroll(real, name, 6, 300, 21 + yo, pal.IDENT, 26, clock_ms)
     _t(shim, "PROMOTION", 6, 50 + yo, pal.LABEL, 9)
 
-    # Right block, right-justified (deviation from the prototype's fixed
-    # rx=308 + left-flowed time, `promoLongCard` dc.html ~544-548 — same
-    # hardware findings, longboi 2026-07-20): the time right-anchors at
-    # width-6 (mirroring the BIG layout's `252 - tw` anchor and the left
-    # column's x=6 margin), the chip + "VS OPP" block anchors off the
-    # time's x with a fixed 14px gap (the prototype's fixed rx stranded
-    # ~67px of dead space before a right-anchored time), and the sub line
-    # right-anchors under the time so the block's right edge is a single
-    # clean line. `rx` floors at the prototype's 308 so pathological data
-    # (an absurdly wide time/opponent string) widens the VS->time gap
-    # instead of invading the name band's [300,308) buffer.
-    tw = text_width(14, time_text, bold=False)
-    time_x = real.width - 6 - tw
-    vs_text = f"VS {opp}"
-    rx = max(308, time_x - 14 - text_width(16, vs_text) - 18)
-    chip(real, rx, 8 + yo, 13, opp)
-    _t(shim, vs_text, rx + 18, 8 + yo, pal.VIOLET, 16)
-    _t(shim, time_text, time_x, 10 + yo, pal.AMBER, 14, bold=False)
-    sub = fit_text(_promo_sub(promo), 196, 14, bold=False)
-    sub_x = real.width - 6 - text_width(14, sub, bold=False)
-    _t(shim, sub, sub_x, 36 + yo, pal.CYAN, 14, bold=False)
+    # Right block: prototype alignment (fixed rx=308, sub left-aligned
+    # under the chip, `promoLongCard` dc.html ~544-549) with two deviations
+    # from hardware feedback (longboi, 2026-07-20): (1) the time
+    # right-anchors at width-6 (left-flowed after "VS OPP" it stranded
+    # ~50px of dead panel at the right edge — round 1); (2) the whole block
+    # is one size notch SMALLER than the prototype (chip h13->11, VS
+    # px16->14, time px14->12, sub px14->12) so it reads as a quiet info
+    # column beside the px26 marquee (round 3 — round 2's pack-the-block-
+    # against-the-time layout was tried on-panel and rolled back in favor
+    # of this).
+    rx = 308
+    chip(real, rx, 8 + yo, 11, opp)
+    _t(shim, f"VS {opp}", rx + 16, 8 + yo, pal.VIOLET, 14)
+    tw = text_width(12, time_text, bold=False)
+    _t(shim, time_text, real.width - 6 - tw, 10 + yo, pal.AMBER, 12, bold=False)
+    sub = fit_text(_promo_sub(promo), 196, 12, bold=False)
+    _t(shim, sub, rx, 36 + yo, pal.CYAN, 12, bold=False)
 
     if story_total > 1:
         paging_dots(
