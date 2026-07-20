@@ -119,11 +119,17 @@ def _segments(game, tz, px_size):
             ]
         else:
             segs.append(("text", ("(Final)", pal.IDENT, False)))
-    # Trailing gap so side-by-side (ticker-mode) stories don't butt together.
-    # The prototype's inter-game "•" bullet was dropped by request
-    # (2026-07-18): each game is its own engine story here, so in slideshow
-    # mode the bullet trailed as a lone grey dot with nothing to separate.
-    segs.append(("gap", 22))
+    # No trailing spacer: the prototype's inter-game "•" bullet was dropped
+    # by request (2026-07-18 — each game is its own engine story, so in
+    # slideshow mode it trailed as a lone grey dot), and the 22px gap that
+    # first stood in for it went too (hardware finding, longboi promos
+    # 2026-07-20, same defect here): a spacer baked into the returned
+    # advance makes the engine's scroll stop overshoot by exactly the
+    # spacer (core's `stop_pos = -(cursor - width) + padding` compensates
+    # only for `widget.padding`), resting the line head-clipped with dead
+    # panel at the right. Ticker-mode spacing between stories rides
+    # `MLBGameCard.padding` (6 logical = 24 physical at scale 4, ≈ the
+    # design's 22) through that same engine compensation instead.
     return segs, y
 
 
@@ -147,8 +153,10 @@ def render_crawl(
     the engine HOLDS the story instead of scrolling — and a held line is
     horizontally CENTERED (matching the legacy SegmentMessage `center=True`
     behavior; hardware finding 2026-07-18: short lines sat flush-left).
-    Centering excludes the trailing inter-story gap so the visible content,
-    not the spacer, is what centers. Scrolling lines keep the left origin.
+    Scrolling lines keep the left origin. The returned advance covers
+    painted content ONLY — no trailing spacer (see `_segments`' tail
+    comment: a spacer in the advance made the engine's scroll stop
+    overshoot flush-right by the spacer width).
     """
     shim, real = phys_wrap(canvas)
     scale = safe_scale(canvas)
@@ -157,13 +165,9 @@ def render_crawl(
     segs, y = _segments(game, tz, px_size)
     seg_widths = [_seg_w(kind, payload, px_size) for kind, payload in segs]
     run_phys = sum(seg_widths)
-    # content width = run minus the trailing spacer gap (always the last seg)
-    content_phys = (
-        run_phys - seg_widths[-1] if segs and segs[-1][0] == "gap" else run_phys
-    )
     logical_advance = -(-run_phys // scale)
     held = logical_advance + hold_padding <= canvas.width
-    center_off = js_round((real.width - content_phys) / 2) if held else 0
+    center_off = js_round((real.width - run_phys) / 2) if held else 0
     x = cursor_pos * scale + center_off  # physical paint offset
     total_phys = 0
     for (kind, payload), w in zip(segs, seg_widths, strict=True):

@@ -100,16 +100,37 @@ def test_y_offset_shifts_content():
 
 def test_no_bullet_between_segments():
     """Repo decision (2026-07-18, mirrored from the scores crawl): the
-    prototype's inter-story '•' bullet is dropped — a plain trailing gap
-    stands in its place. This can't be asserted directly by pixel absence
-    (the bullet's grey is close to other content), so instead assert the
-    returned width matches the sum of the OWN segment widths we expect:
-    the run must be shorter than it would be with the JS's extra
-    gap(11)+bullet(px16)+gap(16) tail included.
+    prototype's inter-story '•' bullet is dropped (and since 2026-07-20 so
+    is the trailing spacer gap that first stood in for it — see
+    `test_advance_has_no_trailing_spacer`). This can't be asserted directly
+    by pixel absence (the bullet's grey is close to other content), so
+    instead assert the returned width matches the sum of the OWN segment
+    widths we expect: the run must be shorter than it would be with the
+    JS's extra gap(11)+bullet(px16)+gap(16) tail included.
     """
     canvas, _real = _bigsign()
     w = render_promo_crawl(canvas, _promo(), 0)
     assert w > 0  # sanity; exact width is a freetype-dependent sum
+
+
+def test_advance_has_no_trailing_spacer():
+    """Hardware finding (longboi, 2026-07-20): a spacer gap baked into the
+    returned advance makes the engine's scroll stop overshoot by exactly
+    that spacer — core's `stop_pos = -(cursor - width) + padding`
+    compensates only for `widget.padding`, so the line rested with its head
+    clipped off the left edge and ~24 physical px of dead panel at the
+    right. Inter-story spacing rides `MLBPromoCard.padding` (6 logical = 24
+    physical at scale 4, ≈ the design's 22) through that same compensation
+    instead. Guard: painted extent and returned advance may differ only by
+    glyph bearings + ceil-to-logical rounding (≤ 14 physical px), never by
+    a 22px spacer. Extent is translation-immune, so held-centering can't
+    mask it — hence the oversized canvas (nothing clips)."""
+    real = HeadlessBackend(2048, 64).create_canvas()
+    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    w = render_promo_crawl(canvas, _promo(), 0)
+    cols = sorted(_lit_cols(real))
+    extent = cols[-1] - cols[0] + 1
+    assert 0 <= w * 4 - extent <= 14
 
 
 def test_empty_fields_never_raise():

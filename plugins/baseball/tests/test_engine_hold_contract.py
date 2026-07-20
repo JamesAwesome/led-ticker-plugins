@@ -146,6 +146,15 @@ def test_crawl_stop_position_leaves_content_visible():
         "blank-panel repro: content scrolled ~192 physical px past "
         "flush-right, leaving only the trailing bullet lit at x<=39)"
     )
+    # Hardware finding (longboi promos, 2026-07-20, same defect here): the
+    # advance used to include a 22-physical-px trailing spacer the engine's
+    # stop compensation knows nothing about, so the rest position sat 22px
+    # past flush-right (head clipped, dead right edge). The resting frame
+    # must end flush-right, modulo the last glyph's advance slack.
+    assert max(lit_cols) >= 256 - 14, (
+        f"final frame's lit extent stops at x={max(lit_cols)} — the scroll "
+        "stop overshot flush-right (a spacer baked into the advance?)"
+    )
 
 
 def test_held_standings_board_takes_hold_branch_no_phantom_scroll():
@@ -341,17 +350,72 @@ def test_held_promo_card_takes_hold_branch_no_phantom_scroll():
 def test_promo_crawl_scrolls_on_longboi_under_auto():
     """`layout="auto"` on a WIDE (longboi, 512 physical px) panel resolves
     to the hires crawl (`layouts.resolve_promo_layout`'s `phys_w >= 400`
-    branch); the crawl's logical cursor must overflow `canvas.width` so the
-    engine actually takes the scroll branch (Finding-2 shape: a crawl that
-    never gets fed back through the real engine can hide a stop-position
-    bug — see module docstring)."""
+    branch); an over-wide promo's logical cursor must overflow
+    `canvas.width` so the engine actually takes the scroll branch
+    (Finding-2 shape: a crawl that never gets fed back through the real
+    engine can hide a stop-position bug — see module docstring)."""
     frame = _longboi_frame()
     card = MLBPromoCard(
-        promo=_promo(), story_index=0, story_total=1, legacy=_promo_legacy()
+        promo=_promo(name="Hawaiian Shirt & Beach Towel Giveaway"),
+        story_index=0,
+        story_total=1,
+        legacy=_promo_legacy(),
     )
     cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
     assert cursor_pos > 128  # overflowed the logical width -> scroll branch ran
     assert final_pos < 0  # did scroll (sanity check the branch actually ran)
+
+
+def test_promo_crawl_short_line_holds_on_longboi():
+    """The flip side of the trailing-spacer fix (hardware finding, longboi
+    2026-07-20): a promo line that visibly fits the panel must be engine-
+    HELD (and centered by the crawl renderer), not classified as
+    overflowing by a spacer gap it doesn't paint. Uses a terse promo
+    (~276 physical px — mirrors test_layout_promo_crawl.py's
+    `_minimal_promo`); the default `_promo()` fixture measures ~521px and
+    legitimately scrolls on a 512px panel either way."""
+    frame = _longboi_frame()
+    card = MLBPromoCard(
+        promo=_promo(
+            name="Cap Day", offer_type="", presented_by="", date_label="TODAY"
+        ),
+        story_index=0,
+        story_total=1,
+        legacy=_promo_legacy(),
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos <= 128  # fits -> engine takes the hold branch
+    assert final_pos == 0  # never entered the scroll branch
+
+
+def test_promo_crawl_stop_position_lands_flush_right():
+    """Hardware finding (longboi, 2026-07-20): the crawl's returned advance
+    included its 22-physical-px trailing inter-story spacer, and core's
+    stop compensation (`stop_pos = -(cursor_pos - canvas.width) + padding`,
+    ticker.py) only adds back `widget.padding` — so every overflowing promo
+    rested 22px past flush-right: head clipped off the left edge, ~24px of
+    dead panel at the right ("the horizontal centering is off"). The
+    resting frame must end flush-right, modulo the last glyph's advance
+    slack."""
+    frame = _longboi_frame()
+    card = MLBPromoCard(
+        promo=_promo(name="Hawaiian Shirt & Beach Towel Giveaway"),
+        story_index=0,
+        story_total=1,
+        legacy=_promo_legacy(),
+    )
+    cursor_pos, final_pos, backend = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos > 128  # sanity: this fixture does overflow
+    assert final_pos < 0  # sanity: the scroll branch actually ran
+    back_buffer = backend._back_buffer
+    lit_cols = {
+        x for x, y in back_buffer._pixels if back_buffer.get_pixel(x, y) != (0, 0, 0)
+    }
+    assert lit_cols, "final displayed frame is entirely blank"
+    assert max(lit_cols) >= 512 - 14, (
+        f"final frame's lit extent stops at x={max(lit_cols)} — the scroll "
+        "stop overshot flush-right (a spacer baked into the advance?)"
+    )
 
 
 def test_clock_ticks_advance_only_unpaused_and_survive_reset_frame():

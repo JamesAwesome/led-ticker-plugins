@@ -17,8 +17,16 @@ The trailing inter-game "•" bullet dc.html draws between promos is DROPPED
 here, same repo decision (2026-07-18) as `layouts/crawl.py`'s scores
 segments: each promo is its own engine story, so the bullet would trail as
 a lone grey dot in slideshow/ticker mode with nothing to separate. The
-trailing gap left in its place (22px) matches `layouts/crawl.py`'s own
-constant for the same reason.
+22px spacer gap that first stood in for it is gone too (hardware finding,
+longboi 2026-07-20): a spacer baked into the returned ADVANCE makes the
+engine's scroll stop overshoot by exactly the spacer — core's
+`stop_pos = -(cursor_pos - canvas.width) + padding` (ticker.py)
+compensates only for `widget.padding`, so an overflowing promo rested
+22 physical px past flush-right (head clipped off the left edge, ~24px of
+dead panel at the right) and a promo that visibly FIT was mis-classified
+as overflowing and scrolled anyway. Inter-story spacing rides
+`MLBPromoCard.padding` (6 logical = 24 physical at scale 4, ≈ the
+design's 22) through that same engine compensation instead.
 """
 
 from led_ticker.plugin import resolve_font, safe_scale
@@ -32,9 +40,6 @@ from led_ticker_baseball._paint import (
     text_width,
 )
 from led_ticker_baseball._primitives import chip
-
-# Trailing inter-story gap — see module docstring ("bullet dropped").
-_TRAILING_GAP = 22
 
 
 def _promo_sub(promo) -> str:
@@ -95,7 +100,6 @@ def _segments(promo):
         ("text", (_promo_sub(promo), pal.CYAN, False, 12)),
         ("gap", 9),
         ("text", (time_text, pal.AMBER, False, 12)),
-        ("gap", _TRAILING_GAP),
     ]
 
 
@@ -115,8 +119,9 @@ def render_promo_crawl(
     """Draw at LOGICAL `cursor_pos`; return the segment run's advance width,
     also in LOGICAL px. Mirrors `layouts/crawl.py`'s `render_crawl` engine
     contract exactly (logical cursor in, logical width out; held segments
-    center, excluding the trailing gap; scrolling segments keep the left
-    origin) — see that function's docstring for the full contract.
+    center; scrolling segments keep the left origin; the advance covers
+    painted content ONLY — no trailing spacer, see module docstring) — see
+    that function's docstring for the full contract.
     """
     shim, real = phys_wrap(canvas)
     scale = safe_scale(canvas)
@@ -124,12 +129,9 @@ def render_promo_crawl(
     segs = _segments(promo)
     seg_widths = [_seg_w(kind, payload) for kind, payload in segs]
     run_phys = sum(seg_widths)
-    content_phys = (
-        run_phys - seg_widths[-1] if segs and segs[-1][0] == "gap" else run_phys
-    )
     logical_advance = -(-run_phys // scale)
     held = logical_advance + hold_padding <= canvas.width
-    center_off = js_round((real.width - content_phys) / 2) if held else 0
+    center_off = js_round((real.width - run_phys) / 2) if held else 0
     x = cursor_pos * scale + center_off
     total_phys = 0
     for (kind, payload), w in zip(segs, seg_widths, strict=True):
