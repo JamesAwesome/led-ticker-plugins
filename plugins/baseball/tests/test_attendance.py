@@ -692,10 +692,10 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd", "smallest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]) == (
+        assert line_text(w.feed_stories[0].legacy) == (
             "Today · Biggest crowd 45,123 — Dodger Stadium"
         )
-        assert line_text(w.feed_stories[1]) == (
+        assert line_text(w.feed_stories[1].legacy) == (
             "Today · Smallest crowd 8,201 — PNC Park"
         )
         assert w._last_derive == (today, 2)
@@ -716,7 +716,9 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith(f"{yest.strftime('%-m/%-d')} · ")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            f"{yest.strftime('%-m/%-d')} · "
+        )
         # Today has a (Preview) game whose attendance is still pending, so the
         # yesterday fallback must NOT durably snapshot — otherwise the gate
         # would mask today's attendance once it is announced. _last_derive must
@@ -742,7 +744,9 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith(f"{yest.strftime('%-m/%-d')} · ")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            f"{yest.strftime('%-m/%-d')} · "
+        )
         assert w._last_derive is None  # keep re-deriving until today reports
 
     async def test_today_finals_all_reported_snapshots(self):
@@ -758,7 +762,7 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith("Today · ")
+        assert line_text(w.feed_stories[0].legacy).startswith("Today · ")
         assert w._last_derive == (today, 1)
 
     async def test_error_sets_no_data(self):
@@ -849,7 +853,9 @@ class TestUpdateTeam:
         w = self._widget(routes)
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith("TOR · Rogers Centre 41,212")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            "TOR · Rogers Centre 41,212"
+        )
 
     async def test_team_no_game_today_then_probe(self):
         patcher, today = _freeze_today()
@@ -935,6 +941,38 @@ class TestStart:
         spawn.assert_called_once_with("LOOP")
 
 
+class TestBuildLeagueCards:
+    def test_league_feed_stories_are_cards(self):
+        from led_ticker_baseball._attendance_card import MLBAttendanceCard
+        from led_ticker_baseball.attendance import CrowdRecord
+
+        mon = make_widget(stats=["biggest_crowd", "fullest"])
+        records = {
+            "biggest_crowd": CrowdRecord(
+                value=45123,
+                venue="Dodger Stadium",
+                home_abbr="LAD",
+                is_pct=False,
+                fill_frac=0.9,
+                attendance=45123,
+                capacity=50000,
+            ),
+            "fullest": CrowdRecord(
+                value=99,
+                venue="Fenway Park",
+                home_abbr="BOS",
+                is_pct=True,
+                fill_frac=0.99,
+                attendance=37000,
+                capacity=37500,
+            ),
+        }
+        cards = mon._build_league_cards(records, "Today")
+        assert all(isinstance(c, MLBAttendanceCard) for c in cards)
+        assert cards[0].label == "BIGGEST CROWD"
+        assert cards[0].story_total == 2
+
+
 class TestValidateConfig:
     def _v(self, cfg):
         from led_ticker_baseball.attendance import MLBAttendanceMonitor
@@ -943,6 +981,10 @@ class TestValidateConfig:
 
     def test_empty_passes(self):
         assert self._v({}) == []
+
+    def test_rejects_bad_layout(self):
+        msgs = self._v({"layout": "sideways"})
+        assert any("layout" in m for m in msgs)
 
     def test_team_only_passes(self):
         assert self._v({"team": "TOR"}) == []

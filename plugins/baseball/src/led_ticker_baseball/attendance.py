@@ -12,7 +12,7 @@ re-derives, schedule-gated so off-hours ticks are cheap.
 import asyncio
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Self
 from zoneinfo import ZoneInfo
@@ -32,6 +32,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._attendance_card import MLBAttendanceCard
 from led_ticker_baseball.teams import (
     _MLB_LIVE_API,
     API_TO_CANONICAL_ABBR,
@@ -215,6 +216,10 @@ class MLBAttendanceMonitor:
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    # Card layout at scale > 1 ("auto" picks big/long by physical width); at
+    # scale <= 1 every layout forwards verbatim to the legacy line, so this
+    # field is a no-op on smallsign. Validated in validate_config below.
+    layout: str = "auto"
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -226,8 +231,8 @@ class MLBAttendanceMonitor:
     feed_title: TickerMessage | SegmentMessage | None = attrs.field(
         init=False, default=None
     )
-    feed_stories: list[TickerMessage | SegmentMessage] = attrs.field(
-        init=False, factory=list
+    feed_stories: list[TickerMessage | SegmentMessage | MLBAttendanceCard] = (
+        attrs.field(init=False, factory=list)
     )
 
     def _body_color(self) -> Color | ColorProvider:
@@ -300,6 +305,36 @@ class MLBAttendanceMonitor:
             )
         return stories
 
+    def _build_league_cards(
+        self, records: dict[str, CrowdRecord], day_label: str
+    ) -> list[TickerMessage | SegmentMessage | MLBAttendanceCard]:
+        """One MLBAttendanceCard per superlative, wrapping its legacy line.
+
+        `_build_league_stories` builds the legacy `SegmentMessage` lines in
+        `self.stats` display order (record-present filtering already applied
+        there); this pairs each line back up with its record so scale>1 can
+        render the hero card while scale<=1 forwards verbatim to the legacy
+        line (see `MLBAttendanceCard.draw`).
+        """
+        lines = self._build_league_stories(records, day_label)
+        ordered = [k for k in self.stats if k in records]
+        total = len(ordered)
+        cards: list[TickerMessage | SegmentMessage | MLBAttendanceCard] = []
+        for idx, (key, legacy) in enumerate(zip(ordered, lines, strict=True)):
+            cards.append(
+                MLBAttendanceCard(
+                    record=records[key],
+                    legacy=legacy,
+                    label=_STAT_LABELS[key].upper(),
+                    story_index=idx,
+                    story_total=total,
+                    cfg_layout=self.layout,
+                    bg_color=self.bg_color,
+                    font_color=self.font_color,
+                )
+            )
+        return cards
+
     def _build_team_line(
         self,
         *,
@@ -343,6 +378,47 @@ class MLBAttendanceMonitor:
             center=True,
             bg_color=self.bg_color,
             font=self.font,
+            font_color=self.font_color,
+        )
+
+    async def _build_team_card(
+        self,
+        *,
+        game_venue: GameVenue,
+        att: int | None,
+        cap: int,
+        weather: dict[str, Any] | None,
+        day_label: str,
+    ) -> MLBAttendanceCard:
+        """The tracked team's single game, wrapped for scale-dispatch.
+
+        Builds the legacy line via `_build_team_line` (unchanged, scale<=1
+        output) then fetches the season average and wraps both in an
+        `AttendanceGame` record for the card's scale>1 layouts. The caller
+        resolves `game_venue.venue` to the live feed's venue name when
+        present (mirroring the existing `venue or game.venue` fallback) —
+        this method just reads it off `game_venue`.
+        """
+        legacy = self._build_team_line(
+            venue=game_venue.venue,
+            attendance=att,
+            capacity=cap,
+            weather=weather,
+            day_label=day_label,
+        )
+        avg = await self._fetch_season_avg()
+        record = AttendanceGame(
+            paid=att,
+            capacity=cap,
+            avg=avg,
+            venue=game_venue.venue,
+            home_abbr=game_venue.home_abbr,
+        )
+        return MLBAttendanceCard(
+            record=record,
+            legacy=legacy,
+            cfg_layout=self.layout,
+            bg_color=self.bg_color,
             font_color=self.font_color,
         )
 
@@ -488,6 +564,13 @@ class MLBAttendanceMonitor:
         if team is not None and not isinstance(team, str):
             msgs.append(f"attendance team={team!r} must be a string abbreviation.")
 
+        layout = cfg.get("layout", "auto")
+        if layout not in ("auto", "big", "long"):
+            msgs.append(
+                f"attendance layout={layout!r} is not valid. "
+                "Use 'auto', 'big', or 'long'."
+            )
+
         stats = cfg.get("stats")
         if stats is not None:
             stats_valid = isinstance(stats, list) and all(
@@ -569,7 +652,7 @@ class MLBAttendanceMonitor:
         pairs = await self._league_pairs(today_games)
         if pairs:
             records = _derive_superlatives(pairs, self.stats)
-            self.feed_stories = self._build_league_stories(records, "Today")
+            self.feed_stories = self._build_league_cards(records, "Today")
             logger.info(
                 "MLB Attendance updated: %d stories (Today)", len(self.feed_stories)
             )
@@ -583,7 +666,7 @@ class MLBAttendanceMonitor:
         if ypairs:
             records = _derive_superlatives(ypairs, self.stats)
             label = yest.strftime("%-m/%-d")
-            self.feed_stories = self._build_league_stories(records, label)
+            self.feed_stories = self._build_league_cards(records, label)
             logger.info(
                 "MLB Attendance updated: %d stories (%s)", len(self.feed_stories), label
             )
@@ -599,10 +682,10 @@ class MLBAttendanceMonitor:
         if game is not None:
             att, weather, venue, cap = await self._fetch_game_data(game.game_pk)
             self.feed_stories = [
-                self._build_team_line(
-                    venue=venue or game.venue,
-                    attendance=att,
-                    capacity=cap or game.capacity,
+                await self._build_team_card(
+                    game_venue=replace(game, venue=venue or game.venue),
+                    att=att,
+                    cap=cap or game.capacity,
                     weather=weather,
                     day_label="",
                 )
@@ -618,10 +701,10 @@ class MLBAttendanceMonitor:
         if ygame is not None:
             att, weather, venue, cap = await self._fetch_game_data(ygame.game_pk)
             self.feed_stories = [
-                self._build_team_line(
-                    venue=venue or ygame.venue,
-                    attendance=att,
-                    capacity=cap or ygame.capacity,
+                await self._build_team_card(
+                    game_venue=replace(ygame, venue=venue or ygame.venue),
+                    att=att,
+                    cap=cap or ygame.capacity,
                     weather=weather,
                     day_label=yest.strftime("%-m/%-d"),
                 )
