@@ -175,6 +175,48 @@ def test_big_arc_stays_within_box():
     )
 
 
+def test_big_hr_arc_never_paints_over_text(monkeypatch):
+    """HR (clears act) lands ~1-2px past `_TRAJ_BOX`'s right edge by design
+    (the ball's leading-edge dot) plus a 1px over/under-bleed from the
+    wall-tick marker (trajectory.py's `end_x = w` / `range(-1, h + 1)`
+    comments say not to clamp either) — both spill outside the box onto
+    empty margin. That's fine; the actual risk is the spill (or a shifted
+    `_TRAJ_BOX` / `plan_arc` geometry) landing on the card's TEXT instead.
+    A box-relative "outside the box" check can't tell those apart once the
+    box itself is the thing that moved — the box would move WITH its own
+    "safe interior" exemption. So this compares every pixel's COLOR against
+    a text-only baseline (arc suppressed via monkeypatch), with no box
+    exemption at all: the arc may freely light a pixel the baseline left
+    black (its own reserved space, or the by-design overflow above), but it
+    must never change the color of a pixel the baseline had ALREADY lit —
+    that's the arc painting over real card content, anywhere on the panel.
+    Regression tripwire for `_TRAJ_BOX` / `plan_arc` geometry drift, encoding
+    the review's one-time manual proof; verified in authoring that pushing
+    `_TRAJ_BOX`'s x left onto the exit-velo/player-name text trips this
+    assertion, and reverting clears it."""
+    from led_ticker_baseball.layouts import statcast_big as sb
+
+    rec = _hr_rec()
+    # (a) full render, arc included
+    canvas_a, real_a = _bigsign()
+    render_statcast_big(canvas_a, rec, "SCHWARBER", 1.0)
+    # (b) text-only baseline: same record, arc suppressed
+    canvas_b, real_b = _bigsign()
+    monkeypatch.setattr(sb, "draw_trajectory", lambda *a, **k: None)
+    render_statcast_big(canvas_b, rec, "SCHWARBER", 1.0)
+
+    all_xy = set(real_a._pixels) | set(real_b._pixels)
+    collisions = {
+        (x, y)
+        for (x, y) in all_xy
+        if real_a.get_pixel(x, y) != real_b.get_pixel(x, y)
+        and real_b.get_pixel(x, y) != (0, 0, 0)
+    }
+    assert not collisions, (
+        f"HR arc overwrote already-lit (text) pixels: {sorted(collisions)[:8]}"
+    )
+
+
 def test_big_progress_advances_arc():
     canvas_early, real_early = _bigsign()
     render_statcast_big(canvas_early, _rec(), "RAMIREZ", 0.1)
