@@ -1,0 +1,99 @@
+"""Batted-ball trajectory geometry for the statcast hero card (longboi).
+
+Replaces the design prototype's `traj()` (dc.html ~257), whose single
+symmetric parabola `4u(1-u)` scaled only by launch angle drew the SAME
+shape for every ball. Here the curve is a deterministic function of the
+ball's real numbers (launch angle, exit velo, distance, bb_type) PLUS a
+result-driven landing `act` — so different balls draw genuinely different
+arcs while a given ball is always identical (no RNG; testable; frame-
+invariant shape). Pure geometry: no canvas, no palette, no frame state.
+"""
+
+import math
+from dataclasses import dataclass
+
+# Tunables (hardware-adjustable constants, one rationale each):
+WARNING_TRACK_FT = 370.0  # an out carrying >= this is "caught at the track"
+REF_FT = 470.0  # distance that reaches the wall (landing frac 1.0)
+LINER_MAX_LA = 12.0  # <= this launch angle is a flat rope, not an arc
+_APEX_BASE = 0.58  # apex fraction at LA 0 (drag: past midpoint)
+_APEX_LA_SHIFT = 0.14  # higher LA apexes earlier by up to this
+_EV_FLATTEN = 0.12  # high exit velo lowers the apex (line-drive carry)
+_EV_REF = 115.0  # exit velo at which _EV_FLATTEN fully applies
+
+
+@dataclass(frozen=True)
+class ArcPlan:
+    points: list[tuple[int, int]]
+    landing: tuple[int, int]
+    act: str
+    wall_x: int | None
+
+
+def _classify(result: str, bb_type: str, distance: float, la: float) -> str:
+    r = (result or "").upper()
+    if "HOME RUN" in r:
+        return "clears"
+    is_out = "OUT" in r or "GIDP" in r or "DOUBLE PLAY" in r
+    if bb_type == "ground_ball" or la <= 0:
+        return "grounder"
+    if is_out and distance >= WARNING_TRACK_FT:
+        return "track"
+    if is_out:
+        return "caught"
+    return "fair"  # a hit that isn't a HR
+
+
+def plan_arc(launch_angle, exit_velo, distance, bb_type, result, w, h):
+    la = float(launch_angle) if launch_angle is not None else 0.0
+    ev = float(exit_velo) if exit_velo is not None else 0.0
+    dist = float(distance) if distance is not None else 0.0
+    act = _classify(result, bb_type, dist, la)
+
+    ground = h - 1
+    liner = 0 < la <= LINER_MAX_LA
+    if act == "grounder":
+        # low skip along the ground to a short landing
+        end_x = max(6, int(round(w * 0.45)))
+        pts = [(i, ground - (1 if (i // 3) % 2 == 0 else 0)) for i in range(end_x + 1)]
+        return ArcPlan(pts, (end_x, ground), "grounder", None)
+
+    # landing x from distance; HR reaches the wall, liner runs off the edge
+    if act == "clears":
+        wall_x = w - 4
+        end_x = w  # continue a hair past the wall
+    elif liner:
+        wall_x = None
+        end_x = w  # never comes down inside the box
+    else:
+        wall_x = None
+        frac = max(0.30, min(0.98, dist / REF_FT)) if dist > 0 else 0.45
+        end_x = int(round(w * frac))
+    end_x = max(6, min(w, end_x))
+
+    # apex height from LA, flattened by high EV; liner barely rises
+    peak_frac = max(0.0, min(1.0, la / 45.0))
+    peak = peak_frac * (h - 2)
+    if ev > 0:
+        peak *= 1.0 - _EV_FLATTEN * min(1.0, ev / _EV_REF)
+    peak = max(2.0, min(float(h - 2), peak))
+    if liner:
+        peak = min(peak, 4.0)
+
+    # apex position: higher LA apexes earlier; drag => steeper descent
+    a = _APEX_BASE - _APEX_LA_SHIFT * peak_frac
+    a = max(0.35, min(0.7, a))
+
+    span = max(1, end_x)
+    pts: list[tuple[int, int]] = []
+    for i in range(end_x + 1):
+        u = i / span
+        if u <= a:
+            f = math.sin((u / a) * (math.pi / 2))  # smooth rise to 1
+        else:
+            v = (u - a) / (1 - a)
+            f = math.cos(v * (math.pi / 2)) ** 1.5  # steeper drag drop
+        y = ground - int(round(peak * max(0.0, f)))
+        pts.append((i, max(0, min(ground, y))))
+    landing = pts[-1]
+    return ArcPlan(pts, landing, act, wall_x)
