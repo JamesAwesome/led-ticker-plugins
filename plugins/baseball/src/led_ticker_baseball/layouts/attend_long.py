@@ -86,14 +86,22 @@ _VENUE_SIZE = 8
 _VENUE_GAP = 10
 
 # League-card rows (no dc.html coordinate beyond label/value/bar — same gap
-# as attend_big's league layout). The headline value shares the team card's
-# paid-number slot (x, y, size) so both variants anchor their primary
-# readout in the same visual position; venue+chip share the row-40 band,
-# mirroring the team card's row-40/42 band and attend_big's league layout.
+# as attend_big's league layout). The label sits ABOVE the value in its own
+# row-disjoint stack, mirroring attend_big's league spacing (label y=1/px9,
+# value y=14/px22) — NOT the team card's y=3/px30 paid slot, whose px30 value
+# cap-top (`cap_top(3, 30) = -5`, glyph span ~-5..24) paints THROUGH the y=1
+# label (span ~-2..6) at overlapping x. With label px9 y=1 (`cap_top = -2`,
+# span ~-2..6) and value px22 y=14 (`cap_top = 8`, span ~8..29) the two are
+# row-disjoint (gap at row 7) and the value clears BOTH the label above and
+# the venue/bar below (venue at row-40 band, `cap_top(40, 8) = 38`, spans
+# ~38..45; bar at rows 52-61). px22 (not px30) is the size that fits this
+# window — same as attend_big's league value. venue+chip share the row-40
+# band, mirroring the team card's row-40/42 band and attend_big's league
+# layout. Tripwire: test_league_label_and_value_are_row_disjoint.
 _Y_LEAGUE_LABEL = 1
 _LEAGUE_LABEL_SIZE = 9
-_Y_LEAGUE_VALUE = _Y_PAID
-_LEAGUE_VALUE_SIZE = _PAID_SIZE
+_Y_LEAGUE_VALUE = 14
+_LEAGUE_VALUE_SIZE = 22
 _Y_LEAGUE_ROW = _Y_ROW40
 _LEAGUE_CHIP_H = 8
 _Y_LEAGUE_BAR = _Y_BAR

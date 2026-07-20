@@ -81,13 +81,30 @@ def test_long_venue_belt_and_edge():
 
 
 def test_team_no_avg_omits_tick():
-    """avg=None (early season) -> no season-avg tick drawn."""
+    """avg=None (early season) -> no season-avg tick drawn; the SAME record
+    WITH avg present DOES draw the tick. The pair proves this test can tell
+    tick-present from tick-absent.
+
+    GOTCHA (task-4/5 brief): `real._pixels` values are plain (r, g, b) tuples
+    and a Color is NEVER == a tuple in the stub, so the old `v == pal.IDENT`
+    comparison was unconditionally False — the test passed whether or not the
+    "no tick" behavior worked. Compare against the tuple form. The tick bleeds
+    1px above/below the bar (rows 51-62 for a y=52,h=10 bar)."""
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+
     canvas, real = _longboi()
     render_attend_long(canvas, _team(avg=None), 1.0)
-    tick = [
-        (x, y) for (x, y), v in real._pixels.items() if v == pal.IDENT and 51 <= y <= 63
+    no_tick = [
+        (x, y) for (x, y), v in real._pixels.items() if v == ident and 51 <= y <= 62
     ]
-    assert tick == []
+    assert no_tick == []  # avg=None -> tick absent
+
+    canvas2, real2 = _longboi()
+    render_attend_long(canvas2, _team(avg=39442), 1.0)
+    with_tick = [
+        (x, y) for (x, y), v in real2._pixels.items() if v == ident and 51 <= y <= 62
+    ]
+    assert with_tick  # avg present -> tick IS drawn (proves discrimination)
 
 
 def test_bar_animates_with_progress():
@@ -148,6 +165,31 @@ def test_long_league_regions_present():
     assert _lit_in(real, 6, 200, 0, 10)  # label
     assert _lit_in(real, 6, 250, 0, 34)  # big value
     assert _lit_in(real, 6, 506, 52, 62)  # fill bar band
+
+
+def test_league_label_and_value_are_row_disjoint():
+    """League label (small, top) and the big value must not paint through
+    each other — the value used to reuse the team paid slot at y=3 and
+    overlapped the y=1 label. Isolate by color (label=LABEL, value=AMBER for
+    a crowd record) and assert their row sets don't intersect."""
+    canvas, real = _longboi()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=0.9,
+        attendance=45123,
+        capacity=50000,
+    )
+    render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")
+    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    amb = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
+    px = real._pixels.items()
+    label_rows = {y for (x, y), v in px if v == lab and x < 200 and y < 40}
+    value_rows = {y for (x, y), v in px if v == amb and x < 200 and y < 45}
+    assert label_rows and value_rows
+    assert not (label_rows & value_rows)  # disjoint — no paint-through
 
 
 def test_never_raises_on_empty_team():
