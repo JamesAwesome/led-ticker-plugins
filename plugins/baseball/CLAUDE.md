@@ -219,6 +219,22 @@ SAME index, so `highlight`/`limit` can never apply differently to the two. Tripw
 `test_promos_field_matches_feed_stories_order` plus the highlight/limit tests that assert both
 shapes (`test_promotions.py`).
 
+**Statcast trajectory** — `trajectory.plan_arc(...)` is a PURE deterministic
+function of the ball's (launch_angle, exit_velo, distance, bb_type, result):
+a given ball always draws the SAME arc, different balls diverge (the
+anti-"same arc" mandate — tripwire `test_equal_distance_hrs_differ_by_bb_type`).
+The landing `act` (clears/fair/track/caught/grounder) is result-driven. Both
+scale>1 layouts draw the arc: `statcast_long` in the full-width DISTANCE slot,
+`statcast_big` in a compact `_TRAJ_BOX = (146, 13, 104, 33)` under the result
+label (both keep la/dist text too; a HR's ~1-2px edge overflow lands in empty
+margin — tripwire `test_big_hr_arc_never_paints_over_text`). The `statcast_long`
+PITCH column sec uses the Savant `pitch_type` ABBREVIATION ("SL MPH"), never the
+full `pitch_name` (which overflowed the DISTANCE panel at x396) + a `fit_text`
+belt. `MLBStatcastCard`'s
+flight clock RESTARTS on visit (`reset_frame` zeroes `_flight_ticks`) — the
+OPPOSITE of `_promo_card.py` (survives) and unlike `_standings_card.py`
+(arm/consume). Never cargo-cult the three onto each other.
+
 **Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
 routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
 ascent-box-top y formula as the scores physical renderers) so a row mixing multiple font sizes

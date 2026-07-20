@@ -30,8 +30,10 @@ from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import GameInfo
 from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball._standings_card import MLBStandingsBoard
+from led_ticker_baseball._statcast_card import MLBStatcastCard
 from led_ticker_baseball.promotions import PromoInfo
 from led_ticker_baseball.standings import TeamStanding
+from led_ticker_baseball.statcast import StatRecord
 
 TZ = ZoneInfo("America/New_York")
 
@@ -453,3 +455,73 @@ def test_clock_ticks_advance_only_unpaused_and_survive_reset_frame():
 
     card.advance_frame()
     assert card._clock_ticks == 4
+
+
+def _statcast_legacy():
+    return SegmentMessage([("Today · HR 451 ft", colors.RGB_WHITE)], center=True)
+
+
+def test_held_statcast_long_card_takes_hold_branch_no_phantom_scroll():
+    """Same Finding-1 shape as the other cards (see module docstring),
+    applied to MLBStatcastCard: on a WIDE (longboi, 512 physical px) panel,
+    `layout="auto"` resolves to the held long card
+    (`layouts.resolve_statcast_layout`'s `phys_w >= _STATCAST_AUTO_WIDE_MIN_W`
+    branch), and the card must return the WRAPPER's LOGICAL width so the
+    engine's real hold-vs-scroll check (`cursor_pos > canvas.width`, core
+    ticker.py) takes the hold branch — zero scroll ticks — rather than
+    phantom-scrolling a static held card. A card that returned `real.width`
+    (512) instead of `canvas.width` (128) would fail HERE even though its
+    own unit test (`test_statcast_card_dispatch.py`) passes in isolation."""
+    frame = _longboi_frame()
+    card = MLBStatcastCard(
+        record=StatRecord(
+            value=451,
+            person_id=1,
+            team_abbr="PHI",
+            exit_velo=114.2,
+            launch_angle=28,
+            distance=451,
+            bb_type="fly_ball",
+            result="HOME RUN",
+            pitch_velo=94.1,
+        ),
+        player_name="RAMIREZ",
+        legacy=_statcast_legacy(),
+        story_index=0,
+        story_total=1,
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos == 128  # wrapper logical width -> hold branch
+    assert final_pos == 0  # never scrolled
+
+
+def test_held_statcast_big_card_takes_hold_branch():
+    """Same Finding-1 shape as the long card, but on a BIGSIGN (256 physical
+    px, scale 4 -> 64 logical). `cfg_layout="big"` forces the held big card;
+    its returned cursor must be the wrapper's LOGICAL width (64) so the
+    engine's real hold-vs-scroll check takes the hold branch. The big/long
+    branches share the `return canvas, canvas.width` line, so this closes the
+    coverage gap the long-card test left (the big renderer was untested at
+    the engine level)."""
+    frame = _bigsign_frame()
+    card = MLBStatcastCard(
+        record=StatRecord(
+            value=451,
+            person_id=1,
+            team_abbr="PHI",
+            exit_velo=114.2,
+            launch_angle=28,
+            distance=451,
+            bb_type="fly_ball",
+            result="HOME RUN",
+            pitch_velo=94.1,
+        ),
+        player_name="RAMIREZ",
+        legacy=_statcast_legacy(),
+        story_index=0,
+        story_total=1,
+        cfg_layout="big",
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos == 64  # wrapper logical width -> hold branch
+    assert final_pos == 0  # never scrolled

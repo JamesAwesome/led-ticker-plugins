@@ -12,6 +12,7 @@ from the full day so far.
 import csv
 import io
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Self
@@ -32,6 +33,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._statcast_card import MLBStatcastCard
 from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
     MLB_API,
@@ -77,11 +79,17 @@ def _to_float(row: dict[str, Any], key: str) -> float | None:
     values are always strings via DictReader, so the falsy-zero edge of the
     ``or ""`` guard only applies to a literal int/float 0, which CSV rows
     never carry.)
+
+    Non-finite readings (``"nan"`` / ``"inf"`` / ``"-inf"``, which ``float()``
+    happily parses) are treated as malformed → None, so ``plan_arc`` and the
+    layouts' ``int(record.distance)`` never see a value that would raise
+    ValueError/OverflowError into the render loop.
     """
     try:
-        return float(row.get(key) or "")
+        v = float(row.get(key) or "")
     except ValueError:
         return None
+    return v if math.isfinite(v) else None
 
 
 def _to_id(row: dict[str, Any], key: str) -> int:
@@ -117,12 +125,50 @@ def _format_value(key: str, value: float) -> str:
     return f"{value:.1f} mph"
 
 
+_RESULT_COPY: dict[str, str] = {
+    "home_run": "HOME RUN",
+    "double": "DOUBLE",
+    "triple": "TRIPLE",
+    "single": "SINGLE",
+    "field_out": "OUT",
+    "sac_fly": "SAC FLY",
+    "force_out": "FORCE OUT",
+    "grounded_into_double_play": "GIDP",
+    "double_play": "DOUBLE PLAY",
+}
+_BB_TYPE_OUT_COPY: dict[str, str] = {
+    "fly_ball": "FLY OUT",
+    "line_drive": "LINE OUT",
+    "popup": "POP OUT",
+    "ground_ball": "GROUND OUT",
+}
+
+
+def _result_label(events: str, bb_type: str) -> str:
+    """Prettify the Savant `events` for display. A generic out
+    (`field_out`) is refined by `bb_type` (FLY/LINE/POP/GROUND OUT); a
+    known event maps directly; anything unmapped Title-cases the raw
+    token. Never invents copy beyond this table."""
+    if events == "field_out" and bb_type in _BB_TYPE_OUT_COPY:
+        return _BB_TYPE_OUT_COPY[bb_type]
+    if events in _RESULT_COPY:
+        return _RESULT_COPY[events]
+    return (events or "").replace("_", " ").upper()
+
+
 @dataclass(frozen=True)
 class StatRecord:
     value: float
     person_id: int
     team_abbr: str
     pitch_name: str = ""
+    pitch_type: str = ""
+    exit_velo: float | None = None
+    launch_angle: float | None = None
+    distance: float | None = None
+    bb_type: str = ""
+    result: str = ""
+    pitch_velo: float | None = None
 
 
 def _derive_records(
@@ -152,11 +198,20 @@ def _derive_records(
         cur = records.get(key)
         if cur is not None and (value >= cur.value if lower else value <= cur.value):
             return
+        events_str = (r.get("events") or "").strip()
+        bb_type_str = (r.get("bb_type") or "").strip()
         records[key] = StatRecord(
             value=value,
             person_id=_to_id(r, who),
             team_abbr=_row_team(r, who),
             pitch_name=(r.get("pitch_name") or "").strip(),
+            pitch_type=(r.get("pitch_type") or "").strip(),
+            exit_velo=_to_float(r, "launch_speed"),
+            launch_angle=_to_float(r, "launch_angle"),
+            distance=_to_float(r, "hit_distance_sc"),
+            bb_type=bb_type_str,
+            result=_result_label(events_str, bb_type_str),
+            pitch_velo=_to_float(r, "release_speed"),
         )
 
     for r in rows:
@@ -187,6 +242,10 @@ class MLBStatcastMonitor:
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    # Card layout at scale > 1 ("auto" picks big/long by physical width); at
+    # scale <= 1 every layout forwards verbatim to the legacy line, so this
+    # field is a no-op on smallsign. Validated in validate_config below.
+    layout: str = "auto"
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -199,7 +258,7 @@ class MLBStatcastMonitor:
     feed_title: TickerMessage | SegmentMessage | None = attrs.field(
         init=False, default=None
     )
-    feed_stories: list[TickerMessage | SegmentMessage] = attrs.field(
+    feed_stories: list[TickerMessage | SegmentMessage | MLBStatcastCard] = attrs.field(
         init=False, factory=list
     )
 
@@ -215,6 +274,12 @@ class MLBStatcastMonitor:
         team = cfg.get("team")
         if team is not None and not isinstance(team, str):
             msgs.append(f"statcast team={team!r} must be a string abbreviation.")
+        layout = cfg.get("layout", "auto")
+        if layout not in ("auto", "big", "long"):
+            msgs.append(
+                f"statcast layout={layout!r} is not valid. "
+                "Use 'auto', 'big', or 'long'."
+            )
         stats = cfg.get("stats")
         if stats is None:
             return msgs
@@ -280,7 +345,7 @@ class MLBStatcastMonitor:
             return
 
         names = await self._resolve_names({r.person_id for r in records.values()})
-        self.feed_stories = self._build_stat_stories(records, label, names)
+        self.feed_stories = self._build_stat_cards(records, label, names)
         self._last_derive = (today, counts[1] if counts is not None else -1)
         logger.info(
             "MLB Statcast updated: %d stories (%s)", len(self.feed_stories), label
@@ -435,6 +500,41 @@ class MLBStatcastMonitor:
                 )
             )
         return stories
+
+    def _build_stat_cards(
+        self,
+        records: dict[str, StatRecord],
+        day_label: str,
+        names: dict[int, str],
+    ) -> list[TickerMessage | SegmentMessage | MLBStatcastCard]:
+        """One MLBStatcastCard per record, wrapping its legacy line.
+
+        `_build_stat_stories` builds the legacy `SegmentMessage` lines in
+        `self.stats` display order (record-present filtering already
+        applied there); this method pairs each line back up with its
+        record + resolved player name so scale>1 can render the hero
+        card while scale<=1 forwards verbatim to the legacy line (see
+        `MLBStatcastCard.draw`).
+        """
+        legacy_lines = self._build_stat_stories(records, day_label, names)
+        ordered = [k for k in self.stats if k in records]
+        total = len(ordered)
+        cards: list[TickerMessage | SegmentMessage | MLBStatcastCard] = []
+        for idx, (key, legacy) in enumerate(zip(ordered, legacy_lines, strict=True)):
+            record = records[key]
+            cards.append(
+                MLBStatcastCard(
+                    record=record,
+                    player_name=names.get(record.person_id, ""),
+                    legacy=legacy,
+                    story_index=idx,
+                    story_total=total,
+                    cfg_layout=self.layout,
+                    bg_color=self.bg_color,
+                    font_color=self.font_color,
+                )
+            )
+        return cards
 
     # Contract for the state setters below: they manage feed_stories only.
     # update() calls _set_title() unconditionally before dispatching to any

@@ -53,6 +53,20 @@ class TestRowHelpers:
         assert _to_float({"x": "null"}, "x") is None
         assert _to_float({}, "x") is None
 
+    def test_to_float_rejects_non_finite(self):
+        """nan/inf slip past float() but violate the docstring's "None when
+        malformed" contract — and reach render as an unguarded int(distance)
+        that raises ValueError/OverflowError into the engine loop. Guard at
+        the source so plan_arc and the layouts never see them."""
+        from led_ticker_baseball.statcast import _to_float
+
+        assert _to_float({"x": "nan"}, "x") is None
+        assert _to_float({"x": "inf"}, "x") is None
+        assert _to_float({"x": "-inf"}, "x") is None
+        # finite values still parse (including the falsy-zero edge)
+        assert _to_float({"x": "451"}, "x") == 451.0
+        assert _to_float({"x": "0"}, "x") == 0.0
+
     def test_to_id(self):
         from led_ticker_baseball.statcast import _to_id
 
@@ -91,6 +105,27 @@ class TestRowHelpers:
         assert _format_value("hardest_hit", 113.4) == "113.4 mph"
 
 
+def _row(**over):
+    """Savant row with enriched play-context fields."""
+    base = dict(
+        events="home_run",
+        description="hit_into_play",
+        bb_type="fly_ball",
+        launch_speed="114.2",
+        launch_angle="28",
+        hit_distance_sc="451",
+        release_speed="94.1",
+        pitch_name="Slider",
+        batter="111",
+        pitcher="222",
+        home_team="PHI",
+        away_team="LAD",
+        inning_topbot="Bot",
+    )
+    base.update(over)
+    return base
+
+
 class TestDeriveRecords:
     def _derive(self, rows, stats=None):
         from led_ticker_baseball.statcast import _STAT_KEYS, _derive_records
@@ -127,6 +162,19 @@ class TestDeriveRecords:
         )
         assert records["slowest_pitch"].pitch_name == "Slow Curve"
 
+    def test_derive_captures_pitch_type_abbreviation(self):
+        records = self._derive(
+            [
+                row(
+                    release_speed=69.6,
+                    pitcher=31,
+                    pitch_name="Slow Curve",
+                    pitch_type="SL",
+                )
+            ]
+        )
+        assert records["slowest_pitch"].pitch_type == "SL"
+
     def test_tie_keeps_first_row(self):
         records = self._derive([hr(440, batter=10), hr(440, batter=11)])
         assert records["longest_hr"].person_id == 10
@@ -152,6 +200,15 @@ class TestDeriveRecords:
 
     def test_empty_rows_empty_records(self):
         assert self._derive([]) == {}
+
+    def test_derive_captures_play_context_for_longest_hr(self):
+        rec = self._derive([_row()], ["longest_hr"])["longest_hr"]
+        assert rec.distance == 451.0
+        assert rec.exit_velo == 114.2
+        assert rec.launch_angle == 28.0
+        assert rec.bb_type == "fly_ball"
+        assert rec.result == "HOME RUN"
+        assert rec.pitch_velo == 94.1
 
 
 def make_widget(**kwargs):
@@ -329,6 +386,83 @@ class TestBuildStatStories:
         widget = make_widget(stats=["longest_hr"])
         stories = widget._build_stat_stories({"longest_hr": rec(463)}, "Today", {})
         assert stories[0].center is True
+
+
+class TestBuildStatCards:
+    def test_feed_stories_are_statcast_cards(self):
+        from led_ticker_baseball._statcast_card import MLBStatcastCard
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"])
+        records = {
+            "longest_hr": StatRecord(
+                value=451,
+                person_id=1,
+                team_abbr="PHI",
+                distance=451,
+                launch_angle=28,
+                exit_velo=114.2,
+                bb_type="fly_ball",
+                result="HOME RUN",
+            ),
+            "hardest_hit": StatRecord(
+                value=118,
+                person_id=2,
+                team_abbr="PHI",
+                distance=0,
+                launch_angle=8,
+                exit_velo=118.0,
+                bb_type="line_drive",
+                result="LINE OUT",
+            ),
+        }
+        cards = mon._build_stat_cards(records, "Today", {1: "Schwarber", 2: "Turner"})
+        assert all(isinstance(c, MLBStatcastCard) for c in cards)
+        assert cards[0].player_name == "Schwarber"
+        assert cards[0].story_total == 2
+
+    def test_cards_carry_index_and_layout(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"], layout="big")
+        records = {
+            "longest_hr": StatRecord(value=451, person_id=1, team_abbr="PHI"),
+            "hardest_hit": StatRecord(value=118, person_id=2, team_abbr="PHI"),
+        }
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert [c.story_index for c in cards] == [0, 1]
+        assert all(c.story_total == 2 for c in cards)
+        assert all(c.cfg_layout == "big" for c in cards)
+
+    def test_missing_record_omitted_from_cards(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"])
+        records = {"longest_hr": StatRecord(value=451, person_id=1, team_abbr="PHI")}
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert len(cards) == 1
+        assert cards[0].story_total == 1
+
+    def test_card_wraps_legacy_line(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr"])
+        records = {"longest_hr": StatRecord(value=463, person_id=10, team_abbr="TOR")}
+        cards = mon._build_stat_cards(records, "Today", {10: "Butler"})
+        assert line_text(cards[0].legacy) == "Today · Longest HR 463 ft — Butler TOR"
+
+    def test_card_threads_bg_and_font_color(self):
+        from led_ticker.plugin import make_color
+
+        from led_ticker_baseball.statcast import StatRecord
+
+        bg = make_color(11, 22, 33)
+        fc = make_color(1, 2, 3)
+        mon = make_widget(stats=["longest_hr"], bg_color=bg, font_color=fc)
+        records = {"longest_hr": StatRecord(value=463, person_id=10, team_abbr="TOR")}
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert cards[0].bg_color is bg
+        assert cards[0].font_color is fc
 
 
 def _ctx(payload):
@@ -591,6 +725,17 @@ class TestValidateConfig:
     def test_messages_returned_not_raised(self):
         assert isinstance(self._validate({"stats": 42}), list)
 
+    def test_rejects_bad_layout(self):
+        msgs = self._validate({"layout": "sideways"})
+        assert any("layout" in m for m in msgs)
+
+    def test_valid_layouts_pass(self):
+        for layout in ("auto", "big", "long"):
+            assert self._validate({"layout": layout}) == []
+
+    def test_layout_omitted_passes(self):
+        assert self._validate({}) == []
+
 
 class TestValidateConfigTeam:
     def _validate(self, cfg):
@@ -635,7 +780,9 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        assert line_text(widget.feed_stories[0]) == (
+        # feed_stories now holds MLBStatcastCards (Task 8); .legacy is the
+        # pre-built SegmentMessage line that forwards verbatim at scale<=1.
+        assert line_text(widget.feed_stories[0].legacy) == (
             "Today · Longest HR 463 ft — Butler TOR"
         )
         assert widget.feed_title is not None
@@ -655,7 +802,7 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        assert line_text(widget.feed_stories[0]).startswith(
+        assert line_text(widget.feed_stories[0].legacy).startswith(
             f"{yest.strftime('%-m/%-d')} · "
         )
 
@@ -752,7 +899,7 @@ class TestUpdate:
         with patcher:
             await widget.update()
         assert widget._last_derive == (today, -1)
-        assert line_text(widget.feed_stories[0]).startswith("Today · ")
+        assert line_text(widget.feed_stories[0].legacy).startswith("Today · ")
 
     async def test_update_logs_info(self, caplog):
         patcher, today = _freeze_today()
