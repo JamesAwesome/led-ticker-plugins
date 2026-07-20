@@ -497,7 +497,7 @@ class MLBStatcastMonitor:
         records: dict[str, StatRecord],
         day_label: str,
         names: dict[int, str],
-    ) -> list[MLBStatcastCard]:
+    ) -> list[TickerMessage | SegmentMessage | MLBStatcastCard]:
         """One MLBStatcastCard per record, wrapping its legacy line.
 
         `_build_stat_stories` builds the legacy `SegmentMessage` lines in
@@ -510,7 +510,7 @@ class MLBStatcastMonitor:
         legacy_lines = self._build_stat_stories(records, day_label, names)
         ordered = [k for k in self.stats if k in records]
         total = len(ordered)
-        cards: list[MLBStatcastCard] = []
+        cards: list[TickerMessage | SegmentMessage | MLBStatcastCard] = []
         for idx, (key, legacy) in enumerate(zip(ordered, legacy_lines, strict=True)):
             record = records[key]
             cards.append(
