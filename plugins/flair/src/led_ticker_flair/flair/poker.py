@@ -26,23 +26,18 @@ PULSES = 2.5
 
 
 def _in_heart(x, y, r):
-    # Two lobe circles + a wedge tapering to the bottom point (y down, so the
-    # top of the heart is negative y). The classic implicit heart curve
-    # ((x²+y²−1)³ ≤ x²y³) was replaced 2026-07-17: at LED sizes it rendered
-    # near-rectangular with vertical sides and only a 1px top notch, reading
-    # as a SHIELD rather than a heart (James's review of the poker GIF). This
-    # form has rounded, clearly-separated lobes and curved sides at every
-    # radius, and fits within `r` by construction (lobe tops reach 0.8r).
+    # Core's hi-res :heart: emoji curve (pixel_emoji._generate_heart_hires):
+    # classic implicit heart with the EMOJI's normalization — scale spans
+    # 2.6 curve-units across the 2r-px box, +0.25 vertical bias. The July
+    # "shield" reading came from a different normalization, not the curve;
+    # adopted 2026-07-20 to fix the pinched bottom (spec
+    # 2026-07-20-poker-heart-emoji-curve-design.md).
     if r <= 0:
         return False
-    lr = 0.5 * r
-    for cx in (-0.4 * r, 0.4 * r):
-        if (x - cx) ** 2 + (y - (-0.3 * r)) ** 2 <= lr * lr:
-            return True
-    top_y, bot_y, top_hw = -0.3 * r, r, 0.9 * r
-    if top_y <= y <= bot_y:
-        return abs(x) <= top_hw * (bot_y - y) / (bot_y - top_y)
-    return False
+    s = (2 * r) / 2.6
+    nx = x / s
+    ny = -y / s + 0.25
+    return (nx * nx + ny * ny - 1) ** 3 - nx * nx * ny * ny * ny < 0
 
 
 def _in_diamond(x, y, r):
