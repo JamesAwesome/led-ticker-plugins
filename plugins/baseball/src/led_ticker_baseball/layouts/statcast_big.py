@@ -1,8 +1,9 @@
 """Held statcast hero card, 256px — port of `statcastBig` (dc.html
-~557-573). No trajectory panel (matches the handoff — the arc is a
-longboi-only feature); launch angle + distance render as the bottom text
-row. Every hires y-target goes through `_t` (cap-top), same shape as the
-other layouts.
+~557-573), now with the animated trajectory arc dropped into the block's
+free right space (matches the longboi treatment, see
+`layouts/statcast_long.py`); launch angle + distance still render as the
+bottom text row (the arc is ADDED, not a replacement). Every hires y-target
+goes through `_t` (cap-top), same shape as the other layouts.
 
 Uppercasing: the result / player name / pitch name are upper()'d at RENDER
 time here (never persisted upstream on `StatRecord` — see
@@ -10,7 +11,7 @@ time here (never persisted upstream on `StatRecord` — see
 verbatim to this widget's own fields).
 """
 
-from led_ticker.plugin import safe_scale
+from led_ticker.plugin import safe_scale, unwrap_to_real
 
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._paint import (
@@ -20,7 +21,11 @@ from led_ticker_baseball._paint import (
     phys_wrap,
     text_width,
 )
-from led_ticker_baseball.trajectory import res_color
+from led_ticker_baseball.trajectory import draw_trajectory, plan_arc, res_color
+
+# The free block under the result label / right of the exit-velo units —
+# measured clear on the real card.
+_TRAJ_BOX = (146, 13, 104, 33)
 
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
@@ -37,14 +42,15 @@ def render_statcast_big(
     canvas,
     record,
     player_name: str,
+    progress: float,
     *,
     y_offset: int = 0,
     story_index: int = 0,
     story_total: int = 1,
 ) -> None:
-    """Draw one statcast hero card (held layout, no scroll/animation clock
-    of its own — the caller's rotation owns timing, same convention as the
-    sibling `layouts/promo_card.render_promo_card`)."""
+    """Draw one statcast hero card (held layout; `progress` drives the
+    trajectory arc's flight fraction — the caller's rotation owns the
+    animation clock, same convention as `layouts.statcast_long`)."""
     shim, real = phys_wrap(canvas)
     yo = y_offset * safe_scale(canvas)
 
@@ -72,6 +78,20 @@ def render_statcast_big(
     mx += _t(shim, la, mx, y + yo, pal.CYAN, 11, bold=False) + 10
     mx += _t(shim, dist, mx, y + yo, pal.MAGENTA, 11, bold=False) + 10
     _t(shim, pitch.upper(), mx, y + yo, pal.WIN, 11, bold=False)
+
+    is_batted = record.launch_angle is not None and record.distance is not None
+    if is_batted:
+        bx, by, bw, bh = _TRAJ_BOX
+        plan = plan_arc(
+            record.launch_angle,
+            record.exit_velo,
+            record.distance,
+            record.bb_type,
+            record.result,
+            bw,
+            bh,
+        )
+        draw_trajectory(unwrap_to_real(canvas), (bx, by + yo, bw, bh), plan, progress)
 
     if story_total > 1:
         paging_dots(

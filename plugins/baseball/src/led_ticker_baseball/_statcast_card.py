@@ -71,17 +71,18 @@ class MLBStatcastCard(FrameAwareBase):
             return self.legacy.draw(
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
+        progress = min(1.0, self._flight_ticks * ENGINE_TICK_MS / FLIGHT_MS)
         if layout == "big":
             render_statcast_big(
                 canvas,
                 self.record,
                 self.player_name,
+                progress,
                 y_offset=y_offset,
                 story_index=self.story_index,
                 story_total=self.story_total,
             )
         else:
-            progress = min(1.0, self._flight_ticks * ENGINE_TICK_MS / FLIGHT_MS)
             render_statcast_long(
                 canvas,
                 self.record,
