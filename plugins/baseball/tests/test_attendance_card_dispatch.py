@@ -39,10 +39,12 @@ def test_held_card_returns_logical_width():
 
 
 def test_no_attendance_falls_back_to_legacy():
-    """A game not yet Final has paid=None → the card draws the legacy line,
-    never an empty bar."""
-    real = HeadlessBackend(512, 64).create_canvas()
-    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    """A team game not yet Final (paid=None) draws the legacy line verbatim
+    through the wrapper (readable, scaled), NOT the hero card. Distinguished
+    by PIXELS: the card's output must equal a direct legacy render on an
+    identical wrapper — cursor value can't tell them apart, since a centered
+    SegmentMessage returns canvas.width, same as the hero card."""
+    legacy = _legacy()  # the same SegmentMessage the card wraps
     card = _card(
         record=AttendanceGame(
             paid=None,
@@ -50,11 +52,19 @@ def test_no_attendance_falls_back_to_legacy():
             avg=39442,
             venue="Dodger Stadium",
             home_abbr="LAD",
-        )
+        ),
+        legacy=legacy,
     )
-    _out, cursor = card.draw(canvas, 0)
-    # legacy SegmentMessage returns its own width, NOT canvas.width
-    assert cursor != canvas.width
+    real_a = HeadlessBackend(512, 64).create_canvas()
+    canvas_a = ScaledCanvas(real_a, scale=4, content_height=16)
+    card.draw(canvas_a, 0)
+    # direct legacy render on an identical fresh wrapper, same args
+    real_b = HeadlessBackend(512, 64).create_canvas()
+    canvas_b = ScaledCanvas(real_b, scale=4, content_height=16)
+    legacy.draw(canvas_b, 0)
+    # forwarding through the wrapper renders pixel-identical to the legacy
+    # line; forwarding the unwrapped real canvas (the bug) would not
+    assert real_a._pixels == real_b._pixels
 
 
 def test_fill_clock_advances_only_unpaused():

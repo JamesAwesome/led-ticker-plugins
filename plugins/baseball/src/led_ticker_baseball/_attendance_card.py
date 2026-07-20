@@ -68,16 +68,17 @@ class MLBAttendanceCard(FrameAwareBase):
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
         if not _has_attendance(self.record):
-            # No-attendance fallback can fire at ANY scale (a team game not
-            # yet Final). Forward the UNWRAPPED real canvas, not the
-            # ScaledCanvas wrapper: this is a scale>1 scenario with no
-            # precedent among the sibling cards (their legacy forwards are
-            # scale<=1 only, where wrapper-width == real-width anyway), and
-            # the legacy line is a plain compact "no data yet" message, not
-            # a hero card — it draws at native physical resolution rather
-            # than borrowing the wrapper's hires-emoji/scaled-text path.
+            # No-attendance fallback (a team game not yet Final) can fire at
+            # ANY scale. Forward the WRAPPER, not the unwrapped real canvas:
+            # at scale>1 the engine draws every SegmentMessage/TickerMessage
+            # THROUGH the ScaledCanvas wrapper, whose draw_bdf_text expands
+            # each SetPixel to a scale×scale block, so the fallback line
+            # renders large and readable. Forwarding `real` would paint it at
+            # native physical resolution — tiny/unreadable on a bigsign. This
+            # is the same reason the scale<=1 legacy branch above forwards the
+            # wrapper, and how the engine draws every text widget on the sign.
             return self.legacy.draw(
-                real, cursor_pos, y_offset=y_offset, font_color=font_color
+                canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
         progress = min(1.0, self._fill_ticks * ENGINE_TICK_MS / FILL_MS)
         if layout == "big":
