@@ -50,6 +50,37 @@ def test_px_bounds_checked():
     assert real.get_pixel(3, 3) == (255, 255, 255)
 
 
+def test_hires_safe_strips_emoji_and_collapses_space():
+    # F1 (final review): a mapped Unicode emoji paints as a hi-res sprite
+    # (`draw_text`/`hires`) but measures at the '?' fallback advance
+    # (`measure_width`/`text_width`) — the two disagree on width for the
+    # exact same string. `_hires_safe` removes the emoji before EITHER call
+    # so free-form promo text can't drift between measure and paint.
+    assert _paint._hires_safe("STAR WARS NIGHT ⭐") == "STAR WARS NIGHT"
+    assert _paint._hires_safe("Pride Night 🌈 Giveaway") == "Pride Night Giveaway"
+
+
+def test_hires_safe_leaves_plain_and_accented_text_untouched():
+    assert _paint._hires_safe("Bobblehead Night") == "Bobblehead Night"
+    assert _paint._hires_safe("JOSÉ RAMÍREZ BOBBLEHEAD") == "JOSÉ RAMÍREZ BOBBLEHEAD"
+    assert _paint._hires_safe("Fan Experience · BY NEW ERA") == (
+        "Fan Experience · BY NEW ERA"
+    )
+
+
+def test_hires_safe_makes_measure_and_paint_agree():
+    # Direct repro of the report's measurement: pre-fix, text_width(17, ...)
+    # returns 178 while hires()'s painted advance returns 197 for the same
+    # raw string. Post-sanitization the two must match exactly.
+    real = _real()
+    shim, _ = _paint.phys_wrap(real)
+    raw = "STAR WARS NIGHT ⭐"
+    safe = _paint._hires_safe(raw)
+    measured = _paint.text_width(17, safe, bold=True)
+    painted = _paint.hires(shim, safe, 0, 0, pal.IDENT, 17, bold=True)
+    assert measured == painted
+
+
 def test_paging_dots_active_vs_dim():
     real = _real()
     _paint.paging_dots(real, 3, 1, 200, 60)

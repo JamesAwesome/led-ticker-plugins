@@ -166,10 +166,29 @@ teams = ["NYY", "BOS"]
 Upcoming home-game promotions — giveaways and theme nights, e.g. the Blue Jays'
 Loonie Dogs Night — for a tracked team, from the schedule API's promotions feed.
 Shows today's promos when there's a home game today, otherwise the next home
-game's, one scrolling line per promo led by the team abbreviation in its brand
-color, with a grey date prefix: `TOR Jun 22 · Retro Domer Hat Giveaway`. Sponsor tails ("presented by …") are
-stripped, and near-duplicate feed entries are collapsed. Promos matching
-`highlight` render in amber and sort first.
+game's — one story per promo, in whichever shape the sign resolves below.
+Sponsor tails ("presented by …") are stripped, and near-duplicate feed entries
+are collapsed. Promos matching `highlight` render in amber and sort first.
+Three `layout` values:
+
+- **`layout = "auto"` (default)** — resolves to the best layout for the sign automatically; see the resolution table below. This is what most configs should use.
+- **`layout = "ticker"`** — the hi-res crawl (see below), forced regardless of sign width.
+- **`layout = "card"`** — the held card (see below), forced regardless of sign width.
+
+**Scale-1 signs (smallsign) always render the classic scrolling lines**, unchanged by `layout`: one line per promo, team-prefixed, `TOR Jun 22 · Retro Domer Hat Giveaway`. **Scale>1 signs (bigsign, longboi) render one of two new physical (procedural pixel-art) shapes** instead — a coordinate-for-coordinate port of the design handoff, design-pinned same as `baseball.scores`/`baseball.standings`'s physical renderers:
+
+- **Held card** — one promo per story, engine-rotated through the target date's promos (paging dots appear when there's more than one). The narrow (bigsign) card and the wide (longboi) card share the same anatomy: date in amber, promo name in white (auto-scrolling in a clipped band if too long for the card), team chip + `VS <opponent>` in violet, `<offer> · BY <sponsor>` in cyan (either half omitted if the feed doesn't supply it — never invented copy), start time in amber.
+- **Hi-res crawl** — the same fields as one continuous scrolling segment run instead of a held card: date, name, chip + VS opponent, offer/sponsor, time, same color scheme as the card.
+
+`layout = "auto"` resolves like this:
+
+| Sign | Resolves to |
+|------|-------------|
+| scale 1 (smallsign) | classic scrolling lines |
+| scale>1, real width < 400px (bigsign) | held card |
+| scale>1, real width >= 400px (longboi) | hi-res crawl |
+
+Explicit `layout = "card"` on a longboi (real width >= 400px) still renders — as the wide variant of the held card (the one whose name auto-scrolls in a clipped band rather than a narrower band), not the crawl. Explicit `layout = "ticker"` on a bigsign forces the crawl there too.
 
 ```toml
 [[playlist.section.widget]]
@@ -183,21 +202,32 @@ highlight = ["Loonie Dogs"]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `team` | string | required | MLB team abbreviation — see [Team codes](#team-codes). Case-insensitive. |
-| `highlight` | list of strings | `[]` | Case-insensitive substrings; matching promos render amber and sort first. |
-| `filter` | list of strings | `[]` | If non-empty, only promos matching one of these substrings are shown. |
-| `limit` | int | `0` | Max promo lines (`0` = all). Applied after highlight sorting, so highlighted promos are never the ones dropped. |
+| `layout` | string | `"auto"` | `"auto"`, `"ticker"`, or `"card"` — see above. |
+| `highlight` | list of strings | `[]` | Case-insensitive substrings; matching promos render amber and sort first. Applies identically to every layout — scrolling lines, held card, and hi-res crawl all order/color from the same pass. |
+| `filter` | list of strings | `[]` | If non-empty, only promos matching one of these substrings are shown. Applies to every layout. |
+| `limit` | int | `0` | Max promos shown (`0` = all). Applied after highlight sorting, so highlighted promos are never the ones dropped. Applies to every layout. |
 | `lookahead_days` | int | `14` | How far ahead to look for the next home game with promotions. |
 | `update_interval` | int | `21600` | Seconds between refreshes (6 h — keeps the "Today" label honest after midnight). |
 | `title` | string | `"<Team> Promos"` | Section title override. |
 | `timezone` | string | `"America/New_York"` | IANA timezone governing "Today" and date labels. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each message when scrolling. |
-| `bg_color` | RGB list | none | Background fill behind all messages. |
-| `font_color` | RGB list / string / table | unset | RGB list tints the promo names; the team prefix, date label, and amber highlights keep their callout colors. A string/table provider overrides all text, as in the other widgets. |
-| `font` | string | `"6x12"` | Display font. Hires name needs `font_size`. |
+| `bg_color` | RGB list | none | Background fill behind all messages. Scale-1 only — the scale>1 card/crawl paint their own fixed palette and ignore it, same as `baseball.scores`. |
+| `font_color` | RGB list / string / table | unset | RGB list tints the promo names; the team prefix, date label, and amber highlights keep their callout colors. A string/table provider overrides all text, as in the other widgets. Scale-1 only, same reason as `bg_color`. **Known limitation:** an animated provider (`"rainbow"`/`"color_cycle"`) renders static on the scale>1 card/crawl — those layouts are design-pinned colors regardless. |
+| `font` | string | `"6x12"` | Display font. Hires name needs `font_size`. Scale-1 only — every scale>1 layout (including `ticker`) is design-pinned and ignores all font options, same as `baseball.scores`. |
 
 With nothing to show, the widget falls back to a team-prefixed
 `Next home game: Jun 22` (promo-free homestand), `No home games soon`
 (road trip), or `Opens <date>` / `Opens soon` (offseason).
+
+**Known behavior:** promos shown are always the TARGET DATE's — today's home
+game if there is one, else the next home game with matching promos (the
+widget's longstanding semantics, unchanged by this layout work). A design
+mock paged through a whole homestand's worth of games; a lookahead knob for
+that is a possible future addition, not present today. Also: a doubleheader
+whose two games carry same-named or near-duplicate (prefix) promos now shows
+two entries (previously merged into one under the legacy scrolling-lines
+view, with the shorter name winning) — each game gets its own card/line/crawl
+segment, matching the per-game data the API actually returns.
 
 ### `baseball.statcast`
 

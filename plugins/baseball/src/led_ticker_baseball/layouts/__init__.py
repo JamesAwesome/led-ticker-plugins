@@ -38,3 +38,39 @@ def resolve_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
     if phys_w >= _AUTO_DASHBOARD_MIN_W:
         return "scoreboard"
     return "two_row"
+
+
+# Same 400px physical-width threshold as `_AUTO_DASHBOARD_MIN_W` above
+# (bigsign 256 -> narrow, longboi 512 -> wide) — kept as its own constant
+# rather than shared because `resolve_promo_layout`'s outcome names ("card"
+# / "ticker") differ from `resolve_layout`'s ("scoreboard" / "two_row") and
+# a future change to one threshold shouldn't silently drag the other along.
+# Mirrors `layouts/promo_card.py`'s own `_WIDE_MIN_W` (that module picks its
+# BIG-vs-LONG geometry independently, purely off `real.width`; this constant
+# is only for the WIDGET-level ticker-vs-card story-shape decision).
+_PROMO_AUTO_WIDE_MIN_W = 400
+
+
+def resolve_promo_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
+    """Resolve `baseball.promotions`' `layout` config to a draw-time shape.
+
+    Lives here (not `promotions.py`) so `_promo_card.py` can import it
+    without creating a cycle: `MLBPromoCard` needs it at draw time but must
+    not import `promotions.py` at module level (that module imports
+    `MLBPromoCard` back, to build `feed_stories` — the same one-directional
+    dependency shape as `scores.py` -> `_card.py`).
+
+    scale <= 1 has no hires renderer at all (mirrors `resolve_layout`'s own
+    ``scale <= 1 -> "ticker"`` fallback) — MLBPromoCard forwards to its
+    pre-built legacy SegmentMessage in that case regardless of what this
+    returns, so "legacy" here is documentation of intent more than a value
+    any caller branches on. At scale > 1, an EXPLICIT `cfg_layout`
+    ("ticker" / "card") passes through unchanged; "auto" maps by physical
+    width — narrow (bigsign) holds the card, wide (longboi) runs the hires
+    crawl (design: docs/superpowers/specs — Phase 3 promotions).
+    """
+    if scale <= 1:
+        return "legacy"
+    if cfg_layout != "auto":
+        return cfg_layout
+    return "card" if phys_w < _PROMO_AUTO_WIDE_MIN_W else "ticker"

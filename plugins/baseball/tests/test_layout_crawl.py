@@ -56,6 +56,25 @@ def _lit_cols(real):
     return {x for x, y in real._pixels if real.get_pixel(x, y) != (0, 0, 0)}
 
 
+def test_advance_has_no_trailing_spacer():
+    """Hardware finding (longboi promos, 2026-07-20 — same defect in this
+    scores crawl): a spacer gap baked into the returned advance makes the
+    engine's scroll stop overshoot by exactly that spacer (core's
+    `stop_pos = -(cursor - width) + padding` compensates only for
+    `widget.padding`), resting the line head-clipped with dead panel at the
+    right. Inter-story spacing rides `MLBGameCard.padding` through that
+    same compensation instead. Painted extent and returned advance may
+    differ only by glyph bearings + ceil-to-logical rounding (≤ 14 physical
+    px). Extent is translation-immune, so held-centering can't mask it —
+    hence the oversized canvas (nothing clips)."""
+    real = HeadlessBackend(2048, 64).create_canvas()
+    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    w = render_crawl(canvas, _live_game(), TZ, 0)
+    cols = sorted(_lit_cols(real))
+    extent = cols[-1] - cols[0] + 1
+    assert 0 <= w * 4 - extent <= 14
+
+
 def test_returns_positive_width_and_draws_at_cursor_zero():
     canvas, real = _bigsign()
     w = render_crawl(canvas, _live_game(), TZ, 0)
@@ -184,7 +203,7 @@ class TestHorizontalCentering:
         canvas = ScaledCanvas(real, scale=4, content_height=16)
         g = _live_game(state="final", inning=None)  # short: fits 512
         render_crawl(canvas, g, TZ, 0, hold_padding=6)
-        assert abs(self._mid(real) - 255.5) <= 14  # centered (trailing gap excluded)
+        assert abs(self._mid(real) - 255.5) <= 14  # centered
 
     def test_long_line_keeps_left_origin(self):
         real = HeadlessBackend(256, 64).create_canvas()

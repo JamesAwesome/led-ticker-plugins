@@ -17,12 +17,14 @@ size for Inter). Those two mostly cancel out on the sibling renderers
 (two_row.py / scoreboard.py) because every text draw within one row shares
 a single size there — but THIS board mixes rank(px8)/abbr(px10)/
 record(px10) on one 10px-pitch row, so a naive port bleeds a row's glyphs
-into its neighbor's band. `_cap_top(y_target, size)` is the ONE conversion
-formula (dc.html's y_target -> `hires`'s ascent-box-top y); `_t(...)`
-(single hires call) routes every plain text draw through it, and the
-`draw_record` call site computes the same converted y once and passes it
-straight through (draw_record itself forwards y unmodified — see its
-docstring in `_primitives.py`) so the formula can't drift per call site.
+into its neighbor's band. `_paint.cap_top(y_target, size)` is the ONE
+conversion formula (dc.html's y_target -> `hires`'s ascent-box-top y,
+originally derived here and later promoted to `_paint` — task 2 of the
+promotions uplift — so `_mask.py` could share it); `_t(...)` (single hires
+call) routes every plain text draw through it, and the `draw_record` call
+site computes the same converted y once and passes it straight through
+(draw_record itself forwards y unmodified — see its docstring in
+`_primitives.py`) so the formula can't drift per call site.
 """
 
 from typing import TYPE_CHECKING
@@ -30,7 +32,7 @@ from typing import TYPE_CHECKING
 from led_ticker.plugin import safe_scale
 
 from led_ticker_baseball import _palette as pal
-from led_ticker_baseball._paint import hires, js_round, phys_wrap
+from led_ticker_baseball._paint import cap_top, hires, phys_wrap
 from led_ticker_baseball._primitives import chip, draw_record
 
 if TYPE_CHECKING:
@@ -90,13 +92,8 @@ _LONG_GEOMETRY: dict[int, dict[str, int]] = {
 }
 
 
-def _cap_top(y_target: int, size: int) -> int:
-    """dc.html visual-cap-top y -> `_paint.hires`'s ascent-box-top y."""
-    return y_target - size + js_round(size * 0.72)
-
-
 def _t(shim, text, x, y_target, color, size, *, bold=True):
-    return hires(shim, text, x, _cap_top(y_target, size), color, size, bold=bold)
+    return hires(shim, text, x, cap_top(y_target, size), color, size, bold=bold)
 
 
 def _strk_color(streak: str):
@@ -173,7 +170,7 @@ def _render_big(shim, real, division_name, rows, yo, geo):
         _t(shim, _rank_label(r, i), 2, y + 1, pal.LABEL, rank)
         chip(real, 11, y, chip_h, r.abbr)
         _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
-        draw_record(shim, 112, _cap_top(y, text), r.wins, r.losses, text)
+        draw_record(shim, 112, cap_top(y, text), r.wins, r.losses, text)
         gb = r.division_gb or "-"
         gb_color = pal.LABEL if gb in _LEADER_GB else pal.AMBER
         _t(shim, gb, gb_x, y, gb_color, text)

@@ -15,7 +15,7 @@ used to live in led-ticker core (`type = "mlb"`):
 
 - `baseball.scores` — live/final/preview scores; `layout = "auto"` (default), `"ticker"`, `"scoreboard"`, or `"two_row"`. `auto` resolves per-sign (`layouts.resolve_layout`); explicit names mean what they say, with ONE width-fit guard: explicit `"scoreboard"` at scale>1 on a panel narrower than 400 physical px (bigsign) degrades to `"two_row"` instead — the physical scoreboard's hardcoded anchors assume >=400px and would otherwise silently clip the whole home side (see `layouts/resolve_layout`'s docstring). Scale 1 renders through the legacy text-glyph classes (`_scoreboard.py`, `_two_row.py`); scale>1 dispatches through `MLBGameCard` (`_card.py`) to the new physical (procedural pixel-art) renderers in `layouts/`.
 - `baseball.standings` — MLB standings for the divisions of your tracked `teams`; `layout = "auto"` (default), `"ticker"`, or `"board"`. `ticker` is the original scrolling-rows behavior (top-N + tracked teams, everywhere); `auto`/`board` build one held physical division board per tracked division at scale>1, degrading to one legacy scrolling row per section visit at scale<=1 (same shape as `ticker`'s rows). Offseason-aware.
-- `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks.
+- `baseball.promotions` — upcoming home-game promotions (giveaways/theme nights); today-first with highlight/filter/limit knobs and offseason-aware fallbacks. `layout = "auto"` (default), `"ticker"`, or `"card"`. Scale 1 always renders the classic scrolling lines via the legacy `SegmentMessage`, regardless of `layout`. `auto` resolves at scale>1 (`layouts.resolve_promo_layout`): narrow (bigsign) holds a physical promo card, wide (longboi) runs a hires crawl; explicit `"card"`/`"ticker"` force one shape at any scale>1 width. `MLBPromoCard` (`_promo_card.py`) is the scale-dispatching story, same family as `MLBGameCard`/`MLBStandingsBoard`.
 - `baseball.statcast` — daily Statcast superlatives (longest HR, hardest hit,
   fastest/slowest pitch), league-wide or scoped to one team's players via an
   optional `team`; from Baseball Savant's day CSV, schedule-gated.
@@ -65,12 +65,18 @@ src/led_ticker_baseball/
   _paint.py       # physical-pixel hi-res paint helpers for layouts/ (phys_wrap, hires, js_round, …)
   _primitives.py  # procedural pixel-art primitives (chip/diamond/pip/dash/series_dashes), ported
                   #   coordinate-for-coordinate from design/…dc.html
-  layouts/        # new physical (scale>1) renderers: resolve_layout + crawl.py/scoreboard.py/two_row.py/standings_board.py
+  layouts/        # new physical (scale>1) renderers: resolve_layout + crawl.py/scoreboard.py/two_row.py/
+                  #   standings_board.py + resolve_promo_layout + promo_card.py/promo_crawl.py
   standings.py    # baseball.standings widget (MLBStandingsMonitor); layout="auto"/ticker/board;
                   #   builds MLBStandingsBoard stories per division (update())
   _standings_card.py  # MLBStandingsBoard — the scale-dispatching story: scale>1 dispatches to
                       #   layouts/standings_board.py, scale<=1 forwards one legacy_rows[idx] per visit
-  promotions.py   # baseball.promotions widget (MLBPromotionsMonitor); home-game promos; today-first + fallback states
+  promotions.py   # baseball.promotions widget (MLBPromotionsMonitor); layout="auto"/ticker/card; home-game
+                  #   promos; today-first + fallback states; builds MLBPromoCard stories (update())
+  _promo_card.py  # MLBPromoCard — the scale-dispatching story: scale 1 delegates to the pre-built
+                  #   legacy SegmentMessage, scale>1 dispatches to layouts/promo_card.py or promo_crawl.py
+  _mask.py        # TextMask/text_mask/blit_mask/mask_scroll — offscreen-rasterized clipped-scroll text,
+                  #   the promo card's "scroll the name if it overflows its band" primitive
   statcast.py     # baseball.statcast widget (MLBStatcastMonitor); Savant day-CSV superlatives; schedule-gated
   attendance.py   # baseball.attendance widget (MLBAttendanceMonitor); league superlatives + team mode; schedule-gated
   transition.py   # baseball.roll* family; lo-res 4-frame + procedural hi-res rotation
@@ -78,8 +84,9 @@ src/led_ticker_baseball/
 
 All widget modules import the shared tables from `teams.py` (no widget reaches into
 another widget's private internals). `transition.py` reuses the hi-res sprite generator from
-`emoji.py`. `_card.py` and `layouts/` import from `_palette.py`/`_paint.py`/`_primitives.py`.
-These sibling intra-package imports are allowed; see the import contract below.
+`emoji.py`. `_card.py`, `_promo_card.py`, and `layouts/` import from `_palette.py`/`_paint.py`/`_primitives.py`;
+`layouts/promo_card.py` also imports `_mask.py`. These sibling intra-package imports are allowed;
+see the import contract below.
 
 `register(api)` (in `__init__.py`):
 
@@ -153,6 +160,64 @@ was fixed here — it would advance by 2 per transitioned visit and stick on eve
 since paused draws are transition compositing and must neither advance nor burn the pending
 advance. Never regress to a bare counter increment in `reset_frame`. Tripwire:
 `test_scale1_row_cycling_survives_double_reset_per_visit`.
+
+**`MLBPromoCard` scale-dispatch contract** (`_promo_card.py`) — the one story
+`promotions.py`'s `update()` builds per displayed promo, for every `layout`. **scale <= 1
+forwards unconditionally to `self.legacy`** — the pre-built `SegmentMessage` for this promo —
+without even consulting `resolve_promo_layout` (unlike `MLBGameCard`, there's only one legacy
+shape here, so it's built eagerly in `update()` and passed in, not lazily cached on first draw).
+**scale > 1 resolves `(cfg_layout, scale, real.width)` via `layouts.resolve_promo_layout`** fresh
+on every call (same flight pattern as `resolve_layout`) and dispatches to the held card
+(`layouts.promo_card.render_promo_card`) or the hires crawl (`layouts.promo_crawl.render_promo_crawl`).
+**Held layout returns `cursor = canvas.width`** — the WRAPPER's LOGICAL width, same held-cursor
+convention as `MLBGameCard`/`MLBStandingsBoard` above; the crawl instead treats `cursor_pos` as
+logical throughout and returns its advance ceil-divided back to logical, plus `self.padding`,
+mirroring `render_crawl`'s own contract. **The per-card clock (`_clock_ticks`) is deliberately
+NEVER reset** — advanced in `advance_frame` gated on `not self._frame_paused`, but there is no
+`reset_frame` override for it. `reset_frame` still fires (possibly twice per visit, same
+core double-reset as `MLBStandingsBoard` above) and the base `FrameAwareBase` counters reset
+normally; only `_clock_ticks` survives, so the clipped name-scroll (`_mask.mask_scroll`, driven
+by `_clock_ticks * ENGINE_TICK_MS`) keeps running smoothly across section re-entries instead of
+snapping back to its start every visit — the same "clock survives visits" lesson as
+`led_ticker_flight`'s per-card clock. `self.legacy.reset_frame()` is likewise not forwarded, and
+that's harmless: `SegmentMessage._frame_count` only feeds a continuous `font_color` phase
+(rainbow/color_cycle), never per-visit story-selection state — `MLBGameCard._legacy` is ALSO
+whole-life cached (not per-visit-selected), same shape as `self.legacy` here. Real per-visit
+selection state exists only in `MLBStandingsBoard` (`legacy_rows[idx]` cycling via
+`_pending_row_advance`) — don't conflate the two patterns. `advance_frame`/`pause_frame`/
+`resume_frame` DO forward to `self.legacy` (it's always present, unlike `MLBGameCard`'s
+optional `_legacy`, so no `is not None` guard is needed).
+
+**`resolve_promo_layout` lives in `layouts/__init__.py`, not `promotions.py`** — avoids an
+import cycle: `_promo_card.py` needs it at draw time, but `promotions.py` imports `MLBPromoCard`
+back (to build `feed_stories`), so `_promo_card.py` must not import `promotions.py` at module
+level. Moving the resolver back into `promotions.py` recreates that cycle. scale <= 1 returns
+`"legacy"` as documentation of intent — `MLBPromoCard.draw` never actually branches on it,
+since it returns from the `scale <= 1` forward before calling the resolver at all.
+
+**`_mask.py` is the sanctioned clip mechanism for the promo card's name-scroll** — `text_mask`
+rasterizes text onto an OFFSCREEN `HeadlessBackend` canvas through the PUBLIC surface
+(`_paint.hires`) and reads it back via `HeadlessCanvas.get_pixel` — the one documented supported
+readback (see `led_ticker/backends/headless.py`). **Never reach for a private `_pixels`
+buffer or invent a core seam for this** — the public-`get_pixel` offscreen-rasterize pattern is
+the whole point: it works with zero new core surface. `text_mask` is `functools.lru_cache(64)`'d,
+keyed on the exact `(text, size, bold)` triple, so a scrolling promo name pays the rasterize+scan
+cost once, not every frame. **Origin convention: `TextMask.pixels` offsets are baked into
+CAP-TOP space already** (the `cap_adjust = size - js_round(size * 0.72)` shift applied once at
+mask-build time) — `blit_mask`/`mask_scroll` take a bare cap-top `y` and add offsets directly;
+never call `_paint.cap_top()` before a `mask_scroll`/`blit_mask` call, or the correction doubles.
+`mask_scroll` is the `dc.html` `maskScroll` port: static single blit when the text fits its
+`[x0, x1)` band, else a wrap-seamless two-blit scroll at a fixed physical px/sec.
+
+**Single-pass `_order_and_limit` is load-bearing** (`promotions.py`) — the ONE
+highlight-partition + `limit`-truncation implementation shared by the legacy
+`_build_promo_stories` (`list[str]` names, feeds `SegmentMessage` lines) and the card/crawl
+`_build_promo_card_stories` (`list[PromoInfo]`, feeds `MLBPromoCard`). Before this, `self._promos`
+(the structured list) was un-highlighted and un-limited relative to the legacy story list — this
+closes that gap by construction: both story shapes are sliced from the SAME ordered list at the
+SAME index, so `highlight`/`limit` can never apply differently to the two. Tripwires:
+`test_promos_field_matches_feed_stories_order` plus the highlight/limit tests that assert both
+shapes (`test_promotions.py`).
 
 **Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
 routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
@@ -309,6 +374,15 @@ rotations at 45° (90° reads as alternating; 22.5° reads chaotic on small pane
 - `test_resolve_layout.py` / `test_card_dispatch.py` — `layouts.resolve_layout`'s per-sign
   resolution table and `MLBGameCard`'s scale-1-vs-scale>1 dispatch (including the held-cursor /
   frame-hook-forwarding contracts above).
+- `test_resolve_promo_layout.py` / `test_promo_card_dispatch.py` — `layouts.resolve_promo_layout`'s
+  per-sign resolution table and `MLBPromoCard`'s scale-1-vs-scale>1 dispatch, including the
+  held-cursor contract, the never-reset `_clock_ticks` clock, and frame-hook forwarding to
+  `self.legacy` (see `MLBPromoCard` scale-dispatch above).
+- `test_layout_promo_card.py` / `test_layout_promo_crawl.py` — the held promo card (big vs long
+  geometry, name auto-scroll via `mask_scroll`, paging dots) and the hires promo crawl (engine
+  cursor contract, segment ordering, chip/VS/offer/time fields).
+- `test_mask.py` — `_mask.py`'s offscreen-rasterize-and-readback `TextMask` cache, the CAP-TOP
+  origin conversion, and `mask_scroll`'s fit-vs-scroll fast path / wrap-seamless two-blit scroll.
 - `test_palette.py` / `test_paint.py` / `test_primitives.py` / `test_teams_chips.py` — the
   handoff-port foundation modules (palette constants, `js_round`, physical paint helpers,
   procedural primitives, and the 30-team chip table).
