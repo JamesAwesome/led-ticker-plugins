@@ -126,6 +126,30 @@ def test_league_regions_present():
     assert _lit_in(real, 4, 252, 50, 60)  # fill bar band
 
 
+def test_team_venue_never_clips_bottom_edge():
+    """The venue name sits just below the bar; at size 8 its cap-top glyph
+    must fit within the 64-row panel (rows 0-63). A y-target too low clips
+    the bottom of every letter off-canvas (the x-based tripwires can't catch
+    a vertical clip). Uses a long venue so the row is densely populated.
+
+    Two assertions, because the naive "no pixel at y>=64" check is trivially
+    true either way: core's hi-res rasterizer bounds-checks each row against
+    the panel height and silently drops anything >= panel_h before it ever
+    reaches `real.SetPixel` — so an out-of-canvas glyph row never shows up
+    as an out-of-bounds pixel, it just vanishes. The actual visible defect
+    is a SHORTENED glyph (missing its bottom ~2 of 6 rows, and shifted low
+    to start with): at the buggy y-target, the on-canvas venue rows are only
+    60-63 (span 3); at the correct one they're the full 58-63 (span 5). The
+    second assertion is the one that actually fails at the bug and passes
+    at the fix — confirmed empirically (see task-4 report)."""
+    canvas, real = _bigsign()
+    render_attend_big(canvas, _team(venue="Great American Ball Park"), 1.0)
+    lit = {xy for xy, v in real._pixels.items() if v != (0, 0, 0)}
+    venue_rows = {y for (_x, y) in lit if y >= 58}
+    assert lit and not any(y >= 64 for (_x, y) in lit)
+    assert venue_rows and max(venue_rows) - min(venue_rows) >= 5
+
+
 def test_never_raises_on_empty_team():
     canvas, real = _bigsign()
     render_attend_big(

@@ -70,7 +70,18 @@ _BAR_W = 248
 # columns end well above y40, the bar ends at y57). Chosen over the brief's
 # suggested "between columns and bar" slot because that band is already
 # fully occupied end-to-end by the "PAID ATTENDANCE" / "NN,NNN CAP" row.
-_Y_TEAM_VENUE = 60
+#
+# y-target is 58, not 60: at size 8, `cap_top(y_target, 8)` converts the
+# visual cap-top into `hires()`'s ascent-box-top, and the glyph paints from
+# `y_top + ascent - bearing_y` down through `+ height - 1`. At y_target=58,
+# `cap_top(58, 8) = 56`, and the glyph spans rows 58-63 — exactly the free
+# band below the bar, with no clip. At y_target=60 (the prior off-by-2), the
+# same math spans rows 60-65: rows 64-65 fall past the panel's last valid
+# row (63) and are silently dropped by the rasterizer's bounds check, so
+# every capital letter in the venue name renders with its bottom ~2 of 6
+# rows missing (a shortened, clipped glyph — not a crash, so it went
+# unnoticed until traced).
+_Y_TEAM_VENUE = 58
 _TEAM_VENUE_SIZE = 8
 
 # League-card rows (no dc.html coordinate beyond label/value/bar — task-4
