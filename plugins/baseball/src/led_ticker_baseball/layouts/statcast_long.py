@@ -78,8 +78,8 @@ def render_statcast_long(
         _t(shim, sec, cx, 48 + yo, pal.LABEL, 9, bold=False)
 
     px0 = 396
-    _t(shim, "DISTANCE", px0, 6 + yo, pal.LABEL, 10)
     is_batted = record.launch_angle is not None and record.distance is not None
+    _t(shim, "DISTANCE" if is_batted else "PITCH", px0, 6 + yo, pal.LABEL, 10)
     if is_batted:
         bx, by, bw, bh = _TRAJ_BOX
         plan = plan_arc(

@@ -10,6 +10,7 @@ is load-bearing — it must never draw the magenta arc path.
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
 from led_ticker_baseball import _palette as pal
+from led_ticker_baseball._paint import text_width
 from led_ticker_baseball.layouts.statcast_long import render_statcast_long
 from led_ticker_baseball.statcast import StatRecord
 
@@ -178,3 +179,64 @@ def test_long_pitch_panel_shows_abbreviation():
     assert any(
         v == win and x >= 396 and 20 <= y <= 44 for (x, y), v in real._pixels.items()
     )
+
+
+def test_long_pitch_panel_header_says_pitch():
+    """Pitch superlative (no launch angle / distance): the right-panel
+    header must read "PITCH", not "DISTANCE". The header lit pixels sit
+    at x >= 396, rows 0 <= y <= 13. Measure the header's width; it must
+    be closer to text_width(10, "PITCH") than to text_width(10, "DISTANCE")."""
+    canvas, real = _longboi()
+    rec = _rec(
+        exit_velo=None,
+        launch_angle=None,
+        distance=None,
+        bb_type="",
+        result="",
+        pitch_velo=99.1,
+        pitch_name="Slider",
+        pitch_type="SL",
+    )
+    render_statcast_long(canvas, rec, "PITCHER", 1.0)
+    # Collect header lit pixels in the panel region
+    header_xs = [
+        x
+        for (x, y), v in real._pixels.items()
+        if v != (0, 0, 0) and x >= 396 and 0 <= y <= 13
+    ]
+    assert header_xs, "expected some lit pixels in header region"
+    header_width = max(header_xs) - min(header_xs) + 1
+    pitch_width = text_width(10, "PITCH")
+    distance_width = text_width(10, "DISTANCE")
+    # Header must be closer to PITCH than to DISTANCE
+    assert abs(header_width - pitch_width) < abs(header_width - distance_width)
+
+
+def test_long_batted_panel_header_says_distance():
+    """Batted superlative: the right-panel header must read "DISTANCE".
+    The header lit pixels sit at x >= 396, rows 0 <= y <= 13. Measure the
+    header's width; it must be closer to text_width(10, "DISTANCE") than
+    to text_width(10, "PITCH")."""
+    canvas, real = _longboi()
+    rec = _rec(
+        exit_velo=114.2,
+        launch_angle=28,
+        distance=451,
+        bb_type="fly_ball",
+        result="HOME RUN",
+        pitch_velo=94.1,
+        pitch_name="SL",
+    )
+    render_statcast_long(canvas, rec, "BATTER", 1.0)
+    # Collect header lit pixels in the panel region
+    header_xs = [
+        x
+        for (x, y), v in real._pixels.items()
+        if v != (0, 0, 0) and x >= 396 and 0 <= y <= 13
+    ]
+    assert header_xs, "expected some lit pixels in header region"
+    header_width = max(header_xs) - min(header_xs) + 1
+    pitch_width = text_width(10, "PITCH")
+    distance_width = text_width(10, "DISTANCE")
+    # Header must be closer to DISTANCE than to PITCH
+    assert abs(header_width - distance_width) < abs(header_width - pitch_width)
