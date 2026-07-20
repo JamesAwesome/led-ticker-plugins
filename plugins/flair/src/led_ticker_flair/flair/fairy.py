@@ -139,7 +139,9 @@ class Fairy:
         scale = self._scale
         set_pixel = real.SetPixel
         dust = self.dust_color
-        line_col = tuple(int(c * 0.45) for c in dust)
+        # 0.7x keeps the settled line clearly GOLD on black (0.45x read as
+        # muddy brown in the gate render).
+        line_col = tuple(int(c * 0.7) for c in dust)
         s = min(1.0, t / _CUTOVER)
         head = self._head_x(s, w)
         trail_len = max(4, int(_TRAIL_FRAC * w))
@@ -156,15 +158,17 @@ class Fairy:
                     set_pixel(x, y, *line_col)
             if behind > trail_len:
                 continue  # dust has faded to just the line
-            # stateless sparks: presence, offset, base brightness from _mix
-            age = 1.0 - behind / trail_len
+            # stateless sparks: presence, offset, base brightness from _mix.
+            # Sub-linear age falloff keeps the region near the head dense and
+            # bright (linear falloff read as sparse/dim in the gate render).
+            age = (1.0 - behind / trail_len) ** 0.6
             for k in range(_SPARKS_PER_COL):
                 rr = _mix(self._spark_seed, x, k)
-                if rr % 3 == 0:
+                if rr % 4 == 0:
                     continue  # this (column, k) slot never sparks
                 dy = (rr >> 4) % (2 * spread + 1) - spread
                 tw = ((_mix(rr, qt) >> 3) & 0xFF) / 255.0
-                b = age * (0.35 + 0.65 * tw)
+                b = age * (0.5 + 0.5 * tw)
                 base = (_CREAM, _GOLD, _AMBER)[(rr >> 2) % 3]
                 col = _tinted(base, dust)
                 col = tuple(int(c * b) for c in col)
@@ -177,20 +181,26 @@ class Fairy:
                         nx2, ny2 = x + ox, sy + oy
                         if 0 <= nx2 < w and 0 <= ny2 < h:
                             set_pixel(nx2, ny2, *col)
-        # white-hot head + gold halo
+        # white-hot head drawn as a 4-point SPARKLE STAR (core + plus-arms),
+        # gold at the arm tips — a plain square read as a cursor in the gate
+        # render.
         hx = int(round(head))
         r_h = max(1, scale // 2)
         halo = _tinted(_GOLD, dust)
         hy = path[hx] if 0 <= hx < w else h // 2
-        for ox in range(-r_h - 1, r_h + 2):
-            for oy in range(-r_h - 1, r_h + 2):
+        for ox in range(-r_h, r_h + 1):
+            for oy in range(-r_h, r_h + 1):
                 x2, y2 = hx + ox, hy + oy
-                if not (0 <= x2 < w and 0 <= y2 < h):
-                    continue
-                if abs(ox) <= r_h and abs(oy) <= r_h:
+                if 0 <= x2 < w and 0 <= y2 < h:
                     set_pixel(x2, y2, *_HEAD_COLOR)
-                else:
-                    set_pixel(x2, y2, *halo)
+        arm = 2 * r_h + 1
+        for direction_x, direction_y in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            for step in range(r_h + 1, arm + 1):
+                x2 = hx + direction_x * step
+                y2 = hy + direction_y * step
+                if 0 <= x2 < w and 0 <= y2 < h:
+                    col = _HEAD_COLOR if step <= arm - 1 else halo
+                    set_pixel(x2, y2, *col)
 
     # --- open phase (gap/blackout core duplicated from lightning.py --------
     # on purpose: rule of three, see spec Code shape) ------------------------
