@@ -5,7 +5,7 @@
 `_paint.hires`) — asserted by advance-sum and by-column color class only,
 same convention as tests/test_paint.py and the layout test suites."""
 
-from led_ticker.plugin import HeadlessBackend
+from led_ticker.plugin import HeadlessBackend, make_color
 
 from led_ticker_baseball import _paint
 from led_ticker_baseball import _palette as pal
@@ -85,10 +85,6 @@ def test_dotted_divider_every_third_pixel():
     assert real.get_pixel(7, 31) != (0, 0, 0)
 
 
-def _lit(real):
-    return {xy for xy, v in real._pixels.items() if v != (0, 0, 0)}
-
-
 def test_draw_record_advance_equals_sum_of_parts():
     real = _real(200, 32)
     shim, _ = _paint.phys_wrap(real)
@@ -121,3 +117,39 @@ def test_draw_record_colors_win_dash_loss_left_to_right():
     assert (pal.WIN.red, pal.WIN.green, pal.WIN.blue) in win_region
     assert (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue) in dash_region
     assert (pal.LOSS.red, pal.LOSS.green, pal.LOSS.blue) in loss_region
+
+
+def test_bar_fill_width_matches_fraction():
+    real = _real(256, 64)
+    prim.draw_bar(real, 4, 40, 200, 8, 0.5, make_color(0, 200, 255))
+    # track fills the whole 200px dimly; the bright fill covers ~100px.
+    # Isolate the fill color band by checking the leftmost 100 vs rightmost 100.
+    track_color = pal.dim(pal.LABEL, 0.32)
+    track_tuple = (track_color.red, track_color.green, track_color.blue)
+    fill_cols = {x for (x, y) in _lit(real) if real.get_pixel(x, y) != track_tuple}
+    assert fill_cols and max(fill_cols) - 4 <= 100  # fill stops near the half mark
+
+
+def test_bar_tick_in_bounds_and_at_fraction():
+    real = _real(256, 64)
+    prim.draw_bar(real, 4, 40, 200, 8, 0.9, make_color(0, 200, 255), tick_frac=0.7)
+    # tick column ~ 4 + round(200*0.7) = 144; must be within [4, 204)
+    ident_tuple = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+    tick_cols = {x for (x, y) in _lit(real) if real.get_pixel(x, y) == ident_tuple}
+    assert tick_cols
+    assert all(4 <= x < 204 for x in tick_cols)
+    assert 140 <= min(tick_cols) <= 148
+
+
+def test_bar_tick_frac_one_stays_in_bounds():
+    real = _real(256, 64)
+    prim.draw_bar(real, 4, 40, 200, 8, 1.0, make_color(0, 200, 255), tick_frac=1.0)
+    ident_tuple = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+    tick_cols = {x for (x, y) in _lit(real) if real.get_pixel(x, y) == ident_tuple}
+    assert tick_cols and max(tick_cols) < 204  # never paints at/after x+w
+
+
+def test_bar_frac_clamps():
+    real = _real(256, 64)
+    # clamps to full, no raise
+    prim.draw_bar(real, 4, 40, 200, 8, 2.0, make_color(0, 200, 255))

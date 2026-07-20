@@ -7,7 +7,8 @@ for the prototype's brightness args.
 
 from led_ticker.plugin import Color, make_color
 
-from led_ticker_baseball._paint import hires, px
+from led_ticker_baseball import _palette as pal
+from led_ticker_baseball._paint import hires, js_round, px
 from led_ticker_baseball._palette import LABEL, LOSS, ORANGE, WIN, dim
 from led_ticker_baseball.teams import MLB_TEAM_CHIPS
 
@@ -97,3 +98,35 @@ def draw_record(
     cx += hires(shim, "-", cx, y, LABEL, size, bold=bold)
     cx += hires(shim, str(losses), cx, y, LOSS, size, bold=bold)
     return cx - x
+
+
+def draw_bar(
+    real,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    frac: float,
+    fill,
+    *,
+    tick_frac: float | None = None,
+) -> None:
+    """Port of dc.html `drawBar` (~251): a dim full-width track, a bright
+    `fill`-colored bar to `frac` with a subtle left-to-right brightness ramp,
+    and an optional tick at `tick_frac`. The tick's x is clamped to stay
+    within [x, x+w) (its y deliberately bleeds 1px above/below, matching the
+    statcast wall-tick full-bleed). Never raises; `frac`/`tick_frac` clamp."""
+    track = pal.dim(pal.LABEL, 0.32)
+    for i in range(w):
+        for yy in range(h):
+            px(real, x + i, y + yy, track)
+    fw = js_round(w * max(0.0, min(1.0, frac)))
+    for i in range(fw):
+        b = 0.85 + 0.15 * (i / max(1, fw))
+        col = pal.dim(fill, b)
+        for yy in range(h):
+            px(real, x + i, y + yy, col)
+    if tick_frac is not None:
+        tx = min(x + js_round(w * max(0.0, min(1.0, tick_frac))), x + w - 1)
+        for yy in range(-1, h + 1):
+            px(real, tx, y + yy, pal.IDENT)
