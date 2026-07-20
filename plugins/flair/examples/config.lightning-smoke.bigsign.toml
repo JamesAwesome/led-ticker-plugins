@@ -1,0 +1,170 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST — flair.lightning transition (flair >= 0.11.0)
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.18.0
+#   - led-ticker-flair >= 0.11.0 (PyPI pin in config/requirements-plugins.txt:
+#     led-ticker-flair==0.11.0), then `docker compose down -v && docker compose up -d`
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
+# and on each section's entry):
+#   — NOTE: past the strike, the peel reveals the incoming widget inside the
+#     widening zigzag gap AGAINST BLACK outside it (approved design decision —
+#     the outgoing cuts out the moment the crack completes; no old content
+#     visible outside the gap).
+#
+#   1 DEFAULT            — a zigzag bolt draws itself left->right over the
+#                          outgoing text: white-hot head, flickering blue-white
+#                          trail. Fresh bolt SHAPE every firing. Then the crack
+#                          pulls apart into twin glowing zigzag edges and the
+#                          incoming shows inside the widening gap. Clean snap.
+#   2 SEEDED             — seed = 99: the bolt takes the IDENTICAL path every
+#                          firing. Watch it twice to confirm reproducibility.
+#   3 TINTED             — color = flame orange: the trail + peel edges take
+#                          the tint; the strike head stays white-hot.
+#   4 BG HOLD            — the incoming widget has a DARK PURPLE background:
+#                          the inside of the opening gap must be purple (not
+#                          black) from the first sliver, and the snap must not
+#                          flash.
+#   5 PERF FEEL          — motion stays smooth through strike AND open; no
+#                          hitch at the moment the crack opens; the FIRST
+#                          transition after boot is as smooth as later ones
+#                          (no warm-up — lightning has no geometry cache).
+#
+# If anything looks wrong: docs/visual-validation.md; reference renders in
+# session GIFs.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 2.5
+easing = "ease_in_out"
+between_sections = "cut"
+
+# ---------------------------------------------------------------------------
+# 1 · DEFAULT — fresh bolt every firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.lightning"
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 STRIKE"
+font_color = [255, 183, 3]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "REVEALED"
+font_color = [80, 220, 120]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 2 · SEEDED — identical bolt path every firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.lightning", seed = 99}
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 SEED 99"
+font_color = [255, 220, 100]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAME BOLT"
+font_color = [255, 220, 100]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 3 · TINTED — flame-orange trail, head stays white
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.lightning", color = [255, 92, 38]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 TINTED"
+font_color = [255, 92, 38]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "FLAME BOLT"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 4 · BG HOLD — gap interior must show the incoming bg immediately
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.lightning"
+bg_color = [40, 10, 60]
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 BG HOLD"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "PURPLE GAP"
+font_color = [255, 183, 3]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 5 · PERF FEEL — smooth strike + open, first firing included
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.lightning"
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 PERF"
+font_color = [100, 200, 255]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "NO STUTTER"
+font_color = [100, 200, 255]
+font = "Inter-Bold"
+font_size = 44

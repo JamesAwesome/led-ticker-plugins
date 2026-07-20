@@ -243,6 +243,51 @@ transition = {type = "flair.poker", suits = ["hearts", "spades"], seed = 42}
 - **Plan-time ring pre-rasterization only.** Ring pixel-lists (the ripple wavefronts and glyph interiors) are computed once per firing and cached; per-frame work is SetPixel iteration only — no shape rasterization per tick. Tripwire test `test_no_ring_rasterization_after_first_frame` enforces this performance contract.
 
 
+## Lightning transition
+
+`flair.lightning` strikes a zigzag bolt across the outgoing widget — white-hot head, flickering electric blue-white trail — then the crack pulls apart into twin glowing zigzag edges, revealing the incoming widget inside the widening gap.
+
+![flair.lightning — a zigzag bolt strikes across, then the crack opens revealing the incoming widget](docs/transition-lightning.gif)
+
+Requires **led-ticker-core >= 4.18.0**.
+
+### Config
+
+Fresh bolt shape every firing:
+
+```toml
+[[playlist.section]]
+transition = "flair.lightning"
+```
+
+Reproducible bolt path:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.lightning", seed = 42}
+```
+
+Tinted trail (the strike head stays white-hot):
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.lightning", color = [255, 92, 38]}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `seed` | int, or omitted | omitted (OS entropy) | Fixes the bolt path for reproducible strikes. Leave unset for a real deploy — every firing gets a fresh bolt. |
+| `color` | `[r, g, b]` (0–255), or omitted | electric blue-white `[150, 190, 255]` | Tints the bolt trail and the peel-phase crack edges. The strike head is always white. |
+
+### Notes
+
+- **Two-phase design.** Phase one (first ~0.45 of the transition) draws the bolt left→right over the outgoing widget. Phase two cuts to the incoming widget and opens the crack: the zigzag duplicates into two edges moving apart, the incoming is visible between them, and everything outside the gap is blacked out — **the incoming is revealed against black, not composited over the old content** (hardware constraint: no `GetPixel` means the outgoing's pixels can't be read back and slid apart).
+- **Bolt geometry.** A random-walk zigzag with a vertex every 6–10 logical px, strictly alternating direction, confined to the center half of the panel height. Section backgrounds (`bg_color`) show inside the gap from the first sliver.
+- **No caches, no warm-up.** Every frame is a pure function of `t`; the only per-firing state is the bolt polyline. The first firing after boot costs the same as every other one, and per-frame paint volume is bounded by panel size (enforced by the `TestPerfUniformity` tripwires).
+
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
