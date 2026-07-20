@@ -162,6 +162,19 @@ class TestDeriveRecords:
         )
         assert records["slowest_pitch"].pitch_name == "Slow Curve"
 
+    def test_derive_captures_pitch_type_abbreviation(self):
+        records = self._derive(
+            [
+                row(
+                    release_speed=69.6,
+                    pitcher=31,
+                    pitch_name="Slow Curve",
+                    pitch_type="SL",
+                )
+            ]
+        )
+        assert records["slowest_pitch"].pitch_type == "SL"
+
     def test_tie_keeps_first_row(self):
         records = self._derive([hr(440, batter=10), hr(440, batter=11)])
         assert records["longest_hr"].person_id == 10

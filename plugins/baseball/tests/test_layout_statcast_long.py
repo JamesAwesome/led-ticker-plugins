@@ -85,3 +85,51 @@ def test_long_never_raises_on_empty():
     render_statcast_long(
         canvas, StatRecord(value=0, person_id=0, team_abbr=""), "", 1.0
     )
+
+
+def _no_label_pixels_past_distance_guard(real):
+    """No pal.LABEL-colored pixel at x >= 390 in rows 44-58 — that band is
+    the PITCH column's `sec` text (px9, y48); the STATCAST label and column
+    labels are also LABEL-colored but sit at x<=360, so x>=390 isolates the
+    PITCH sec region from any legitimate LABEL-colored content."""
+    label = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    return not any(
+        v == label and x >= 390 and 44 <= y <= 58 for (x, y), v in real._pixels.items()
+    )
+
+
+def test_long_pitch_sec_never_overlaps_distance():
+    """A long pitch name (Knuckle Curve / KC) must not paint its `sec`
+    text into the magenta distance readout's column (x >= 396). Pre-fix,
+    the full pitch name produced 'KNUCKLE CURVE MPH', which overflows past
+    x=396 at px9 and bleeds into the trajectory/distance panel."""
+    canvas, real = _longboi()
+    rec = _rec(
+        pitch_type="KC",
+        pitch_name="Knuckle Curve",
+        exit_velo=114.2,
+        launch_angle=28,
+        distance=451,
+        bb_type="fly_ball",
+        result="HOME RUN",
+    )
+    render_statcast_long(canvas, rec, "RAMIREZ", 1.0)
+    assert _no_label_pixels_past_distance_guard(real)
+
+
+def test_long_pitch_sec_fits_even_absurd_name():
+    """Belt: even with no pitch_type abbreviation and an absurdly long
+    pitch_name, fit_text must ellipsize the sec text within the column so
+    it never reaches the distance panel guard column."""
+    canvas, real = _longboi()
+    rec = _rec(
+        pitch_type="",
+        pitch_name="Absurdly Long Pitch Name That Should Never Happen",
+        exit_velo=114.2,
+        launch_angle=28,
+        distance=451,
+        bb_type="fly_ball",
+        result="HOME RUN",
+    )
+    render_statcast_long(canvas, rec, "RAMIREZ", 1.0)
+    assert _no_label_pixels_past_distance_guard(real)

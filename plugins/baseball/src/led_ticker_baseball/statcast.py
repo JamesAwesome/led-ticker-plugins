@@ -162,6 +162,7 @@ class StatRecord:
     person_id: int
     team_abbr: str
     pitch_name: str = ""
+    pitch_type: str = ""
     exit_velo: float | None = None
     launch_angle: float | None = None
     distance: float | None = None
@@ -204,6 +205,7 @@ def _derive_records(
             person_id=_to_id(r, who),
             team_abbr=_row_team(r, who),
             pitch_name=(r.get("pitch_name") or "").strip(),
+            pitch_type=(r.get("pitch_type") or "").strip(),
             exit_velo=_to_float(r, "launch_speed"),
             launch_angle=_to_float(r, "launch_angle"),
             distance=_to_float(r, "hit_distance_sc"),

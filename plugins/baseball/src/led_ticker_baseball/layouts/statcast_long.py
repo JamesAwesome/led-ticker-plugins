@@ -13,6 +13,7 @@ from led_ticker.plugin import safe_scale, unwrap_to_real
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._paint import (
     cap_top,
+    fit_text,
     hires,
     paging_dots,
     phys_wrap,
@@ -20,6 +21,12 @@ from led_ticker_baseball._paint import (
 from led_ticker_baseball.trajectory import draw_trajectory, plan_arc, res_color
 
 _TRAJ_BOX = (396, 20, 106, 24)
+
+# PITCH column origin (cx=320) to a 6px safe margin before the distance
+# panel (px0=396): 396 - 320 - 6. Even the abbreviation-based sec text is
+# fit_text-clamped to this width so an unexpectedly long value can never
+# overlap the trajectory/distance panel.
+_PITCH_SEC_MAX_W = 70
 
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
@@ -53,15 +60,12 @@ def render_statcast_long(
     _t(shim, res, 6, 34 + yo, res_color(res), 13)
     _t(shim, "STATCAST", 6, 52 + yo, pal.LABEL, 9)
 
+    pt = (record.pitch_type or record.pitch_name or "").upper()
+    pitch_sec = fit_text(f"{pt} MPH" if pt else "MPH", _PITCH_SEC_MAX_W, 9, bold=False)
     cols = [
         ("EXIT VELO", _num(record.exit_velo), "MPH", pal.AMBER),
         ("LAUNCH", _num(record.launch_angle, "°"), "ANGLE", pal.CYAN),
-        (
-            "PITCH",
-            _num(record.pitch_velo),
-            f"{(record.pitch_name or '').upper()} MPH".strip(),
-            pal.WIN,
-        ),
+        ("PITCH", _num(record.pitch_velo), pitch_sec, pal.WIN),
     ]
     for i, (lab, val, sec, c) in enumerate(cols):
         cx = 176 + i * 72
