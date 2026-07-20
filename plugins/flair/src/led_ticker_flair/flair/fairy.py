@@ -50,11 +50,7 @@ def plan_path(w: int, h: int, scale: int, rng: random.Random) -> list[int]:
     span = max(1, w - 1)
     path = []
     for x in range(w):
-        y = (
-            y0
-            + drift * (x / span - 0.5)
-            + wob_amp * math.sin(wob_freq * x + wob_phase)
-        )
+        y = y0 + drift * (x / span - 0.5) + wob_amp * math.sin(wob_freq * x + wob_phase)
         path.append(max(1, min(h - 2, int(round(y)))))
     return path
 

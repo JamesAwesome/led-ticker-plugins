@@ -164,15 +164,11 @@ class TestFullReveal:
     function of t)."""
 
     @pytest.mark.parametrize("seed", range(8))
-    @pytest.mark.parametrize(
-        ("width", "height", "scale"), [(160, 16, 1), (256, 64, 4)]
-    )
+    @pytest.mark.parametrize(("width", "height", "scale"), [(160, 16, 1), (256, 64, 4)])
     def test_full_reveal_before_snap(self, width, height, scale, seed) -> None:
         real = _StubCanvas(width=width, height=height)
         canvas = (
-            ScaledCanvas(real, scale=scale, content_height=16)
-            if scale > 1
-            else real
+            ScaledCanvas(real, scale=scale, content_height=16) if scale > 1 else real
         )
         p = Fairy(seed=seed)
         o = _make_widget(draw_pixel=False)
@@ -230,3 +226,81 @@ class TestPhysicalResolution:
         rows = [y for (x, y) in real._pixels if x == 3]
         assert rows
         assert len(rows) <= 3
+
+
+class _RecordingAPI:
+    """Minimal PluginAPI stand-in recording registrations."""
+
+    def __init__(self) -> None:
+        self.animations: dict[str, type] = {}
+        self.transitions: dict[str, type] = {}
+        self.widgets: dict[str, type] = {}
+
+    def animation(self, name):
+        def _dec(cls):
+            self.animations[name] = cls
+            return cls
+
+        return _dec
+
+    def transition(self, name):
+        def _dec(cls):
+            self.transitions[name] = cls
+            return cls
+
+        return _dec
+
+    def widget(self, name):
+        def _dec(cls):
+            self.widgets[name] = cls
+            return cls
+
+        return _dec
+
+
+class TestRegistration:
+    def test_all_three_fairy_variants_registered(self) -> None:
+        api = _RecordingAPI()
+        flair_pkg.register(api)
+        assert api.transitions["fairy.forward"] is Fairy
+        assert api.transitions["fairy.reverse"] is FairyReverse
+        assert api.transitions["fairy.alternating"] is FairyAlternating
+
+
+class TestPerfUniformity:
+    """Committed CI-safe perf gate (lightning convention): count WORK per
+    frame, not time — a deferred-backlog bug fails the bound
+    deterministically."""
+
+    def test_per_frame_paint_volume_bounded(self) -> None:
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = Fairy(seed=4)
+        counts = []
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            counts.append((round(t, 2), len(canvas.calls) - before))
+            t += 0.02
+        panel = 160 * 16
+        worst_t, worst = max(counts, key=lambda c: c[1])
+        assert worst <= int(1.5 * panel), (
+            f"frame at t={worst_t} painted {worst} px (> 1.5x panel {panel})"
+        )
+
+    def test_alternating_refire_frames_equally_bounded(self) -> None:
+        canvas = _StubCanvas(width=160, height=16)
+        o = _make_widget(draw_pixel=False)
+        i = _make_widget(draw_pixel=False)
+        p = FairyAlternating()  # seedless, flips per firing
+        for t in (0.3, 0.6, 0.96):
+            p.frame_at(t, canvas, o, i)
+        panel = 160 * 16
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            assert len(canvas.calls) - before <= int(1.5 * panel)
+            t += 0.02
