@@ -298,9 +298,10 @@ Two card shapes, chosen by `layout`:
 | scale>1, real width < 400px (bigsign) | big card |
 | scale>1, real width >= 400px (longboi) | long card |
 
-**The big card (bigsign)** is text-only: player, result, exit velo, then a
-line with launch angle, distance, and pitch (name + velo, when the
-superlative is a pitch rather than a batted ball) — no arc panel.
+**The big card (bigsign)** shows player, result, exit velo, then a line with
+launch angle, distance, and pitch (abbreviation + velo, when the superlative
+is a pitch rather than a batted ball), plus an animated trajectory panel in
+the empty block under the result label for batted-ball superlatives.
 
 **The long card (longboi)** adds an animated trajectory panel in the
 DISTANCE slot for batted-ball superlatives (`longest_hr`, `hardest_hit`): the
@@ -326,11 +327,11 @@ same arc on replay. **Pitch superlatives (`fastest_pitch`, `slowest_pitch`)
 have no launch angle or distance, so the long card skips the arc panel
 entirely** and shows the pitch type large in that slot instead.
 
-**The trajectory arc is LONGBOI-ONLY** — the narrower bigsign card has no
-room for a flight panel and always shows launch angle + distance as plain
-text, same as the classic line. Re-entering the section (a new visit) always
-flies the ball again from the start; it never resumes mid-flight or skips
-straight to the resting pose.
+**Both scale>1 cards draw the arc** — the bigsign fits a compact panel in the
+block under the result label; the longboi uses the full-width DISTANCE slot.
+Both keep the launch-angle / distance / pitch text as well. Re-entering the
+section (a new visit) always flies the ball again from the start; it never
+resumes mid-flight or skips straight to the resting pose.
 
 ### `baseball.attendance`
 
