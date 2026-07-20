@@ -1,0 +1,216 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST — flair.fairy transition (flair >= 0.12.0)
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.18.0
+#   - led-ticker-flair >= 0.12.0 (PyPI pin in config/requirements-plugins.txt:
+#     led-ticker-flair==0.12.0), then `docker compose down -v && docker compose up -d`
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
+# and on each section's entry):
+#   — NOTE: past the flight, the line OPENS to reveal the incoming widget
+#     inside the widening gap AGAINST BLACK outside it (approved design
+#     decision — the outgoing cuts out when the fairy reaches the far edge;
+#     no old content visible outside the gap).
+#
+#   1 FORWARD            — a white sparkle-star fairy flies LEFT→RIGHT trailing
+#                          a long cone of gold pixie dust, settling a thin gold
+#                          line. At the far edge the line splits into two
+#                          twinkling gold edges and the incoming shows between.
+#   2 REVERSE            — same, flying RIGHT→LEFT.
+#   3 ALTERNATING        — direction flips every firing: watch two full cycles
+#                          (forward, then reverse, then forward…).
+#   4 SEEDED             — seed = 99: identical flight path AND spark field
+#                          every firing. Watch it twice to confirm.
+#   5 TINTED             — color = violet: the dust + line + peel edges take
+#                          the tint; the fairy head stays white-hot.
+#   6 BG HOLD            — the incoming widget has a DARK PURPLE background:
+#                          the inside of the opening gap must be purple (not
+#                          black) from the first sliver, and the snap must not
+#                          flash.
+#   7 PERF FEEL          — motion stays smooth through flight AND open; no
+#                          hitch when the line opens; the FIRST transition
+#                          after boot is as smooth as later ones (fairy has no
+#                          caches, no warm-up).
+#
+# If anything looks wrong: docs/visual-validation.md; reference renders in
+# session GIFs.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 2.5
+easing = "ease_in_out"
+between_sections = "cut"
+
+# ---------------------------------------------------------------------------
+# 1 · FORWARD — flies left→right
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.fairy.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 FORWARD"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "PIXIE DUST"
+font_color = [80, 220, 120]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 2 · REVERSE — flies right→left
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.fairy.reverse"
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 REVERSE"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "OTHER WAY"
+font_color = [80, 220, 120]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 3 · ALTERNATING — direction flips every firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.fairy.alternating"
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 FLIP"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "EACH TIME"
+font_color = [80, 220, 120]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 4 · SEEDED — identical path + spark field every firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.fairy.forward", seed = 99}
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 SEED 99"
+font_color = [255, 220, 100]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAME FLIGHT"
+font_color = [255, 220, 100]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 5 · TINTED — violet dust, head stays white
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.fairy.forward", color = [180, 120, 255]}
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 TINTED"
+font_color = [180, 120, 255]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "VIOLET DUST"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 6 · BG HOLD — gap interior must show the incoming bg immediately
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.fairy.forward"
+bg_color = [40, 10, 60]
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 BG HOLD"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "PURPLE GAP"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 44
+
+# ---------------------------------------------------------------------------
+# 7 · PERF FEEL — smooth flight + open, first firing included
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.fairy.alternating"
+
+[[playlist.section.widget]]
+type = "message"
+text = "7 PERF"
+font_color = [100, 200, 255]
+font = "Inter-Bold"
+font_size = 44
+
+[[playlist.section.widget]]
+type = "message"
+text = "NO STUTTER"
+font_color = [100, 200, 255]
+font = "Inter-Bold"
+font_size = 44
