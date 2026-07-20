@@ -6,10 +6,12 @@ paging dots, cycles through several promos on its own clock) and
 `promoLongScroll` (a SEPARATE static demo of one over-wide promo name via
 `maskScroll`, plus a `fitText`-ellipsized sub line) as two different pages.
 This module ports ONE long-layout renderer that has both behaviors: the
-promo name always goes through `_mask.mask_scroll` (band `[6, 300)` at
-px22) — for a promo name that fits the band that's byte-identical to
-`promoLongCard`'s plain draw (mask_scroll's own fast path is a single
-static blit), and for an over-wide name it scrolls like `promoLongScroll`.
+promo name always goes through `_mask.mask_scroll` (band `[6, 300)`;
+px26/y21 rather than the prototype's px22/y18 — see `_render_long`'s
+vertical-rhythm comment) — for a promo name that fits the band that's
+equivalent to `promoLongCard`'s plain draw (mask_scroll's own fast path is
+a single static blit), and for an over-wide name it scrolls like
+`promoLongScroll`.
 The 256px BIG layout gets the same treatment (band `[4, 252)` at px16) for
 consistency, even though the prototype's `promoBig` never scrolls its name
 — the handoff's own promo fixtures are all short enough there anyway.
@@ -150,24 +152,37 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
     name = _hires_safe((promo.name or "").upper())
     time_text = f"{promo.time_label} {promo.am_pm}".strip()
 
+    # Left column vertical rhythm (deviation from the prototype's px22 name
+    # at y18 — hardware feedback, longboi 2026-07-20 round 2): the
+    # prototype's spacing read as date -> 5px gap -> name -> 15px gap ->
+    # PROMOTION on the panel. The name marquee is px26 seated at y21 so
+    # both gaps land at 8-9px (the date-bottom..PROMOTION-top span is fixed
+    # at 36 rows; cap(26) ~= 19 rows leaves ~8.5 per side).
     _t(shim, promo.date_label, 6, 4 + yo, pal.AMBER, 12)
-    mask_scroll(real, name, 6, 300, 18 + yo, pal.IDENT, 22, clock_ms)
+    mask_scroll(real, name, 6, 300, 21 + yo, pal.IDENT, 26, clock_ms)
     _t(shim, "PROMOTION", 6, 50 + yo, pal.LABEL, 9)
 
-    rx = 308
-    chip(real, rx, 8 + yo, 13, opp)
-    _t(shim, f"VS {opp}", rx + 18, 8 + yo, pal.VIOLET, 16)
-    # Deliberate deviation from the prototype (`promoLongCard` dc.html ~548
-    # left-flows the time 12px after "VS OPP"): right-anchor it at width-6
-    # instead, mirroring the BIG layout's `252 - tw` anchor and the left
-    # column's x=6 margin. Left-flowed, a typical line topped out near
-    # x=432 and stranded ~50 physical px of dead panel at the right edge —
-    # glaring when the cyan sub line below is empty, which live promos
-    # often are (hardware finding, longboi 2026-07-20).
+    # Right block, right-justified (deviation from the prototype's fixed
+    # rx=308 + left-flowed time, `promoLongCard` dc.html ~544-548 — same
+    # hardware findings, longboi 2026-07-20): the time right-anchors at
+    # width-6 (mirroring the BIG layout's `252 - tw` anchor and the left
+    # column's x=6 margin), the chip + "VS OPP" block anchors off the
+    # time's x with a fixed 14px gap (the prototype's fixed rx stranded
+    # ~67px of dead space before a right-anchored time), and the sub line
+    # right-anchors under the time so the block's right edge is a single
+    # clean line. `rx` floors at the prototype's 308 so pathological data
+    # (an absurdly wide time/opponent string) widens the VS->time gap
+    # instead of invading the name band's [300,308) buffer.
     tw = text_width(14, time_text, bold=False)
-    _t(shim, time_text, real.width - 6 - tw, 10 + yo, pal.AMBER, 14, bold=False)
+    time_x = real.width - 6 - tw
+    vs_text = f"VS {opp}"
+    rx = max(308, time_x - 14 - text_width(16, vs_text) - 18)
+    chip(real, rx, 8 + yo, 13, opp)
+    _t(shim, vs_text, rx + 18, 8 + yo, pal.VIOLET, 16)
+    _t(shim, time_text, time_x, 10 + yo, pal.AMBER, 14, bold=False)
     sub = fit_text(_promo_sub(promo), 196, 14, bold=False)
-    _t(shim, sub, rx, 36 + yo, pal.CYAN, 14, bold=False)
+    sub_x = real.width - 6 - text_width(14, sub, bold=False)
+    _t(shim, sub, sub_x, 36 + yo, pal.CYAN, 14, bold=False)
 
     if story_total > 1:
         paging_dots(

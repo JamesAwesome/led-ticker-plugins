@@ -158,13 +158,12 @@ def test_big_y_offset_shifts_content():
 def test_long_regions_present():
     canvas, real = _longboi()
     render_promo_card(canvas, _promo(), 0)
-    assert _lit_in(real, 6, 60, 2, 20)  # date, x6 y4 px12
-    assert _lit_in(real, 6, 300, 16, 44)  # name band [6,300) y18 px22
+    assert _lit_in(real, 6, 300, 2, 20)  # date, x6 y4 px12
+    assert _lit_in(real, 6, 300, 16, 46)  # name band [6,300) y21 px26
     assert _lit_in(real, 6, 100, 48, 62)  # "PROMOTION" label x6 y50 px9
-    assert _lit_in(real, 308, 322, 6, 25)  # chip rx=308 y8 h13
-    assert _lit_in(real, 326, 440, 6, 28)  # "VS BOS", right block
+    assert _lit_in(real, 322, 440, 6, 28)  # chip + "VS BOS", anchored off time
     assert _lit_in(real, 440, 507, 2, 26)  # time, right-anchored at 506
-    assert _lit_in(real, 308, 460, 34, 54)  # sub line rx=308 y36 px14
+    assert _lit_in(real, 308, 507, 34, 54)  # sub line, right-anchored, y36 px14
 
 
 def test_long_time_right_anchored():
@@ -184,6 +183,45 @@ def test_long_time_right_anchored():
     # ...and respects the 6px right margin (paging dots are off at
     # story_total=1; nothing may cross x=506).
     assert not any(x > 506 for x, _y in lit)
+
+
+def test_long_left_column_gaps_consistent():
+    """Hardware feedback (longboi, 2026-07-20, round 2): the left column's
+    vertical rhythm was date -> 5px gap -> name -> 15px gap -> PROMOTION.
+    The name marquee is now px26 seated so both gaps land within a couple
+    of px of each other. Asserted RELATIVELY (gap difference, not absolute
+    rows) so freetype cap-height variance across platforms can't flake it."""
+    canvas, real = _longboi()
+    render_promo_card(canvas, _promo(), 0)
+    lit = _lit_coords(real)
+    left = {(x, y) for x, y in lit if x < 300}
+    date_rows = sorted(y for _x, y in left if y < 16)
+    name_rows = sorted(y for _x, y in left if 16 <= y < 46)
+    label_rows = sorted(y for _x, y in left if y >= 46)
+    gap_above = name_rows[0] - date_rows[-1] - 1
+    gap_below = label_rows[0] - name_rows[-1] - 1
+    assert abs(gap_above - gap_below) <= 3, (
+        f"date->name gap {gap_above} vs name->PROMOTION gap {gap_below}"
+    )
+
+
+def test_long_vs_block_sits_near_time():
+    """Hardware feedback (longboi, 2026-07-20, round 2): with the time
+    right-anchored, the chip + "VS OPP" block left at the prototype's fixed
+    rx=308 stranded ~67px of dead space before the time. The block now
+    anchors off the time's x (fixed 14px gap). Isolate "VS OPP" from the
+    date (also amber-adjacent rows) by color: hires threshold rasterization
+    paints the palette color exactly."""
+    canvas, real = _longboi()
+    render_promo_card(canvas, _promo(), 0)
+    violet = (pal.VIOLET.red, pal.VIOLET.green, pal.VIOLET.blue)
+    amber = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
+    vs_end = max(x for (x, y), v in real._pixels.items() if v == violet)
+    time_start = min(
+        x for (x, y), v in real._pixels.items() if v == amber and x > 300 and y < 30
+    )
+    dead = time_start - vs_end - 1
+    assert dead <= 20, f"{dead}px of dead space between 'VS OPP' and the time"
 
 
 def test_long_name_outside_band_never_lit():
