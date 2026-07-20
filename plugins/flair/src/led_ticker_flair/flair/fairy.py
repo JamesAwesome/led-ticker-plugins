@@ -18,7 +18,7 @@ from led_ticker.plugin import SNAP_THRESHOLD, is_scaled, snap_reset, unwrap_to_r
 
 _CUTOVER = 0.5  # flight ends / open begins (flight is the star)
 _OPEN_END = 0.9  # fraction of the open phase over which the gap fully opens
-_TRAIL_FRAC = 0.30  # spark trail length, fraction of panel width
+_TRAIL_FRAC = 0.48  # spark trail length, fraction of panel width (dust dwell)
 _DRIFT_LOGICAL = 4  # max end-to-end path drift, logical px
 _WOBBLE_LOGICAL = 1.5  # max sine wobble amplitude, logical px
 _SPARK_SPREAD_LOGICAL = 5  # vertical spark scatter at the WIDE end of the cone
@@ -166,7 +166,10 @@ class Fairy:
             # gate feedback).
             cone = behind / trail_len  # 0 at the head, 1 at the tail end
             local_spread = max(1, int(round((0.2 + 0.8 * cone) * spread)))
-            age = (1.0 - cone) ** 0.6
+            # Flatter falloff (0.35 exponent) so the dust DWELLS at near-full
+            # brightness for most of the (now longer) trail and only fades in
+            # the last stretch, per James's gate feedback.
+            age = (1.0 - cone) ** 0.35
             for k in range(_SPARKS_PER_COL):
                 rr = _mix(self._spark_seed, x, k)
                 if rr % 5 == 0:
