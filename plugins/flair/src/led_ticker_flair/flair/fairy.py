@@ -21,8 +21,8 @@ _OPEN_END = 0.9  # fraction of the open phase over which the gap fully opens
 _TRAIL_FRAC = 0.30  # spark trail length, fraction of panel width
 _DRIFT_LOGICAL = 4  # max end-to-end path drift, logical px
 _WOBBLE_LOGICAL = 1.5  # max sine wobble amplitude, logical px
-_SPARK_SPREAD_LOGICAL = 4  # vertical spark scatter around the path
-_SPARKS_PER_COL = 3
+_SPARK_SPREAD_LOGICAL = 5  # vertical spark scatter at the WIDE end of the cone
+_SPARKS_PER_COL = 5
 _GOLD = (255, 215, 120)
 _CREAM = (255, 240, 200)
 _AMBER = (230, 170, 60)
@@ -161,12 +161,17 @@ class Fairy:
             # stateless sparks: presence, offset, base brightness from _mix.
             # Sub-linear age falloff keeps the region near the head dense and
             # bright (linear falloff read as sparse/dim in the gate render).
-            age = (1.0 - behind / trail_len) ** 0.6
+            # The scatter widens with distance behind the head — a CONE:
+            # tight at the star, spreading as the dust disperses (per James's
+            # gate feedback).
+            cone = behind / trail_len  # 0 at the head, 1 at the tail end
+            local_spread = max(1, int(round((0.2 + 0.8 * cone) * spread)))
+            age = (1.0 - cone) ** 0.6
             for k in range(_SPARKS_PER_COL):
                 rr = _mix(self._spark_seed, x, k)
-                if rr % 4 == 0:
+                if rr % 5 == 0:
                     continue  # this (column, k) slot never sparks
-                dy = (rr >> 4) % (2 * spread + 1) - spread
+                dy = (rr >> 4) % (2 * local_spread + 1) - local_spread
                 tw = ((_mix(rr, qt) >> 3) & 0xFF) / 255.0
                 b = age * (0.5 + 0.5 * tw)
                 base = (_CREAM, _GOLD, _AMBER)[(rr >> 2) % 3]
