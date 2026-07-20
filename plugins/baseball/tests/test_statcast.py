@@ -361,6 +361,83 @@ class TestBuildStatStories:
         assert stories[0].center is True
 
 
+class TestBuildStatCards:
+    def test_feed_stories_are_statcast_cards(self):
+        from led_ticker_baseball._statcast_card import MLBStatcastCard
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"])
+        records = {
+            "longest_hr": StatRecord(
+                value=451,
+                person_id=1,
+                team_abbr="PHI",
+                distance=451,
+                launch_angle=28,
+                exit_velo=114.2,
+                bb_type="fly_ball",
+                result="HOME RUN",
+            ),
+            "hardest_hit": StatRecord(
+                value=118,
+                person_id=2,
+                team_abbr="PHI",
+                distance=0,
+                launch_angle=8,
+                exit_velo=118.0,
+                bb_type="line_drive",
+                result="LINE OUT",
+            ),
+        }
+        cards = mon._build_stat_cards(records, "Today", {1: "Schwarber", 2: "Turner"})
+        assert all(isinstance(c, MLBStatcastCard) for c in cards)
+        assert cards[0].player_name == "Schwarber"
+        assert cards[0].story_total == 2
+
+    def test_cards_carry_index_and_layout(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"], layout="big")
+        records = {
+            "longest_hr": StatRecord(value=451, person_id=1, team_abbr="PHI"),
+            "hardest_hit": StatRecord(value=118, person_id=2, team_abbr="PHI"),
+        }
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert [c.story_index for c in cards] == [0, 1]
+        assert all(c.story_total == 2 for c in cards)
+        assert all(c.cfg_layout == "big" for c in cards)
+
+    def test_missing_record_omitted_from_cards(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr", "hardest_hit"])
+        records = {"longest_hr": StatRecord(value=451, person_id=1, team_abbr="PHI")}
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert len(cards) == 1
+        assert cards[0].story_total == 1
+
+    def test_card_wraps_legacy_line(self):
+        from led_ticker_baseball.statcast import StatRecord
+
+        mon = make_widget(stats=["longest_hr"])
+        records = {"longest_hr": StatRecord(value=463, person_id=10, team_abbr="TOR")}
+        cards = mon._build_stat_cards(records, "Today", {10: "Butler"})
+        assert line_text(cards[0].legacy) == "Today · Longest HR 463 ft — Butler TOR"
+
+    def test_card_threads_bg_and_font_color(self):
+        from led_ticker.plugin import make_color
+
+        from led_ticker_baseball.statcast import StatRecord
+
+        bg = make_color(11, 22, 33)
+        fc = make_color(1, 2, 3)
+        mon = make_widget(stats=["longest_hr"], bg_color=bg, font_color=fc)
+        records = {"longest_hr": StatRecord(value=463, person_id=10, team_abbr="TOR")}
+        cards = mon._build_stat_cards(records, "Today", {})
+        assert cards[0].bg_color is bg
+        assert cards[0].font_color is fc
+
+
 def _ctx(payload):
     """Async-context response mock: str payloads serve .text(), dicts .json()."""
     resp = mock.AsyncMock()
@@ -621,6 +698,17 @@ class TestValidateConfig:
     def test_messages_returned_not_raised(self):
         assert isinstance(self._validate({"stats": 42}), list)
 
+    def test_rejects_bad_layout(self):
+        msgs = self._validate({"layout": "sideways"})
+        assert any("layout" in m for m in msgs)
+
+    def test_valid_layouts_pass(self):
+        for layout in ("auto", "big", "long"):
+            assert self._validate({"layout": layout}) == []
+
+    def test_layout_omitted_passes(self):
+        assert self._validate({}) == []
+
 
 class TestValidateConfigTeam:
     def _validate(self, cfg):
@@ -665,7 +753,9 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        assert line_text(widget.feed_stories[0]) == (
+        # feed_stories now holds MLBStatcastCards (Task 8); .legacy is the
+        # pre-built SegmentMessage line that forwards verbatim at scale<=1.
+        assert line_text(widget.feed_stories[0].legacy) == (
             "Today · Longest HR 463 ft — Butler TOR"
         )
         assert widget.feed_title is not None
@@ -685,7 +775,7 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        assert line_text(widget.feed_stories[0]).startswith(
+        assert line_text(widget.feed_stories[0].legacy).startswith(
             f"{yest.strftime('%-m/%-d')} · "
         )
 
@@ -782,7 +872,7 @@ class TestUpdate:
         with patcher:
             await widget.update()
         assert widget._last_derive == (today, -1)
-        assert line_text(widget.feed_stories[0]).startswith("Today · ")
+        assert line_text(widget.feed_stories[0].legacy).startswith("Today · ")
 
     async def test_update_logs_info(self, caplog):
         patcher, today = _freeze_today()

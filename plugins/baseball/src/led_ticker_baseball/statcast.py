@@ -32,6 +32,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._statcast_card import MLBStatcastCard
 from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
     MLB_API,
@@ -232,6 +233,10 @@ class MLBStatcastMonitor:
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    # Card layout at scale > 1 ("auto" picks big/long by physical width); at
+    # scale <= 1 every layout forwards verbatim to the legacy line, so this
+    # field is a no-op on smallsign. Validated in validate_config below.
+    layout: str = "auto"
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -244,7 +249,7 @@ class MLBStatcastMonitor:
     feed_title: TickerMessage | SegmentMessage | None = attrs.field(
         init=False, default=None
     )
-    feed_stories: list[TickerMessage | SegmentMessage] = attrs.field(
+    feed_stories: list[TickerMessage | SegmentMessage | MLBStatcastCard] = attrs.field(
         init=False, factory=list
     )
 
@@ -260,6 +265,12 @@ class MLBStatcastMonitor:
         team = cfg.get("team")
         if team is not None and not isinstance(team, str):
             msgs.append(f"statcast team={team!r} must be a string abbreviation.")
+        layout = cfg.get("layout", "auto")
+        if layout not in ("auto", "big", "long"):
+            msgs.append(
+                f"statcast layout={layout!r} is not valid. "
+                "Use 'auto', 'big', or 'long'."
+            )
         stats = cfg.get("stats")
         if stats is None:
             return msgs
@@ -325,7 +336,7 @@ class MLBStatcastMonitor:
             return
 
         names = await self._resolve_names({r.person_id for r in records.values()})
-        self.feed_stories = self._build_stat_stories(records, label, names)
+        self.feed_stories = self._build_stat_cards(records, label, names)
         self._last_derive = (today, counts[1] if counts is not None else -1)
         logger.info(
             "MLB Statcast updated: %d stories (%s)", len(self.feed_stories), label
@@ -480,6 +491,41 @@ class MLBStatcastMonitor:
                 )
             )
         return stories
+
+    def _build_stat_cards(
+        self,
+        records: dict[str, StatRecord],
+        day_label: str,
+        names: dict[int, str],
+    ) -> list[MLBStatcastCard]:
+        """One MLBStatcastCard per record, wrapping its legacy line.
+
+        `_build_stat_stories` builds the legacy `SegmentMessage` lines in
+        `self.stats` display order (record-present filtering already
+        applied there); this method pairs each line back up with its
+        record + resolved player name so scale>1 can render the hero
+        card while scale<=1 forwards verbatim to the legacy line (see
+        `MLBStatcastCard.draw`).
+        """
+        legacy_lines = self._build_stat_stories(records, day_label, names)
+        ordered = [k for k in self.stats if k in records]
+        total = len(ordered)
+        cards: list[MLBStatcastCard] = []
+        for idx, (key, legacy) in enumerate(zip(ordered, legacy_lines, strict=True)):
+            record = records[key]
+            cards.append(
+                MLBStatcastCard(
+                    record=record,
+                    player_name=names.get(record.person_id, ""),
+                    legacy=legacy,
+                    story_index=idx,
+                    story_total=total,
+                    cfg_layout=self.layout,
+                    bg_color=self.bg_color,
+                    font_color=self.font_color,
+                )
+            )
+        return cards
 
     # Contract for the state setters below: they manage feed_stories only.
     # update() calls _set_title() unconditionally before dispatching to any
