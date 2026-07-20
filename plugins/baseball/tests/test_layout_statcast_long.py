@@ -133,3 +133,48 @@ def test_long_pitch_sec_fits_even_absurd_name():
     )
     render_statcast_long(canvas, rec, "RAMIREZ", 1.0)
     assert _no_label_pixels_past_distance_guard(real)
+
+
+def test_long_pitch_panel_name_never_clips_edge():
+    """A pitch superlative with a common compound name (4-Seam Fastball)
+    must not clip off the panel's right edge. The pitch-superlative
+    branch's big panel element must use the short pitch_type abbreviation
+    (fit_text-clamped) rather than the full pitch name, which can run past
+    the canvas edge (pre-fix: rightmost lit x=511 on a 512px canvas)."""
+    canvas, real = _longboi()
+    rec = _rec(
+        exit_velo=None,
+        launch_angle=None,
+        distance=None,
+        bb_type="",
+        result="",
+        pitch_velo=99.1,
+        pitch_name="4-Seam Fastball",
+        pitch_type="FF",
+    )
+    render_statcast_long(canvas, rec, "OKADA", 1.0)
+    lit_xs = [x for (x, _y), v in real._pixels.items() if v != (0, 0, 0)]
+    assert lit_xs, "expected some lit pixels"
+    assert max(lit_xs) <= 505  # inside the 6px right margin (512 - 6 - 1)
+
+
+def test_long_pitch_panel_shows_abbreviation():
+    """Sanity: the edge-clip fix doesn't blank the panel — the pitch_type
+    abbreviation still renders (WIN-colored) in the panel region at the
+    big-element rows."""
+    canvas, real = _longboi()
+    rec = _rec(
+        exit_velo=None,
+        launch_angle=None,
+        distance=None,
+        bb_type="",
+        result="",
+        pitch_velo=99.1,
+        pitch_name="4-Seam Fastball",
+        pitch_type="FF",
+    )
+    render_statcast_long(canvas, rec, "OKADA", 1.0)
+    win = (pal.WIN.red, pal.WIN.green, pal.WIN.blue)
+    assert any(
+        v == win and x >= 396 and 20 <= y <= 44 for (x, y), v in real._pixels.items()
+    )

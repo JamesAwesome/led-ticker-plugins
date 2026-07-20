@@ -28,6 +28,10 @@ _TRAJ_BOX = (396, 20, 106, 24)
 # overlap the trajectory/distance panel.
 _PITCH_SEC_MAX_W = 70
 
+# panel slot x=396 to a 6px right margin (512-6-396); the big pitch element
+# fit_text-clamped to this so a long name can't run off the panel edge.
+_PITCH_PANEL_MAX_W = 110
+
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
     return hires(shim, text, x, cap_top(y_target, size), color, size, bold=bold)
@@ -98,8 +102,13 @@ def render_statcast_long(
             13,
         )
     else:
-        # pitch superlative: no arc — emphasize pitch type in the panel
-        _t(shim, (record.pitch_name or "—").upper(), px0, 24 + yo, pal.WIN, 20)
+        # pitch superlative: no arc — emphasize pitch type in the panel.
+        # Use the short Savant abbreviation (can't clip) with a fit_text
+        # belt as backstop; fall back to the full name (also belted, so
+        # it ellipsizes instead of clipping) only when no abbreviation
+        # exists.
+        pt_big = (record.pitch_type or record.pitch_name or "—").upper()
+        _t(shim, fit_text(pt_big, _PITCH_PANEL_MAX_W, 20), px0, 24 + yo, pal.WIN, 20)
         _t(shim, "PITCH TYPE", px0, 48 + yo, pal.LABEL, 9, bold=False)
 
     if story_total > 1:
