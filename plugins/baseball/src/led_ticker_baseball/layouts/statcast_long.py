@@ -79,7 +79,7 @@ def render_statcast_long(
 
     px0 = 396
     is_batted = record.launch_angle is not None and record.distance is not None
-    _t(shim, "DISTANCE" if is_batted else "PITCH", px0, 6 + yo, pal.LABEL, 10)
+    _t(shim, "DISTANCE" if is_batted else "PITCH TYPE", px0, 6 + yo, pal.LABEL, 10)
     if is_batted:
         bx, by, bw, bh = _TRAJ_BOX
         plan = plan_arc(
@@ -109,7 +109,17 @@ def render_statcast_long(
         # exists.
         pt_big = (record.pitch_type or record.pitch_name or "—").upper()
         _t(shim, fit_text(pt_big, _PITCH_PANEL_MAX_W, 20), px0, 24 + yo, pal.WIN, 20)
-        _t(shim, "PITCH TYPE", px0, 48 + yo, pal.LABEL, 9, bold=False)
+        _t(
+            shim,
+            fit_text(
+                (record.pitch_name or "").upper(), _PITCH_PANEL_MAX_W, 9, bold=False
+            ),
+            px0,
+            48 + yo,
+            pal.LABEL,
+            9,
+            bold=False,
+        )
 
     if story_total > 1:
         paging_dots(

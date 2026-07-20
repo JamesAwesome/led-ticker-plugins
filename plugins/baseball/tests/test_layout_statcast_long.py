@@ -181,11 +181,13 @@ def test_long_pitch_panel_shows_abbreviation():
     )
 
 
-def test_long_pitch_panel_header_says_pitch():
+def test_long_pitch_panel_header_says_pitch_type():
     """Pitch superlative (no launch angle / distance): the right-panel
-    header must read "PITCH", not "DISTANCE". The header lit pixels sit
-    at x >= 396, rows 0 <= y <= 13. Measure the header's width; it must
-    be closer to text_width(10, "PITCH") than to text_width(10, "DISTANCE")."""
+    header must read "PITCH TYPE", not "DISTANCE" — and not the bare
+    "PITCH" (which duplicates the adjacent PITCH stat column's header).
+    The header lit pixels sit at x >= 396, rows 0 <= y <= 13. Measure the
+    header's width; it must be closer to text_width(10, "PITCH TYPE") than
+    to text_width(10, "DISTANCE")."""
     canvas, real = _longboi()
     rec = _rec(
         exit_velo=None,
@@ -206,10 +208,37 @@ def test_long_pitch_panel_header_says_pitch():
     ]
     assert header_xs, "expected some lit pixels in header region"
     header_width = max(header_xs) - min(header_xs) + 1
-    pitch_width = text_width(10, "PITCH")
+    pitch_type_width = text_width(10, "PITCH TYPE")
     distance_width = text_width(10, "DISTANCE")
-    # Header must be closer to PITCH than to DISTANCE
-    assert abs(header_width - pitch_width) < abs(header_width - distance_width)
+    # Header must be closer to PITCH TYPE than to DISTANCE
+    assert abs(header_width - pitch_type_width) < abs(header_width - distance_width)
+
+
+def test_long_pitch_panel_shows_full_name_caption():
+    """Pitch superlative: the panel caption (below the big abbreviation)
+    must show the full pitch name (e.g. "4-SEAM FASTBALL"), not a literal
+    "PITCH TYPE" repeat of the header. Caption sits at x >= 396, rows
+    ~46-58 (px9, y48) and is pal.LABEL-colored. The no-clip belt still
+    holds: nothing in the whole card may light past x=505."""
+    canvas, real = _longboi()
+    rec = _rec(
+        exit_velo=None,
+        launch_angle=None,
+        distance=None,
+        bb_type="",
+        result="",
+        pitch_velo=99.1,
+        pitch_name="4-Seam Fastball",
+        pitch_type="FF",
+    )
+    render_statcast_long(canvas, rec, "OKADA", 1.0)
+    label = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    assert any(
+        v == label and x >= 396 and 46 <= y <= 58 for (x, y), v in real._pixels.items()
+    )
+    lit_xs = [x for (x, _y), v in real._pixels.items() if v != (0, 0, 0)]
+    assert lit_xs, "expected some lit pixels"
+    assert max(lit_xs) <= 505
 
 
 def test_long_batted_panel_header_says_distance():
