@@ -144,6 +144,18 @@ class CrowdRecord:
     venue: str
     home_abbr: str
     is_pct: bool  # True → render value as "NN%"
+    fill_frac: float = 0.0  # attendance/capacity, 0.0 when capacity is 0/missing
+    attendance: int = 0  # raw attendance for this record, regardless of is_pct
+    capacity: int = 0  # venue capacity for this record, 0 when unlisted
+
+
+@dataclass(frozen=True)
+class AttendanceGame:
+    paid: int | None
+    capacity: int
+    avg: int | None  # attendanceAverageHome; None when missing (early season)
+    venue: str
+    home_abbr: str
 
 
 def _derive_superlatives(
@@ -157,26 +169,35 @@ def _derive_superlatives(
     """
     records: dict[str, CrowdRecord] = {}
 
-    def consider(key: str, value: int, gv: GameVenue, *, lower: bool) -> None:
+    def consider(key: str, value: int, gv: GameVenue, att: int, *, lower: bool) -> None:
         cur = records.get(key)
         if cur is not None and (value >= cur.value if lower else value <= cur.value):
             return
         is_pct = key in ("fullest", "emptiest")
+        fill = (
+            (value / 100.0) if is_pct else (att / gv.capacity if gv.capacity else 0.0)
+        )
         records[key] = CrowdRecord(
-            value=value, venue=gv.venue, home_abbr=gv.home_abbr, is_pct=is_pct
+            value=value,
+            venue=gv.venue,
+            home_abbr=gv.home_abbr,
+            is_pct=is_pct,
+            fill_frac=fill,
+            attendance=att,
+            capacity=gv.capacity,
         )
 
     for gv, att in pairs:
         if "biggest_crowd" in stats:
-            consider("biggest_crowd", att, gv, lower=False)
+            consider("biggest_crowd", att, gv, att, lower=False)
         if "smallest_crowd" in stats:
-            consider("smallest_crowd", att, gv, lower=True)
+            consider("smallest_crowd", att, gv, att, lower=True)
         pct = _fill_pct(att, gv.capacity)
         if pct is not None:
             if "fullest" in stats:
-                consider("fullest", pct, gv, lower=False)
+                consider("fullest", pct, gv, att, lower=False)
             if "emptiest" in stats:
-                consider("emptiest", pct, gv, lower=True)
+                consider("emptiest", pct, gv, att, lower=True)
     return records
 
 
@@ -355,6 +376,27 @@ class MLBAttendanceMonitor:
             logger.debug("MLB Attendance boxscore fetch failed for %s", game_pk)
             return None
         return _parse_attendance(data)
+
+    async def _fetch_season_avg(self) -> int | None:
+        """Team's home-crowd season average (records[0].attendanceAverageHome).
+
+        None on failure/missing. NOTE: the prototype's `attendanceAverage`
+        field does not exist (verified 2026-07-20) — this is the correct one.
+        """
+        if not self._team_id:
+            return None
+        season = datetime.now(self._tz or ZoneInfo(self.timezone)).year
+        url = f"{MLB_API}/attendance?teamId={self._team_id}&season={season}"
+        try:
+            async with self.session.get(url) as resp:
+                data = await resp.json()
+        except Exception:
+            return None
+        recs = data.get("records") or []
+        if not recs:
+            return None
+        avg = recs[0].get("attendanceAverageHome")
+        return avg if isinstance(avg, int) else None
 
     async def _fetch_game_data(
         self, game_pk: int

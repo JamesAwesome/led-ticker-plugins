@@ -212,6 +212,35 @@ class TestDeriveSuperlatives:
     def test_empty_pairs(self):
         assert self._derive([]) == {}
 
+    def test_computes_fill_frac(self):
+        pairs = [(sched_gv(1, "Dodger Stadium", "LAD", 50000), 40000)]
+        recs = self._derive(pairs, stats=["biggest_crowd", "fullest"])
+        assert abs(recs["biggest_crowd"].fill_frac - 0.8) < 1e-6  # 40000/50000
+        assert recs["biggest_crowd"].attendance == 40000
+        assert recs["biggest_crowd"].capacity == 50000
+        # fullest: value is the pct (80), fill_frac == pct/100
+        assert recs["fullest"].value == 80
+        assert abs(recs["fullest"].fill_frac - 0.8) < 1e-6
+
+    def test_zero_capacity_fill_frac_is_zero(self):
+        pairs = [(sched_gv(1, "Sutter Health", "ATH", 0), 30000)]
+        recs = self._derive(pairs, stats=["biggest_crowd"])
+        assert recs["biggest_crowd"].fill_frac == 0.0  # no capacity -> no bar fill
+
+
+class TestAttendanceGame:
+    def test_record_shape(self):
+        from led_ticker_baseball.attendance import AttendanceGame
+
+        g = AttendanceGame(
+            paid=46537,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        )
+        assert g.paid == 46537 and g.avg == 39442 and g.home_abbr == "LAD"
+
 
 def make_widget(**kwargs):
     from led_ticker_baseball.attendance import MLBAttendanceMonitor
@@ -498,6 +527,43 @@ class TestFetchAttendance:
         session.get.side_effect = RuntimeError("down")
         w = make_widget(session=session)
         assert await w._fetch_attendance(1) is None
+
+
+class TestFetchSeasonAvg:
+    async def test_no_team_id_returns_none_without_fetching(self):
+        session = mock.MagicMock()
+        w = make_widget(session=session)
+        assert await w._fetch_season_avg() is None
+        session.get.assert_not_called()
+
+    async def test_returns_attendance_average_home(self):
+        session = make_session(
+            {"attendance?": {"records": [{"attendanceAverageHome": 39442}]}}
+        )
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() == 39442
+
+    async def test_missing_records_returns_none(self):
+        session = make_session({"attendance?": {"records": []}})
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
+
+    async def test_non_int_average_returns_none(self):
+        session = make_session(
+            {"attendance?": {"records": [{"attendanceAverageHome": None}]}}
+        )
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
+
+    async def test_fetch_failure_returns_none(self):
+        session = mock.MagicMock()
+        session.get.side_effect = RuntimeError("down")
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
 
 
 class TestFetchGameData:
