@@ -60,8 +60,12 @@ def _make_widget(draw_pixel: bool = True) -> Any:
 
 class TestKnobValidation:
     def test_unknown_slug_raises_at_construction_naming_it(self):
-        with pytest.raises(ValueError, match="fire"):
-            Stickers(emoji=["taco", "fire"])
+        # `dragon` is a deliberately non-existent slug — do NOT use `fire`
+        # here: core added `:fire:` in led-ticker-core (PR #424), so it is a
+        # VALID slug now and would not be rejected. `dragon` is not in the
+        # emoji set (and unlikely to be), so this stays a real rejection case.
+        with pytest.raises(ValueError, match="dragon"):
+            Stickers(emoji=["taco", "dragon"])
 
     def test_empty_or_nonlist_rejected(self):
         for bad in ([], "taco", [1], [""]):

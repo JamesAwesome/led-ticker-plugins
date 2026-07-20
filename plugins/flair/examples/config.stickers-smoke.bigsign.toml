@@ -8,8 +8,9 @@
 #   - copy to config/config.toml, then `make restart`
 #
 # Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
-#   (Then try changing "taco" to "fire" in section 1 and re-validate — it must
-#    FAIL naming the slug. Put it back.)
+#   (Then try changing "taco" to "dragon" in section 1 and re-validate — it must
+#    FAIL naming the slug. Put it back. NB: don't use "fire" — core added
+#    :fire: so it's a valid slug now; "dragon" is a real non-slug.)
 #
 # WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
 # and on each section's entry):
