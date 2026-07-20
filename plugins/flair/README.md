@@ -288,6 +288,58 @@ transition = {type = "flair.lightning", color = [255, 92, 38]}
 - **No caches, no warm-up.** Every frame is a pure function of `t`; the only per-firing state is the bolt polyline. The first firing after boot costs the same as every other one, and per-frame paint volume is bounded by panel size (enforced by the `TestPerfUniformity` tripwires).
 
 
+## Fairy transition
+
+`flair.fairy` sends a Tinkerbell-style fairy — a white-hot sparkle-star — across the panel trailing a long cone of gold pixie dust and settling a thin line; when the fairy reaches the far edge the line opens into two twinkling gold edges, revealing the incoming widget in the widening gap.
+
+![flair.fairy — a fairy trails pixie dust across the panel, then the line opens to reveal the incoming widget](docs/transition-fairy.gif)
+
+Requires **led-ticker-core >= 4.18.0**. Comes in three direction variants (sprite-family convention):
+
+### Config
+
+Flies left→right / right→left:
+
+```toml
+[[playlist.section]]
+transition = "flair.fairy.forward"
+```
+
+```toml
+[[playlist.section]]
+transition = "flair.fairy.reverse"
+```
+
+Direction flips every firing:
+
+```toml
+[[playlist.section]]
+transition = "flair.fairy.alternating"
+```
+
+Reproducible flight + tinted dust (the fairy head stays white):
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.fairy.forward", seed = 42, color = [180, 120, 255]}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `seed` | int, or omitted | omitted (OS entropy) | Fixes the flight path and the pixie-dust spark field. Leave unset for a real deploy — every firing gets a fresh flight. |
+| `color` | `[r, g, b]` (0–255), or omitted | gold `[255, 215, 120]` | Tints the pixie dust, the settled line, and the peel-phase edges. The fairy head is always white. |
+
+Direction is **not** a knob — pick the variant (`.forward` / `.reverse` / `.alternating`).
+
+### Notes
+
+- **Two-phase design.** Phase one (first half of the transition) flies the fairy across, drawing over the outgoing widget with a dwelling cone of stateless sparks. Phase two cuts to the incoming widget and opens the settled line: the two edges move apart, incoming visible between them, everything outside blacked out — **revealed against black, not composited over the old content** (same no-`GetPixel` constraint as lightning/poker). Section `bg_color` shows inside the gap from the first sliver.
+- **Near-straight flight.** The path is single-valued per column (the reveal machinery requires it): a gentle center-band line with small drift and wobble. The magic is in the dust, not a loop-de-loop.
+- **Stateless sparks, no warm-up.** Every spark is a pure function of `(column, index, quantized t)` — no particle lists, no caches. The first firing after boot costs the same as every other, and per-frame paint volume is bounded by panel size (enforced by the `TestPerfUniformity` tripwires).
+
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
