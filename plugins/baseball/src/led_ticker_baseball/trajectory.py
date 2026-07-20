@@ -12,6 +12,8 @@ invariant shape). Pure geometry: no canvas, no palette, no frame state.
 import math
 from dataclasses import dataclass
 
+from led_ticker.plugin import Color
+
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._paint import px
 
@@ -23,6 +25,20 @@ _APEX_BASE = 0.58  # apex fraction at LA 0 (drag: past midpoint)
 _APEX_LA_SHIFT = 0.14  # higher LA apexes earlier by up to this
 _EV_FLATTEN = 0.12  # high exit velo lowers the apex (line-drive carry)
 _EV_REF = 115.0  # exit velo at which _EV_FLATTEN fully applies
+
+
+def res_color(result: str) -> Color:
+    """Map a batted-ball result string to a palette color.
+
+    HR/grand slam -> WIN (green), out/GIDP/double play -> LOSS (red),
+    else AMBER (orange).
+    """
+    r = (result or "").upper()
+    if "HOME RUN" in r or "HR" in r or "GRAND" in r:
+        return pal.WIN
+    if "OUT" in r or "GIDP" in r or "DOUBLE PLAY" in r:
+        return pal.LOSS
+    return pal.AMBER
 
 
 @dataclass(frozen=True)

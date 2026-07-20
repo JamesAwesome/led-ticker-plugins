@@ -74,3 +74,26 @@ def resolve_promo_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
     if cfg_layout != "auto":
         return cfg_layout
     return "card" if phys_w < _PROMO_AUTO_WIDE_MIN_W else "ticker"
+
+
+# Same 400px physical-width threshold as `_AUTO_DASHBOARD_MIN_W` and
+# `_PROMO_AUTO_WIDE_MIN_W` above (bigsign 256 -> narrow, longboi 512 ->
+# wide) — kept as its own constant for consistency with the sibling resolvers
+# whose outcome names differ. This constant is for the WIDGET-level
+# big-vs-long story-shape decision for statcast.
+_STATCAST_AUTO_WIDE_MIN_W = 400
+
+
+def resolve_statcast_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
+    """Resolve `baseball.statcast`' `layout` config to a draw-time shape.
+
+    Scale <= 1 returns "legacy" (no hires renderer). At scale > 1, an
+    EXPLICIT `cfg_layout` ("big" / "long") passes through unchanged; "auto"
+    maps by physical width — narrow (bigsign, 256px) uses "big", wide
+    (longboi, 512px) uses "long".
+    """
+    if scale <= 1:
+        return "legacy"
+    if cfg_layout != "auto":
+        return cfg_layout
+    return "big" if phys_w < _STATCAST_AUTO_WIDE_MIN_W else "long"
