@@ -158,8 +158,18 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
     # PROMOTION on the panel. The name marquee is px26 seated at y21 so
     # both gaps land at 8-9px (the date-bottom..PROMOTION-top span is fixed
     # at 36 rows; cap(26) ~= 19 rows leaves ~8.5 per side).
+    # Band width rides the sub line (round 4, hardware feedback longboi
+    # 2026-07-20): with the cyan sub EMPTY (offer_type + presented_by both
+    # missing — the norm for PHI and a few other clubs), the rows under the
+    # right block are dead space, so the marquee band extends to the full
+    # [6, 506) — its rows (~21..40) pass below the chip/VS/time block (top
+    # ~20 rows). With a sub present the band stays the prototype's [6,300)
+    # so the name never runs under the cyan line.
+    sub = fit_text(_promo_sub(promo), 196, 12, bold=False)
+    band_x1 = 300 if sub else real.width - 6
+
     _t(shim, promo.date_label, 6, 4 + yo, pal.AMBER, 12)
-    mask_scroll(real, name, 6, 300, 21 + yo, pal.IDENT, 26, clock_ms)
+    mask_scroll(real, name, 6, band_x1, 21 + yo, pal.IDENT, 26, clock_ms)
     _t(shim, "PROMOTION", 6, 50 + yo, pal.LABEL, 9)
 
     # Right block: prototype alignment (fixed rx=308, sub left-aligned
@@ -177,7 +187,6 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
     _t(shim, f"VS {opp}", rx + 16, 8 + yo, pal.VIOLET, 14)
     tw = text_width(12, time_text, bold=False)
     _t(shim, time_text, real.width - 6 - tw, 10 + yo, pal.AMBER, 12, bold=False)
-    sub = fit_text(_promo_sub(promo), 196, 12, bold=False)
     _t(shim, sub, rx, 36 + yo, pal.CYAN, 12, bold=False)
 
     if story_total > 1:

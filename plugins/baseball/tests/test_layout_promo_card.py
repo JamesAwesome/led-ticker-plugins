@@ -238,6 +238,35 @@ def test_long_name_outside_band_never_lit():
     assert not any(y in range(16, 44) and x < 6 for x, y in lit)
 
 
+def test_long_no_sub_extends_name_band_full_width():
+    """Hardware feedback (longboi, 2026-07-20, round 4): when the cyan sub
+    line is EMPTY (offer_type and presented_by both missing — the norm for
+    PHI and a few other clubs), the rows under the right block are dead
+    space, so the name marquee's clip band extends from [6,300) to the
+    full [6,506). The name rows (~21..40) pass below the chip/VS/time
+    block (top ~20 rows), so nothing collides. With a sub line present the
+    band stays [6,300)."""
+    canvas, real = _longboi()
+    render_promo_card(
+        canvas,
+        _promo(name="Chick-fil-A Phillies Big Chain", offer_type="", presented_by=""),
+        0,
+    )
+    lit = _lit_coords(real)
+    name_rows = range(21, 46)
+    # Band extended: name pixels land beyond the sub-present band edge (300)
+    assert any(x >= 320 for x, y in lit if y in name_rows)
+    # ...but the clip (and the 6px margin) still hold at 506.
+    assert not any(x > 506 for x, _y in lit)
+
+    # Sub present -> band stays [6,300): no name pixels at/right of 300
+    # (the sub itself sits at x>=308 but on rows 36+ — probe rows 21..34).
+    canvas_b, real_b = _longboi()
+    render_promo_card(canvas_b, _promo(name="Chick-fil-A Phillies Big Chain"), 0)
+    lit_b = _lit_coords(real_b)
+    assert not any(x >= 300 for x, y in lit_b if 21 <= y < 35)
+
+
 def test_long_long_name_scrolls_across_clocks():
     canvas_a, real_a = _longboi()
     canvas_b, real_b = _longboi()
