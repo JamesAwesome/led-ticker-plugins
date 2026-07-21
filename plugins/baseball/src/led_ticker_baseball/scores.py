@@ -128,11 +128,12 @@ class MLBScoreMonitor:
     """MLB scores for a single team's current series."""
 
     session: aiohttp.ClientSession
-    # Defaults "" (not required) so `demo = true` widgets can construct
-    # without one — _load_demo() ignores it and uses the fixture team.
-    # Non-demo configs missing `team` are caught by validate_config below
-    # with a friendly message instead of falling through to start()'s bare
-    # TypeError.
+    # Defaults "" (not required at the attrs/construction level) so
+    # `demo = true` widgets can construct without one — _load_demo()
+    # ignores it and uses the fixture team. A non-demo config that omits
+    # `team` is caught pre-coercion by validate_config below (a friendly
+    # message) rather than silently constructing with team="" and fetching
+    # an empty team forever ("No Data" with no indication why).
     team: str = ""
     timezone: str = "America/New_York"
     padding: int = 6
@@ -202,6 +203,14 @@ class MLBScoreMonitor:
                 f"baseball.scores demo must be a bool (true/false), got {demo!r}"
             )
 
+        # `team` is required unless `demo = true` — `start()`'s own `team`
+        # parameter defaults to "" (so a demo widget can construct without
+        # one), so a non-demo config that simply omits `team` would
+        # otherwise sail through to a live team="" fetch that renders
+        # "No Data" forever instead of failing loudly at boot.
+        if not demo and not str(cfg.get("team", "")).strip():
+            msgs.append('scores requires team = "<ABBR>" (or set demo = true).')
+
         return msgs
 
     @classmethod
@@ -243,6 +252,12 @@ class MLBScoreMonitor:
         path's own source, untouched by this feature.
         """
         tz = self._tz or ZoneInfo(self.timezone)
+        if self.team and self.team != DEMO_TEAM:
+            logger.debug(
+                "MLB demo mode: ignoring configured team=%s, using fixture team %s",
+                self.team,
+                DEMO_TEAM,
+            )
         self.team = DEMO_TEAM
         series = build_demo_series(tz)
 

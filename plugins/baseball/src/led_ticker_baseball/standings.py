@@ -368,6 +368,13 @@ class MLBStandingsMonitor:
         update()'s own ticker-vs-board dispatch (including the "no division
         resolved" board->ticker fallback) so demo cards render through the
         SAME renderers real standings do.
+
+        Unlike scores.py's `_load_demo` (which force-overwrites `self.team`
+        with the fixture team), `self.teams` is NOT overridden here — it's
+        only ever used as a highlight filter, so a configured `teams` list
+        outside the fixture's AL EAST division simply fails to match
+        anything (same as it would against live data) rather than being
+        silently discarded.
         """
         standings = list(DEMO_STANDINGS)
         standings_by_abbr = {s.abbr: s for s in standings if s.abbr}
