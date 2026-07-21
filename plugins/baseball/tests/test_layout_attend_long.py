@@ -159,7 +159,7 @@ def test_long_team_venue_bigger_and_no_clip():
     render_attend_long(
         canvas, _team(venue="Great American Ball Park Extended Name"), 1.0
     )
-    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    lab = (pal.LABEL_HI.red, pal.LABEL_HI.green, pal.LABEL_HI.blue)
     label_px = [(x, y) for (x, y), v in real._pixels.items() if v == lab]
 
     # Isolate the venue (x < 224, before the fixed columns) from the
@@ -242,7 +242,7 @@ def test_league_label_and_value_are_row_disjoint():
         capacity=50000,
     )
     render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")
-    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    lab = (pal.LABEL_HI.red, pal.LABEL_HI.green, pal.LABEL_HI.blue)
     amb = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
     px = real._pixels.items()
     label_rows = {y for (x, y), v in px if v == lab and x < 200 and y < 40}
@@ -315,11 +315,11 @@ def test_long_league_pct_superlative_shows_crowd_column():
 
 
 def test_long_league_venue_bigger_no_clip():
-    """The promoted league venue (px14, up from px8) sits on the row-40 band.
+    """The promoted league venue (px16, up from px8) sits on the row-40 band.
     A naive "no y>=64" check is VACUOUS (core silently drops off-canvas rows);
-    assert the full px14 VISIBLE ROW-SPAN instead (the current px8 span is 5
-    rows — a clip would shorten it). Venue is the only LABEL element at y>=35
-    (superlative + column labels sit at y<=9). No pixel in the bar band
+    assert the full px16 VISIBLE ROW-SPAN instead (the current px8 span is 5
+    rows — a clip would shorten it). Venue is the only LABEL_HI element at
+    y>=35 (superlative + column labels sit at y<=11). No pixel in the bar band
     (y>=52) and no overlap with the right-side chip/abbr block."""
     canvas, real = _longboi()
     rec = CrowdRecord(
@@ -332,19 +332,21 @@ def test_long_league_venue_bigger_no_clip():
         capacity=50000,
     )
     render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")
-    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    lab = (pal.LABEL_HI.red, pal.LABEL_HI.green, pal.LABEL_HI.blue)
     ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
 
     venue_px = [(x, y) for (x, y), v in real._pixels.items() if v == lab and y >= 35]
     assert venue_px
     venue_rows = {y for (_x, y) in venue_px}
-    assert max(venue_rows) - min(venue_rows) >= 8  # full px14 span, not clipped
+    assert max(venue_rows) - min(venue_rows) >= 8  # full px16 span, not clipped
     assert not any(y >= 52 for (_x, y) in venue_px)  # clear of the bar band
 
     # Right block (chip + IDENT abbr) sits on the row-40 band; use the abbr as
-    # its marker and prove the venue doesn't reach it.
+    # its marker and prove the venue doesn't reach it. Window starts at y=40
+    # (not 36) so the grown col1 CAPACITY value (px24, bottom ~row 36, also
+    # IDENT) can't leak into the abbr marker — the abbr paints from row 40.
     right_block = [
-        x for (x, y), v in real._pixels.items() if v == ident and 36 <= y <= 50
+        x for (x, y), v in real._pixels.items() if v == ident and 40 <= y <= 50
     ]
     assert right_block
     assert max(x for (x, _y) in venue_px) < min(right_block)  # no overlap

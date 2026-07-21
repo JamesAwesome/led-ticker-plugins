@@ -54,7 +54,14 @@ _X0 = 4
 # wider fixture (more digits, a bigger font) is guarded rather than assumed.
 _VX_MAX = _PANEL_W - _RIGHT_MARGIN - 4
 
-# Team-card row y's (dc.html handoff, cap-top space).
+# Team-card row y's (dc.html handoff, cap-top space). Readability uplift
+# (labels were too dim/small on-panel): ATTENDANCE + "% FULL"/"VS AVG" labels
+# grew px8->px9, the pct/VS-AVG values px13->px14 (rows 21-34 at y=22, clear
+# of the y=40 PAID-ATTENDANCE/CAP row), and every LABEL text recolored
+# LABEL->LABEL_HI. paid px24 and the row-40/venue sizes are LEFT unchanged —
+# paid is already the hero, the row-40 labels would collide right-anchored on
+# tight 256, and the venue sits flush on the bottom edge (see `_Y_TEAM_VENUE`)
+# with no room to grow.
 _Y_LABEL = 1
 _Y_PAID = 12
 _Y_COLVAL = 22
@@ -87,7 +94,11 @@ _TEAM_VENUE_SIZE = 8
 # League-card rows (no dc.html coordinate beyond label/value/bar — task-4
 # brief leaves the venue/chip row's exact y to the implementer). Venue +
 # team chip/abbr share one row (mirrors the team card's label/CAP row
-# shape) so both have a concrete, non-overlapping position.
+# shape) so both have a concrete, non-overlapping position. Readability
+# uplift: the big value grew px22->px24 (rows 13-34 at y=14, clears the px9
+# superlative label above at rows 0-6 and the row-40 venue below) and the
+# row-40 venue grew px8->px10 (rows 39-46, still clears the y=52 bar); the
+# superlative label stays px9. Every LABEL text recolored LABEL->LABEL_HI.
 _Y_LEAGUE_LABEL = 1
 _Y_LEAGUE_VALUE = 14
 _Y_LEAGUE_ROW = 40
@@ -95,25 +106,27 @@ _Y_LEAGUE_BAR = 52
 _LEAGUE_CHIP_H = 8
 
 # League-card upper-band stat columns (task-5 uplift — leaner-for-256 mirror of
-# attend_long's league fill). The big value ends ~x77 ("45,123" px22) and the
+# attend_long's league fill). The big value (now px24, ends ~x82) and the
 # right chip block sits on the y=40 row, leaving x96-255/y0-40 measured dead on
 # the bigsign (the same measured dead zone the longboi card filled). Two
-# adaptive stat columns fill it. 256 is TIGHT, so the columns are compact —
-# label px8 / value px16 (vs the longboi's px10/px20, which won't fit 256) — at
-# league-specific x-origins `_LEAGUE_COL_X = (104, 180)`: col0 clears the big
-# value (ends x77 -> 27px gap) and col1's widest realistic value ("56,000" px16
-# -> ends ~x237) clears the right edge (256). BOTH columns fit measured, so no
-# single-stat fallback is needed. The columns adapt to the superlative type and
-# draw ONLY when `capacity > 0` (no fill/capacity data otherwise). Empirical
-# spans (see tests): label px8 @ y=4 -> rows 4-9; value px16 @ y=22 -> rows
-# 22-36 (clears the y=40 venue/chip row). Tripwires:
+# adaptive stat columns fill it. 256 is TIGHT, so the columns stay compact —
+# but the readability uplift grew them label px8->px9 / value px16->px18 (vs
+# the longboi's px11/px24, which won't fit 256) — at league-specific x-origins
+# `_LEAGUE_COL_X = (104, 180)`: col0 clears the big value (ends ~x82 -> gap to
+# x104) and col1's widest realistic value ("56,000" px18 -> ends ~x244) clears
+# the right edge (256). BOTH columns fit measured, so no single-stat fallback
+# is needed. The columns adapt to the superlative type and draw ONLY when
+# `capacity > 0` (no fill/capacity data otherwise). Empirical spans (see
+# tests): label px9 @ y=4 -> rows 3-9; value px18 @ y=22 -> rows 22-38 (bottom
+# 38 clears the y=40 venue/chip row by a single empty row). Every LABEL text
+# also recolored LABEL->LABEL_HI. Tripwires:
 # test_big_league_columns_present_and_clear,
 # test_big_league_pct_shows_crowd_column, test_big_league_no_capacity_omits_columns.
 _LEAGUE_COL_X = (104, 180)
 _LEAGUE_COL_LABEL_Y = 4
-_LEAGUE_COL_LABEL_SIZE = 8
+_LEAGUE_COL_LABEL_SIZE = 9
 _LEAGUE_COL_VAL_Y = 22
-_LEAGUE_COL_VAL_SIZE = 16
+_LEAGUE_COL_VAL_SIZE = 18
 
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
@@ -157,7 +170,7 @@ def _render_team(shim, real, record, progress, yo):
     paid, capacity, avg = record.paid, record.capacity, record.avg
     venue, home_abbr = record.venue, record.home_abbr
 
-    _t(shim, "ATTENDANCE", _X0, _Y_LABEL + yo, pal.LABEL, 8)
+    _t(shim, "ATTENDANCE", _X0, _Y_LABEL + yo, pal.LABEL_HI, 9)
 
     paid_text = f"{paid:,}" if paid is not None else "—"
     nw = _t(shim, paid_text, _X0, _Y_PAID + yo, pal.AMBER, 24)
@@ -165,8 +178,8 @@ def _render_team(shim, real, record, progress, yo):
     if paid is not None:
         ux = _X0 + nw + 10
         pct = paid / capacity * 100 if capacity else 0.0
-        _t(shim, "% FULL", ux, _Y_PAID + yo, pal.LABEL, 8)
-        _t(shim, f"{pct:.1f}%", ux, _Y_COLVAL + yo, pal.WIN, 13)
+        _t(shim, "% FULL", ux, _Y_PAID + yo, pal.LABEL_HI, 9)
+        _t(shim, f"{pct:.1f}%", ux, _Y_COLVAL + yo, pal.WIN, 14)
 
         if avg is not None:
             vs = paid - avg
@@ -176,24 +189,24 @@ def _render_team(shim, real, record, progress, yo):
             # at the spec offset (`ux + 70`), but a wider future fixture is
             # guarded — right-anchor the whole column against `_VX_MAX`
             # rather than assume the flowed position always fits.
-            col_w = max(text_width(8, "VS AVG"), text_width(13, vs_text))
+            col_w = max(text_width(9, "VS AVG"), text_width(14, vs_text))
             vx = ux + 70
             if vx + col_w > _VX_MAX:
                 vx = _VX_MAX - col_w
-            _t(shim, "VS AVG", vx, _Y_PAID + yo, pal.LABEL, 8)
-            _t(shim, vs_text, vx, _Y_COLVAL + yo, vs_color, 13)
+            _t(shim, "VS AVG", vx, _Y_PAID + yo, pal.LABEL_HI, 9)
+            _t(shim, vs_text, vx, _Y_COLVAL + yo, vs_color, 14)
 
-    _t(shim, "PAID ATTENDANCE", _X0, _Y_ROW40 + yo, pal.LABEL, 8)
+    _t(shim, "PAID ATTENDANCE", _X0, _Y_ROW40 + yo, pal.LABEL_HI, 8)
 
     if capacity:
         cap_text = f"{capacity:,} CAP"
         capw = text_width(8, cap_text)
         cap_x = _PANEL_W - _RIGHT_MARGIN - capw
-        _t(shim, cap_text, cap_x, _Y_ROW40 + yo, pal.LABEL, 8)
+        _t(shim, cap_text, cap_x, _Y_ROW40 + yo, pal.LABEL_HI, 8)
 
     venue_maxw = _PANEL_W - _X0 - 6
     venue_belted = fit_text((venue or "").upper(), venue_maxw, _TEAM_VENUE_SIZE)
-    _t(shim, venue_belted, _X0, _Y_TEAM_VENUE + yo, pal.LABEL, _TEAM_VENUE_SIZE)
+    _t(shim, venue_belted, _X0, _Y_TEAM_VENUE + yo, pal.LABEL_HI, _TEAM_VENUE_SIZE)
 
     if capacity:
         frac = (paid / capacity) if paid is not None else 0.0
@@ -214,8 +227,8 @@ def _render_league(shim, real, record, progress, label, yo):
     value_text = f"{record.value}%" if record.is_pct else f"{record.value:,}"
     value_color = pal.WIN if record.is_pct else pal.AMBER
 
-    _t(shim, (label or "").upper(), _X0, _Y_LEAGUE_LABEL + yo, pal.LABEL, 9)
-    _t(shim, value_text, _X0, _Y_LEAGUE_VALUE + yo, value_color, 22)
+    _t(shim, (label or "").upper(), _X0, _Y_LEAGUE_LABEL + yo, pal.LABEL_HI, 9)
+    _t(shim, value_text, _X0, _Y_LEAGUE_VALUE + yo, value_color, 24)
 
     # Two adaptive stat columns fill the dead upper-band middle (x96-255).
     # Guard on capacity: no capacity -> no fill/capacity data (and fill_frac is
@@ -231,7 +244,7 @@ def _render_league(shim, real, record, progress, label, yo):
                 "CROWD",
                 cx0,
                 _LEAGUE_COL_LABEL_Y + yo,
-                pal.LABEL,
+                pal.LABEL_HI,
                 _LEAGUE_COL_LABEL_SIZE,
             )
             _t(
@@ -250,7 +263,7 @@ def _render_league(shim, real, record, progress, label, yo):
                 "% FULL",
                 cx0,
                 _LEAGUE_COL_LABEL_Y + yo,
-                pal.LABEL,
+                pal.LABEL_HI,
                 _LEAGUE_COL_LABEL_SIZE,
             )
             _t(
@@ -266,7 +279,7 @@ def _render_league(shim, real, record, progress, label, yo):
             "CAP",
             cx1,
             _LEAGUE_COL_LABEL_Y + yo,
-            pal.LABEL,
+            pal.LABEL_HI,
             _LEAGUE_COL_LABEL_SIZE,
         )
         _t(
@@ -286,8 +299,8 @@ def _render_league(shim, real, record, progress, label, yo):
     _t(shim, abbr, chip_x + _LEAGUE_CHIP_H + 3, _Y_LEAGUE_ROW + yo, pal.IDENT, 8)
 
     venue_maxw = chip_x - _X0 - 6
-    venue_belted = fit_text((record.venue or "").upper(), max(venue_maxw, 0), 8)
-    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL, 8)
+    venue_belted = fit_text((record.venue or "").upper(), max(venue_maxw, 0), 10)
+    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL_HI, 10)
 
     draw_bar(
         real,

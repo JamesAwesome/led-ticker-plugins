@@ -12,6 +12,7 @@ def test_tokens_exist_with_handoff_values():
     assert (pal.MAGENTA.red, pal.MAGENTA.green, pal.MAGENTA.blue) == (255, 80, 255)
     assert (pal.VIOLET.red, pal.VIOLET.green, pal.VIOLET.blue) == (170, 90, 255)
     assert (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue) == (70, 90, 130)
+    assert (pal.LABEL_HI.red, pal.LABEL_HI.green, pal.LABEL_HI.blue) == (165, 185, 220)
     assert (pal.YEL.red, pal.YEL.green, pal.YEL.blue) == (255, 217, 0)
     assert (pal.ORANGE.red, pal.ORANGE.green, pal.ORANGE.blue) == (255, 128, 0)
 

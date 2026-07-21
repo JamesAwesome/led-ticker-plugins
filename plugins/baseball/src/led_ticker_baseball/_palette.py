@@ -15,6 +15,9 @@ CYAN: Color = make_color(0, 220, 255)  # secondary metrics
 MAGENTA: Color = make_color(255, 80, 255)  # distance / trajectory
 VIOLET: Color = make_color(170, 90, 255)  # opponent (VS)
 LABEL: Color = make_color(70, 90, 130)  # dim labels, dividers, empty bases
+LABEL_HI: Color = make_color(
+    165, 185, 220
+)  # brighter label for dense hero cards where dim LABEL is hard to read on-panel
 YEL: Color = make_color(255, 217, 0)  # strikes in the count
 ORANGE: Color = make_color(255, 128, 0)  # series-win dashes
 

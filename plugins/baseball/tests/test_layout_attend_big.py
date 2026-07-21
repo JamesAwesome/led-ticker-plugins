@@ -200,8 +200,8 @@ def test_big_league_columns_present_and_clear():
     assert not any(x >= 256 for x in col0_x)  # on-panel
 
     # col1 value ("CAP") is IDENT; isolate from the row-40 abbr (also IDENT) by
-    # restricting to the columns' y<38 band.
-    col1_x = {x for (x, y), v in real._pixels.items() if v == ident and y < 38}
+    # restricting to the columns' y<40 band (col val now reaches ~row 38).
+    col1_x = {x for (x, y), v in real._pixels.items() if v == ident and y < 40}
     assert col1_x, "col1 (CAP) value should render"
     assert any(175 <= x <= 245 for x in col1_x)  # lives in col1's band
     assert not any(x < 90 for x in col1_x)  # clear of the big value
@@ -228,7 +228,7 @@ def test_big_league_pct_shows_crowd_column():
     render_attend_big(canvas, rec, 1.0, label="FULLEST PARK")
     amb = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
     # AMBER is the col0 CROWD value (big value is WIN on a pct card).
-    col0_x = {x for (x, y), v in real._pixels.items() if v == amb and y < 38}
+    col0_x = {x for (x, y), v in real._pixels.items() if v == amb and y < 40}
     assert col0_x, "pct card col0 should show the raw CROWD number in AMBER"
     assert any(100 <= x <= 165 for x in col0_x)  # in the col0 band, not the value
 
@@ -236,7 +236,7 @@ def test_big_league_pct_shows_crowd_column():
 def test_big_league_no_capacity_omits_columns():
     """capacity=0 → no fill/capacity data → both stat columns are omitted, and
     the render never raises. On a crowd card col0 is the only WIN (absent) and
-    col1's IDENT value band (y<38) is empty (the row-40 abbr IDENT is ok)."""
+    col1's IDENT value band (y<40) is empty (the row-40 abbr IDENT is ok)."""
     from led_ticker_baseball import _palette as pal
 
     canvas, real = _bigsign()
@@ -254,7 +254,7 @@ def test_big_league_no_capacity_omits_columns():
     ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
     assert not [xy for xy, v in real._pixels.items() if v == win]  # no col0
     assert not [
-        (x, y) for (x, y), v in real._pixels.items() if v == ident and y < 38
+        (x, y) for (x, y), v in real._pixels.items() if v == ident and y < 40
     ]  # no col1 value
 
 

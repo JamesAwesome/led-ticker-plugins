@@ -29,9 +29,10 @@ coordinate beyond "belted venue name", same gap as attend_big's venue
 placement). The redundant "PAID ATTENDANCE" caption is gone — the big
 amber paid number plus the capacity bar already say "this is attendance";
 the venue identifies the park and reads better big. Bar sits at y=52,h=10
--> real rows 52-61; the promoted venue (px14 at y=40, empirically rows
-~39-49 — see `test_long_team_venue_bigger_and_no_clip`) clears the bar
-with room to spare, same headroom margin the old px8 venue had.
+-> real rows 52-61; the promoted venue (px16 at y=40, empirically rows
+40-51 — see `test_long_team_venue_bigger_and_no_clip`) clears the bar by a
+single row (readability uplift: the small dim labels were hard to read
+on-panel, so venue grew px14->px16 and recolored LABEL->LABEL_HI).
 
 Weather slot (task-5 uplift): the paid number ends ~x109 and the fixed
 `% FULL`/`VS AVG` columns start at x228 — the ~100px gap between them
@@ -65,15 +66,19 @@ _X0 = 6
 # Team-mode fixed columns (task-5 brief): `cx = 228 + i*96`.
 _COL_X = (228, 324)
 
-# Team-card row y's (dc.html handoff, cap-top space).
+# Team-card row y's (dc.html handoff, cap-top space). Readability uplift:
+# the small labels/values were hard to read on-panel, so column labels grew
+# px10->px11, column values px20->px24 (rows 19-36 at y=18, clear of the
+# px11 labels above at rows 4-11 and the y=40 row-40 band below), and CAP
+# px9->px11 (rows 40-49). Every LABEL text also recolored LABEL->LABEL_HI.
 _Y_PAID = 3
 _PAID_SIZE = 30
 _Y_COL_LABEL = 4
-_COL_LABEL_SIZE = 10
+_COL_LABEL_SIZE = 11
 _Y_COL_VAL = 18
-_COL_VAL_SIZE = 20
+_COL_VAL_SIZE = 24
 _Y_ROW40 = 40
-_CAP_SIZE = 9
+_CAP_SIZE = 11
 _Y_BAR = 52
 _BAR_W = 500
 _BAR_H = 10
@@ -84,42 +89,46 @@ _BAR_H = 10
 # `_COL_X[0] - _WEATHER_GAP - _WEATHER_X` (228 - 6 - 122) so a long
 # condition string belts before ever reaching the column start rather than
 # relying on string length staying short. `_WEATHER_Y = 10` sits the line
-# in the paid number's own y0-40 vertical band (empirically rows 9-18 at
-# this size — see `test_long_team_weather_in_gap_no_overlap`), reading as
-# the same "top line" as the paid number and column labels.
+# in the paid number's own y0-40 vertical band (empirically rows 9-19 at
+# the readability-uplift size px14 — see
+# `test_long_team_weather_in_gap_no_overlap`), reading as the same "top
+# line" as the paid number and column labels. Grown px13->px14 for on-panel
+# legibility ("88° P CLOUDY" still fits _WEATHER_MAXW — see
+# `test_long_team_partly_cloudy_not_ellipsized`).
 _WEATHER_X = 122
 _WEATHER_GAP = 6
 _WEATHER_MAXW = _COL_X[0] - _WEATHER_GAP - _WEATHER_X
 _WEATHER_Y = 10
-_WEATHER_SIZE = 13
+_WEATHER_SIZE = 14
 
 # Venue slot (task-5 uplift — promoted, replaces the removed "PAID
 # ATTENDANCE" label): takes the row-40 band's left side, belted so it
 # can't run into the right-anchored "NN,NNN CAP" readout. `_VENUE_SIZE`
-# raised from the old 8px label-adjacent size to 14px now that it's the
-# band's headline element (empirically rows ~39-49 at y=40 — see
-# `test_long_team_venue_bigger_and_no_clip` — well clear of the y=52 bar).
+# raised from the old 8px label-adjacent size, then bumped again px14->px16
+# in the readability uplift now that it's the band's headline element
+# (empirically rows 40-51 at y=40 — see
+# `test_long_team_venue_bigger_and_no_clip` — clears the y=52 bar by a
+# single row, exactly at the ceiling).
 _VENUE_Y = 40
-_VENUE_SIZE = 14
+_VENUE_SIZE = 16
 _VENUE_GAP = 10
 
 # League-card rows (no dc.html coordinate beyond label/value/bar — same gap
 # as attend_big's league layout). The label sits ABOVE the value in its own
-# row-disjoint stack, mirroring attend_big's league spacing (label y=1/px9,
-# value y=14/px22) — NOT the team card's y=3/px30 paid slot, whose px30 value
-# cap-top (`cap_top(3, 30) = -5`, glyph span ~-5..24) paints THROUGH the y=1
-# label (span ~-2..6) at overlapping x. With label px9 y=1 (`cap_top = -2`,
-# span ~-2..6) and value px22 y=14 (`cap_top = 8`, span ~8..29) the two are
-# row-disjoint (gap at row 7) and the value clears BOTH the label above and
-# the venue/bar below (venue at row-40 band, `cap_top(40, 8) = 38`, spans
-# ~38..45; bar at rows 52-61). px22 (not px30) is the size that fits this
-# window — same as attend_big's league value. venue+chip share the row-40
-# band, mirroring the team card's row-40/42 band and attend_big's league
-# layout. Tripwire: test_league_label_and_value_are_row_disjoint.
+# row-disjoint stack — NOT the team card's y=3/px30 paid slot, whose px30
+# value cap-top would paint THROUGH the y=1 label at overlapping x.
+# Readability uplift: label grew px9->px10 (empirically rows 0-7 at y=1) and
+# the big value grew px22->px26 (empirically rows 14-37 at y=14) for on-panel
+# legibility. The two stay row-disjoint (gap at rows 8-13) and the px26 value
+# clears BOTH the label above and the venue/bar below (venue now px16 on the
+# row-40 band, rows 40-51; value bottom 37 leaves rows 38-39 as the gap; bar
+# at rows 52-61). px26 (not px30) is the size that fits this window without
+# reaching the venue. venue+chip share the row-40 band, mirroring the team
+# card. Tripwire: test_league_label_and_value_are_row_disjoint.
 _Y_LEAGUE_LABEL = 1
-_LEAGUE_LABEL_SIZE = 9
+_LEAGUE_LABEL_SIZE = 10
 _Y_LEAGUE_VALUE = 14
-_LEAGUE_VALUE_SIZE = 22
+_LEAGUE_VALUE_SIZE = 26
 _Y_LEAGUE_ROW = _Y_ROW40
 _LEAGUE_CHIP_H = 8
 _Y_LEAGUE_BAR = _Y_BAR
@@ -205,14 +214,14 @@ def _render_team(shim, real, record, progress, yo):
     if paid is not None:
         pct = paid / capacity * 100 if capacity else 0.0
         cx0, cx1 = _COL_X
-        _t(shim, "% FULL", cx0, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+        _t(shim, "% FULL", cx0, _Y_COL_LABEL + yo, pal.LABEL_HI, _COL_LABEL_SIZE)
         _t(shim, f"{pct:.1f}%", cx0, _Y_COL_VAL + yo, pal.WIN, _COL_VAL_SIZE)
 
         if avg is not None:
             vs = paid - avg
             vs_text = ("+" if vs >= 0 else "") + f"{vs:,}"
             vs_color = pal.WIN if vs >= 0 else pal.LOSS
-            _t(shim, "VS AVG", cx1, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+            _t(shim, "VS AVG", cx1, _Y_COL_LABEL + yo, pal.LABEL_HI, _COL_LABEL_SIZE)
             _t(shim, vs_text, cx1, _Y_COL_VAL + yo, vs_color, _COL_VAL_SIZE)
 
     cap_x = None
@@ -220,14 +229,14 @@ def _render_team(shim, real, record, progress, yo):
         cap_text = f"{capacity:,} CAP"
         capw = text_width(_CAP_SIZE, cap_text)
         cap_x = _PANEL_W - _RIGHT_MARGIN - capw
-        _t(shim, cap_text, cap_x, _Y_ROW40 + yo, pal.LABEL, _CAP_SIZE)
+        _t(shim, cap_text, cap_x, _Y_ROW40 + yo, pal.LABEL_HI, _CAP_SIZE)
 
     venue_right = (cap_x if cap_x is not None else _PANEL_W - _RIGHT_MARGIN) - (
         _VENUE_GAP
     )
     venue_maxw = venue_right - _X0
     venue_belted = fit_text((venue or "").upper(), max(venue_maxw, 0), _VENUE_SIZE)
-    _t(shim, venue_belted, _X0, _VENUE_Y + yo, pal.LABEL, _VENUE_SIZE)
+    _t(shim, venue_belted, _X0, _VENUE_Y + yo, pal.LABEL_HI, _VENUE_SIZE)
 
     if capacity:
         frac = (paid / capacity) if paid is not None else 0.0
@@ -253,7 +262,7 @@ def _render_league(shim, real, record, progress, label, yo):
         (label or "").upper(),
         _X0,
         _Y_LEAGUE_LABEL + yo,
-        pal.LABEL,
+        pal.LABEL_HI,
         _LEAGUE_LABEL_SIZE,
     )
     _t(shim, value_text, _X0, _Y_LEAGUE_VALUE + yo, value_color, _LEAGUE_VALUE_SIZE)
@@ -266,7 +275,7 @@ def _render_league(shim, real, record, progress, label, yo):
         if record.is_pct:
             # The big value already IS the pct here, so col0 shows the raw
             # CROWD instead of a redundant "% FULL".
-            _t(shim, "CROWD", cx0, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+            _t(shim, "CROWD", cx0, _Y_COL_LABEL + yo, pal.LABEL_HI, _COL_LABEL_SIZE)
             _t(
                 shim,
                 f"{record.attendance:,}",
@@ -278,9 +287,9 @@ def _render_league(shim, real, record, progress, label, yo):
         else:
             # The big value is the raw crowd, so col0 shows how full it was.
             pct = record.fill_frac * 100
-            _t(shim, "% FULL", cx0, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+            _t(shim, "% FULL", cx0, _Y_COL_LABEL + yo, pal.LABEL_HI, _COL_LABEL_SIZE)
             _t(shim, f"{pct:.1f}%", cx0, _Y_COL_VAL + yo, pal.WIN, _COL_VAL_SIZE)
-        _t(shim, "CAPACITY", cx1, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+        _t(shim, "CAPACITY", cx1, _Y_COL_LABEL + yo, pal.LABEL_HI, _COL_LABEL_SIZE)
         _t(
             shim,
             f"{record.capacity:,}",
@@ -297,15 +306,16 @@ def _render_league(shim, real, record, progress, label, yo):
     chip(real, chip_x, _Y_LEAGUE_ROW + yo, _LEAGUE_CHIP_H, record.home_abbr or "")
     _t(shim, abbr, chip_x + _LEAGUE_CHIP_H + 3, _Y_LEAGUE_ROW + yo, pal.IDENT, 8)
 
-    # Venue promoted to `_VENUE_SIZE` (px14, up from px8) to match the team
-    # card's headline venue; the existing `chip_x - _X0 - 6` belt keeps it
-    # clear of the right-side chip block, and px14 at y=40 still clears the
-    # y=52 bar (see `test_long_league_venue_bigger_no_clip`).
+    # Venue promoted to `_VENUE_SIZE` (px16 after the readability uplift, up
+    # from px8) to match the team card's headline venue; the existing
+    # `chip_x - _X0 - 6` belt keeps it clear of the right-side chip block, and
+    # px16 at y=40 (rows 40-51) still clears the y=52 bar by a single row (see
+    # `test_long_league_venue_bigger_no_clip`).
     venue_maxw = chip_x - _X0 - 6
     venue_belted = fit_text(
         (record.venue or "").upper(), max(venue_maxw, 0), _VENUE_SIZE
     )
-    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL, _VENUE_SIZE)
+    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL_HI, _VENUE_SIZE)
 
     draw_bar(
         real,
