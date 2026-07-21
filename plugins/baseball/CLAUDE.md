@@ -235,6 +235,37 @@ flight clock RESTARTS on visit (`reset_frame` zeroes `_flight_ticks`) — the
 OPPOSITE of `_promo_card.py` (survives) and unlike `_standings_card.py`
 (arm/consume). Never cargo-cult the three onto each other.
 
+**Attendance card** — `draw_bar` (`_primitives.py`) is the shared capacity-bar
+primitive (dim track + ramped fill + optional tick; the tick's x is clamped
+in-bounds to `[x, x+w)`, its y deliberately bleeds 1px above/below like the
+statcast wall-tick full-bleed). `MLBAttendanceCard`'s fill clock
+(`_fill_ticks`) RESTARTS on visit (`reset_frame` zeroes it every call,
+including core's documented double-call-per-transitioned-visit) — same shape
+as `_statcast_card.py`'s flight clock, the OPPOSITE of `_promo_card.py`
+(survives). Season average is `records[0].attendanceAverageHome` — the
+prototype's `attendanceAverage` field DOES NOT EXIST on the MLB Stats API
+schedule endpoint (verified 2026-07-20); `_fetch_season_avg` returns `None`
+on a missing/non-int value and every downstream read (`% FULL`/`VS AVG`
+columns, the bar's tick) guards that `None` rather than assuming a number.
+Free-form venue names are `fit_text`-belted on both cards (never trusted to
+fit raw) — the big card's team-mode belt right-anchors against `_VX_MAX`
+because its `% FULL`/`VS AVG` columns FLOW off the measured width of the paid
+number (`ux = nw + 10`, `vx = ux + 70`); the long card's equivalent columns
+sit at FIXED x-origins (`_COL_X = (228, 324)`) since the extra card width
+means no realistic paid number ever reaches them, so it needs no flow guard.
+A game not yet Final (`paid is None`) forwards the WRAPPER (not the unwrapped
+real canvas) to the legacy line — the same reason the scale<=1 branch above
+it also forwards the wrapper: the engine's `ScaledCanvas.draw_bdf_text`
+expands each `SetPixel` to a `scale×scale` block, so the fallback renders
+large and readable instead of at native physical resolution. The team card's
+belted venue slot has no dc.html coordinate and sits in the free rows below
+the capacity bar (`_Y_TEAM_VENUE = 58`, cap-top size 8) — a naive
+`y >= 64` assertion on that slot is VACUOUS, because core's rasterizer
+silently DROPS rows past the panel's last valid row rather than raising; the
+real regression (an off-by-2 y-target that clipped the bottom ~2 of every
+capital letter) never crashed a `y >= 64` check. Assert the glyph's actual
+VISIBLE row-span instead, not just that its nominal y-target is in range.
+
 **Board renderer text conversion** (`layouts/standings_board.py`) — every text draw on the board
 routes through the `_t`/`_cap_top` helper pair (same "dc.html visual-cap-top y" -> `_paint.hires`'s
 ascent-box-top y formula as the scores physical renderers) so a row mixing multiple font sizes
