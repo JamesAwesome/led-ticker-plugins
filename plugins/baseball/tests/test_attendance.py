@@ -1140,3 +1140,162 @@ class TestScheduleAbbrNormalization:
             oak.blue,
         )
         assert venue_c is not RGB_WHITE
+
+
+class TestValidateConfigDemo:
+    def _v(self, cfg):
+        from led_ticker_baseball.attendance import MLBAttendanceMonitor
+
+        return MLBAttendanceMonitor.validate_config(cfg)
+
+    def test_demo_true_passes(self):
+        assert self._v({"demo": True}) == []
+
+    def test_demo_false_passes(self):
+        assert self._v({"demo": False}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        msgs = self._v({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
+
+    def test_demo_with_team_passes(self):
+        # team is optional at any time — demo doesn't add a team requirement.
+        assert self._v({"demo": True, "team": "TOR"}) == []
+
+
+class TestBuildTeamCardFromAvg:
+    """`_build_team_card` now delegates its card construction to
+    `_build_team_card_from_avg` (split out for `_load_demo()`'s benefit —
+    see that method's docstring). This locks down the split didn't change
+    `_build_team_card`'s own observable behavior."""
+
+    async def test_build_team_card_still_fetches_avg_and_builds_record(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0  # season-avg fetch short-circuits without a team id
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={"condition": "Clear", "temp": "72"},
+            day_label="",
+        )
+        assert card.record.paid == 41212
+        assert card.record.avg is None  # no team id → _fetch_season_avg() -> None
+        assert card.record.temp == "72°"
+        assert card.record.condition == "Clear"
+
+    def test_build_team_card_from_avg_threads_supplied_avg(self):
+        w = make_widget(team="TOR")
+        card = w._build_team_card_from_avg(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather=None,
+            day_label="",
+            avg=12345,
+        )
+        assert card.record.avg == 12345
+        assert card.record.paid == 41212
+
+
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestAttendanceDemo:
+    """`demo = true` builds feed_stories from a curated fixture team game
+    PLUS league superlative cards, in one rotation — never fetching the
+    MLB API (schedule/boxscore/live-feed/season-avg) or spawning the
+    background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.attendance as mod
+        from led_ticker_baseball._attendance_card import MLBAttendanceCard
+        from led_ticker_baseball.attendance import (
+            AttendanceGame,
+            CrowdRecord,
+            MLBAttendanceMonitor,
+        )
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBAttendanceMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBAttendanceMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # Every story is a real MLBAttendanceCard — demo reuses the SAME
+        # story builders, not a re-implemented rendering path.
+        assert all(isinstance(s, MLBAttendanceCard) for s in widget.feed_stories)
+        # Both shapes are present: a team game (AttendanceGame) AND league
+        # superlatives (CrowdRecord).
+        records = [s.record for s in widget.feed_stories]
+        assert any(isinstance(r, AttendanceGame) for r in records)
+        assert any(isinstance(r, CrowdRecord) for r in records)
+        # The team fixture carries a full card's worth of data: paid,
+        # capacity, season avg, venue, and weather.
+        team_record = next(r for r in records if isinstance(r, AttendanceGame))
+        assert team_record.paid is not None
+        assert team_record.capacity > 0
+        assert team_record.avg is not None
+        assert team_record.venue
+        assert team_record.temp
+        assert team_record.condition
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_works_without_session_in_league_mode(self):
+        from led_ticker_baseball.attendance import MLBAttendanceMonitor
+
+        widget = await MLBAttendanceMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+
+    async def test_demo_works_without_session_in_team_mode(self):
+        # Demo shows BOTH shapes regardless of the configured mode — a
+        # `team=` config doesn't change which fetches would happen (none).
+        from led_ticker_baseball.attendance import MLBAttendanceMonitor
+
+        widget = await MLBAttendanceMonitor.start(session=None, team="TOR", demo=True)
+
+        assert widget.feed_stories
+
+    def test_demo_construct_directly(self):
+        from led_ticker_baseball._attendance_card import MLBAttendanceCard
+        from led_ticker_baseball.attendance import MLBAttendanceMonitor
+
+        widget = MLBAttendanceMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert any(isinstance(s, MLBAttendanceCard) for s in widget.feed_stories)
+
+    def test_demo_respects_configured_stats_subset(self):
+        # DEMO_CROWD_RECORDS only has biggest_crowd + fullest; a narrower
+        # `stats` config restricts further, same "missing stat omitted"
+        # behavior as live league data.
+        from led_ticker_baseball.attendance import AttendanceGame, MLBAttendanceMonitor
+
+        widget = MLBAttendanceMonitor(session=None, demo=True, stats=["fullest"])
+        widget._load_demo()
+
+        league_records = [
+            s.record
+            for s in widget.feed_stories
+            if not isinstance(s.record, AttendanceGame)
+        ]
+        assert len(league_records) == 1
+        assert league_records[0].is_pct is True

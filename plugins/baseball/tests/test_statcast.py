@@ -1156,3 +1156,102 @@ class TestStart:
         assert widget.feed_stories  # update() ran
         loop.assert_called_once_with(widget, 123)
         spawn.assert_called_once_with("LOOP")
+
+
+class TestValidateConfigDemo:
+    def _validate(self, cfg):
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        return MLBStatcastMonitor.validate_config(cfg)
+
+    def test_demo_true_passes(self):
+        assert self._validate({"demo": True}) == []
+
+    def test_demo_false_passes(self):
+        assert self._validate({"demo": False}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        msgs = self._validate({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
+
+    def test_demo_with_team_passes(self):
+        # team is optional at any time — demo doesn't add a team requirement.
+        assert self._validate({"demo": True, "team": "PHI"}) == []
+
+
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestStatcastDemo:
+    """`demo = true` builds feed_stories from curated fixture superlatives —
+    never fetching the Savant CSV, the schedule gate, or spawning the
+    background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.statcast as mod
+        from led_ticker_baseball._statcast_card import MLBStatcastCard
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBStatcastMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBStatcastMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # The real card type update() would build — demo reuses the SAME
+        # story builder, not a re-implemented rendering path.
+        assert all(isinstance(s, MLBStatcastCard) for s in widget.feed_stories)
+        # The longest-HR fixture carries full trajectory context.
+        hr_card = next(c for c in widget.feed_stories if c.record.result == "HOME RUN")
+        assert hr_card.record.launch_angle == 29.0
+        assert hr_card.record.exit_velo == 112.4
+        assert hr_card.record.distance == 452.0
+        assert hr_card.record.bb_type == "fly_ball"
+        # A pure-pitch superlative with no batted-ball context is present
+        # (exercises the no-arc pitch panel).
+        pitch_only = [c for c in widget.feed_stories if c.record.exit_velo is None]
+        assert pitch_only
+        assert pitch_only[0].record.pitch_velo is not None
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_works_without_session(self):
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        widget = await MLBStatcastMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+
+    def test_demo_construct_directly(self):
+        from led_ticker_baseball._statcast_card import MLBStatcastCard
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        widget = MLBStatcastMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert any(isinstance(s, MLBStatcastCard) for s in widget.feed_stories)
+
+    def test_demo_respects_configured_stats_subset(self):
+        from led_ticker_baseball.statcast import MLBStatcastMonitor
+
+        widget = MLBStatcastMonitor(session=None, demo=True, stats=["hardest_hit"])
+        widget._load_demo()
+
+        assert len(widget.feed_stories) == 1
+        assert widget.feed_stories[0].record.exit_velo == 118.3

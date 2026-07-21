@@ -1122,3 +1122,172 @@ class TestStart:
         assert widget.feed_stories  # update() ran
         loop.assert_called_once_with(widget, 99)
         spawn.assert_called_once_with("LOOP")
+
+
+class TestValidateConfigDemo:
+    def _validate(self, cfg):
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        return MLBPromotionsMonitor.validate_config(cfg)
+
+    def test_demo_true_passes_without_team(self):
+        assert self._validate({"demo": True}) == []
+
+    def test_demo_false_with_team_passes(self):
+        assert self._validate({"demo": False, "team": "TOR"}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        # A truthy non-bool "demo" bypasses the team-required check (same
+        # as `demo = true` would) — only the bool-type message is expected.
+        msgs = self._validate({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
+
+    def test_team_required_unless_demo(self):
+        msgs = self._validate({})
+        assert len(msgs) == 1
+        assert "team" in msgs[0]
+        # demo = true never needs a team.
+        assert self._validate({"demo": True}) == []
+
+    def test_team_blank_string_still_required(self):
+        msgs = self._validate({"team": "   "})
+        assert len(msgs) == 1
+        assert "team" in msgs[0]
+
+
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestPromotionsDemo:
+    """`demo = true` builds feed_stories from curated fixture promos —
+    never fetching the MLB API or spawning the background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.promotions as mod
+        from led_ticker_baseball._promo_card import MLBPromoCard
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBPromotionsMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBPromotionsMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # The real card type update() would build — demo reuses the SAME
+        # story builder, not a re-implemented rendering path.
+        assert all(isinstance(s, MLBPromoCard) for s in widget.feed_stories)
+        names = {s.promo.name for s in widget.feed_stories}
+        assert "Bobblehead Night" in names
+        # All fixture promos are for the SAME home game — one game, one
+        # opponent — so the demo widget doesn't violate
+        # `_build_promo_card_stories`'s shared-target-date precondition
+        # (see `test_demo_legacy_line_date_is_consistent` below).
+        opponents = {s.promo.opponent_abbr for s in widget.feed_stories}
+        assert len(opponents) == 1
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_works_without_team_or_session(self):
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        widget = await MLBPromotionsMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+        assert widget.team  # set from the fixture, not left blank
+
+    def test_demo_construct_directly_without_team(self):
+        from led_ticker_baseball._promo_card import MLBPromoCard
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        widget = MLBPromotionsMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert any(isinstance(s, MLBPromoCard) for s in widget.feed_stories)
+
+    def test_demo_with_configured_team_logs_override(self, caplog):
+        from led_ticker_baseball.promotions import DEMO_TEAM, MLBPromotionsMonitor
+
+        widget = MLBPromotionsMonitor(session=None, team="SEA", demo=True)
+        with caplog.at_level(logging.DEBUG, logger="led_ticker_baseball.promotions"):
+            widget._load_demo()
+
+        assert widget.team == DEMO_TEAM
+        assert widget.team != "SEA"
+        assert any(
+            "ignoring configured team" in r.message.lower() for r in caplog.records
+        )
+
+    def test_demo_without_configured_team_does_not_log_override(self, caplog):
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        widget = MLBPromotionsMonitor(session=None, demo=True)
+        with caplog.at_level(logging.DEBUG, logger="led_ticker_baseball.promotions"):
+            widget._load_demo()
+
+        assert not any(
+            "ignoring configured team" in r.message.lower() for r in caplog.records
+        )
+
+    def test_demo_legacy_line_date_is_consistent(self):
+        """Regression for the demo-fixture defect: `_build_promo_card_stories`'s
+        docstring documents a precondition that every `PromoInfo` passed in
+        shares the SAME target date (the live path always scopes
+        `target_infos` to one picked home date before calling
+        `_build_promo_cards`). Before the fix, `_build_demo_promos()` used
+        three DIFFERENT `game_date`s while `_load_demo()` passed a single
+        hardcoded `label="Today"` into `_build_promo_cards` — on smallsign
+        (scale <= 1), `MLBPromoCard.draw` forwards to `self.legacy`, whose
+        SegmentMessage embeds that shared `label`, so every demo card's
+        legacy line read "Today · <name>" even for fixture promos whose own
+        `game_date`/`date_label` said otherwise. This asserts the legacy
+        line's date lead-in is identical AND correct across every demo
+        card, i.e. the fixtures now respect the shared-target-date
+        precondition.
+        """
+        from led_ticker_baseball._promo_card import MLBPromoCard
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        widget = MLBPromotionsMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert all(isinstance(s, MLBPromoCard) for s in widget.feed_stories)
+
+        # segments[1] is the (f"{label} · ", date_c) date lead-in tuple —
+        # see `_build_promo_card_stories`.
+        date_prefixes = {card.legacy.segments[1][0] for card in widget.feed_stories}
+        assert len(date_prefixes) == 1, (
+            "every demo promo's legacy line must share one date lead-in, "
+            f"got {date_prefixes!r}"
+        )
+        (prefix,) = date_prefixes
+        assert prefix == "Today · "
+
+        # The legacy prefix must actually MATCH the fixtures' own declared
+        # date — not just agree with itself by coincidence — so the
+        # shared-target-date precondition genuinely holds.
+        game_dates = {card.promo.game_date for card in widget.feed_stories}
+        date_labels = {card.promo.date_label for card in widget.feed_stories}
+        assert game_dates == {"2026-07-18"}
+        assert date_labels == {"TODAY"}
+
+        # One game also means one opponent — the chip color must agree
+        # across every demo card.
+        opponents = {card.promo.opponent_abbr for card in widget.feed_stories}
+        assert len(opponents) == 1

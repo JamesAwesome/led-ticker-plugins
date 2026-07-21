@@ -120,3 +120,71 @@ def _fit_team_name(abbr: str, zone_w: int, font: Font, canvas: Canvas) -> str:
 
     name = MLB_TEAM_NAMES.get(abbr, abbr)
     return name if measure_width(font, name, canvas) <= zone_w else abbr
+
+
+# --- demo=true fixture data (baseball.scores) ---
+#
+# Curated for the docs showcase + on-demand hardware validation: one
+# fictional home series (BOS hosting NYY) whose three games span every
+# GameInfo state the card renderers (scoreboard / two_row / crawl, plus the
+# legacy scale-1 text builders) branch on — an already-decided opener, a
+# live nightcap with runners on and a full count, and a still-to-come
+# getaway game. All three share the same home/away pairing so
+# `_build_series_title`'s "AWAY @ HOME" naming (rather than the neutral
+# "vs" fallback) and the series win/loss record both render.
+DEMO_TEAM: str = "NYY"
+DEMO_OPPONENT: str = "BOS"
+
+
+def build_demo_series(tz: ZoneInfo) -> SeriesInfo:
+    """Build a fresh demo SeriesInfo (NYY @ BOS) for `demo = true` widgets.
+
+    A function, not a static module list, for two reasons: GameInfo is a
+    plain MUTABLE dataclass (the real update() path mutates
+    `series_away_wins`/`series_home_wins` in place via `_series_sides`), so
+    sharing one module-level list across widget instances/tests would let
+    them stomp on each other's state; and `start_time` is relative to
+    "now" so the live/final/preview game times keep reading as
+    yesterday/right-now/tomorrow regardless of when the demo is loaded.
+    """
+    now = datetime.now(tz)
+    game_final = GameInfo(
+        home_abbr=DEMO_OPPONENT,
+        away_abbr=DEMO_TEAM,
+        home_score=2,
+        away_score=7,
+        state="final",
+        start_time=now - timedelta(days=1, hours=3),
+        game_pk=1,
+    )
+    game_live = GameInfo(
+        home_abbr=DEMO_OPPONENT,
+        away_abbr=DEMO_TEAM,
+        home_score=4,
+        away_score=3,
+        state="live",
+        inning="▼8",
+        balls=3,
+        strikes=2,
+        outs=2,
+        on_first=True,
+        on_second=True,
+        on_third=False,
+        start_time=now - timedelta(hours=2),
+        game_pk=2,
+        home_challenges=1,
+        away_challenges=2,
+    )
+    game_preview = GameInfo(
+        home_abbr=DEMO_OPPONENT,
+        away_abbr=DEMO_TEAM,
+        state="preview",
+        start_time=now + timedelta(days=1, hours=4),
+        game_pk=3,
+    )
+    return SeriesInfo(
+        opponent_abbr=DEMO_OPPONENT,
+        games=[game_final, game_live, game_preview],
+        team_wins=1,
+        team_losses=0,
+    )

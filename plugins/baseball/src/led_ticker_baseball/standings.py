@@ -83,6 +83,88 @@ class TeamStanding:
     division_id: int = 0  # 0 == unknown/unset
 
 
+# `demo = true` fixture data — a full, realistic AL EAST division (5 teams,
+# descending win totals) so the standings board's every column (wins/losses,
+# pct, l10, streak, division rank + games-back) has something to show,
+# exercising both the physical board (scale>1) and the legacy per-team rows
+# (scale<=1) the board falls back to. Names use MLB_TEAM_NAMES' exact
+# strings so `_team_color_by_name`/`MLB_NAME_TO_ABBR` resolve correctly, same
+# as parsed live data.
+_DEMO_DIVISION_ID: int = 201  # AL EAST
+DEMO_STANDINGS: list[TeamStanding] = [
+    TeamStanding(
+        name="Yankees",
+        wins=58,
+        losses=39,
+        rank=1,
+        games_back="-",
+        abbr="NYY",
+        pct=".598",
+        l10="7-3",
+        streak="W3",
+        division_rank=1,
+        division_gb="-",
+        division_id=_DEMO_DIVISION_ID,
+    ),
+    TeamStanding(
+        name="Rays",
+        wins=53,
+        losses=44,
+        rank=2,
+        games_back="5.0",
+        abbr="TB",
+        pct=".546",
+        l10="6-4",
+        streak="W1",
+        division_rank=2,
+        division_gb="5.0",
+        division_id=_DEMO_DIVISION_ID,
+    ),
+    TeamStanding(
+        name="Red Sox",
+        wins=50,
+        losses=47,
+        rank=3,
+        games_back="8.0",
+        abbr="BOS",
+        pct=".515",
+        l10="5-5",
+        streak="L2",
+        division_rank=3,
+        division_gb="8.0",
+        division_id=_DEMO_DIVISION_ID,
+    ),
+    TeamStanding(
+        name="Blue Jays",
+        wins=47,
+        losses=50,
+        rank=4,
+        games_back="11.0",
+        abbr="TOR",
+        pct=".485",
+        l10="4-6",
+        streak="L1",
+        division_rank=4,
+        division_gb="11.0",
+        division_id=_DEMO_DIVISION_ID,
+    ),
+    TeamStanding(
+        name="Orioles",
+        wins=39,
+        losses=58,
+        rank=5,
+        games_back="19.0",
+        abbr="BAL",
+        pct=".402",
+        l10="3-7",
+        streak="L4",
+        division_rank=5,
+        division_gb="19.0",
+        division_id=_DEMO_DIVISION_ID,
+    ),
+]
+
+
 def _group_by_division(
     standings: list[TeamStanding],
 ) -> dict[int, list[TeamStanding]]:
@@ -171,12 +253,17 @@ class MLBStandingsMonitor:
     """MLB overall standings showing top N teams and tracked teams."""
 
     session: aiohttp.ClientSession
-    teams: list[str]
+    # Defaults to an empty list — already handled gracefully by
+    # _build_board_stories' "no tracked division resolved" fallback (the
+    # overall leader's division) and by `demo = true` widgets, which never
+    # need a tracked team at all (the fixture division stands alone).
+    teams: list[str] = attrs.field(factory=list)
     title: str = "MLB Standings"
     top_n: int = 3
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    demo: bool = False
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -237,23 +324,32 @@ class MLBStandingsMonitor:
                     f"{_STANDINGS_BOARD_MAX_ROWS}."
                 )
 
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            msgs.append(
+                f"baseball.standings demo must be a bool (true/false), got {demo!r}"
+            )
+
         return msgs
 
     @classmethod
     async def start(
         cls,
         session: aiohttp.ClientSession,
-        teams: list[str],
+        teams: list[str] | None = None,
         update_interval: int = _INTERVAL_DAILY,
         **kwargs: Any,
     ) -> Self:
         logger.debug("MLBStandingsMonitor.start: teams=%s", teams)
         widget = cls(
             session=session,
-            teams=[t.upper() for t in teams],
+            teams=[t.upper() for t in (teams or [])],
             **kwargs,
         )
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.demo:
+            widget._load_demo()
+            return widget
         await widget.update()
         logger.info(
             "MLB Standings: %d stories",
@@ -261,6 +357,47 @@ class MLBStandingsMonitor:
         )
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
+
+    def _load_demo(self) -> None:
+        """Populate feed_stories from a curated fixture division — no network
+        fetch.
+
+        Reuses the exact same story-building path update() uses for live
+        data (_build_ticker_stories / _build_board_stories) against a fixed
+        AL EAST fixture (DEMO_STANDINGS) instead of the MLB API, mirroring
+        update()'s own ticker-vs-board dispatch (including the "no division
+        resolved" board->ticker fallback) so demo cards render through the
+        SAME renderers real standings do.
+
+        Unlike scores.py's `_load_demo` (which force-overwrites `self.team`
+        with the fixture team), `self.teams` is NOT overridden here — it's
+        only ever used as a highlight filter, so a configured `teams` list
+        outside the fixture's AL EAST division simply fails to match
+        anything (same as it would against live data) rather than being
+        silently discarded.
+        """
+        standings = list(DEMO_STANDINGS)
+        standings_by_abbr = {s.abbr: s for s in standings if s.abbr}
+
+        title_color = (
+            self.font_color if self.font_color is not None else colors.RGB_WHITE
+        )
+        self.feed_title = TickerMessage(
+            self.title,
+            font_color=title_color,
+            center=True,
+            bg_color=self.bg_color,
+        )
+
+        if self.layout == "ticker":
+            stories = self._build_ticker_stories(standings, standings_by_abbr)
+        else:
+            stories = self._build_board_stories(standings, standings_by_abbr)
+            if not stories:
+                stories = self._build_ticker_stories(standings, standings_by_abbr)
+
+        self.feed_stories = stories
+        logger.info("MLB standings demo: %d stories", len(self.feed_stories))
 
     async def update(self) -> None:
         """Fetch standings and build display messages."""

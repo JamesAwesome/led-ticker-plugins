@@ -8,6 +8,7 @@ from led_ticker.widgets.message import SegmentMessage
 
 from led_ticker_baseball.scores import (
     GameInfo,
+    MLBGameCard,
     MLBScoreMonitor,
     SeriesInfo,
     _build_game_message,
@@ -1588,14 +1589,16 @@ class TestScoresValidateConfig:
 
     def test_valid_layouts_pass(self):
         for layout in ("auto", "ticker", "scoreboard", "two_row"):
-            assert MLBScoreMonitor.validate_config({"layout": layout}) == []
+            assert (
+                MLBScoreMonitor.validate_config({"layout": layout, "team": "NYY"}) == []
+            )
 
     def test_default_layout_passes(self):
         # Omitting layout defaults to "auto" — valid.
-        assert MLBScoreMonitor.validate_config({}) == []
+        assert MLBScoreMonitor.validate_config({"team": "NYY"}) == []
 
     def test_invalid_layout_suggests_close_match(self):
-        msgs = MLBScoreMonitor.validate_config({"layout": "scorebord"})
+        msgs = MLBScoreMonitor.validate_config({"layout": "scorebord", "team": "NYY"})
         assert len(msgs) == 1
         assert "Did you mean 'scoreboard'?" in msgs[0]
         # Lists the valid values.
@@ -1606,14 +1609,14 @@ class TestScoresValidateConfig:
     def test_invalid_layout_no_close_match(self):
         # A totally unrelated value still reports invalid + the valid list,
         # just without a "Did you mean" suggestion.
-        msgs = MLBScoreMonitor.validate_config({"layout": "zzzzz"})
+        msgs = MLBScoreMonitor.validate_config({"layout": "zzzzz", "team": "NYY"})
         assert len(msgs) == 1
         assert "is not valid" in msgs[0]
         assert "Did you mean" not in msgs[0]
 
     def test_top_field_with_ticker_layout_flagged(self):
         msgs = MLBScoreMonitor.validate_config(
-            {"layout": "ticker", "top_font_size": 16}
+            {"layout": "ticker", "top_font_size": 16, "team": "NYY"}
         )
         assert len(msgs) == 1
         assert "top_font_size" in msgs[0]
@@ -1622,17 +1625,26 @@ class TestScoresValidateConfig:
     def test_top_field_with_default_layout_ok(self):
         # layout omitted (defaults "auto") → top_* is NOT flagged: auto can
         # resolve to two_row at scale 1, same as an explicit layout="auto".
-        assert MLBScoreMonitor.validate_config({"top_row_height": 6}) == []
+        assert (
+            MLBScoreMonitor.validate_config({"top_row_height": 6, "team": "NYY"}) == []
+        )
 
     def test_top_field_with_two_row_layout_ok(self):
         assert (
-            MLBScoreMonitor.validate_config({"layout": "two_row", "top_font_size": 16})
+            MLBScoreMonitor.validate_config(
+                {"layout": "two_row", "top_font_size": 16, "team": "NYY"}
+            )
             == []
         )
 
     def test_multiple_top_fields_all_named(self):
         msgs = MLBScoreMonitor.validate_config(
-            {"layout": "scoreboard", "top_font": "6x12", "top_row_height": 6}
+            {
+                "layout": "scoreboard",
+                "top_font": "6x12",
+                "top_row_height": 6,
+                "team": "NYY",
+            }
         )
         assert len(msgs) == 1
         assert "top_font" in msgs[0]
@@ -1641,14 +1653,48 @@ class TestScoresValidateConfig:
     def test_callable_as_classmethod(self):
         # Confirms it's a classmethod usable off the class (engine calls
         # cls.validate_config(dict(cfg))).
-        assert MLBScoreMonitor.validate_config({"layout": "ticker"}) == []
+        assert (
+            MLBScoreMonitor.validate_config({"layout": "ticker", "team": "NYY"}) == []
+        )
+
+    def test_demo_true_passes(self):
+        assert MLBScoreMonitor.validate_config({"demo": True}) == []
+
+    def test_demo_false_passes(self):
+        assert MLBScoreMonitor.validate_config({"demo": False, "team": "NYY"}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        # A truthy non-bool "demo" bypasses the team-required check (same
+        # as `demo = true` would) — only the bool-type message is expected.
+        msgs = MLBScoreMonitor.validate_config({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
 
     def test_validate_config_accepts_auto_and_default_is_auto(self):
-        assert MLBScoreMonitor.validate_config({"layout": "auto"}) == []
+        assert MLBScoreMonitor.validate_config({"layout": "auto", "team": "NYY"}) == []
         import attrs
 
         field = {f.name: f for f in attrs.fields(MLBScoreMonitor)}["layout"]
         assert field.default == "auto"
+
+    def test_validate_team_required_unless_demo(self):
+        # Regression: adding `demo` made `team` default to "" on the attrs
+        # field, which would otherwise let a non-demo config that omits
+        # `team` sail through to a live team="" fetch that silently renders
+        # "No Data" forever instead of failing loudly at boot.
+        msgs = MLBScoreMonitor.validate_config({})
+        assert len(msgs) == 1
+        assert "team" in msgs[0]
+
+        # demo = true never needs a team.
+        assert MLBScoreMonitor.validate_config({"demo": True}) == []
+
+    def test_validate_team_blank_string_still_required(self):
+        # A present-but-blank `team = ""` is the same as omitting it.
+        msgs = MLBScoreMonitor.validate_config({"team": "   "})
+        assert len(msgs) == 1
+        assert "team" in msgs[0]
 
 
 # --- update() orchestration (faked session) ---
@@ -1784,3 +1830,154 @@ class TestStart:
         assert widget.feed_stories  # update() ran
         loop.assert_called_once_with(widget, 77)
         spawn.assert_called_once_with("LOOP")
+
+
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestScoresDemo:
+    """`demo = true` builds feed_stories from curated fixture games — never
+    fetching the MLB API or spawning the background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.scores as mod
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode. Passing session=None (as a config
+        # with no [team]/session context would) is the simplest possible
+        # proof there's no fetch; this session goes one step further and
+        # actively traps a fetch attempt.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBScoreMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBScoreMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # The real card type update() would build — demo reuses the SAME
+        # story builders, not a re-implemented rendering path.
+        assert any(isinstance(s, MLBGameCard) for s in widget.feed_stories)
+        # All three curated fixture states are represented.
+        states = {
+            s.game.state for s in widget.feed_stories if isinstance(s, MLBGameCard)
+        }
+        assert states == {"final", "live", "preview"}
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_works_without_team_or_session(self):
+        # demo=true needs neither `team` nor a real session — session=None
+        # is fine since _load_demo() never touches it.
+        widget = await MLBScoreMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+        assert widget.team  # set from the fixture, not left blank
+
+    def test_demo_construct_directly_without_team(self):
+        # Direct construction (bypassing start()) also works team-less.
+        widget = MLBScoreMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert any(isinstance(s, MLBGameCard) for s in widget.feed_stories)
+
+    def test_demo_with_configured_team_logs_override(self, caplog):
+        # demo=true + an explicit team=... silently overrides team with the
+        # fixture team (DEMO_TEAM) — a one-line debug log makes that
+        # non-obvious override discoverable instead of silent.
+        import logging
+
+        widget = MLBScoreMonitor(session=None, team="BOS", demo=True)
+        with caplog.at_level(logging.DEBUG, logger="led_ticker_baseball.scores"):
+            widget._load_demo()
+
+        assert widget.team == "NYY"  # DEMO_TEAM, not the configured "BOS"
+        assert any(
+            "ignoring configured team" in r.message.lower() for r in caplog.records
+        )
+
+    def test_demo_without_configured_team_does_not_log_override(self, caplog):
+        # No configured team (the common demo case) → nothing to override,
+        # so no debug log fires.
+        import logging
+
+        widget = MLBScoreMonitor(session=None, demo=True)
+        with caplog.at_level(logging.DEBUG, logger="led_ticker_baseball.scores"):
+            widget._load_demo()
+
+        assert not any(
+            "ignoring configured team" in r.message.lower() for r in caplog.records
+        )
+
+
+# --- _load_demo() stays faithful to update()'s MLBGameCard build ---
+
+
+class TestDemoMirrorsUpdateGameCardKwargs:
+    """Structural tripwire: `_load_demo()` and `update()` must construct
+    `MLBGameCard` with the same keyword-argument set.
+
+    `_load_demo()` is a deliberate INLINE COPY of `update()`'s
+    current-series story-building tail (see `_load_demo`'s own docstring
+    for why it isn't a shared helper — extracting one broke
+    `test_dispatch_two_row_branch_exists_in_update`, an `inspect.getsource`
+    tripwire scoped to `update`'s own source). Because it's a hand-kept
+    copy rather than one shared call site, if `update()`'s `MLBGameCard(...)`
+    construction gains, drops, or renames a kwarg and the demo copy isn't
+    updated to match, demo cards silently stop mirroring live cards — with
+    no existing test to catch the drift.
+
+    This does NOT pin argument VALUES (that would be a golden test, and
+    values legitimately differ — e.g. `team_abbr=DEMO_TEAM` vs.
+    `team_abbr=self.team`). It only asserts the two call sites pass the
+    SAME set of keyword argument NAMES, parsed structurally via `ast` (same
+    spirit as the two_row `inspect.getsource` tripwire above) so a rename or
+    a one-sided addition fails loudly instead of drifting unnoticed.
+    """
+
+    @staticmethod
+    def _mlb_game_card_kwarg_names(method: object) -> set[str]:
+        import ast
+        import inspect
+        import textwrap
+
+        source = textwrap.dedent(inspect.getsource(method))
+        tree = ast.parse(source)
+        names: set[str] = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "MLBGameCard"
+            ):
+                names.update(kw.arg for kw in node.keywords if kw.arg is not None)
+        return names
+
+    def test_load_demo_and_update_construct_game_card_with_same_kwargs(self):
+        demo_kwargs = self._mlb_game_card_kwarg_names(MLBScoreMonitor._load_demo)
+        update_kwargs = self._mlb_game_card_kwarg_names(MLBScoreMonitor.update)
+
+        # Sanity: both call sites actually construct a MLBGameCard at all —
+        # an empty set on either side would make the equality check below a
+        # trivial pass and defeat the tripwire's purpose.
+        assert demo_kwargs, "_load_demo() has no MLBGameCard(...) call to compare"
+        assert update_kwargs, "update() has no MLBGameCard(...) call to compare"
+
+        assert demo_kwargs == update_kwargs, (
+            "_load_demo() and update() construct MLBGameCard with "
+            f"different kwargs: demo-only={demo_kwargs - update_kwargs}, "
+            f"update-only={update_kwargs - demo_kwargs}. _load_demo() "
+            "deliberately mirrors update()'s story-build tail — keep the "
+            "kwarg sets in sync or demo cards silently drift from live "
+            "cards."
+        )
