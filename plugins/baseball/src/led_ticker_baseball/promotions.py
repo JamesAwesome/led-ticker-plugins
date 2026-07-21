@@ -182,11 +182,18 @@ class PromoInfo:
 
 # `demo = true` fixture data — a curated docs-showcase / on-demand
 # hardware-validation slate (see the sibling fixture blocks in scores.py /
-# standings.py). Three promos against three DIFFERENT opponents so the
-# opponent chip shows three distinct brand colors across the rotation; a
-# giveaway with a sponsor line (exercises `presented_by`), a theme night
-# with no sponsor, and a second giveaway — the mix a real bigsign feed would
-# actually show over a homestand.
+# standings.py). `_build_promo_card_stories`'s docstring documents a hard
+# precondition: every `PromoInfo` passed in must share the SAME target
+# date, because the live path (`update()`) always scopes `target_infos` to
+# one picked home date before calling `_build_promo_cards`. These three
+# promos are all for the SAME home game against the SAME opponent (one
+# game = one date = one opponent, same as a real bigsign feed would show
+# for "tonight's giveaways") — a giveaway with a sponsor line (exercises
+# `presented_by`), a theme night with no sponsor, and a second giveaway.
+# Varying `name`/`offer_type`/`presented_by` still gives the showcase
+# richness without violating the shared-date precondition; the opponent
+# chip is deliberately the SAME color across all three since they're one
+# game's promos, not three games'.
 def _build_demo_promos() -> list[PromoInfo]:
     """Fresh demo PromoInfo list (NYY home promos) for `demo = true` widgets.
 
@@ -204,27 +211,27 @@ def _build_demo_promos() -> list[PromoInfo]:
             date_label="TODAY",
             time_label="7:05",
             am_pm="PM",
-            game_date="2026-07-20",
+            game_date="2026-07-18",
         ),
         PromoInfo(
             name="Fireworks Friday",
             offer_type="Theme Night",
             presented_by="",
-            opponent_abbr="TB",
-            date_label="FRI JUL 24",
+            opponent_abbr="BOS",
+            date_label="TODAY",
             time_label="7:05",
             am_pm="PM",
-            game_date="2026-07-24",
+            game_date="2026-07-18",
         ),
         PromoInfo(
             name="Retro Jersey Giveaway",
             offer_type="Giveaway",
             presented_by="New Era",
-            opponent_abbr="TOR",
-            date_label="SAT JUL 25",
-            time_label="1:05",
+            opponent_abbr="BOS",
+            date_label="TODAY",
+            time_label="7:05",
             am_pm="PM",
-            game_date="2026-07-25",
+            game_date="2026-07-18",
         ),
     ]
 

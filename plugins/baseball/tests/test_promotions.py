@@ -1191,9 +1191,12 @@ class TestPromotionsDemo:
         assert all(isinstance(s, MLBPromoCard) for s in widget.feed_stories)
         names = {s.promo.name for s in widget.feed_stories}
         assert "Bobblehead Night" in names
-        # Different opponents so the chip color varies across the rotation.
+        # All fixture promos are for the SAME home game — one game, one
+        # opponent — so the demo widget doesn't violate
+        # `_build_promo_card_stories`'s shared-target-date precondition
+        # (see `test_demo_legacy_line_date_is_consistent` below).
         opponents = {s.promo.opponent_abbr for s in widget.feed_stories}
-        assert len(opponents) >= 2
+        assert len(opponents) == 1
         # Never fetched, never spawned the background poll loop.
         session.get.assert_not_called()
         loop.assert_not_called()
@@ -1240,3 +1243,51 @@ class TestPromotionsDemo:
         assert not any(
             "ignoring configured team" in r.message.lower() for r in caplog.records
         )
+
+    def test_demo_legacy_line_date_is_consistent(self):
+        """Regression for the demo-fixture defect: `_build_promo_card_stories`'s
+        docstring documents a precondition that every `PromoInfo` passed in
+        shares the SAME target date (the live path always scopes
+        `target_infos` to one picked home date before calling
+        `_build_promo_cards`). Before the fix, `_build_demo_promos()` used
+        three DIFFERENT `game_date`s while `_load_demo()` passed a single
+        hardcoded `label="Today"` into `_build_promo_cards` — on smallsign
+        (scale <= 1), `MLBPromoCard.draw` forwards to `self.legacy`, whose
+        SegmentMessage embeds that shared `label`, so every demo card's
+        legacy line read "Today · <name>" even for fixture promos whose own
+        `game_date`/`date_label` said otherwise. This asserts the legacy
+        line's date lead-in is identical AND correct across every demo
+        card, i.e. the fixtures now respect the shared-target-date
+        precondition.
+        """
+        from led_ticker_baseball._promo_card import MLBPromoCard
+        from led_ticker_baseball.promotions import MLBPromotionsMonitor
+
+        widget = MLBPromotionsMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert all(isinstance(s, MLBPromoCard) for s in widget.feed_stories)
+
+        # segments[1] is the (f"{label} · ", date_c) date lead-in tuple —
+        # see `_build_promo_card_stories`.
+        date_prefixes = {card.legacy.segments[1][0] for card in widget.feed_stories}
+        assert len(date_prefixes) == 1, (
+            "every demo promo's legacy line must share one date lead-in, "
+            f"got {date_prefixes!r}"
+        )
+        (prefix,) = date_prefixes
+        assert prefix == "Today · "
+
+        # The legacy prefix must actually MATCH the fixtures' own declared
+        # date — not just agree with itself by coincidence — so the
+        # shared-target-date precondition genuinely holds.
+        game_dates = {card.promo.game_date for card in widget.feed_stories}
+        date_labels = {card.promo.date_label for card in widget.feed_stories}
+        assert game_dates == {"2026-07-18"}
+        assert date_labels == {"TODAY"}
+
+        # One game also means one opponent — the chip color must agree
+        # across every demo card.
+        opponents = {card.promo.opponent_abbr for card in widget.feed_stories}
+        assert len(opponents) == 1
