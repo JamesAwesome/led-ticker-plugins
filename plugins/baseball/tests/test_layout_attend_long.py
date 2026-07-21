@@ -141,7 +141,7 @@ def test_bar_animates_with_progress():
 
 
 def test_long_team_venue_bigger_and_no_clip():
-    """The promoted venue (px14, up from the old px9 "PAID ATTENDANCE"-
+    """The promoted venue (px15, up from the old px9 "PAID ATTENDANCE"-
     adjacent px8) sits on the row-40 band, well clear of the bar at y52-61.
 
     A naive "no pixel at y>=64" check is VACUOUS: core's hi-res rasterizer
@@ -150,7 +150,7 @@ def test_long_team_venue_bigger_and_no_clip():
     out-of-canvas glyph row never shows up as an out-of-bounds pixel, it
     just vanishes. The actual visible defect would be a SHORTENED glyph
     (missing its bottom rows), so this asserts the full expected VISIBLE
-    ROW-SPAN for px14 (empirically 10 rows; >=8 leaves headroom for
+    ROW-SPAN for px15 (empirically ~11 rows; >=8 leaves headroom for
     cross-platform freetype variance without weakening the tripwire) —
     that's the assertion that would actually fail on a clip. Also verifies
     no overlap with the right-anchored "NN,NNN CAP" readout (x-extents
@@ -315,9 +315,9 @@ def test_long_league_pct_superlative_shows_crowd_column():
 
 
 def test_long_league_venue_bigger_no_clip():
-    """The promoted league venue (px16, up from px8) sits on the row-40 band.
+    """The promoted league venue (px15, up from px8) sits on the row-40 band.
     A naive "no y>=64" check is VACUOUS (core silently drops off-canvas rows);
-    assert the full px16 VISIBLE ROW-SPAN instead (the current px8 span is 5
+    assert the full px15 VISIBLE ROW-SPAN instead (the current px8 span is 5
     rows — a clip would shorten it). Venue is the only LABEL_HI element at
     y>=35 (superlative + column labels sit at y<=11). No pixel in the bar band
     (y>=52) and no overlap with the right-side chip/abbr block."""

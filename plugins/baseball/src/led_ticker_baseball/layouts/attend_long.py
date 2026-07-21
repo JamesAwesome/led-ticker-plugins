@@ -29,10 +29,12 @@ coordinate beyond "belted venue name", same gap as attend_big's venue
 placement). The redundant "PAID ATTENDANCE" caption is gone — the big
 amber paid number plus the capacity bar already say "this is attendance";
 the venue identifies the park and reads better big. Bar sits at y=52,h=10
--> real rows 52-61; the promoted venue (px16 at y=40, empirically rows
-40-51 — see `test_long_team_venue_bigger_and_no_clip`) clears the bar by a
+-> real rows 52-61; the promoted venue (px15 at y=40, empirically rows
+40-50 — see `test_long_team_venue_bigger_and_no_clip`) clears the bar by a
 single row (readability uplift: the small dim labels were hard to read
-on-panel, so venue grew px14->px16 and recolored LABEL->LABEL_HI).
+on-panel, so venue grew px14->px15 and recolored LABEL->LABEL_HI; px15 not
+px16 so the glyph span clears the y=52 bar with 1 row to spare even under
+Linux freetype's slightly-taller hires rasterization).
 
 Weather slot (task-5 uplift): the paid number ends ~x109 and the fixed
 `% FULL`/`VS AVG` columns start at x228 — the ~100px gap between them
@@ -104,13 +106,14 @@ _WEATHER_SIZE = 14
 # Venue slot (task-5 uplift — promoted, replaces the removed "PAID
 # ATTENDANCE" label): takes the row-40 band's left side, belted so it
 # can't run into the right-anchored "NN,NNN CAP" readout. `_VENUE_SIZE`
-# raised from the old 8px label-adjacent size, then bumped again px14->px16
+# raised from the old 8px label-adjacent size, then bumped again px14->px15
 # in the readability uplift now that it's the band's headline element
-# (empirically rows 40-51 at y=40 — see
+# (empirically rows 40-50 at y=40 — see
 # `test_long_team_venue_bigger_and_no_clip` — clears the y=52 bar by a
-# single row, exactly at the ceiling).
+# single row; px15 not px16 so the glyph span clears the y=52 bar with 1 row
+# to spare even under Linux freetype's slightly-taller hires rasterization).
 _VENUE_Y = 40
-_VENUE_SIZE = 16
+_VENUE_SIZE = 15
 _VENUE_GAP = 10
 
 # League-card rows (no dc.html coordinate beyond label/value/bar — same gap
@@ -306,10 +309,10 @@ def _render_league(shim, real, record, progress, label, yo):
     chip(real, chip_x, _Y_LEAGUE_ROW + yo, _LEAGUE_CHIP_H, record.home_abbr or "")
     _t(shim, abbr, chip_x + _LEAGUE_CHIP_H + 3, _Y_LEAGUE_ROW + yo, pal.IDENT, 8)
 
-    # Venue promoted to `_VENUE_SIZE` (px16 after the readability uplift, up
+    # Venue promoted to `_VENUE_SIZE` (px15 after the readability uplift, up
     # from px8) to match the team card's headline venue; the existing
     # `chip_x - _X0 - 6` belt keeps it clear of the right-side chip block, and
-    # px16 at y=40 (rows 40-51) still clears the y=52 bar by a single row (see
+    # px15 at y=40 (rows 40-50) still clears the y=52 bar by a single row (see
     # `test_long_league_venue_bigger_no_clip`).
     venue_maxw = chip_x - _X0 - 6
     venue_belted = fit_text(
