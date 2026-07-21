@@ -94,6 +94,27 @@ _Y_LEAGUE_ROW = 40
 _Y_LEAGUE_BAR = 52
 _LEAGUE_CHIP_H = 8
 
+# League-card upper-band stat columns (task-5 uplift — leaner-for-256 mirror of
+# attend_long's league fill). The big value ends ~x77 ("45,123" px22) and the
+# right chip block sits on the y=40 row, leaving x96-255/y0-40 measured dead on
+# the bigsign (the same measured dead zone the longboi card filled). Two
+# adaptive stat columns fill it. 256 is TIGHT, so the columns are compact —
+# label px8 / value px16 (vs the longboi's px10/px20, which won't fit 256) — at
+# league-specific x-origins `_LEAGUE_COL_X = (104, 180)`: col0 clears the big
+# value (ends x77 -> 27px gap) and col1's widest realistic value ("56,000" px16
+# -> ends ~x237) clears the right edge (256). BOTH columns fit measured, so no
+# single-stat fallback is needed. The columns adapt to the superlative type and
+# draw ONLY when `capacity > 0` (no fill/capacity data otherwise). Empirical
+# spans (see tests): label px8 @ y=4 -> rows 4-9; value px16 @ y=22 -> rows
+# 22-36 (clears the y=40 venue/chip row). Tripwires:
+# test_big_league_columns_present_and_clear,
+# test_big_league_pct_shows_crowd_column, test_big_league_no_capacity_omits_columns.
+_LEAGUE_COL_X = (104, 180)
+_LEAGUE_COL_LABEL_Y = 4
+_LEAGUE_COL_LABEL_SIZE = 8
+_LEAGUE_COL_VAL_Y = 22
+_LEAGUE_COL_VAL_SIZE = 16
+
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
     return hires(shim, text, x, cap_top(y_target, size), color, size, bold=bold)
@@ -195,6 +216,67 @@ def _render_league(shim, real, record, progress, label, yo):
 
     _t(shim, (label or "").upper(), _X0, _Y_LEAGUE_LABEL + yo, pal.LABEL, 9)
     _t(shim, value_text, _X0, _Y_LEAGUE_VALUE + yo, value_color, 22)
+
+    # Two adaptive stat columns fill the dead upper-band middle (x96-255).
+    # Guard on capacity: no capacity -> no fill/capacity data (and fill_frac is
+    # 0.0 in that case anyway, so there's nothing meaningful to show and no
+    # div-by-zero risk).
+    if record.capacity > 0:
+        cx0, cx1 = _LEAGUE_COL_X
+        if record.is_pct:
+            # The big value already IS the pct, so col0 shows the raw CROWD
+            # instead of a redundant "% FULL".
+            _t(
+                shim,
+                "CROWD",
+                cx0,
+                _LEAGUE_COL_LABEL_Y + yo,
+                pal.LABEL,
+                _LEAGUE_COL_LABEL_SIZE,
+            )
+            _t(
+                shim,
+                f"{record.attendance:,}",
+                cx0,
+                _LEAGUE_COL_VAL_Y + yo,
+                pal.AMBER,
+                _LEAGUE_COL_VAL_SIZE,
+            )
+        else:
+            # The big value is the raw crowd, so col0 shows how full it was.
+            pct = record.fill_frac * 100
+            _t(
+                shim,
+                "% FULL",
+                cx0,
+                _LEAGUE_COL_LABEL_Y + yo,
+                pal.LABEL,
+                _LEAGUE_COL_LABEL_SIZE,
+            )
+            _t(
+                shim,
+                f"{pct:.1f}%",
+                cx0,
+                _LEAGUE_COL_VAL_Y + yo,
+                pal.WIN,
+                _LEAGUE_COL_VAL_SIZE,
+            )
+        _t(
+            shim,
+            "CAP",
+            cx1,
+            _LEAGUE_COL_LABEL_Y + yo,
+            pal.LABEL,
+            _LEAGUE_COL_LABEL_SIZE,
+        )
+        _t(
+            shim,
+            f"{record.capacity:,}",
+            cx1,
+            _LEAGUE_COL_VAL_Y + yo,
+            pal.IDENT,
+            _LEAGUE_COL_VAL_SIZE,
+        )
 
     abbr = (record.home_abbr or "").upper()
     abbr_w = text_width(8, abbr) if abbr else 0

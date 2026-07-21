@@ -166,6 +166,98 @@ def test_team_venue_never_clips_bottom_edge():
     assert venue_rows and max(venue_rows) - min(venue_rows) >= 5
 
 
+def test_big_league_columns_present_and_clear():
+    """A crowd superlative (is_pct=False) fills the measured dead zone
+    (x96-255, y0-40) with two adaptive stat columns: col0 "% FULL" (value in
+    WIN, the ONLY WIN on a crowd card) and col1 "CAP" (value in IDENT). Both
+    must live in their compact x-bands and clear BOTH the big value on the left
+    (ends ~x77) and the right panel edge (x>=256).
+
+    GOTCHA (task-5 brief): `real._pixels` values are plain (r, g, b) tuples and
+    a Color is NEVER == a get_pixel tuple in the stub — compare against the
+    TUPLE form, not the Color object (that comparison is vacuously False)."""
+    from led_ticker_baseball import _palette as pal
+
+    canvas, real = _bigsign()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=0.902,
+        attendance=45123,
+        capacity=50000,
+    )
+    render_attend_big(canvas, rec, 1.0, label="BIGGEST CROWD")
+    win = (pal.WIN.red, pal.WIN.green, pal.WIN.blue)
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+
+    # col0 value ("% FULL") — the only WIN on a crowd card.
+    col0_x = {x for (x, _y), v in real._pixels.items() if v == win}
+    assert col0_x, "col0 (% FULL) value should render"
+    assert any(100 <= x <= 160 for x in col0_x)  # lives in col0's band
+    assert not any(x < 90 for x in col0_x)  # clear of the big value (ends ~x77)
+    assert not any(x >= 256 for x in col0_x)  # on-panel
+
+    # col1 value ("CAP") is IDENT; isolate from the row-40 abbr (also IDENT) by
+    # restricting to the columns' y<38 band.
+    col1_x = {x for (x, y), v in real._pixels.items() if v == ident and y < 38}
+    assert col1_x, "col1 (CAP) value should render"
+    assert any(175 <= x <= 245 for x in col1_x)  # lives in col1's band
+    assert not any(x < 90 for x in col1_x)  # clear of the big value
+    assert not any(x >= 256 for x in col1_x)  # on-panel
+
+
+def test_big_league_pct_shows_crowd_column():
+    """For a pct superlative (is_pct=True) the big value already IS the pct, so
+    col0 adapts to show the raw CROWD number instead of a redundant "% FULL".
+    On a pct card the big value is WIN, so AMBER appears ONLY in col0 — its
+    presence in the col0 band proves the adaptive swap fired."""
+    from led_ticker_baseball import _palette as pal
+
+    canvas, real = _bigsign()
+    rec = CrowdRecord(
+        value=98,
+        venue="Fenway Park",
+        home_abbr="BOS",
+        is_pct=True,
+        fill_frac=0.98,
+        attendance=37003,
+        capacity=37755,
+    )
+    render_attend_big(canvas, rec, 1.0, label="FULLEST PARK")
+    amb = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
+    # AMBER is the col0 CROWD value (big value is WIN on a pct card).
+    col0_x = {x for (x, y), v in real._pixels.items() if v == amb and y < 38}
+    assert col0_x, "pct card col0 should show the raw CROWD number in AMBER"
+    assert any(100 <= x <= 165 for x in col0_x)  # in the col0 band, not the value
+
+
+def test_big_league_no_capacity_omits_columns():
+    """capacity=0 → no fill/capacity data → both stat columns are omitted, and
+    the render never raises. On a crowd card col0 is the only WIN (absent) and
+    col1's IDENT value band (y<38) is empty (the row-40 abbr IDENT is ok)."""
+    from led_ticker_baseball import _palette as pal
+
+    canvas, real = _bigsign()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=0.0,
+        attendance=45123,
+        capacity=0,
+    )
+    render_attend_big(canvas, rec, 1.0, label="BIGGEST CROWD")  # must not raise
+    win = (pal.WIN.red, pal.WIN.green, pal.WIN.blue)
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+    assert not [xy for xy, v in real._pixels.items() if v == win]  # no col0
+    assert not [
+        (x, y) for (x, y), v in real._pixels.items() if v == ident and y < 38
+    ]  # no col1 value
+
+
 def test_never_raises_on_empty_team():
     canvas, real = _bigsign()
     render_attend_big(
