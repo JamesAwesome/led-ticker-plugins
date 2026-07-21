@@ -31,6 +31,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._models import DEMO_TEAM
 from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
@@ -179,12 +180,67 @@ class PromoInfo:
     game_date: str = ""
 
 
+# `demo = true` fixture data — a curated docs-showcase / on-demand
+# hardware-validation slate (see the sibling fixture blocks in scores.py /
+# standings.py). Three promos against three DIFFERENT opponents so the
+# opponent chip shows three distinct brand colors across the rotation; a
+# giveaway with a sponsor line (exercises `presented_by`), a theme night
+# with no sponsor, and a second giveaway — the mix a real bigsign feed would
+# actually show over a homestand.
+def _build_demo_promos() -> list[PromoInfo]:
+    """Fresh demo PromoInfo list (NYY home promos) for `demo = true` widgets.
+
+    A function, not a static module list — mirrors `_models.build_demo_series`:
+    `PromoInfo` is a plain mutable dataclass, so a shared module-level list
+    could let widget instances/tests stomp on each other's state even though
+    nothing currently mutates these fields in place.
+    """
+    return [
+        PromoInfo(
+            name="Bobblehead Night",
+            offer_type="Giveaway",
+            presented_by="Chase",
+            opponent_abbr="BOS",
+            date_label="TODAY",
+            time_label="7:05",
+            am_pm="PM",
+            game_date="2026-07-20",
+        ),
+        PromoInfo(
+            name="Fireworks Friday",
+            offer_type="Theme Night",
+            presented_by="",
+            opponent_abbr="TB",
+            date_label="FRI JUL 24",
+            time_label="7:05",
+            am_pm="PM",
+            game_date="2026-07-24",
+        ),
+        PromoInfo(
+            name="Retro Jersey Giveaway",
+            offer_type="Giveaway",
+            presented_by="New Era",
+            opponent_abbr="TOR",
+            date_label="SAT JUL 25",
+            time_label="1:05",
+            am_pm="PM",
+            game_date="2026-07-25",
+        ),
+    ]
+
+
 @attrs.define
 class MLBPromotionsMonitor:
     """Upcoming home-game promotions (giveaways / theme nights) for one team."""
 
     session: aiohttp.ClientSession
-    team: str
+    # Defaults "" (not required at the attrs/construction level) so
+    # `demo = true` widgets can construct without one — `_load_demo()`
+    # ignores it and uses the fixture team. A non-demo config that omits
+    # `team` is caught pre-coercion by validate_config below (a friendly
+    # message) rather than silently constructing with team="" and fetching
+    # an empty team forever.
+    team: str = ""
     title: str = ""
     timezone: str = "America/New_York"
     lookahead_days: int = 14
@@ -193,6 +249,7 @@ class MLBPromotionsMonitor:
     limit: int = 0
     padding: int = 6
     hold_time: float = 0.0
+    demo: bool = False
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -243,19 +300,37 @@ class MLBPromotionsMonitor:
                     f'e.g. {key} = ["Loonie Dogs"].'
                 )
 
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            msgs.append(
+                f"baseball.promotions demo must be a bool (true/false), got {demo!r}"
+            )
+
+        # `team` is required unless `demo = true` — `start()`'s own `team`
+        # parameter defaults to "" (so a demo widget can construct without
+        # one), so a non-demo config that simply omits `team` would
+        # otherwise sail through to a live team="" fetch that fails to
+        # resolve a team id and renders "No Data" forever instead of
+        # failing loudly at boot.
+        if not demo and not str(cfg.get("team", "")).strip():
+            msgs.append('promotions requires team = "<ABBR>" (or set demo = true).')
+
         return msgs
 
     @classmethod
     async def start(
         cls,
         session: aiohttp.ClientSession,
-        team: str,
+        team: str = "",
         update_interval: int = _INTERVAL_SIX_HOURS,
         **kwargs: Any,
     ) -> Self:
         logger.debug("MLBPromotionsMonitor.start: team=%s", team)
         widget = cls(session=session, team=team.upper(), **kwargs)
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.demo:
+            widget._load_demo()
+            return widget
         widget._team_id = await resolve_team_id(session, widget.team) or 0
         await widget.update()
         logger.info(
@@ -265,6 +340,30 @@ class MLBPromotionsMonitor:
         )
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
+
+    def _load_demo(self) -> None:
+        """Populate feed_stories from curated fixture promos — no network
+        fetch.
+
+        Reuses `_build_promo_cards` (the SAME card-building tail `update()`
+        uses — `_build_promo_card_stories` + `MLBPromoCard` construction,
+        in a single ordered/highlighted/limited pass) against a fixed
+        fixture list (`_build_demo_promos`) instead of live schedule data,
+        so demo cards render through the SAME renderers real promos do.
+        """
+        if self.team and self.team != DEMO_TEAM:
+            logger.debug(
+                "MLB Promotions demo mode: ignoring configured team=%s, "
+                "using fixture team %s",
+                self.team,
+                DEMO_TEAM,
+            )
+        self.team = DEMO_TEAM
+        self._set_title()
+        self.feed_stories = self._build_promo_cards(_build_demo_promos(), "Today")
+        logger.info(
+            "MLB Promotions %s demo: %d stories", self.team, len(self.feed_stories)
+        )
 
     async def update(self) -> None:
         """Fetch the promotions-hydrated schedule and build display messages."""
@@ -331,22 +430,7 @@ class MLBPromotionsMonitor:
             return
 
         label = self._promo_line_date_label(target.game_date, today)
-        legacy_msgs, ordered_infos = self._build_promo_card_stories(target_infos, label)
-        self._promos = ordered_infos
-        story_total = len(ordered_infos)
-        self.feed_stories = [
-            MLBPromoCard(
-                promo=info,
-                story_index=i,
-                story_total=story_total,
-                legacy=legacy_msgs[i],
-                cfg_layout=self.layout,
-                padding=self.padding,
-                bg_color=self.bg_color,
-                font_color=self.font_color,
-            )
-            for i, info in enumerate(ordered_infos)
-        ]
+        self.feed_stories = self._build_promo_cards(target_infos, label)
         logger.info(
             "MLB Promotions %s updated: %d stories",
             self.team,
@@ -540,6 +624,35 @@ class MLBPromotionsMonitor:
                 font_color=self.font_color,
             )
             for name in ordered
+        ]
+
+    def _build_promo_cards(
+        self, infos: list[PromoInfo], label: str
+    ) -> list[TickerMessage | SegmentMessage | MLBPromoCard]:
+        """One `MLBPromoCard` per displayed promo, from a SINGLE ordered
+        pass over `infos` (via `_build_promo_card_stories`). Shared by
+        `update()` (live `target_infos`, already scoped to the picked home
+        date) and `_load_demo()` (fixture infos) so the two paths can never
+        construct `MLBPromoCard` with a different kwarg set. Also updates
+        `self._promos` to the same ordered list `feed_stories` mirrors —
+        the invariant `update()` always kept (see `_build_promo_card_stories`'s
+        own docstring).
+        """
+        legacy_msgs, ordered_infos = self._build_promo_card_stories(infos, label)
+        self._promos = ordered_infos
+        story_total = len(ordered_infos)
+        return [
+            MLBPromoCard(
+                promo=info,
+                story_index=i,
+                story_total=story_total,
+                legacy=legacy_msgs[i],
+                cfg_layout=self.layout,
+                padding=self.padding,
+                bg_color=self.bg_color,
+                font_color=self.font_color,
+            )
+            for i, info in enumerate(ordered_infos)
         ]
 
     def _build_promo_card_stories(

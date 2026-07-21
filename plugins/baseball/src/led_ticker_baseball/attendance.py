@@ -165,6 +165,55 @@ class AttendanceGame:
     condition: str = ""
 
 
+# `demo = true` fixture data — a curated docs-showcase / on-demand
+# hardware-validation slate (see the sibling fixture blocks in scores.py /
+# standings.py / promotions.py / statcast.py). Frozen dataclasses — safe to
+# share as module-level constants (nothing mutates these in place).
+#
+# The team fixture (`DEMO_GAME_VENUE` + `DEMO_ATTENDANCE_*`) shows every
+# element the long-card layout can draw: paid attendance, capacity, a season
+# average (for the VS AVG tick), venue + home team, and temp/condition (the
+# weather line). The league fixture (`DEMO_CROWD_RECORDS`) covers exactly
+# `biggest_crowd` + `fullest` — see `_load_demo`'s docstring for why the
+# demo shows a fixed pair rather than every configured `stats` entry.
+DEMO_GAME_VENUE: GameVenue = GameVenue(
+    game_pk=0,
+    state="Final",
+    game_number=1,
+    home_abbr="NYY",
+    away_abbr="BOS",
+    venue="Yankee Stadium",
+    capacity=46_537,
+)
+DEMO_ATTENDANCE_PAID: int = 42_313
+DEMO_ATTENDANCE_AVG: int = 39_850
+DEMO_ATTENDANCE_WEATHER: dict[str, Any] = {
+    "temp": "72",
+    "condition": "Clear",
+    "wind": "5 mph, Out To CF",
+}
+DEMO_CROWD_RECORDS: dict[str, CrowdRecord] = {
+    "biggest_crowd": CrowdRecord(
+        value=54_120,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=54_120 / 56_000,
+        attendance=54_120,
+        capacity=56_000,
+    ),
+    "fullest": CrowdRecord(
+        value=99,
+        venue="Fenway Park",
+        home_abbr="BOS",
+        is_pct=True,
+        fill_frac=0.99,
+        attendance=37_354,
+        capacity=37_731,
+    ),
+}
+
+
 def _derive_superlatives(
     pairs: list[tuple[GameVenue, int]], stats: list[str]
 ) -> dict[str, CrowdRecord]:
@@ -222,6 +271,7 @@ class MLBAttendanceMonitor:
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    demo: bool = False
     # Card layout at scale > 1 ("auto" picks big/long by physical width); at
     # scale <= 1 every layout forwards verbatim to the legacy line, so this
     # field is a no-op on smallsign. Validated in validate_config below.
@@ -387,7 +437,7 @@ class MLBAttendanceMonitor:
             font_color=self.font_color,
         )
 
-    async def _build_team_card(
+    def _build_team_card_from_avg(
         self,
         *,
         game_venue: GameVenue,
@@ -395,15 +445,16 @@ class MLBAttendanceMonitor:
         cap: int,
         weather: dict[str, Any] | None,
         day_label: str,
+        avg: int | None,
     ) -> MLBAttendanceCard:
-        """The tracked team's single game, wrapped for scale-dispatch.
+        """Sync half of `_build_team_card`: build the card given an
+        ALREADY-RESOLVED season average.
 
-        Builds the legacy line via `_build_team_line` (unchanged, scale<=1
-        output) then fetches the season average and wraps both in an
-        `AttendanceGame` record for the card's scale>1 layouts. The caller
-        resolves `game_venue.venue` to the live feed's venue name when
-        present (mirroring the existing `venue or game.venue` fallback) —
-        this method just reads it off `game_venue`.
+        Split out so `_load_demo()` can supply a fixture average without
+        awaiting `_fetch_season_avg()` (a network call) — that's the ONLY
+        difference between the demo and live paths; every other kwarg and
+        the card construction itself is shared here, so there's no
+        duplicated rendering logic to drift between the two.
         """
         legacy = self._build_team_line(
             venue=game_venue.venue,
@@ -412,7 +463,6 @@ class MLBAttendanceMonitor:
             weather=weather,
             day_label=day_label,
         )
-        avg = await self._fetch_season_avg()
         w = weather or {}
         temp_raw = w.get("temp")
         record = AttendanceGame(
@@ -430,6 +480,34 @@ class MLBAttendanceMonitor:
             cfg_layout=self.layout,
             bg_color=self.bg_color,
             font_color=self.font_color,
+        )
+
+    async def _build_team_card(
+        self,
+        *,
+        game_venue: GameVenue,
+        att: int | None,
+        cap: int,
+        weather: dict[str, Any] | None,
+        day_label: str,
+    ) -> MLBAttendanceCard:
+        """The tracked team's single game, wrapped for scale-dispatch.
+
+        Fetches the season average, then delegates the actual card
+        construction to `_build_team_card_from_avg` (shared with
+        `_load_demo()`). The caller resolves `game_venue.venue` to the live
+        feed's venue name when present (mirroring the existing
+        `venue or game.venue` fallback) — this method just reads it off
+        `game_venue`.
+        """
+        avg = await self._fetch_season_avg()
+        return self._build_team_card_from_avg(
+            game_venue=game_venue,
+            att=att,
+            cap=cap,
+            weather=weather,
+            day_label=day_label,
+            avg=avg,
         )
 
     async def _fetch_schedule(
@@ -574,6 +652,15 @@ class MLBAttendanceMonitor:
         if team is not None and not isinstance(team, str):
             msgs.append(f"attendance team={team!r} must be a string abbreviation.")
 
+        # `team` is optional (league mode is a fully supported mode already),
+        # so unlike scores/standings/promotions there is no "required unless
+        # demo" rule here — `demo` just needs to be a bool.
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            msgs.append(
+                f"baseball.attendance demo must be a bool (true/false), got {demo!r}"
+            )
+
         layout = cfg.get("layout", "auto")
         if layout not in ("auto", "big", "long"):
             msgs.append(
@@ -616,12 +703,48 @@ class MLBAttendanceMonitor:
         logger.debug("MLBAttendanceMonitor.start")
         widget = cls(session=session, **kwargs)
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.demo:
+            widget._load_demo()
+            return widget
         if widget.team:  # already upper-cased by the field converter
             widget._team_id = await resolve_team_id(session, widget.team) or 0
         await widget.update()
         logger.info("MLB Attendance: %d stories", len(widget.feed_stories))
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
+
+    def _load_demo(self) -> None:
+        """Populate feed_stories with BOTH a team fixture card and league
+        superlative cards — no network fetch (no schedule/boxscore/season-avg
+        fetch of any kind).
+
+        Regardless of whether `team` is configured (team mode) or left blank
+        (league mode), demo always shows BOTH shapes in one rotation so a
+        single `demo = true` widget showcases the full card surface —
+        `[title, team_card, biggest_crowd_card, fullest_card]`.
+
+        Reuses the SAME builders `update()` uses: `_build_team_card_from_avg`
+        (the sync half of `_build_team_card`, split out specifically so demo
+        can supply a fixture season average instead of awaiting
+        `_fetch_season_avg()`) for the team card, and `_build_league_cards`
+        for the league cards — so demo cards render through the SAME
+        renderers real attendance data does. `_build_league_cards` filters by
+        `self.stats`, so `DEMO_CROWD_RECORDS` (fixed to `biggest_crowd` +
+        `fullest`) only surfaces the subset also present in `self.stats` —
+        same "missing stat omitted" behavior as live data.
+        """
+        self._set_title()
+        team_card = self._build_team_card_from_avg(
+            game_venue=DEMO_GAME_VENUE,
+            att=DEMO_ATTENDANCE_PAID,
+            cap=DEMO_GAME_VENUE.capacity,
+            weather=dict(DEMO_ATTENDANCE_WEATHER),
+            day_label="",
+            avg=DEMO_ATTENDANCE_AVG,
+        )
+        league_cards = self._build_league_cards(dict(DEMO_CROWD_RECORDS), "Today")
+        self.feed_stories = [team_card, *league_cards]
+        logger.info("MLB Attendance demo: %d stories", len(self.feed_stories))
 
     async def update(self) -> None:
         """Re-derive attendance (schedule-gated); league or team mode."""

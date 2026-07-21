@@ -171,6 +171,59 @@ class StatRecord:
     pitch_velo: float | None = None
 
 
+# `demo = true` fixture data — a curated docs-showcase / on-demand
+# hardware-validation slate (see the sibling fixture blocks in scores.py /
+# standings.py / promotions.py). `longest_hr` carries full batted-ball
+# context (a towering ~30 degree arc, ~112 mph exit velo, ~450 ft) so the
+# trajectory renders fully; `hardest_hit` is a scorched line drive (~118 mph,
+# low launch angle) to show off the OTHER shape a hero card can take;
+# `fastest_pitch` has no batted-ball fields at all (a pure pitch, no swing)
+# so the no-arc pitch panel gets exercised too. Frozen dataclasses — safe to
+# share as module-level constants (unlike the mutable GameInfo/PromoInfo
+# fixtures elsewhere in this plugin, nothing here is ever mutated in place).
+DEMO_STATCAST_RECORDS: dict[str, StatRecord] = {
+    "longest_hr": StatRecord(
+        value=452.0,
+        person_id=101,
+        team_abbr="NYY",
+        pitch_name="4-Seam Fastball",
+        pitch_type="FF",
+        exit_velo=112.4,
+        launch_angle=29.0,
+        distance=452.0,
+        bb_type="fly_ball",
+        result="HOME RUN",
+        pitch_velo=97.2,
+    ),
+    "hardest_hit": StatRecord(
+        value=118.3,
+        person_id=102,
+        team_abbr="LAD",
+        pitch_name="Sinker",
+        pitch_type="SI",
+        exit_velo=118.3,
+        launch_angle=9.0,
+        distance=112.0,
+        bb_type="line_drive",
+        result="DOUBLE",
+        pitch_velo=95.6,
+    ),
+    "fastest_pitch": StatRecord(
+        value=101.4,
+        person_id=103,
+        team_abbr="NYY",
+        pitch_name="4-Seam Fastball",
+        pitch_type="FF",
+        pitch_velo=101.4,
+    ),
+}
+DEMO_STATCAST_NAMES: dict[int, str] = {
+    101: "Judge",
+    102: "Ohtani",
+    103: "Cole",
+}
+
+
 def _derive_records(
     rows: list[dict[str, Any]], stats: list[str], team: str = ""
 ) -> dict[str, StatRecord]:
@@ -242,6 +295,7 @@ class MLBStatcastMonitor:
     timezone: str = "America/New_York"
     padding: int = 6
     hold_time: float = 0.0
+    demo: bool = False
     # Card layout at scale > 1 ("auto" picks big/long by physical width); at
     # scale <= 1 every layout forwards verbatim to the legacy line, so this
     # field is a no-op on smallsign. Validated in validate_config below.
@@ -280,6 +334,14 @@ class MLBStatcastMonitor:
                 f"statcast layout={layout!r} is not valid. "
                 "Use 'auto', 'big', or 'long'."
             )
+        # `team` is optional (league-wide is a fully supported mode already),
+        # so unlike scores/standings/promotions there is no "required unless
+        # demo" rule here — `demo` just needs to be a bool.
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            msgs.append(
+                f"baseball.statcast demo must be a bool (true/false), got {demo!r}"
+            )
         stats = cfg.get("stats")
         if stats is None:
             return msgs
@@ -308,12 +370,34 @@ class MLBStatcastMonitor:
         logger.debug("MLBStatcastMonitor.start")
         widget = cls(session=session, **kwargs)
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.demo:
+            widget._load_demo()
+            return widget
         if widget.team:  # upper-cased by the field converter
             widget._team_id = await resolve_team_id(session, widget.team) or 0
         await widget.update()
         logger.info("MLB Statcast: %d stories", len(widget.feed_stories))
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
+
+    def _load_demo(self) -> None:
+        """Populate feed_stories from curated fixture superlatives — no
+        network fetch (no Savant CSV pull, no schedule gate, no name lookup).
+
+        Reuses `_build_stat_cards` — the SAME card-building method `update()`
+        calls — against `DEMO_STATCAST_RECORDS`/`DEMO_STATCAST_NAMES` instead
+        of a derived day, so demo cards render through the SAME renderers
+        real superlatives do. `_build_stat_cards` already filters/orders by
+        `self.stats`, so a configured `stats` list restricts the demo to
+        exactly the same subset it would restrict live data to — a record
+        for a stat not in `self.stats` is simply omitted, same as "missing
+        stat" behavior on live data.
+        """
+        self._set_title()
+        self.feed_stories = self._build_stat_cards(
+            dict(DEMO_STATCAST_RECORDS), "Today", dict(DEMO_STATCAST_NAMES)
+        )
+        logger.info("MLB Statcast demo: %d stories", len(self.feed_stories))
 
     async def update(self) -> None:
         """Re-derive the day's superlatives (schedule-gated)."""
