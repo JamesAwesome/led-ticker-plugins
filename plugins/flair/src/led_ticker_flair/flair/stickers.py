@@ -25,6 +25,14 @@ TILT_MAX_DEG = 10.0
 BACKING_PAD = 1
 OUTLINE_PAD = 2
 
+# Random mode is "gone wild" ACROSS firings (a fresh replan re-samples) but
+# capped to a coherent handful of distinct slugs WITHIN one firing -- with
+# the standard-emoji pack (led-ticker core, ~1,400 drawable slugs) an
+# uncapped per-sticker rng.choice would make every single sticker a
+# different, unrelated emoji. A constant, not a knob (emoji-pack spec,
+# Task 7). `emoji=[...]` is an explicit themed wall and bypasses this.
+_RANDOM_VARIETY_CAP = 12
+
 
 @dataclass(frozen=True)
 class Sticker:
@@ -236,7 +244,10 @@ class Stickers:
     """Sticker-bomb: emoji pop on over the outgoing widget until full cover
     at t=0.5, then pop off in an independent random order revealing the
     incoming widget. `emoji=[...]` restricts the slug pool (one slug = a
-    themed wall); omitted = random assortment across every drawable slug.
+    themed wall); omitted = a random assortment, capped to at most
+    `_RANDOM_VARIETY_CAP` distinct slugs per firing (see `_firing_pool`) so
+    one firing reads as a coherent handful rather than every drawable slug
+    flashing past once -- a fresh replan (each re-fire) samples anew.
     ``backing`` picks the sticker body: "card" (default — tilted black card
     with a white rim; the only mode that fully covers the panel at the
     midpoint), "shadow" (black silhouette halo, no card), or "none" (bare
@@ -278,6 +289,24 @@ class Stickers:
         self._raster = StickerRaster()
         self._last_t = 1.0
 
+    def _firing_pool(self) -> list[str]:
+        """The slug pool `plan_stickers` draws from for this firing.
+
+        An explicit `emoji=[...]` list is used verbatim -- uncapped, since a
+        themed wall of repeated slugs is the whole point. Random mode
+        samples at most `_RANDOM_VARIETY_CAP` DISTINCT slugs from the full
+        drawable set via `self._rng`, so a seeded run stays deterministic
+        and a seedless refire (which replaces `self._rng` -- see
+        `frame_at`) draws a fresh subset. Called fresh on every (re)plan in
+        `_ensure_plan`, never cached across plans.
+        """
+        if self.emoji:
+            return self.emoji
+        pool = list(emoji_slugs())
+        if len(pool) > _RANDOM_VARIETY_CAP:
+            pool = self._rng.sample(pool, _RANDOM_VARIETY_CAP)
+        return pool
+
     def _ensure_plan(self, canvas):
         # `real`/`scale`/`content_height` are cheap attribute lookups and are
         # recomputed on EVERY call (mirroring Fireworks' `frame_at`, which
@@ -296,7 +325,7 @@ class Stickers:
             # Footprint from an actual capture (max bbox side + rim), not a
             # guess. Only done when (re)building the plan -- NOT on every
             # call -- so a warm plan costs zero rasterization per frame.
-            pool = self.emoji if self.emoji else list(emoji_slugs())
+            pool = self._firing_pool()
             probe = capture_sprite(pool[0], scale, content_height)
             side = (
                 1 + max(max(p[0] for p in probe), max(p[1] for p in probe))
