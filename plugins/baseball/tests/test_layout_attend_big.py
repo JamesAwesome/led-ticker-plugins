@@ -71,16 +71,32 @@ def test_team_long_venue_never_overlaps_bar():
 
 
 def test_team_no_avg_omits_tick(monkeypatch):
-    """avg=None (early season) -> no season-avg tick drawn."""
-    canvas, real = _bigsign()
-    render_attend_big(canvas, _team(avg=None), 1.0)
-    # IDENT-colored tick pixels in the bar band should be absent
+    """avg=None (early season) -> no season-avg tick drawn; the SAME record
+    WITH avg present DOES draw the tick. The pair proves this test can tell
+    tick-present from tick-absent.
+
+    GOTCHA (task-4/5 brief): `real._pixels` values are plain (r, g, b) tuples
+    and a Color is NEVER == a tuple in the stub, so the old `v == pal.IDENT`
+    comparison was unconditionally False — the test passed whether or not the
+    "no tick" behavior worked. Compare against the tuple form. The tick bleeds
+    1px above/below the bar (rows 47-59 for a y=49,h=9 bar)."""
     from led_ticker_baseball import _palette as pal
 
-    tick = [
-        (x, y) for (x, y), v in real._pixels.items() if v == pal.IDENT and 47 <= y <= 59
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+
+    canvas, real = _bigsign()
+    render_attend_big(canvas, _team(avg=None), 1.0)
+    no_tick = [
+        (x, y) for (x, y), v in real._pixels.items() if v == ident and 47 <= y <= 59
     ]
-    assert tick == []
+    assert no_tick == []  # avg=None -> tick absent
+
+    canvas2, real2 = _bigsign()
+    render_attend_big(canvas2, _team(avg=39442), 1.0)
+    with_tick = [
+        (x, y) for (x, y), v in real2._pixels.items() if v == ident and 47 <= y <= 59
+    ]
+    assert with_tick  # avg present -> tick IS drawn (proves discrimination)
 
 
 def test_bar_animates_with_progress():
