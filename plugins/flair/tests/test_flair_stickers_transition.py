@@ -293,6 +293,91 @@ class TestRegistration:
         assert "lottery" in api.widgets
 
 
+class TestRandomVarietyCap:
+    """Random mode ("gone wild" across firings) caps distinct slugs WITHIN
+    one firing (emoji-pack companion, Task 7). Unit-level tests exercise
+    `_firing_pool()` directly with a fake pack-scale (1,400-slug) drawable
+    set via monkeypatch -- `_ensure_plan`'s footprint probe rasterizes
+    `pool[0]` through the real draw path (`capture_sprite`), which raises
+    `KeyError` for a slug that isn't actually registered, so a full
+    `frame_at` render can't use fake slugs. The pool-level unit tests
+    isolate the cap/sample logic from that rasterization; one integration
+    test below drives the real `frame_at` -> `_ensure_plan` -> `_plan`
+    pipeline with the installed core's real (currently 45, still > the
+    12 cap) curated slug set to prove the wiring, not just the helper.
+    """
+
+    def test_firing_pool_caps_distinct_slugs(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.stickers as m
+
+        fake = tuple(f"pack_slug_{i}" for i in range(1400)) + ("taco",)
+        monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
+        s = m.Stickers(seed=3)
+
+        pool = s._firing_pool()
+
+        assert 1 <= len(set(pool)) <= m._RANDOM_VARIETY_CAP
+
+    def test_firing_pool_explicit_list_uncapped(self) -> None:
+        explicit = ["taco", "sun", "moon"]
+        s = Stickers(emoji=list(explicit), seed=3)
+
+        assert s._firing_pool() == explicit
+
+    def test_firing_pool_seedless_resamples_across_calls(self, monkeypatch) -> None:
+        """Models what `_ensure_plan` does across a replan: a seedless
+        instance's `_rng` keeps advancing, so calling `_firing_pool()`
+        again (as a replan does) draws a fresh subset."""
+        import led_ticker_flair.flair.stickers as m
+
+        fake = tuple(f"pack_slug_{i}" for i in range(1400))
+        monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
+        s = m.Stickers()  # seedless
+
+        first = set(s._firing_pool())
+        second = set(s._firing_pool())
+
+        assert first != second  # 1400-choose-12 twice: collision ~impossible
+
+    def test_seeded_firing_pool_is_deterministic(self, monkeypatch) -> None:
+        import led_ticker_flair.flair.stickers as m
+
+        fake = tuple(f"pack_slug_{i}" for i in range(1400))
+        monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
+
+        pool_a = m.Stickers(seed=7)._firing_pool()
+        pool_b = m.Stickers(seed=7)._firing_pool()
+
+        assert pool_a == pool_b
+
+    def test_random_mode_plan_caps_distinct_slugs(self) -> None:
+        """Integration: the real render pipeline actually applies the cap,
+        using the installed core's real curated slug set (currently 45)
+        so sprite rasterization succeeds."""
+        s = Stickers(seed=3)
+        canvas = _StubCanvas(width=160, height=16)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_widget(draw_pixel=False)
+
+        s.frame_at(0.5, canvas, outgoing, incoming)
+
+        assert s._plan is not None
+        distinct = {st.slug for st in s._plan}
+        assert 1 <= len(distinct) <= 12
+
+    def test_explicit_list_plan_uncapped(self) -> None:
+        explicit = {"taco", "sun", "moon"}
+        s = Stickers(emoji=list(explicit), seed=3)
+        canvas = _StubCanvas(width=160, height=16)
+        outgoing = _make_widget(draw_pixel=False)
+        incoming = _make_widget(draw_pixel=False)
+
+        s.frame_at(0.5, canvas, outgoing, incoming)
+
+        assert s._plan is not None
+        assert {st.slug for st in s._plan} <= explicit
+
+
 class TestBackingKnob:
     def test_bad_backing_raises_naming_options(self) -> None:
         with pytest.raises(ValueError, match="backing"):
