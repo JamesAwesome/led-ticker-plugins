@@ -54,7 +54,7 @@ def render_statcast_big(
     shim, real = phys_wrap(canvas)
     yo = y_offset * safe_scale(canvas)
 
-    _t(shim, "STATCAST", 4, 1 + yo, pal.LABEL, 8)
+    _t(shim, "STATCAST", 4, 1 + yo, pal.LABEL_HI, 8)
     res = (record.result or "").upper()
     rw = text_width(10, res)
     _t(shim, res, 206 - rw, 1 + yo, res_color(res), 10)
@@ -65,7 +65,7 @@ def render_statcast_big(
     nw = _t(shim, ev, 4, 26 + yo, pal.AMBER, 26)
     ux = 4 + nw + 7
     _t(shim, "MPH", ux, 28 + yo, pal.AMBER, 11)
-    _t(shim, "EXIT VELO", ux, 44 + yo, pal.LABEL, 8)
+    _t(shim, "EXIT VELO", ux, 44 + yo, pal.LABEL_HI, 8)
 
     la = _num(record.launch_angle, "°")
     dist = f"{int(record.distance)} FT" if record.distance else "—"

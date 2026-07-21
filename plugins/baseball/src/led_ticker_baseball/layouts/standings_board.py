@@ -154,9 +154,9 @@ def render_standings_board(
 
 def _render_big(shim, real, division_name, rows, yo, geo):
     _t(shim, division_name, 4, 1 + yo, pal.CYAN, 8)
-    _t(shim, "W-L", 112, 1 + yo, pal.LABEL, 8)
-    _t(shim, "GB", 180, 1 + yo, pal.LABEL, 8)
-    _t(shim, "STRK", 210, 1 + yo, pal.LABEL, 8)
+    _t(shim, "W-L", 112, 1 + yo, pal.LABEL_HI, 8)
+    _t(shim, "GB", 180, 1 + yo, pal.LABEL_HI, 8)
+    _t(shim, "STRK", 210, 1 + yo, pal.LABEL_HI, 8)
     pitch, text, rank, chip_h, row0 = (
         geo["pitch"],
         geo["text"],
@@ -167,7 +167,7 @@ def _render_big(shim, real, division_name, rows, yo, geo):
     abbr_x, gb_x, strk_x = geo["abbr_x"], geo["gb_x"], geo["strk_x"]
     for i, r in enumerate(rows):
         y = row0 + i * pitch + yo
-        _t(shim, _rank_label(r, i), 2, y + 1, pal.LABEL, rank)
+        _t(shim, _rank_label(r, i), 2, y + 1, pal.LABEL_HI, rank)
         chip(real, 11, y, chip_h, r.abbr)
         _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
         draw_record(shim, 112, cap_top(y, text), r.wins, r.losses, text)
@@ -180,12 +180,12 @@ def _render_big(shim, real, division_name, rows, yo, geo):
 
 def _render_long(shim, real, division_name, rows, yo, geo):
     _t(shim, division_name, 6, 2 + yo, pal.CYAN, 9)
-    _t(shim, "W", 158, 2 + yo, pal.LABEL, 9)
-    _t(shim, "L", 192, 2 + yo, pal.LABEL, 9)
-    _t(shim, "PCT", 224, 2 + yo, pal.LABEL, 9)
-    _t(shim, "GB", 292, 2 + yo, pal.LABEL, 9)
-    _t(shim, "L10", 350, 2 + yo, pal.LABEL, 9)
-    _t(shim, "STRK", 420, 2 + yo, pal.LABEL, 9)
+    _t(shim, "W", 158, 2 + yo, pal.LABEL_HI, 9)
+    _t(shim, "L", 192, 2 + yo, pal.LABEL_HI, 9)
+    _t(shim, "PCT", 224, 2 + yo, pal.LABEL_HI, 9)
+    _t(shim, "GB", 292, 2 + yo, pal.LABEL_HI, 9)
+    _t(shim, "L10", 350, 2 + yo, pal.LABEL_HI, 9)
+    _t(shim, "STRK", 420, 2 + yo, pal.LABEL_HI, 9)
     pitch, text, rank, chip_h, row0 = (
         geo["pitch"],
         geo["text"],
@@ -196,7 +196,7 @@ def _render_long(shim, real, division_name, rows, yo, geo):
     abbr_x = geo["abbr_x"]
     for i, r in enumerate(rows):
         y = row0 + i * pitch + yo
-        _t(shim, _rank_label(r, i), 6, y + 1, pal.LABEL, rank)
+        _t(shim, _rank_label(r, i), 6, y + 1, pal.LABEL_HI, rank)
         chip(real, 18, y, chip_h, r.abbr)
         _t(shim, r.abbr, abbr_x, y, pal.IDENT, text)
         _t(shim, str(r.wins), 158, y, pal.WIN, text)

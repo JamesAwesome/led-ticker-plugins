@@ -143,4 +143,4 @@ def _render_scored(shim, real, game, yo, ac, hc):
             cx -= 3
     else:
         fw = text_width(18, "FINAL")
-        hires(shim, "FINAL", js_round((256 - fw) / 2), 37 + yo, pal.LABEL, 18)
+        hires(shim, "FINAL", js_round((256 - fw) / 2), 37 + yo, pal.LABEL_HI, 18)

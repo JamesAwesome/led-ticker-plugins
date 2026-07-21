@@ -170,7 +170,7 @@ def _render_long(shim, real, promo, clock_ms, yo, story_index, story_total):
 
     _t(shim, promo.date_label, 6, 4 + yo, pal.AMBER, 12)
     mask_scroll(real, name, 6, band_x1, 21 + yo, pal.IDENT, 26, clock_ms)
-    _t(shim, "PROMOTION", 6, 50 + yo, pal.LABEL, 9)
+    _t(shim, "PROMOTION", 6, 50 + yo, pal.LABEL_HI, 9)
 
     # Right block: prototype alignment (fixed rx=308, sub left-aligned
     # under the chip, `promoLongCard` dc.html ~544-549) with two deviations

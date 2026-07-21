@@ -62,7 +62,7 @@ def render_statcast_long(
     _t(shim, (player_name or "").upper(), 6, 4 + yo, pal.IDENT, 22)
     res = (record.result or "").upper()
     _t(shim, res, 6, 34 + yo, res_color(res), 13)
-    _t(shim, "STATCAST", 6, 52 + yo, pal.LABEL, 9)
+    _t(shim, "STATCAST", 6, 52 + yo, pal.LABEL_HI, 9)
 
     pt = (record.pitch_type or record.pitch_name or "").upper()
     pitch_sec = fit_text(f"{pt} MPH" if pt else "MPH", _PITCH_SEC_MAX_W, 9, bold=False)
@@ -73,13 +73,13 @@ def render_statcast_long(
     ]
     for i, (lab, val, sec, c) in enumerate(cols):
         cx = 176 + i * 72
-        _t(shim, lab, cx, 6 + yo, pal.LABEL, 10)
+        _t(shim, lab, cx, 6 + yo, pal.LABEL_HI, 10)
         _t(shim, val, cx, 20 + yo, c, 22)
-        _t(shim, sec, cx, 48 + yo, pal.LABEL, 9, bold=False)
+        _t(shim, sec, cx, 48 + yo, pal.LABEL_HI, 9, bold=False)
 
     px0 = 396
     is_batted = record.launch_angle is not None and record.distance is not None
-    _t(shim, "DISTANCE" if is_batted else "PITCH TYPE", px0, 6 + yo, pal.LABEL, 10)
+    _t(shim, "DISTANCE" if is_batted else "PITCH TYPE", px0, 6 + yo, pal.LABEL_HI, 10)
     if is_batted:
         bx, by, bw, bh = _TRAJ_BOX
         plan = plan_arc(
@@ -116,7 +116,7 @@ def render_statcast_long(
             ),
             px0,
             48 + yo,
-            pal.LABEL,
+            pal.LABEL_HI,
             9,
             bold=False,
         )
