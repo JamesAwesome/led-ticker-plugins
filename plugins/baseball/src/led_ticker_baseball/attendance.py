@@ -157,6 +157,12 @@ class AttendanceGame:
     avg: int | None  # attendanceAverageHome; None when missing (early season)
     venue: str
     home_abbr: str
+    # Game-day weather for the long-card's dead-zone readout (task-5); both
+    # default "" so existing construction (and league mode, which never sets
+    # these) is unaffected. Pre-formatted degree string ("72°"), not a raw
+    # number — the layout draws it verbatim, no further formatting.
+    temp: str = ""
+    condition: str = ""
 
 
 def _derive_superlatives(
@@ -407,12 +413,16 @@ class MLBAttendanceMonitor:
             day_label=day_label,
         )
         avg = await self._fetch_season_avg()
+        w = weather or {}
+        temp_raw = w.get("temp")
         record = AttendanceGame(
             paid=att,
             capacity=cap,
             avg=avg,
             venue=game_venue.venue,
             home_abbr=game_venue.home_abbr,
+            temp=f"{temp_raw}°" if temp_raw else "",
+            condition=w.get("condition") or "",
         )
         return MLBAttendanceCard(
             record=record,

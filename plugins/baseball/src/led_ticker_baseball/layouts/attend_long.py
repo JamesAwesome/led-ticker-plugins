@@ -23,20 +23,22 @@ means even the widest realistic crowd number never reaches x=228, so there
 is no flow-collision risk to guard against (contrast with attend_big's
 `_VX_MAX` belt).
 
-Venue slot (no dc.html coordinate for the team card beyond "belted venue
-name" — task-5 brief, same gap as attend_big's venue placement): the big
-card's approach (place it in the free rows below the bar) does NOT carry
-over geometrically. This card's bar sits at y=52,h=10 -> real rows 52-61,
-leaving only rows 62-63 below it on the same 64-row-tall real canvas — not
-enough vertical room for an 8px-cap glyph (attend_big's own y=58 case
-needed rows 58-63, six rows, to avoid clipping; two rows here isn't
-enough). Instead, the venue takes the horizontal free space in the
-existing row-40/42 band, between "PAID ATTENDANCE" (left) and "NN,NNN CAP"
-(right) — real estate that only exists at this width, not on the 256px
-card. `cap_top(42, 8) = 42 - 8 + 6 = 36`, well clear of the bar's row-52
-start, so the row-40/42 band has plenty of headroom to hold a third
-element without ever approaching the bottom-edge clip risk the big card
-had to solve for.
+Venue slot (task-5 uplift — promoted + "PAID ATTENDANCE" label removed):
+the venue name now IS the row-40 band's left element (no dc.html
+coordinate beyond "belted venue name", same gap as attend_big's venue
+placement). The redundant "PAID ATTENDANCE" caption is gone — the big
+amber paid number plus the capacity bar already say "this is attendance";
+the venue identifies the park and reads better big. Bar sits at y=52,h=10
+-> real rows 52-61; the promoted venue (px14 at y=40, empirically rows
+~39-49 — see `test_long_team_venue_bigger_and_no_clip`) clears the bar
+with room to spare, same headroom margin the old px8 venue had.
+
+Weather slot (task-5 uplift): the paid number ends ~x109 and the fixed
+`% FULL`/`VS AVG` columns start at x228 — the ~96px gap between them
+(x122-223, after the paid number's `y0-40` height) was dead space at
+every crowd size. `"72° CLEAR"`-style weather (only when the record has a
+temp or condition) fills it, `fit_text`-belted so it can never reach into
+either neighbor regardless of condition-string length.
 """
 
 from led_ticker.plugin import safe_scale
@@ -72,17 +74,33 @@ _Y_COL_VAL = 18
 _COL_VAL_SIZE = 20
 _Y_ROW40 = 40
 _CAP_SIZE = 9
-_Y_PAID_ATTEND = 42
-_PAID_ATTEND_SIZE = 10
 _Y_BAR = 52
 _BAR_W = 500
 _BAR_H = 10
 
-# Venue slot: shares the row-40/42 band's horizontal free space between
-# "PAID ATTENDANCE" and "NN,NNN CAP" (see module docstring). A 10px gap on
-# each side keeps it from crowding either neighbor.
-_VENUE_Y = 42
-_VENUE_SIZE = 8
+# Weather slot (task-5 uplift): fills the dead gap between the paid number
+# (ends ~x109) and the fixed columns (start x228). `_WEATHER_X = 122`
+# leaves a 13px margin off the paid number; `_WEATHER_MAXW = 96` is
+# `_COL_X[0] - _WEATHER_GAP - _WEATHER_X` (224 - 6 - 122) so a long
+# condition string belts before ever reaching the column start rather than
+# relying on string length staying short. `_WEATHER_Y = 10` sits the line
+# in the paid number's own y0-40 vertical band (empirically rows 9-18 at
+# this size — see `test_long_team_weather_in_gap_no_overlap`), reading as
+# the same "top line" as the paid number and column labels.
+_WEATHER_X = 122
+_WEATHER_GAP = 6
+_WEATHER_MAXW = _COL_X[0] - _WEATHER_GAP - _WEATHER_X
+_WEATHER_Y = 10
+_WEATHER_SIZE = 13
+
+# Venue slot (task-5 uplift — promoted, replaces the removed "PAID
+# ATTENDANCE" label): takes the row-40 band's left side, belted so it
+# can't run into the right-anchored "NN,NNN CAP" readout. `_VENUE_SIZE`
+# raised from the old 8px label-adjacent size to 14px now that it's the
+# band's headline element (empirically rows ~39-49 at y=40 — see
+# `test_long_team_venue_bigger_and_no_clip` — well clear of the y=52 bar).
+_VENUE_Y = 40
+_VENUE_SIZE = 14
 _VENUE_GAP = 10
 
 # League-card rows (no dc.html coordinate beyond label/value/bar — same gap
@@ -146,9 +164,15 @@ def render_attend_long(
 def _render_team(shim, real, record, progress, yo):
     paid, capacity, avg = record.paid, record.capacity, record.avg
     venue, home_abbr = record.venue, record.home_abbr
+    temp, condition = record.temp, record.condition
 
     paid_text = f"{paid:,}" if paid is not None else "—"
     _t(shim, paid_text, _X0, _Y_PAID + yo, pal.AMBER, _PAID_SIZE)
+
+    if temp or condition:
+        weather_text = f"{temp} {condition}".strip().upper()
+        weather_belted = fit_text(weather_text, _WEATHER_MAXW, _WEATHER_SIZE)
+        _t(shim, weather_belted, _WEATHER_X, _WEATHER_Y + yo, pal.CYAN, _WEATHER_SIZE)
 
     if paid is not None:
         pct = paid / capacity * 100 if capacity else 0.0
@@ -163,15 +187,6 @@ def _render_team(shim, real, record, progress, yo):
             _t(shim, "VS AVG", cx1, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
             _t(shim, vs_text, cx1, _Y_COL_VAL + yo, vs_color, _COL_VAL_SIZE)
 
-    _t(
-        shim,
-        "PAID ATTENDANCE",
-        _X0,
-        _Y_PAID_ATTEND + yo,
-        pal.LABEL,
-        _PAID_ATTEND_SIZE,
-    )
-
     cap_x = None
     if capacity:
         cap_text = f"{capacity:,} CAP"
@@ -179,14 +194,12 @@ def _render_team(shim, real, record, progress, yo):
         cap_x = _PANEL_W - _RIGHT_MARGIN - capw
         _t(shim, cap_text, cap_x, _Y_ROW40 + yo, pal.LABEL, _CAP_SIZE)
 
-    pa_w = text_width(_PAID_ATTEND_SIZE, "PAID ATTENDANCE")
-    venue_x = _X0 + pa_w + _VENUE_GAP
     venue_right = (cap_x if cap_x is not None else _PANEL_W - _RIGHT_MARGIN) - (
         _VENUE_GAP
     )
-    venue_maxw = venue_right - venue_x
+    venue_maxw = venue_right - _X0
     venue_belted = fit_text((venue or "").upper(), max(venue_maxw, 0), _VENUE_SIZE)
-    _t(shim, venue_belted, venue_x, _VENUE_Y + yo, pal.LABEL, _VENUE_SIZE)
+    _t(shim, venue_belted, _X0, _VENUE_Y + yo, pal.LABEL, _VENUE_SIZE)
 
     if capacity:
         frac = (paid / capacity) if paid is not None else 0.0

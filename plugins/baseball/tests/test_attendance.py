@@ -241,6 +241,77 @@ class TestAttendanceGame:
         )
         assert g.paid == 46537 and g.avg == 39442 and g.home_abbr == "LAD"
 
+    def test_temp_and_condition_default_empty(self):
+        from led_ticker_baseball.attendance import AttendanceGame
+
+        g = AttendanceGame(
+            paid=46537,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        )
+        assert g.temp == "" and g.condition == ""
+
+
+class TestBuildTeamCardWeather:
+    """`_build_team_card` threads the fetched weather dict's temp/condition
+    onto the `AttendanceGame` record it builds — the long-card layout reads
+    these off the record to render its new weather line (task-5)."""
+
+    async def test_weather_dict_threads_temp_and_condition(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0  # season-avg fetch short-circuits without a team id
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={"condition": "Clear", "temp": "72", "wind": "5 mph"},
+            day_label="",
+        )
+        assert card.record.temp == "72°"
+        assert card.record.condition == "Clear"
+
+    async def test_missing_weather_yields_empty_strings(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather=None,
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == ""
+
+    async def test_empty_weather_dict_yields_empty_strings(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={},
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == ""
+
+    async def test_weather_missing_temp_condition_only(self):
+        """`condition` alone (no `temp`) -> temp `""`, condition passes through."""
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={"condition": "Cloudy"},
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == "Cloudy"
+
 
 def make_widget(**kwargs):
     from led_ticker_baseball.attendance import MLBAttendanceMonitor

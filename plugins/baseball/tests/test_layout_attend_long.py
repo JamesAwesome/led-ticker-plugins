@@ -23,7 +23,13 @@ def _longboi():
 
 def _team(**over):
     kw = dict(
-        paid=46537, capacity=56000, avg=39442, venue="Dodger Stadium", home_abbr="LAD"
+        paid=46537,
+        capacity=56000,
+        avg=39442,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        temp="",
+        condition="",
     )
     kw.update(over)
     return AttendanceGame(**kw)
@@ -128,26 +134,73 @@ def test_bar_animates_with_progress():
     assert len(fill_cols(real0)) < len(fill_cols(real1))  # bar grew
 
 
-def test_team_venue_never_clips_vertically():
-    """The venue name sits on the row-40 band (well clear of the bar at
-    y52-61); verify its cap-top glyph never clips the panel bottom (rows
-    0-63). Uses a long venue so the row is densely populated.
+def test_long_team_venue_bigger_and_no_clip():
+    """The promoted venue (px14, up from the old px9 "PAID ATTENDANCE"-
+    adjacent px8) sits on the row-40 band, well clear of the bar at y52-61.
 
-    Two assertions, because the naive "no pixel at y>=64" check is
-    trivially true either way: core's hi-res rasterizer bounds-checks each
-    row against the panel height and silently drops anything >= panel_h
-    before it ever reaches `real.SetPixel` — an out-of-canvas glyph row
-    never shows up as an out-of-bounds pixel, it just vanishes. The actual
-    visible defect would be a SHORTENED glyph (missing its bottom rows);
-    the second assertion is the one that would actually fail on a clip."""
+    A naive "no pixel at y>=64" check is VACUOUS: core's hi-res rasterizer
+    bounds-checks each row against the panel height and silently drops
+    anything >= panel_h before it ever reaches `real.SetPixel` — an
+    out-of-canvas glyph row never shows up as an out-of-bounds pixel, it
+    just vanishes. The actual visible defect would be a SHORTENED glyph
+    (missing its bottom rows), so this asserts the full expected VISIBLE
+    ROW-SPAN for px14 (empirically 10 rows; >=8 leaves headroom for
+    cross-platform freetype variance without weakening the tripwire) —
+    that's the assertion that would actually fail on a clip. Also verifies
+    no overlap with the right-anchored "NN,NNN CAP" readout (x-extents
+    traced, isolated by color) and no bleed into the bar band (y>=52)."""
     canvas, real = _longboi()
     render_attend_long(
         canvas, _team(venue="Great American Ball Park Extended Name"), 1.0
     )
+    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    label_px = [(x, y) for (x, y), v in real._pixels.items() if v == lab]
+
+    # Isolate the venue (x < 224, before the fixed columns) from the
+    # right-anchored CAP readout (which also paints in LABEL color).
+    venue_px = [(x, y) for (x, y) in label_px if 35 <= y <= 55 and x < 224]
+    cap_px = [(x, y) for (x, y) in label_px if 35 <= y <= 55 and x >= 400]
+    assert venue_px and cap_px  # both present — proves the isolation works
+
+    venue_rows = {y for (_x, y) in venue_px}
+    assert max(venue_rows) - min(venue_rows) >= 8  # full glyph span, not clipped
+
+    venue_x_max = max(x for (x, _y) in venue_px)
+    cap_x_min = min(x for (x, _y) in cap_px)
+    assert venue_x_max < cap_x_min  # no overlap with the CAP readout
+
+    assert not any(y >= 52 for (_x, y) in venue_px)  # clear of the bar band
+
+
+def test_long_team_weather_in_gap_no_overlap():
+    """Weather ("72° CLEAR") fills the dead x122-223 gap between the paid
+    number (ends ~x109) and the fixed columns (start x228). Isolated by its
+    CYAN draw color — compared against the TUPLE form, since a Color is
+    never == a get_pixel tuple in the stub (task-4/5 GOTCHA)."""
+    canvas, real = _longboi()
+    render_attend_long(canvas, _team(temp="72°", condition="Clear"), 1.0)
+    cyan = (pal.CYAN.red, pal.CYAN.green, pal.CYAN.blue)
+    weather_px = [(x, y) for (x, y), v in real._pixels.items() if v == cyan]
+    assert weather_px  # weather line actually drew something
+
+    xs = {x for (x, _y) in weather_px}
+    assert any(122 <= x < 224 for x in xs)  # lives in the gap
+    assert not any(x < 118 for x in xs)  # doesn't reach the paid number
+    assert not any(x >= 224 for x in xs)  # doesn't reach the columns
+
+
+def test_long_team_no_weather_omits_line():
+    """temp/condition both empty (the AttendanceGame default) -> no lit
+    pixels anywhere in the weather's gap band, guarding against a stray
+    "° " render when there's nothing to show. Capped at y<35 (above the
+    row-40 venue band, which legitimately reaches into this x-range when a
+    long venue name flows past x122) so this isolates the weather row
+    specifically, not the unrelated venue text below it."""
+    canvas, real = _longboi()
+    render_attend_long(canvas, _team(), 1.0)
     lit = {xy for xy, v in real._pixels.items() if v != (0, 0, 0)}
-    venue_rows = {y for (_x, y) in lit if 35 <= y <= 49}
-    assert lit and not any(y >= 64 for (_x, y) in lit)
-    assert venue_rows and max(venue_rows) - min(venue_rows) >= 4
+    gap_pixels = [(x, y) for (x, y) in lit if 122 <= x < 224 and y < 35]
+    assert gap_pixels == []
 
 
 def test_long_league_regions_present():
