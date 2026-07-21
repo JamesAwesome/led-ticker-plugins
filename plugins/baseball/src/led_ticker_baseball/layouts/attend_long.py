@@ -124,6 +124,20 @@ _Y_LEAGUE_ROW = _Y_ROW40
 _LEAGUE_CHIP_H = 8
 _Y_LEAGUE_BAR = _Y_BAR
 
+# MLB weather conditions are a small stable set; the two multi-word ones
+# overflow the compact weather slot, so abbreviate them (all others fit and
+# pass through unchanged). fit_text remains the final belt for anything
+# unexpected a future feed adds.
+_CONDITION_ABBR = {
+    "PARTLY CLOUDY": "P CLOUDY",
+    "ROOF CLOSED": "ROOF",
+}
+
+
+def _abbrev_condition(condition: str) -> str:
+    c = (condition or "").upper()
+    return _CONDITION_ABBR.get(c, c)
+
 
 def _t(shim, text, x, y_target, color, size, *, bold=True):
     return hires(shim, text, x, cap_top(y_target, size), color, size, bold=bold)
@@ -170,7 +184,7 @@ def _render_team(shim, real, record, progress, yo):
     _t(shim, paid_text, _X0, _Y_PAID + yo, pal.AMBER, _PAID_SIZE)
 
     if temp or condition:
-        weather_text = f"{temp} {condition}".strip().upper()
+        weather_text = f"{temp} {_abbrev_condition(condition)}".strip()
         weather_belted = fit_text(weather_text, _WEATHER_MAXW, _WEATHER_SIZE)
         _t(shim, weather_belted, _WEATHER_X, _WEATHER_Y + yo, pal.CYAN, _WEATHER_SIZE)
 

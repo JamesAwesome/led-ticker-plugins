@@ -12,8 +12,14 @@ guarantee, phrased the other way around: fixed, not flowed).
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
 from led_ticker_baseball import _palette as pal
+from led_ticker_baseball._paint import text_width
 from led_ticker_baseball.attendance import AttendanceGame, CrowdRecord
-from led_ticker_baseball.layouts.attend_long import render_attend_long
+from led_ticker_baseball.layouts.attend_long import (
+    _WEATHER_MAXW,
+    _WEATHER_SIZE,
+    _abbrev_condition,
+    render_attend_long,
+)
 
 
 def _longboi():
@@ -261,4 +267,57 @@ def test_never_raises_on_empty_league():
         CrowdRecord(value=0, venue="", home_abbr="", is_pct=False),
         1.0,
         label="",
+    )
+
+
+def test_abbrev_condition_maps_long_names():
+    """Verify the abbreviation map abbreviates multi-word conditions to
+    shorter forms that fit the compact weather slot, and passes through
+    all others (including empty)."""
+    assert _abbrev_condition("Partly Cloudy") == "P CLOUDY"
+    assert _abbrev_condition("Roof Closed") == "ROOF"
+    assert _abbrev_condition("Clear") == "CLEAR"
+    assert _abbrev_condition("Overcast") == "OVERCAST"
+    assert _abbrev_condition("") == ""
+    assert _abbrev_condition(None) == ""
+
+
+def test_long_team_partly_cloudy_not_ellipsized():
+    """Abbreviated "P CLOUDY" fits the weather slot without ellipsizing,
+    while the raw "PARTLY CLOUDY" would exceed _WEATHER_MAXW and get
+    belt-truncated. Verify the abbreviated form fits by measuring its
+    width against the slot capacity."""
+    canvas, real = _longboi()
+    render_attend_long(canvas, _team(temp="88°", condition="Partly Cloudy"), 1.0)
+
+    # The abbreviated weather text "88° P CLOUDY" must fit within the
+    # weather slot width without being truncated by fit_text.
+    abbrev_text = "88° P CLOUDY"
+    abbrev_width = text_width(_WEATHER_SIZE, abbrev_text)
+    assert abbrev_width <= _WEATHER_MAXW, (
+        f"Abbreviated weather '{abbrev_text}' exceeds slot "
+        f"({abbrev_width} > {_WEATHER_MAXW}); fit_text would truncate it"
+    )
+
+    # Confirm the raw (unabbreviated) form WOULD exceed the limit,
+    # proving the abbreviation achieves its purpose.
+    raw_text = "88° PARTLY CLOUDY"
+    raw_width = text_width(_WEATHER_SIZE, raw_text)
+    assert raw_width > _WEATHER_MAXW, (
+        f"Raw weather '{raw_text}' should exceed slot "
+        f"({raw_width} <= {_WEATHER_MAXW}); abbreviation unnecessary"
+    )
+
+    # Verify no ellipsis (U+2026 "…") appears in the rendered output.
+    cyan = (pal.CYAN.red, pal.CYAN.green, pal.CYAN.blue)
+    weather_px = [(x, y) for (x, y), v in real._pixels.items() if v == cyan]
+    assert weather_px, "Weather line should have lit pixels"
+
+    # Ellipsis, if rendered by fit_text, would light pixels in the weather
+    # slot area. The absence of weather pixels at the right edge (x >= 220)
+    # suggests no ellipsis is visible. This is a defensive check — the
+    # width assertion above is the primary gate.
+    xs = {x for (x, _y) in weather_px}
+    assert not any(x >= 224 for x in xs), (
+        "Weather pixels reached column start; possible ellipsis at right"
     )
