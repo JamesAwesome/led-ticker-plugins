@@ -124,6 +124,20 @@ _Y_LEAGUE_ROW = _Y_ROW40
 _LEAGUE_CHIP_H = 8
 _Y_LEAGUE_BAR = _Y_BAR
 
+# League-card upper-band stat columns (task-5 uplift): the big value ends
+# ~x116 and the right chip block starts ~x480, leaving x96-480/y0-40 measured
+# dead on-hardware (longboi). Two adaptive stat columns fill it, reusing the
+# team card's column sizes (`_COL_LABEL_SIZE`/`_COL_VAL_SIZE` at
+# `_Y_COL_LABEL`/`_Y_COL_VAL`) so the two cards read alike, but at
+# league-specific x-origins: `_LEAGUE_COL_X = (200, 320)` seats both columns
+# in the middle band, clear of the big value (left) and the chip (right). The
+# columns adapt to the superlative type and only draw when `capacity > 0`
+# (no fill/capacity data otherwise). Tripwires:
+# test_long_league_columns_present_and_clear,
+# test_long_league_pct_superlative_shows_crowd_column,
+# test_long_league_no_capacity_omits_columns.
+_LEAGUE_COL_X = (200, 320)
+
 # MLB weather conditions are a small stable set; the two multi-word ones
 # overflow the compact weather slot, so abbreviate them (all others fit and
 # pass through unchanged). fit_text remains the final belt for anything
@@ -244,6 +258,38 @@ def _render_league(shim, real, record, progress, label, yo):
     )
     _t(shim, value_text, _X0, _Y_LEAGUE_VALUE + yo, value_color, _LEAGUE_VALUE_SIZE)
 
+    # Two adaptive stat columns fill the dead upper-band middle. Guard on
+    # capacity: with no capacity there's no fill/capacity to show (and no
+    # div-by-zero on `fill_frac`, which is 0.0 in that case anyway).
+    if record.capacity > 0:
+        cx0, cx1 = _LEAGUE_COL_X
+        if record.is_pct:
+            # The big value already IS the pct here, so col0 shows the raw
+            # CROWD instead of a redundant "% FULL".
+            _t(shim, "CROWD", cx0, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+            _t(
+                shim,
+                f"{record.attendance:,}",
+                cx0,
+                _Y_COL_VAL + yo,
+                pal.AMBER,
+                _COL_VAL_SIZE,
+            )
+        else:
+            # The big value is the raw crowd, so col0 shows how full it was.
+            pct = record.fill_frac * 100
+            _t(shim, "% FULL", cx0, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+            _t(shim, f"{pct:.1f}%", cx0, _Y_COL_VAL + yo, pal.WIN, _COL_VAL_SIZE)
+        _t(shim, "CAPACITY", cx1, _Y_COL_LABEL + yo, pal.LABEL, _COL_LABEL_SIZE)
+        _t(
+            shim,
+            f"{record.capacity:,}",
+            cx1,
+            _Y_COL_VAL + yo,
+            pal.IDENT,
+            _COL_VAL_SIZE,
+        )
+
     abbr = (record.home_abbr or "").upper()
     abbr_w = text_width(8, abbr) if abbr else 0
     block_w = _LEAGUE_CHIP_H + 3 + abbr_w
@@ -251,9 +297,15 @@ def _render_league(shim, real, record, progress, label, yo):
     chip(real, chip_x, _Y_LEAGUE_ROW + yo, _LEAGUE_CHIP_H, record.home_abbr or "")
     _t(shim, abbr, chip_x + _LEAGUE_CHIP_H + 3, _Y_LEAGUE_ROW + yo, pal.IDENT, 8)
 
+    # Venue promoted to `_VENUE_SIZE` (px14, up from px8) to match the team
+    # card's headline venue; the existing `chip_x - _X0 - 6` belt keeps it
+    # clear of the right-side chip block, and px14 at y=40 still clears the
+    # y=52 bar (see `test_long_league_venue_bigger_no_clip`).
     venue_maxw = chip_x - _X0 - 6
-    venue_belted = fit_text((record.venue or "").upper(), max(venue_maxw, 0), 8)
-    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL, 8)
+    venue_belted = fit_text(
+        (record.venue or "").upper(), max(venue_maxw, 0), _VENUE_SIZE
+    )
+    _t(shim, venue_belted, _X0, _Y_LEAGUE_ROW + yo, pal.LABEL, _VENUE_SIZE)
 
     draw_bar(
         real,

@@ -251,6 +251,128 @@ def test_league_label_and_value_are_row_disjoint():
     assert not (label_rows & value_rows)  # disjoint — no paint-through
 
 
+def test_long_league_columns_present_and_clear():
+    """A crowd superlative (is_pct=False) fills the measured dead zone
+    (x96-480, y0-40) with two adaptive stat columns: col0 "% FULL" (value in
+    WIN, the ONLY WIN on a crowd card) and col1 "CAPACITY" (value in IDENT).
+    Both must live in their fixed x-bands and clear BOTH the big value on the
+    left (x<130) and the chip block on the right (x>=480).
+
+    GOTCHA: `real._pixels` values are plain (r, g, b) tuples and a Color is
+    NEVER == a get_pixel tuple in the stub — compare against the TUPLE form,
+    not the Color object (that comparison is vacuously False)."""
+    canvas, real = _longboi()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=0.902,
+        attendance=45123,
+        capacity=50000,
+    )
+    render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")
+    win = (pal.WIN.red, pal.WIN.green, pal.WIN.blue)
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+
+    # col0 value ("% FULL") — the only WIN on a crowd card.
+    col0_x = {x for (x, y), v in real._pixels.items() if v == win}
+    assert col0_x, "col0 (% FULL) value should render"
+    assert any(190 <= x <= 300 for x in col0_x)  # lives in col0's band
+    assert not any(x < 130 for x in col0_x)  # clear of the big value
+    assert not any(x >= 480 for x in col0_x)  # clear of the chip block
+
+    # col1 value ("CAPACITY") is IDENT; isolate from the abbr (IDENT at y=40)
+    # by restricting to the columns' y<35 band.
+    col1_x = {x for (x, y), v in real._pixels.items() if v == ident and y < 35}
+    assert col1_x, "col1 (CAPACITY) value should render"
+    assert any(310 <= x <= 440 for x in col1_x)  # lives in col1's band
+    assert not any(x < 130 for x in col1_x)  # clear of the big value
+    assert not any(x >= 480 for x in col1_x)  # clear of the chip block
+
+
+def test_long_league_pct_superlative_shows_crowd_column():
+    """For a pct superlative (is_pct=True) the big value already IS the pct,
+    so col0 adapts to show the raw CROWD number instead of a redundant
+    "% FULL". On a pct card the big value is WIN, so AMBER appears ONLY in
+    col0 — its presence in the col0 band proves the adaptive swap fired."""
+    canvas, real = _longboi()
+    rec = CrowdRecord(
+        value=98,
+        venue="Fenway Park",
+        home_abbr="BOS",
+        is_pct=True,
+        fill_frac=0.98,
+        attendance=36789,
+        capacity=37555,
+    )
+    render_attend_long(canvas, rec, 1.0, label="FULLEST PARK")
+    amb = (pal.AMBER.red, pal.AMBER.green, pal.AMBER.blue)
+    # AMBER is the col0 CROWD value (big value is WIN on a pct card).
+    col0_x = {x for (x, y), v in real._pixels.items() if v == amb and y < 35}
+    assert col0_x, "pct card col0 should show the raw CROWD number in AMBER"
+    assert any(190 <= x <= 300 for x in col0_x)  # in the col0 band, not the value
+
+
+def test_long_league_venue_bigger_no_clip():
+    """The promoted league venue (px14, up from px8) sits on the row-40 band.
+    A naive "no y>=64" check is VACUOUS (core silently drops off-canvas rows);
+    assert the full px14 VISIBLE ROW-SPAN instead (the current px8 span is 5
+    rows — a clip would shorten it). Venue is the only LABEL element at y>=35
+    (superlative + column labels sit at y<=9). No pixel in the bar band
+    (y>=52) and no overlap with the right-side chip/abbr block."""
+    canvas, real = _longboi()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Great American Ball Park Extended Name",
+        home_abbr="CIN",
+        is_pct=False,
+        fill_frac=0.9,
+        attendance=45123,
+        capacity=50000,
+    )
+    render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")
+    lab = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+
+    venue_px = [(x, y) for (x, y), v in real._pixels.items() if v == lab and y >= 35]
+    assert venue_px
+    venue_rows = {y for (_x, y) in venue_px}
+    assert max(venue_rows) - min(venue_rows) >= 8  # full px14 span, not clipped
+    assert not any(y >= 52 for (_x, y) in venue_px)  # clear of the bar band
+
+    # Right block (chip + IDENT abbr) sits on the row-40 band; use the abbr as
+    # its marker and prove the venue doesn't reach it.
+    right_block = [
+        x for (x, y), v in real._pixels.items() if v == ident and 36 <= y <= 50
+    ]
+    assert right_block
+    assert max(x for (x, _y) in venue_px) < min(right_block)  # no overlap
+
+
+def test_long_league_no_capacity_omits_columns():
+    """capacity=0 → no fill/capacity data → both stat columns are omitted, and
+    the render never raises. On a crowd card col0 is the only WIN (absent) and
+    col1's IDENT value band (y<35) is empty (the row-40 abbr IDENT is ok)."""
+    canvas, real = _longboi()
+    rec = CrowdRecord(
+        value=45123,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+        is_pct=False,
+        fill_frac=0.0,
+        attendance=45123,
+        capacity=0,
+    )
+    render_attend_long(canvas, rec, 1.0, label="BIGGEST CROWD")  # must not raise
+    win = (pal.WIN.red, pal.WIN.green, pal.WIN.blue)
+    ident = (pal.IDENT.red, pal.IDENT.green, pal.IDENT.blue)
+    assert not [xy for xy, v in real._pixels.items() if v == win]  # no col0
+    assert not [
+        (x, y) for (x, y), v in real._pixels.items() if v == ident and y < 35
+    ]  # no col1 value
+
+
 def test_never_raises_on_empty_team():
     canvas, real = _longboi()
     render_attend_long(
