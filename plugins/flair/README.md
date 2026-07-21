@@ -152,7 +152,7 @@ Mixed assortment — multiple distinct emoji:
 transition = {type = "flair.stickers", emoji = ["sun", "moon", "star_yellow"]}
 ```
 
-Bare random form — random slug per sticker, drawn from the full drawable set:
+Bare random form — each firing samples up to 12 distinct slugs from the full drawable set (flair >= 0.13.0; with core >= 4.21.0's standard-emoji pack that set is ~1,360 emoji) and builds the wall from those:
 
 ```toml
 [[playlist.section]]
@@ -177,7 +177,7 @@ the outgoing widget stays visible through the gaps between sprites, by design.
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `emoji` | list of strings, or omitted | omitted (random assortment) | Slug pool for stickers. Each string must be a known drawable emoji slug (e.g., `taco`, `sun`, `moon`, `star_yellow`, `heart_red`, `pride`). A single-item list (`["taco"]`) creates a themed wall of one emoji; omitting the field draws a random slug per sticker from the complete drawable set. |
+| `emoji` | list of strings, or omitted | omitted (random assortment) | Slug pool for stickers. Each string must be a known drawable emoji slug (e.g., `taco`, `sun`, `moon`, `star_yellow`, `heart_red`, `pride`). A single-item list (`["taco"]`) creates a themed wall of one emoji; explicit lists are never capped. Omitting the field samples ≤ 12 distinct slugs per firing (`_RANDOM_VARIETY_CAP`) from the complete drawable set — resampled every firing, so consecutive firings differ wildly while each wall stays coherent. |
 | `backing` | `"card"` / `"shadow"` / `"none"` | `"card"` | Sticker body. `"card"`: tilted black card with a white rim — the only mode that fully covers the panel at the midpoint. `"shadow"`: black silhouette halo, no card. `"none"`: bare sprites. Shadow/none read as an emoji swarm over the content (gaps stay visible, by design). |
 | `seed` | int, or omitted | omitted (OS entropy) | Fixes the sticker positions, angles, and arrival/departure timing for reproducible patterns. See "Determinism and re-fire" below. |
 
