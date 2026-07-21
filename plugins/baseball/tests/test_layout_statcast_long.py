@@ -218,7 +218,7 @@ def test_long_pitch_panel_shows_full_name_caption():
     """Pitch superlative: the panel caption (below the big abbreviation)
     must show the full pitch name (e.g. "4-SEAM FASTBALL"), not a literal
     "PITCH TYPE" repeat of the header. Caption sits at x >= 396, rows
-    ~46-58 (px9, y48) and is pal.LABEL-colored. The no-clip belt still
+    ~46-58 (px9, y48) and is pal.LABEL_HI-colored. The no-clip belt still
     holds: nothing in the whole card may light past x=505."""
     canvas, real = _longboi()
     rec = _rec(
@@ -232,7 +232,7 @@ def test_long_pitch_panel_shows_full_name_caption():
         pitch_type="FF",
     )
     render_statcast_long(canvas, rec, "OKADA", 1.0)
-    label = (pal.LABEL.red, pal.LABEL.green, pal.LABEL.blue)
+    label = (pal.LABEL_HI.red, pal.LABEL_HI.green, pal.LABEL_HI.blue)
     assert any(
         v == label and x >= 396 and 46 <= y <= 58 for (x, y), v in real._pixels.items()
     )
