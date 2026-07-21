@@ -34,7 +34,7 @@ the venue identifies the park and reads better big. Bar sits at y=52,h=10
 with room to spare, same headroom margin the old px8 venue had.
 
 Weather slot (task-5 uplift): the paid number ends ~x109 and the fixed
-`% FULL`/`VS AVG` columns start at x228 — the ~96px gap between them
+`% FULL`/`VS AVG` columns start at x228 — the ~100px gap between them
 (x122-223, after the paid number's `y0-40` height) was dead space at
 every crowd size. `"72° CLEAR"`-style weather (only when the record has a
 temp or condition) fills it, `fit_text`-belted so it can never reach into
@@ -80,8 +80,8 @@ _BAR_H = 10
 
 # Weather slot (task-5 uplift): fills the dead gap between the paid number
 # (ends ~x109) and the fixed columns (start x228). `_WEATHER_X = 122`
-# leaves a 13px margin off the paid number; `_WEATHER_MAXW = 96` is
-# `_COL_X[0] - _WEATHER_GAP - _WEATHER_X` (224 - 6 - 122) so a long
+# leaves a 13px margin off the paid number; `_WEATHER_MAXW = 100` is
+# `_COL_X[0] - _WEATHER_GAP - _WEATHER_X` (228 - 6 - 122) so a long
 # condition string belts before ever reaching the column start rather than
 # relying on string length staying short. `_WEATHER_Y = 10` sits the line
 # in the paid number's own y0-40 vertical band (empirically rows 9-18 at
