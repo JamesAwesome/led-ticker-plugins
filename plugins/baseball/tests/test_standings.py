@@ -9,6 +9,7 @@ from led_ticker.widgets.message import SegmentMessage, TickerMessage
 
 from led_ticker_baseball._standings_card import MLBStandingsBoard
 from led_ticker_baseball.standings import (
+    DEMO_STANDINGS,
     DIVISION_NAMES,
     MLBStandingsMonitor,
     TeamStanding,
@@ -984,6 +985,72 @@ class TestStart:
         spawn.assert_called_once_with("LOOP")
 
 
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestStandingsDemo:
+    """`demo = true` builds feed_stories from a curated fixture division —
+    never fetching the MLB API or spawning the background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.standings as mod
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBStandingsMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBStandingsMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # Default layout ("auto") resolves to the board shape — the SAME
+        # story type update()'s live path builds, not a re-implemented one.
+        assert all(isinstance(s, MLBStandingsBoard) for s in widget.feed_stories)
+        board = widget.feed_stories[0]
+        assert len(board.rows) == len(DEMO_STANDINGS)
+        abbrs = [row.abbr for row in board.rows]
+        assert abbrs == ["NYY", "TB", "BOS", "TOR", "BAL"]
+        # Every column populated (pct/l10/streak weren't just left blank).
+        assert all(row.pct and row.l10 and row.streak for row in board.rows)
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_ticker_layout_reuses_ticker_story_builder(self):
+        # layout="ticker" demo also reuses the real _build_ticker_stories
+        # path (SegmentMessage rows), not the board.
+        widget = await MLBStandingsMonitor.start(
+            session=None, demo=True, layout="ticker"
+        )
+
+        assert widget.feed_stories
+        assert all(isinstance(s, SegmentMessage) for s in widget.feed_stories)
+
+    async def test_demo_works_without_teams_or_session(self):
+        # demo=true needs neither `teams` nor a real session.
+        widget = await MLBStandingsMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+
+    def test_demo_construct_directly_without_teams(self):
+        # Direct construction (bypassing start()) also works teams-less.
+        widget = MLBStandingsMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert isinstance(widget.feed_stories[0], MLBStandingsBoard)
+
+
 # --- layout field + validate_config ---
 
 
@@ -1027,6 +1094,18 @@ class TestStandingsValidateConfig:
 
     def test_callable_as_classmethod(self):
         assert MLBStandingsMonitor.validate_config({"layout": "auto"}) == []
+
+    def test_demo_true_passes(self):
+        assert MLBStandingsMonitor.validate_config({"demo": True}) == []
+
+    def test_demo_false_passes(self):
+        assert MLBStandingsMonitor.validate_config({"demo": False}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        msgs = MLBStandingsMonitor.validate_config({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
 
 
 class TestStandingsValidateConfigBoardRows:

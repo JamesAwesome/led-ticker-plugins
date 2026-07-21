@@ -25,6 +25,7 @@ from led_ticker.plugin import (
 
 from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import (
+    DEMO_TEAM,
     GameInfo,
     SeriesInfo,
     _classify_postponement,
@@ -33,6 +34,7 @@ from led_ticker_baseball._models import (
     _format_inning,
     _ordinal,
     _parse_team_abbr,
+    build_demo_series,
 )
 from led_ticker_baseball._scoreboard import (
     MLBScoreboardMessage,
@@ -126,16 +128,23 @@ class MLBScoreMonitor:
     """MLB scores for a single team's current series."""
 
     session: aiohttp.ClientSession
-    team: str
+    # Defaults "" (not required) so `demo = true` widgets can construct
+    # without one — _load_demo() ignores it and uses the fixture team.
+    # Non-demo configs missing `team` are caught by validate_config below
+    # with a friendly message instead of falling through to start()'s bare
+    # TypeError.
+    team: str = ""
     timezone: str = "America/New_York"
     padding: int = 6
     final_hold_hours: int = 6
     hold_time: float = 0.0
+    demo: bool = False
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     # None when the config omits `font`. Resolved per-layout at draw-build time:
     # two_row falls back to FONT_SMALL (fits an 8-row band), ticker / scoreboard
-    # fall back to FONT_DEFAULT. See the `display_font` resolution in update().
+    # fall back to FONT_DEFAULT. See the `display_font` resolution in update()
+    # (mirrored in _load_demo() for the demo=true fixture path).
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font = attrs.field(default=FONT_SMALL, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
@@ -187,19 +196,28 @@ class MLBScoreMonitor:
                     f"remove the field(s) or set layout='two_row'."
                 )
 
+        demo = cfg.get("demo")
+        if demo is not None and not isinstance(demo, bool):
+            msgs.append(
+                f"baseball.scores demo must be a bool (true/false), got {demo!r}"
+            )
+
         return msgs
 
     @classmethod
     async def start(
         cls,
         session: aiohttp.ClientSession,
-        team: str,
+        team: str = "",
         update_interval: int = 300,
         **kwargs: Any,
     ) -> Self:
         logger.debug("MLBScoreMonitor.start: team=%s", team)
         widget = cls(session=session, team=team.upper(), **kwargs)
         widget._tz = ZoneInfo(widget.timezone)
+        if widget.demo:
+            widget._load_demo()
+            return widget
         await widget._resolve_team_id()
         await widget.update()
         logger.info(
@@ -209,6 +227,77 @@ class MLBScoreMonitor:
         )
         spawn_tracked(run_monitor_loop(widget, update_interval))
         return widget
+
+    def _load_demo(self) -> None:
+        """Populate feed_stories from curated fixture data — no network fetch.
+
+        Deliberately mirrors update()'s own current-series story-building
+        tail (font resolution + _build_series_title /
+        _build_two_row_series_title + MLBGameCard) against a fixed demo
+        series (build_demo_series) instead of live MLB API data — the SAME
+        builder classes/functions update() calls, just fed fixture data, so
+        demo cards render through the SAME renderers real games do. Kept as
+        its own inline copy rather than a shared helper so
+        `test_dispatch_two_row_branch_exists_in_update` (an inspect.getsource
+        tripwire scoped to MLBScoreMonitor.update) keeps guarding the live
+        path's own source, untouched by this feature.
+        """
+        tz = self._tz or ZoneInfo(self.timezone)
+        self.team = DEMO_TEAM
+        series = build_demo_series(tz)
+
+        if self.font is not None:
+            display_font = self.font
+        elif self.layout == "two_row":
+            display_font = FONT_SMALL
+        else:
+            display_font = FONT_DEFAULT
+
+        if self.layout == "two_row":
+            series_title: _MLBStoryT = _build_two_row_series_title(
+                DEMO_TEAM,
+                series,
+                tz,
+                bg_color=self.bg_color,
+                font=display_font,
+                small_font=self.small_font,
+                top_font=self.top_font,
+                top_row_height=self.top_row_height,
+                font_color=self.font_color,
+            )
+        else:
+            series_title = _build_series_title(
+                DEMO_TEAM,
+                series,
+                tz,
+                bg_color=self.bg_color,
+                font=display_font,
+                font_color=self.font_color,
+            )
+        n = len(series.games)
+        for g in series.games:
+            g.series_away_wins, g.series_home_wins = self._series_sides(series, g)
+        stories: list[_MLBStoryT] = [series_title]
+        stories.extend(
+            MLBGameCard(
+                game=g,
+                team_abbr=DEMO_TEAM,
+                tz=tz,
+                cfg_layout=self.layout,
+                story_index=i,
+                story_total=n,
+                bg_color=self.bg_color,
+                font=display_font,
+                small_font=self.small_font,
+                top_font=self.top_font,
+                top_row_height=self.top_row_height,
+                font_color=self.font_color,
+            )
+            for i, g in enumerate(series.games)
+        )
+        self.feed_title = series_title
+        self.feed_stories = stories
+        logger.info("MLB %s demo: %d stories", self.team, len(self.feed_stories))
 
     async def _resolve_team_id(self) -> None:
         """Fetch team ID from MLB API."""

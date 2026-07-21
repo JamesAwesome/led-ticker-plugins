@@ -8,6 +8,7 @@ from led_ticker.widgets.message import SegmentMessage
 
 from led_ticker_baseball.scores import (
     GameInfo,
+    MLBGameCard,
     MLBScoreMonitor,
     SeriesInfo,
     _build_game_message,
@@ -1643,6 +1644,18 @@ class TestScoresValidateConfig:
         # cls.validate_config(dict(cfg))).
         assert MLBScoreMonitor.validate_config({"layout": "ticker"}) == []
 
+    def test_demo_true_passes(self):
+        assert MLBScoreMonitor.validate_config({"demo": True}) == []
+
+    def test_demo_false_passes(self):
+        assert MLBScoreMonitor.validate_config({"demo": False}) == []
+
+    def test_validate_demo_must_be_bool(self):
+        msgs = MLBScoreMonitor.validate_config({"demo": "yes"})
+        assert len(msgs) == 1
+        assert "demo" in msgs[0]
+        assert "bool" in msgs[0]
+
     def test_validate_config_accepts_auto_and_default_is_auto(self):
         assert MLBScoreMonitor.validate_config({"layout": "auto"}) == []
         import attrs
@@ -1784,3 +1797,63 @@ class TestStart:
         assert widget.feed_stories  # update() ran
         loop.assert_called_once_with(widget, 77)
         spawn.assert_called_once_with("LOOP")
+
+
+# --- demo = true (fixture data, no live fetch) ---
+
+
+class TestScoresDemo:
+    """`demo = true` builds feed_stories from curated fixture games — never
+    fetching the MLB API or spawning the background poll loop."""
+
+    async def test_demo_populates_feed_without_fetch(self):
+        import led_ticker_baseball.scores as mod
+
+        # A session whose .get() would raise if ever called — start() must
+        # never touch it in demo mode. Passing session=None (as a config
+        # with no [team]/session context would) is the simplest possible
+        # proof there's no fetch; this session goes one step further and
+        # actively traps a fetch attempt.
+        session = mock.Mock()
+        session.get.side_effect = AssertionError(
+            "demo mode must never call session.get()"
+        )
+        spawn = mock.Mock()
+        loop = mock.Mock(return_value="LOOP")
+        with (
+            mock.patch.object(mod, "spawn_tracked", spawn),
+            mock.patch.object(mod, "run_monitor_loop", loop),
+        ):
+            widget = await MLBScoreMonitor.start(session, demo=True)
+
+        assert isinstance(widget, MLBScoreMonitor)
+        assert widget.feed_stories
+        assert widget.feed_title is not None
+        # The real card type update() would build — demo reuses the SAME
+        # story builders, not a re-implemented rendering path.
+        assert any(isinstance(s, MLBGameCard) for s in widget.feed_stories)
+        # All three curated fixture states are represented.
+        states = {
+            s.game.state for s in widget.feed_stories if isinstance(s, MLBGameCard)
+        }
+        assert states == {"final", "live", "preview"}
+        # Never fetched, never spawned the background poll loop.
+        session.get.assert_not_called()
+        loop.assert_not_called()
+        spawn.assert_not_called()
+
+    async def test_demo_works_without_team_or_session(self):
+        # demo=true needs neither `team` nor a real session — session=None
+        # is fine since _load_demo() never touches it.
+        widget = await MLBScoreMonitor.start(session=None, demo=True)
+
+        assert widget.feed_stories
+        assert widget.team  # set from the fixture, not left blank
+
+    def test_demo_construct_directly_without_team(self):
+        # Direct construction (bypassing start()) also works team-less.
+        widget = MLBScoreMonitor(session=None, demo=True)
+        widget._load_demo()
+
+        assert widget.feed_stories
+        assert any(isinstance(s, MLBGameCard) for s in widget.feed_stories)
