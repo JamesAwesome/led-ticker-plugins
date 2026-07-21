@@ -359,6 +359,7 @@ type = "baseball.attendance"
 |--------|------|---------|-------------|
 | `team` | string | unset | Set → that team's game; omit → league-wide superlatives. |
 | `stats` | list of strings | all four | League mode only, in display order: `"biggest_crowd"`, `"smallest_crowd"`, `"fullest"`, `"emptiest"`. |
+| `layout` | string | `"auto"` | `"auto"`, `"big"`, or `"long"` — see [Hero card + animated bar](#hero-card--animated-bar-bigsignlongboi) below. Scale-1 signs ignore this and always render the classic scrolling line. |
 | `update_interval` | int | `1800` | Seconds between refreshes (30 min). A ~47 KB schedule check skips the per-game fetches when nothing changed. |
 | `title` | string | `"Attendance"` | Section title override. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for "Today" / day rollover. |
@@ -371,6 +372,49 @@ Fill % is omitted when a venue lists no capacity (spring sites). With nothing
 final yet, the widget shows yesterday's data (short-date labeled, e.g.
 `6/12 · …`); with no games at all it shows `Next game: Jun 20` (team) /
 `Next games: Jun 20` (league); a fetch failure shows `No Data`.
+
+#### Hero card + animated bar (bigsign/longboi)
+
+**Scale-1 signs (smallsign) always render the classic scrolling line above**,
+unchanged by `layout`. **Scale>1 signs (bigsign, longboi) render one story per
+record as a physical (procedural pixel-art) hero card** instead — the same
+design-pinned convention as the `baseball.scores`/`baseball.standings`/`baseball.promotions`/`baseball.statcast`
+physical renderers, with a capacity bar that fills toward its resting fraction
+each time the card appears.
+
+Two card shapes, chosen by `layout`:
+
+- **`layout = "auto"` (default)** — resolves to the best card for the sign automatically, same resolution table as `baseball.statcast` (scale 1 → classic line, scale>1 + real width < 400px → big card, scale>1 + real width >= 400px → long card). This is what most configs should use.
+- **`layout = "big"`** — the narrow (bigsign) card, forced regardless of sign width.
+- **`layout = "long"`** — the wide (longboi) card, forced regardless of sign width.
+
+**The TEAM card** (`team` set) shows the big paid-attendance number, then —
+once the game is Final — a `% FULL` column and a `VS AVG` column (the
+difference against the team's season home average, green when at/above
+average and red when below). Below that: a `PAID ATTENDANCE` label, the
+venue's capacity right-anchored as `NN,NNN CAP`, and the venue name (belted
+to fit the panel width — long venue names truncate with an ellipsis rather
+than overflow or wrap). The capacity bar underneath fills to the game's
+actual paid/capacity fraction in the home team's brand color, with a bright
+vertical **season-average tick** marking where the team's average crowd
+would land on the same bar — a quick visual "packed house vs. typical
+night" read. Before the game is Final, `% FULL`/`VS AVG` and the bar don't
+have real numbers to show yet, so the card falls back to the classic
+scrolling line instead of drawing an empty/zeroed bar.
+
+**The LEAGUE-superlative card** (no `team`) shows the superlative's label
+(`BIGGEST CROWD`, `FULLEST`, etc.) above the big value (a crowd count or a
+fill percentage, depending on the stat), the belted venue name, and a small
+team-colored chip + abbreviation identifying the home club. The fill bar
+below uses that team's color and the record's fill fraction — no
+season-average tick (league superlatives aren't tied to one team's history).
+
+**The bar always animates**: on every card entry it grows from empty to its
+resting fraction over about a second, then holds there for the rest of the
+visit. Re-entering the section (a new visit, including after a
+between-widgets transition) always re-fills from empty — it never resumes
+mid-fill or jumps straight to the resting bar, the same restart-on-visit
+convention as the statcast trajectory arc.
 
 ## Common patterns
 

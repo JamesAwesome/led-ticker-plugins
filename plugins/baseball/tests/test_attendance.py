@@ -212,6 +212,106 @@ class TestDeriveSuperlatives:
     def test_empty_pairs(self):
         assert self._derive([]) == {}
 
+    def test_computes_fill_frac(self):
+        pairs = [(sched_gv(1, "Dodger Stadium", "LAD", 50000), 40000)]
+        recs = self._derive(pairs, stats=["biggest_crowd", "fullest"])
+        assert abs(recs["biggest_crowd"].fill_frac - 0.8) < 1e-6  # 40000/50000
+        assert recs["biggest_crowd"].attendance == 40000
+        assert recs["biggest_crowd"].capacity == 50000
+        # fullest: value is the pct (80), fill_frac == pct/100
+        assert recs["fullest"].value == 80
+        assert abs(recs["fullest"].fill_frac - 0.8) < 1e-6
+
+    def test_zero_capacity_fill_frac_is_zero(self):
+        pairs = [(sched_gv(1, "Sutter Health", "ATH", 0), 30000)]
+        recs = self._derive(pairs, stats=["biggest_crowd"])
+        assert recs["biggest_crowd"].fill_frac == 0.0  # no capacity -> no bar fill
+
+
+class TestAttendanceGame:
+    def test_record_shape(self):
+        from led_ticker_baseball.attendance import AttendanceGame
+
+        g = AttendanceGame(
+            paid=46537,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        )
+        assert g.paid == 46537 and g.avg == 39442 and g.home_abbr == "LAD"
+
+    def test_temp_and_condition_default_empty(self):
+        from led_ticker_baseball.attendance import AttendanceGame
+
+        g = AttendanceGame(
+            paid=46537,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        )
+        assert g.temp == "" and g.condition == ""
+
+
+class TestBuildTeamCardWeather:
+    """`_build_team_card` threads the fetched weather dict's temp/condition
+    onto the `AttendanceGame` record it builds — the long-card layout reads
+    these off the record to render its new weather line (task-5)."""
+
+    async def test_weather_dict_threads_temp_and_condition(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0  # season-avg fetch short-circuits without a team id
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={"condition": "Clear", "temp": "72", "wind": "5 mph"},
+            day_label="",
+        )
+        assert card.record.temp == "72°"
+        assert card.record.condition == "Clear"
+
+    async def test_missing_weather_yields_empty_strings(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather=None,
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == ""
+
+    async def test_empty_weather_dict_yields_empty_strings(self):
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={},
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == ""
+
+    async def test_weather_missing_temp_condition_only(self):
+        """`condition` alone (no `temp`) -> temp `""`, condition passes through."""
+        w = make_widget(team="TOR")
+        w._team_id = 0
+        card = await w._build_team_card(
+            game_venue=sched_gv(99, "Rogers Centre", "TOR", 46000),
+            att=41212,
+            cap=46000,
+            weather={"condition": "Cloudy"},
+            day_label="",
+        )
+        assert card.record.temp == ""
+        assert card.record.condition == "Cloudy"
+
 
 def make_widget(**kwargs):
     from led_ticker_baseball.attendance import MLBAttendanceMonitor
@@ -500,6 +600,43 @@ class TestFetchAttendance:
         assert await w._fetch_attendance(1) is None
 
 
+class TestFetchSeasonAvg:
+    async def test_no_team_id_returns_none_without_fetching(self):
+        session = mock.MagicMock()
+        w = make_widget(session=session)
+        assert await w._fetch_season_avg() is None
+        session.get.assert_not_called()
+
+    async def test_returns_attendance_average_home(self):
+        session = make_session(
+            {"attendance?": {"records": [{"attendanceAverageHome": 39442}]}}
+        )
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() == 39442
+
+    async def test_missing_records_returns_none(self):
+        session = make_session({"attendance?": {"records": []}})
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
+
+    async def test_non_int_average_returns_none(self):
+        session = make_session(
+            {"attendance?": {"records": [{"attendanceAverageHome": None}]}}
+        )
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
+
+    async def test_fetch_failure_returns_none(self):
+        session = mock.MagicMock()
+        session.get.side_effect = RuntimeError("down")
+        w = make_widget(team="LAD", session=session)
+        w._team_id = 119
+        assert await w._fetch_season_avg() is None
+
+
 class TestFetchGameData:
     async def test_returns_attendance_weather_venue_capacity(self):
         feed = {
@@ -626,10 +763,10 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd", "smallest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]) == (
+        assert line_text(w.feed_stories[0].legacy) == (
             "Today · Biggest crowd 45,123 — Dodger Stadium"
         )
-        assert line_text(w.feed_stories[1]) == (
+        assert line_text(w.feed_stories[1].legacy) == (
             "Today · Smallest crowd 8,201 — PNC Park"
         )
         assert w._last_derive == (today, 2)
@@ -650,7 +787,9 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith(f"{yest.strftime('%-m/%-d')} · ")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            f"{yest.strftime('%-m/%-d')} · "
+        )
         # Today has a (Preview) game whose attendance is still pending, so the
         # yesterday fallback must NOT durably snapshot — otherwise the gate
         # would mask today's attendance once it is announced. _last_derive must
@@ -676,7 +815,9 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith(f"{yest.strftime('%-m/%-d')} · ")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            f"{yest.strftime('%-m/%-d')} · "
+        )
         assert w._last_derive is None  # keep re-deriving until today reports
 
     async def test_today_finals_all_reported_snapshots(self):
@@ -692,7 +833,7 @@ class TestUpdateLeague:
         w = self._widget(routes, stats=["biggest_crowd"])
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith("Today · ")
+        assert line_text(w.feed_stories[0].legacy).startswith("Today · ")
         assert w._last_derive == (today, 1)
 
     async def test_error_sets_no_data(self):
@@ -783,7 +924,9 @@ class TestUpdateTeam:
         w = self._widget(routes)
         with patcher:
             await w.update()
-        assert line_text(w.feed_stories[0]).startswith("TOR · Rogers Centre 41,212")
+        assert line_text(w.feed_stories[0].legacy).startswith(
+            "TOR · Rogers Centre 41,212"
+        )
 
     async def test_team_no_game_today_then_probe(self):
         patcher, today = _freeze_today()
@@ -869,6 +1012,38 @@ class TestStart:
         spawn.assert_called_once_with("LOOP")
 
 
+class TestBuildLeagueCards:
+    def test_league_feed_stories_are_cards(self):
+        from led_ticker_baseball._attendance_card import MLBAttendanceCard
+        from led_ticker_baseball.attendance import CrowdRecord
+
+        mon = make_widget(stats=["biggest_crowd", "fullest"])
+        records = {
+            "biggest_crowd": CrowdRecord(
+                value=45123,
+                venue="Dodger Stadium",
+                home_abbr="LAD",
+                is_pct=False,
+                fill_frac=0.9,
+                attendance=45123,
+                capacity=50000,
+            ),
+            "fullest": CrowdRecord(
+                value=99,
+                venue="Fenway Park",
+                home_abbr="BOS",
+                is_pct=True,
+                fill_frac=0.99,
+                attendance=37000,
+                capacity=37500,
+            ),
+        }
+        cards = mon._build_league_cards(records, "Today")
+        assert all(isinstance(c, MLBAttendanceCard) for c in cards)
+        assert cards[0].label == "BIGGEST CROWD"
+        assert cards[0].story_total == 2
+
+
 class TestValidateConfig:
     def _v(self, cfg):
         from led_ticker_baseball.attendance import MLBAttendanceMonitor
@@ -877,6 +1052,10 @@ class TestValidateConfig:
 
     def test_empty_passes(self):
         assert self._v({}) == []
+
+    def test_rejects_bad_layout(self):
+        msgs = self._v({"layout": "sideways"})
+        assert any("layout" in m for m in msgs)
 
     def test_team_only_passes(self):
         assert self._v({"team": "TOR"}) == []

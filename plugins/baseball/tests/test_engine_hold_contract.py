@@ -26,11 +26,13 @@ from led_ticker.frame import LedFrame
 from led_ticker.plugin import ScaledCanvas, SegmentMessage, colors
 from led_ticker.ticker import Ticker
 
+from led_ticker_baseball._attendance_card import MLBAttendanceCard
 from led_ticker_baseball._card import MLBGameCard
 from led_ticker_baseball._models import GameInfo
 from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball._standings_card import MLBStandingsBoard
 from led_ticker_baseball._statcast_card import MLBStatcastCard
+from led_ticker_baseball.attendance import AttendanceGame
 from led_ticker_baseball.promotions import PromoInfo
 from led_ticker_baseball.standings import TeamStanding
 from led_ticker_baseball.statcast import StatRecord
@@ -524,4 +526,32 @@ def test_held_statcast_big_card_takes_hold_branch():
     )
     cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
     assert cursor_pos == 64  # wrapper logical width -> hold branch
+    assert final_pos == 0  # never scrolled
+
+
+def test_held_attendance_card_takes_hold_branch():
+    """Same Finding-1 shape as MLBGameCard, MLBPromoCard, and MLBStatcastCard
+    (see module docstring), applied to MLBAttendanceCard: on a WIDE (longboi,
+    512 physical px) panel, `layout="auto"` resolves to the held attendance
+    card, and the card must return the WRAPPER's LOGICAL width (128) so the
+    engine's real hold-vs-scroll check (`cursor_pos > canvas.width`, core
+    ticker.py) takes the hold branch — zero scroll ticks — rather than
+    phantom-scrolling a static held card. A card that returned `real.width`
+    (512) instead of `canvas.width` (128) would fail HERE even though its
+    own unit test passes in isolation."""
+    frame = _longboi_frame()
+    card = MLBAttendanceCard(
+        record=AttendanceGame(
+            paid=46537,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        ),
+        legacy=SegmentMessage([("LAD 46,537", colors.RGB_WHITE)], center=True),
+        story_index=0,
+        story_total=1,
+    )
+    cursor_pos, final_pos, _ = asyncio.run(_run_visit(card, frame))
+    assert cursor_pos == 128  # wrapper logical width -> hold branch
     assert final_pos == 0  # never scrolled

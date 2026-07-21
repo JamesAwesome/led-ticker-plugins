@@ -107,3 +107,33 @@ def resolve_statcast_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
     if cfg_layout != "auto":
         return cfg_layout
     return "big" if phys_w < _STATCAST_AUTO_WIDE_MIN_W else "long"
+
+
+# Same 400px physical-width threshold as the sibling resolvers above
+# (bigsign 256 -> narrow, longboi 512 -> wide) — kept as its own constant
+# for consistency with the other layout resolvers.
+_ATTEND_AUTO_WIDE_MIN_W = 400
+
+
+def resolve_attendance_layout(cfg_layout: str, scale: int, phys_w: int) -> str:
+    """Resolve `baseball.attendance`' `layout` config to a draw-time shape.
+
+    Scale <= 1 returns "legacy" (no hires renderer). At scale > 1, an
+    EXPLICIT `cfg_layout` ("big" / "long") passes through unchanged; "auto"
+    maps by physical width — narrow (bigsign, 256px) uses "big", wide
+    (longboi, 512px) uses "long".
+
+    **Width-fit degrade for explicit `long`**: `layouts/attendance_long.py`
+    hardcodes anchors and draws fixed elements assuming a >=400 physical-px
+    panel (longboi). An explicit `layout = "long"` on a narrower panel
+    (e.g. bigsign, 256px) would render mostly off-panel — near-blank, no error,
+    no log. So an explicit `long` at `scale > 1` and `phys_w < _ATTEND_AUTO_WIDE_MIN_W`
+    degrades to `big` — the same landing spot `auto` would already pick.
+    """
+    if scale <= 1:
+        return "legacy"
+    if cfg_layout == "long" and scale > 1 and phys_w < _ATTEND_AUTO_WIDE_MIN_W:
+        return "big"
+    if cfg_layout != "auto":
+        return cfg_layout
+    return "big" if phys_w < _ATTEND_AUTO_WIDE_MIN_W else "long"
