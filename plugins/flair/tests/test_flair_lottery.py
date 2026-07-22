@@ -1163,6 +1163,67 @@ class TestConfigSelectedFont:
             Lottery(words=["A"], font="no-such-font")
 
 
+class TestConfigSelectedFontEndToEnd:
+    """`test_config_set_pixel_font_is_accepted_and_used` above calls
+    `Lottery(...)` directly — it never proves core's real config-load path
+    (validate_widget_cfg -> _resolve_fonts) actually leaves `font` alone for
+    this widget. Before the RESOLVES_OWN_FONT rework, a hires name like
+    `spleen-6x12` with no `font_size` would raise ("requires font_size,
+    e.g. font_size = 24...") right here in _resolve_fonts, before Lottery's
+    own validate_config/constructor ever saw it — the exact bug this class
+    guards against regressing."""
+
+    async def test_config_pixel_font_survives_the_real_factory_path(self):
+        from led_ticker import _plugin_loader as L
+
+        L.reset_plugins()
+        try:
+            L.load_plugins(None, entry_points_enabled=True)
+
+            from led_ticker.app.factories import validate_widget_cfg
+
+            cfg = {
+                "type": "flair.lottery",
+                "words": ["HALAL"],
+                "font": "spleen-6x12",
+            }
+            # No font_size — a normal (non-RESOLVES_OWN_FONT) widget with a
+            # hires font name here would raise in _resolve_fonts.
+            await validate_widget_cfg(cfg, None)
+
+            # The load-bearing assertion: RESOLVES_OWN_FONT left `font` as
+            # the raw NAME string. A widget without the opt-out would have
+            # it replaced by a resolved Font/HiresFont object by now.
+            assert cfg["font"] == "spleen-6x12"
+        finally:
+            L.reset_plugins()
+
+    async def test_hires_font_without_font_size_still_raises_for_a_normal_widget(
+        self,
+    ):
+        """Sanity check that the failure mode this test guards against is
+        real: a widget WITHOUT RESOLVES_OWN_FONT still hits the
+        font_size-required error for the same hires name, on the same
+        real path."""
+        from led_ticker import _plugin_loader as L
+
+        L.reset_plugins()
+        try:
+            L.load_plugins(None, entry_points_enabled=True)
+
+            from led_ticker.app.factories import validate_widget_cfg
+
+            cfg = {
+                "type": "message",
+                "text": "hi",
+                "font": "spleen-6x12",
+            }
+            with pytest.raises(ValueError, match="requires font_size"):
+                await validate_widget_cfg(cfg, None)
+        finally:
+            L.reset_plugins()
+
+
 class TestAutoFontSizePixelGrid:
     def test_pixel_font_returns_only_native_multiples(self):
         from led_ticker_flair.flair.lottery import auto_font_size
