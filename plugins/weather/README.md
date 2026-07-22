@@ -1,6 +1,6 @@
 # led-ticker-weather
 
-A current-conditions weather **plugin** for [led-ticker](https://github.com/JamesAwesome/led-ticker), backed by [WeatherAPI.com](https://www.weatherapi.com/). It contributes a single `weather.current` widget that shows the location label, current temperature, and a condition icon.
+A weather **plugin** for [led-ticker](https://github.com/JamesAwesome/led-ticker), backed by [WeatherAPI.com](https://www.weatherapi.com/). It contributes two widgets: `weather.current` (location label, current temperature, and a condition icon) and `weather.forecast` (a held multi-day forecast card).
 
 This package split out of `led-ticker-feeds` (its `feeds.weather` widget); the type is now `weather.current`.
 
@@ -51,6 +51,40 @@ location = "London"
 ```
 
 The widget polls WeatherAPI.com in the background and renders the label, temperature, and a condition icon. Conditions map to icon slugs via `_match_condition` (sun / cloud / rain / snow / thunder / fog).
+
+## weather.forecast
+
+A held multi-day forecast card. Layout is auto-detected per sign: smallsign (scale 1) shows a 3-day strip (today + 2 more); bigsign (scale > 1, physical width < 400px) shows a today hero next to a 4-day strip; longboi (scale > 1, physical width >= 400px) shows an expanded hero next to a 6-day strip with precipitation percentages.
+
+```toml
+[[playlist.section]]
+[[playlist.section.widget]]
+type = "weather.forecast"
+location = "Boston, MA"
+```
+
+### Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `location` | string or `{lat = ..., lon = ...}` | **required** (unless `demo = true`) | Same location forms as `weather.current`: name / zip / "lat,lon" / a `{lat=…, lon=…}` table. |
+| `layout` | string | `"auto"` | `"auto"` \| `"strip"` \| `"big"` \| `"long"`. `auto` picks by sign shape (see above). An explicit `"long"` on a panel narrower than 400px degrades to `"big"`; an explicit `"big"` or `"long"` on a scale-1 sign renders as `"strip"` — hi-res is impossible there (`led-ticker validate` warns in both cases). |
+| `units` | string | `"imperial"` | `"imperial"` \| `"metric"`. |
+| `update_interval` | int (seconds) | `10800` | How often the widget re-polls WeatherAPI.com (3 hours by default — forecasts don't need current-conditions cadence). |
+| `demo` | bool | `false` | Render a fixed sample week (BOSTON) instead of calling the network — no API key or location needed. Useful for previews. |
+
+### Requirements
+
+Same `WEATHERAPI_KEY` env var as `weather.current` (see Prerequisites above). The widget calls `/v1/forecast.json?days=7`. Free-tier WeatherAPI.com keys only return 3 forecast days; the widget degrades gracefully — it renders however many days the feed actually provides and widens the strip columns to fill the available space (a 3-day key on longboi shows the hero next to a 2-day strip instead of 6).
+
+### Divergences from the design handoff
+
+The normative visual spec lives at [`design/`](design/) (`design/README.md` + the `.dc.html` prototype). This widget faithfully reproduces its layouts and palette, with four deliberate divergences:
+
+- **Condition icons are the packaged emoji**, not the handoff's procedural glyphs. Strips always draw the curated 8x8/32x32 weather sprites; the hero slot upgrades two hero-only distinctions (overcast, patchy rain) to standard-pack sprites the curated set can't draw on its own. Icon boxes snap to sprite sizes (8/16/24/32px) rather than the handoff's 14/18/22/30/40px boxes, so the overcast-vs-cloudy distinction only survives in the hero (strips show both as a plain cloud), and partly-cloudy-at-night is approximated (`partly_cloudy` lowres in strips, a plain moon in the hero).
+- **smallsign text uses the nearest bundled BDF font (5x8)**, not the handoff's Silkscreen px7 — metrics may differ by up to a row.
+- **No °F/°C runtime toggle or GLOW control.** Those were prototype chrome; units come from the `units` config field, and glow is a property of the physical hardware, not something the widget can render.
+- **No 15 FPS re-render loop.** The card is static per data update and follows the engine's normal held-card cadence — there's nothing to animate between polls.
 
 ## Weather value token (`:id:` in any widget's text)
 
