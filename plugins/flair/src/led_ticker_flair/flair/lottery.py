@@ -57,6 +57,7 @@ from led_ticker.plugin import (
     make_color,
     make_rotation_surface,
     paint_hires,
+    pixel_native_size,
     resolve_font,
     unwrap_to_real,
 )
@@ -217,12 +218,22 @@ def roll_order_for_slot(
 def auto_font_size(word: str, diameter_px: int, font_name: str, scale: int) -> int:
     """Largest hi-res font size whose rendered ``word`` fits the ball face.
 
-    Searches ``size`` from ``int(diameter_px * 0.45)`` down to
+    For an OUTLINE font (``pixel_native_size(font_name)`` is ``None``),
+    searches ``size`` continuously from ``int(diameter_px * 0.45)`` down to
     ``_MIN_FONT_SIZE`` (8, the ``resolve_font`` legibility floor) and
     returns the first (largest) size whose rendered width fits
     ``diameter_px * _CHORD_FACTOR`` (0.72 — the usable text-width chord of
-    a circle). Returns 0 if not even the floor size fits (caller treats
-    that as "doesn't fit — fall back / truncate / error", widget concern).
+    a circle).
+
+    For a PIXEL font (e.g. Spleen), an off-grid size renders blurry — only
+    integer multiples of the font's native cell size are crisp. The search
+    is restricted to those multiples, largest first: from the largest
+    native multiple ``<= int(diameter_px * 0.45)`` down to ``native``
+    itself. If even ``native`` doesn't fit, falls straight through to 0
+    rather than ever resolving an off-grid size.
+
+    Returns 0 if not even the floor size fits (caller treats that as
+    "doesn't fit — fall back / truncate / error", widget concern).
 
     Unit note on ``get_text_width`` and the ``scale`` argument: for a
     HiresFont, ``get_text_width`` sums REAL-pixel glyph advances (font
@@ -248,7 +259,16 @@ def auto_font_size(word: str, diameter_px: int, font_name: str, scale: int) -> i
         raise ValueError(f"scale must be an int >= 1; got {scale!r}")
 
     threshold = diameter_px * _CHORD_FACTOR
-    for size in range(int(diameter_px * _MAX_FONT_FACTOR), _MIN_FONT_SIZE - 1, -1):
+    ceil = int(diameter_px * _MAX_FONT_FACTOR)
+    native = pixel_native_size(font_name)
+    if native is not None:
+        # Pixel font: only native multiples render crisp — search those,
+        # largest first. If even `native` overflows, fall through to 0.
+        candidates = range(ceil - (ceil % native), native - 1, -native)
+    else:
+        # Outline font: continuous search (unchanged).
+        candidates = range(ceil, _MIN_FONT_SIZE - 1, -1)
+    for size in candidates:
         font = resolve_font(font_name, size, _FACE_THRESHOLD)
         width = get_text_width(font, word, padding=0, canvas=_REAL_SCALE1_STUB)
         if width <= threshold:

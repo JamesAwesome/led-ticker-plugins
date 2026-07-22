@@ -1125,3 +1125,38 @@ class TestFaceLegibility:
 
         with pytest.raises(ValueError, match="reserved by the core"):
             Lottery(words=["A"], font=_FakeCoercedFont())
+
+
+class TestAutoFontSizePixelGrid:
+    def test_pixel_font_returns_only_native_multiples(self):
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        # Across a range of ball diameters, a pixel font must resolve to a
+        # native multiple (or 0 = doesn't fit) — never an off-grid size.
+        for diam in (40, 48, 56, 64, 80):
+            for word in ("HALAL", "GYRO", "RICE"):
+                size = auto_font_size(word, diam, "spleen-6x12", 4)
+                assert size == 0 or size % 12 == 0, (diam, word, size)
+
+    def test_pixel_font_snaps_down_not_up(self):
+        # A diameter whose continuous fit lands between 12 and 24 must snap
+        # DOWN to 12 (fits), never up to 24 (would overflow).
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        size = auto_font_size("RICE", 48, "spleen-6x12", 4)
+        assert size in (0, 12, 24, 36)  # on-grid only
+        # 48px ball: continuous fit ~15 -> snaps to 12
+        assert size == 12
+
+    def test_tiny_ball_returns_zero_when_native_overflows(self):
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        # A ball too small for even native 12px pixel text -> 0 (doesn't fit).
+        assert auto_font_size("HALAL", 16, "spleen-6x12", 4) == 0
+
+    def test_outline_font_unchanged(self):
+        # Inter keeps the continuous search (may return any int).
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        size = auto_font_size("RICE", 48, "Inter-Bold", 4)
+        assert size > 0  # unchanged continuous behavior
