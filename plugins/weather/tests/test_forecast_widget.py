@@ -82,6 +82,20 @@ class TestUpdate:
             await w.update()
         assert w.should_display()
 
+    async def test_update_never_closes_shared_session(self, monkeypatch):
+        from plugins.weather.tests.test_forecast_data import _payload
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+        session = mock.MagicMock()
+        session.close = mock.AsyncMock()
+        w = ForecastWidget(location="Boston", session=session)
+        with mock.patch(
+            "led_ticker_weather.forecast.fetch_forecast",
+            mock.AsyncMock(return_value=_payload()),
+        ):
+            await w.update()
+        session.close.assert_not_called()
+
     async def test_start_survives_failed_initial_fetch(self, monkeypatch):
         monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
         with mock.patch(
