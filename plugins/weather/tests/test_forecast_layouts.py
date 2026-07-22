@@ -121,3 +121,158 @@ class TestStripCell:
         real = self._cell(unwrap_to_real(bigsign), _BIG_GEO)
         ink = {p for _, _, p in lit(real, 10, 0, 44, 13)}
         assert any(r > 200 and g > 100 and b == 0 for r, g, b in ink)
+
+
+class TestRenderHeroBig:
+    def test_hero_and_strip_regions_populated(self, bigsign, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, DEMO_DATA, "imperial")
+        real = unwrap_to_real(bigsign)
+        assert lit(real, 4, 0, 40, 13)  # location label row
+        assert lit(real, 40, 10, 110, 42)  # big current temp
+        assert lit(real, 4, 12, 40, 46)  # hero icon (hires sprite)
+        for i in range(4):  # four strip columns
+            x0 = 118 + int(i * (252 - 118) / 4)
+            assert lit(real, x0, 0, x0 + 33, 62), f"strip col {i}"
+
+    def test_divider_dotted_at_x112(self, bigsign, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, DEMO_DATA, "imperial")
+        real = unwrap_to_real(bigsign)
+        xs = {(x, y) for x, y, _ in lit(real, 112, 6, 113, 58)}
+        assert xs == {(112, y) for y in range(6, 58, 3)}
+
+    def test_feels_line_cyan(self, bigsign, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, DEMO_DATA, "imperial")
+        real = unwrap_to_real(bigsign)
+        ink = {p for _, _, p in lit(real, 44, 50, 112, 64)}
+        assert any(r == 0 and g > 100 and b > 200 for r, g, b in ink)
+
+    def test_short_feed_widens_columns(self, bigsign, lit):
+        import attrs
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        short = attrs.evolve(DEMO_DATA, days=DEMO_DATA.days[:2])
+        render_hero_big(bigsign, short, "imperial")
+        real = unwrap_to_real(bigsign)
+        # two columns spanning the whole strip: content near both ends
+        assert lit(real, 118, 0, 185, 62)
+        assert lit(real, 185, 0, 252, 62)
+
+    def test_no_days_draws_hero_only(self, bigsign, lit):
+        import attrs
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, attrs.evolve(DEMO_DATA, days=()), "imperial")
+        real = unwrap_to_real(bigsign)
+        assert lit(real, 4, 0, 110, 62)
+        assert not lit(real, 118, 0, 252, 62)
+
+
+class TestRenderHeroLong:
+    def test_hero_strip_and_divider(self, longboi, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_long
+
+        render_hero_long(longboi, DEMO_DATA, "imperial")
+        real = unwrap_to_real(longboi)
+        assert lit(real, 6, 0, 60, 14)  # location, left-justified
+        assert lit(real, 70, 10, 160, 45)  # big temp pushed right
+        xs = {(x, y) for x, y, _ in lit(real, 156, 6, 157, 58)}
+        assert xs == {(156, y) for y in range(6, 58, 3)}
+        for i in range(6):  # six strip columns
+            x0 = 162 + int(i * (506 - 162) / 6)
+            assert lit(real, x0, 0, x0 + 57, 62), f"strip col {i}"
+
+    def test_location_ellipsizes_to_hero_width(self, longboi, lit):
+        import attrs
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_long
+
+        wide = attrs.evolve(
+            DEMO_DATA, location="SOUTH BURLINGTON INTERNATIONAL DISTRICT"
+        )
+        render_hero_long(longboi, wide, "imperial")
+        real = unwrap_to_real(longboi)
+        # never bleeds past the divider into the strip's label row.
+        # x=156 is the divider's own column (its dots are mandated lit by
+        # test_hero_strip_and_divider), so the check starts at x=157.
+        assert not lit(real, 157, 0, 162, 13)
+
+    def test_precip_row_present(self, longboi, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_long
+
+        render_hero_long(longboi, DEMO_DATA, "imperial")
+        real = unwrap_to_real(longboi)
+        assert lit(real, 162, 50, 506, 62)  # pop % row on every column
+
+
+class TestWorstCaseCollision:
+    """Spec Testing section: column-collision guard with worst-case content
+    (widest temps `-99/-99`, `100%` pop) on both hires layouts — each
+    column's ink must stay inside its own column band."""
+
+    def _worst_data(self):
+        import attrs
+
+        from led_ticker_weather.forecast_data import DayForecast
+
+        worst = tuple(
+            DayForecast(label="WED", kind="thunder", hi_f=-99, lo_f=-99, pop=100)
+            for _ in range(6)
+        )
+        cur = attrs.evolve(
+            DEMO_DATA.current, temp_f=-99, feels_f=-99, hi_f=-99, lo_f=-99
+        )
+        return attrs.evolve(DEMO_DATA, current=cur, days=worst)
+
+    @staticmethod
+    def _column_gaps_clear(real, lit, x0, x1, n):
+        cw = (x1 - x0) / n
+        for i in range(1, n):
+            edge = round(x0 + i * cw)
+            # 1px gutter each side of every column boundary stays dark
+            assert not lit(real, edge - 1, 0, edge + 1, 62), f"boundary {i}"
+
+    def test_big_strip_columns_stay_separated(self, bigsign, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, self._worst_data(), "imperial")
+        self._column_gaps_clear(unwrap_to_real(bigsign), lit, 118, 252, 4)
+
+    def test_long_strip_columns_stay_separated(self, longboi, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_long
+
+        render_hero_long(longboi, self._worst_data(), "imperial")
+        self._column_gaps_clear(unwrap_to_real(longboi), lit, 162, 506, 6)
+
+    def test_big_hero_never_bleeds_into_strip(self, bigsign, lit):
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        render_hero_big(bigsign, self._worst_data(), "imperial")
+        # nothing between the divider (112) and the strip origin (118)
+        assert not lit(unwrap_to_real(bigsign), 113, 0, 118, 62)

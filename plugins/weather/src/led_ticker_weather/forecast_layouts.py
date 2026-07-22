@@ -5,7 +5,7 @@ to packaged emoji (spec divergence 1: boxes snap to sprite sizes).
 """
 
 import attrs
-from led_ticker.plugin import FONT_SMALL, draw_emoji_at, draw_text
+from led_ticker.plugin import FONT_SMALL, draw_emoji_at, draw_text, safe_scale
 
 from led_ticker_weather.forecast_data import (
     KIND_SLUGS,
@@ -17,9 +17,12 @@ from led_ticker_weather.paint import (
     blit_emoji_scaled,
     cap_top,
     dim,
+    fit_text,
     hires,
     js_round,
+    phys_wrap,
     text_width,
+    vdivider,
 )
 from led_ticker_weather.palette import AMBER, CYAN, HI, IDENT, LABEL, LO, RGB
 
@@ -197,3 +200,81 @@ def _strip_cell(shim, real, x, w, day: DayForecast, geo: StripGeo, units, oy):
     if geo.pop_y is not None:
         rgb = CYAN if day.pop >= 50 else LABEL
         _ctext(shim, f"{day.pop}%", x, w, geo.pop_y, rgb, geo.pop_px, oy, bold=False)
+
+
+# --- hero layouts (bigsign / longboi) — handoff weatherBig / weatherLong ---
+
+# Hero icon: 32x32 hires/pack sprite via draw_emoji_at at LOGICAL coords,
+# so the physical position quantizes to scale multiples — (4,13) lands at
+# (4,12), (4,15) at (4,16). <=3px drift, accepted (spec divergence 1).
+
+
+def _hero_icon(canvas, kind: str, log_x: int, log_y: int, y_offset: int) -> None:
+    _, hires_slug = KIND_SLUGS[kind]
+    draw_emoji_at(canvas, hires_slug, log_x, log_y + y_offset)
+
+
+def _strip(shim, real, days, x0, x1, n_slots, geo, units, oy):
+    """Lay out up to n_slots day columns; a short feed widens the columns
+    (cw = span / actual_n, the handoff's own formula with the real count)."""
+    n = min(n_slots, len(days))
+    if n == 0:
+        return
+    cw = (x1 - x0) / n
+    for i in range(n):
+        _strip_cell(shim, real, x0 + i * cw, cw, days[i], geo, units, oy)
+
+
+def render_hero_big(
+    canvas, data: ForecastData, units: str, *, y_offset: int = 0
+) -> None:
+    """256x64: today hero left of a dotted divider, 4-day strip right."""
+    shim, real = phys_wrap(canvas)
+    oy = y_offset * safe_scale(canvas)
+    cur = data.current
+    hires(shim, data.location, 6, cap_top(2, 9) + oy, LABEL, 9)
+    _hero_icon(canvas, cur.kind, 1, 3, y_offset)
+    temp = f"{display_temp(cur.temp_f, units)}°"
+    hires(shim, temp, 44, cap_top(13, 27) + oy, IDENT, 27)
+    _center_segs(
+        shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 44, 60, 41, 11, oy
+    )
+    hires(
+        shim,
+        f"FEELS {display_temp(cur.feels_f, units)}°",
+        44,
+        cap_top(53, 8) + oy,
+        CYAN,
+        8,
+        bold=False,
+    )
+    vdivider(real, 112, 6 + oy, 58 + oy)
+    _strip(shim, real, data.days, 118, 252, 4, _BIG_GEO, units, oy)
+
+
+def render_hero_long(
+    canvas, data: ForecastData, units: str, *, y_offset: int = 0
+) -> None:
+    """512x64: expanded hero (ellipsized location, temp pushed right),
+    dotted divider, 6-day strip with precip %."""
+    shim, real = phys_wrap(canvas)
+    oy = y_offset * safe_scale(canvas)
+    cur = data.current
+    hires(shim, fit_text(data.location, 148, 11), 6, cap_top(2, 11) + oy, LABEL, 11)
+    _hero_icon(canvas, cur.kind, 1, 4, y_offset)
+    temp = f"{display_temp(cur.temp_f, units)}°"
+    hires(shim, temp, 70, cap_top(14, 28) + oy, IDENT, 28)
+    _center_segs(
+        shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 70, 80, 43, 11, oy
+    )
+    hires(
+        shim,
+        f"FEELS {display_temp(cur.feels_f, units)}°",
+        70,
+        cap_top(56, 8) + oy,
+        CYAN,
+        8,
+        bold=False,
+    )
+    vdivider(real, 156, 6 + oy, 58 + oy)
+    _strip(shim, real, data.days, 162, 506, 6, _LONG_GEO, units, oy)
