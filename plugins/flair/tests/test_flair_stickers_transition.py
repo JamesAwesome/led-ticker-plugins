@@ -60,12 +60,12 @@ def _make_widget(draw_pixel: bool = True) -> Any:
 
 class TestKnobValidation:
     def test_unknown_slug_raises_at_construction_naming_it(self):
-        # `dragon` is a deliberately non-existent slug — do NOT use `fire`
-        # here: core added `:fire:` in led-ticker-core (PR #424), so it is a
-        # VALID slug now and would not be rejected. `dragon` is not in the
-        # emoji set (and unlikely to be), so this stays a real rejection case.
-        with pytest.raises(ValueError, match="dragon"):
-            Stickers(emoji=["taco", "dragon"])
+        # Use a GARBAGE token, never a real word: the standard-emoji pack
+        # (core >=4.21) made `emoji_slugs()` ~1,400 Noto names, so plausible
+        # words like `fire` (#424) and `dragon` (#78) are now VALID slugs and
+        # stop being rejections. `nonexistent_slug_zzz` can't be a real emoji.
+        with pytest.raises(ValueError, match="nonexistent_slug_zzz"):
+            Stickers(emoji=["taco", "nonexistent_slug_zzz"])
 
     def test_empty_or_nonlist_rejected(self):
         for bad in ([], "taco", [1], [""]):
@@ -314,7 +314,9 @@ class TestRandomVarietyCap:
         monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
         s = m.Stickers(seed=3)
 
-        pool = s._firing_pool()
+        # scale > 1 skips the drawable-filter (which would KeyError on the
+        # unregistered fake slugs) — isolates the cap/sample logic.
+        pool = s._firing_pool(4, 16)
 
         assert 1 <= len(set(pool)) <= m._RANDOM_VARIETY_CAP
 
@@ -322,7 +324,7 @@ class TestRandomVarietyCap:
         explicit = ["taco", "sun", "moon"]
         s = Stickers(emoji=list(explicit), seed=3)
 
-        assert s._firing_pool() == explicit
+        assert s._firing_pool(4, 16) == explicit
 
     def test_firing_pool_seedless_resamples_across_calls(self, monkeypatch) -> None:
         """Models what `_ensure_plan` does across a replan: a seedless
@@ -334,8 +336,8 @@ class TestRandomVarietyCap:
         monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
         s = m.Stickers()  # seedless
 
-        first = set(s._firing_pool())
-        second = set(s._firing_pool())
+        first = set(s._firing_pool(4, 16))
+        second = set(s._firing_pool(4, 16))
 
         assert first != second  # 1400-choose-12 twice: collision ~impossible
 
@@ -345,8 +347,8 @@ class TestRandomVarietyCap:
         fake = tuple(f"pack_slug_{i}" for i in range(1400))
         monkeypatch.setattr(m, "emoji_slugs", lambda: fake)
 
-        pool_a = m.Stickers(seed=7)._firing_pool()
-        pool_b = m.Stickers(seed=7)._firing_pool()
+        pool_a = m.Stickers(seed=7)._firing_pool(4, 16)
+        pool_b = m.Stickers(seed=7)._firing_pool(4, 16)
 
         assert pool_a == pool_b
 
@@ -364,6 +366,39 @@ class TestRandomVarietyCap:
         assert s._plan is not None
         distinct = {st.slug for st in s._plan}
         assert 1 <= len(distinct) <= 12
+
+    def test_firing_pool_scale1_excludes_hires_only_slugs(self) -> None:
+        """The regression fix: at scale 1 the pool is filtered to slugs that
+        actually rasterize (the curated low-res set), excluding the ~1,360
+        HIRES-ONLY standard-emoji-pack slugs that draw nothing at scale 1 and
+        would compose an empty sprite. Every returned slug must render."""
+        from led_ticker_flair.flair.stickers import capture_sprite
+
+        s = Stickers(seed=11)  # the seed that previously crashed
+        pool = s._firing_pool(1, 16)
+
+        assert pool, "scale-1 pool must not be empty"
+        for slug in pool:
+            assert capture_sprite(slug, 1, 16), f"{slug} draws nothing at scale 1"
+
+    def test_scale1_smallsign_frame_does_not_crash(self) -> None:
+        """End-to-end guard for the min()-on-empty-mask crash: a scale-1
+        firing with the crash-triggering seed now renders cleanly."""
+        s = Stickers(seed=11)
+        canvas = _StubCanvas(width=160, height=16)
+        s.frame_at(
+            0.5, canvas, _make_widget(draw_pixel=False), _make_widget(draw_pixel=False)
+        )
+        assert s._plan is not None
+
+    def test_compose_sticker_empty_sprite_returns_empty(self) -> None:
+        """Defense-in-depth: an empty sprite (e.g. an explicit hires-only slug
+        at scale 1) composes to nothing instead of crashing on bbox math."""
+        from led_ticker_flair.flair.stickers import compose_sticker
+
+        assert compose_sticker({}, footprint=12, backing="card") == {}
+        assert compose_sticker({}, backing="shadow") == {}
+        assert compose_sticker({}, backing="none") == {}
 
     def test_explicit_list_plan_uncapped(self) -> None:
         explicit = {"taco", "sun", "moon"}

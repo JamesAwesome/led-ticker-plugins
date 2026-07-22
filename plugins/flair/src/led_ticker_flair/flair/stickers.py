@@ -194,6 +194,14 @@ def compose_sticker(sprite, footprint=None, backing="card"):
     full random-assortment pool, on both panel geometries (see the
     ``Stickers`` transition's ``TestEndpoints.test_full_cover_at_half``).
     """
+    # An empty sprite has no ink to back or center — a hires-only emoji drawn
+    # at scale 1 (nothing to rasterize) is the way this happens. Return an
+    # empty sticker rather than crashing on the bbox-center `min()` below; the
+    # random-mode pool filters these out at the source (see `_firing_pool`),
+    # so this only guards an explicit `emoji=[...]` list with an
+    # unrenderable-at-this-scale slug.
+    if not sprite:
+        return {}
     if backing == "none":
         return dict(sprite)
     mask = set(sprite)
@@ -289,20 +297,31 @@ class Stickers:
         self._raster = StickerRaster()
         self._last_t = 1.0
 
-    def _firing_pool(self) -> list[str]:
+    def _firing_pool(self, scale: int, content_height) -> list[str]:
         """The slug pool `plan_stickers` draws from for this firing.
 
         An explicit `emoji=[...]` list is used verbatim -- uncapped, since a
         themed wall of repeated slugs is the whole point. Random mode
-        samples at most `_RANDOM_VARIETY_CAP` DISTINCT slugs from the full
+        samples at most `_RANDOM_VARIETY_CAP` DISTINCT slugs from the
         drawable set via `self._rng`, so a seeded run stays deterministic
         and a seedless refire (which replaces `self._rng` -- see
         `frame_at`) draws a fresh subset. Called fresh on every (re)plan in
         `_ensure_plan`, never cached across plans.
+
+        `emoji_slugs()` grew to include the standard-emoji pack (core >=4.21):
+        ~1,360 HIRES-ONLY slugs that rasterize to NOTHING at scale 1. At
+        scale 1 (smallsign) the pool is filtered to slugs that actually draw
+        here -- the curated low-res set -- so a firing never composes an empty
+        sprite (which crashed `compose_sticker`'s bbox-center math) and full
+        coverage stays achievable. The filter is cheap: an empty capture
+        returns immediately, so screening all slugs is ~1ms. At scale > 1
+        every slug has a hires form, so no filtering is needed.
         """
         if self.emoji:
             return self.emoji
         pool = list(emoji_slugs())
+        if scale == 1:
+            pool = [s for s in pool if capture_sprite(s, scale, content_height)]
         if len(pool) > _RANDOM_VARIETY_CAP:
             pool = self._rng.sample(pool, _RANDOM_VARIETY_CAP)
         return pool
@@ -325,7 +344,7 @@ class Stickers:
             # Footprint from an actual capture (max bbox side + rim), not a
             # guess. Only done when (re)building the plan -- NOT on every
             # call -- so a warm plan costs zero rasterization per frame.
-            pool = self._firing_pool()
+            pool = self._firing_pool(scale, content_height)
             probe = capture_sprite(pool[0], scale, content_height)
             side = (
                 1 + max(max(p[0] for p in probe), max(p[1] for p in probe))
