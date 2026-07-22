@@ -78,3 +78,151 @@ class TestKindSlugs:
         assert KIND_SLUGS["overcast"] == ("cloud", "sun_behind_large_cloud")
         assert KIND_SLUGS["rain_patchy"] == ("rain", "sun_behind_rain_cloud")
         assert KIND_SLUGS["partly_night"] == ("partly_cloudy", "moon")
+
+
+def _payload(n_days=7):
+    """Minimal /v1/forecast.json shape (fields per design/README.md)."""
+    fd = [
+        {
+            "date": "2026-07-21",  # a Tuesday
+            "day": {
+                "maxtemp_f": 86.0,
+                "mintemp_f": 66.0,
+                "daily_chance_of_rain": 0,
+                "condition": {"code": 1000},
+            },
+        }
+    ]
+    for i in range(1, n_days):
+        fd.append(
+            {
+                "date": f"2026-07-{21 + i}",
+                "day": {
+                    "maxtemp_f": 80.0 + i,
+                    "mintemp_f": 60.0 + i,
+                    "daily_chance_of_rain": 10 * i,
+                    "condition": {"code": 1063},
+                },
+            }
+        )
+    return {
+        "location": {"name": "Boston"},
+        "current": {
+            "temp_f": 78.0,
+            "feelslike_f": 80.0,
+            "is_day": 1,
+            "condition": {"code": 1003},
+        },
+        "forecast": {"forecastday": fd},
+    }
+
+
+class TestParseForecastPayload:
+    def test_current_merges_today_hi_lo(self):
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        data = parse_forecast_payload(_payload())
+        assert data.location == "Boston"
+        assert data.current.temp_f == 78.0
+        assert data.current.feels_f == 80.0
+        assert data.current.kind == "partly"
+        assert data.current.hi_f == 86.0  # forecastday[0]
+        assert data.current.lo_f == 66.0
+
+    def test_days_are_tomorrow_onward(self):
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        data = parse_forecast_payload(_payload())
+        assert len(data.days) == 6  # forecastday[1:]
+        assert data.days[0].label == "WED"  # 2026-07-22
+        assert data.days[0].kind == "rain_patchy"
+        assert data.days[0].pop == 10
+
+    def test_day_kind_always_resolves_as_day(self):
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        p = _payload()
+        p["forecast"]["forecastday"][1]["day"]["condition"]["code"] = 1000
+        data = parse_forecast_payload(p)
+        assert data.days[0].kind == "sunny"  # never "clear"
+
+    def test_short_feed_parses_short(self):
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        data = parse_forecast_payload(_payload(n_days=3))
+        assert len(data.days) == 2
+
+    def test_night_current_swaps_kind(self):
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        p = _payload()
+        p["current"]["is_day"] = 0
+        assert parse_forecast_payload(p).current.kind == "partly_night"
+
+
+class TestDisplayTemp:
+    def test_imperial_rounds(self):
+        from led_ticker_weather.forecast_data import display_temp
+
+        assert display_temp(78.4, "imperial") == 78
+        assert display_temp(78.5, "imperial") == 79  # js_round half-up
+
+    def test_metric_converts(self):
+        from led_ticker_weather.forecast_data import display_temp
+
+        assert display_temp(78.0, "metric") == 26  # (78-32)*5/9 = 25.6
+
+
+class TestDemoData:
+    def test_demo_is_the_handoff_boston_week(self):
+        from led_ticker_weather.forecast_data import DEMO_DATA
+
+        assert DEMO_DATA.location == "BOSTON"
+        assert DEMO_DATA.current.temp_f == 78
+        assert DEMO_DATA.current.kind == "partly"
+        assert [d.label for d in DEMO_DATA.days] == [
+            "TUE", "WED", "THU", "FRI", "SAT", "SUN",
+        ]
+        assert DEMO_DATA.days[1].kind == "thunder"
+        assert DEMO_DATA.days[2].pop == 80
+
+
+class TestFetchForecast:
+    async def test_missing_key_raises(self, monkeypatch):
+        from led_ticker_weather.forecast_data import fetch_forecast
+
+        monkeypatch.delenv("WEATHERAPI_KEY", raising=False)
+        with pytest.raises(ValueError, match="WEATHERAPI_KEY"):
+            await fetch_forecast(None, "Boston")
+
+    async def test_api_error_payload_raises(self, monkeypatch):
+        import unittest.mock as mock
+
+        from led_ticker_weather.forecast_data import fetch_forecast
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+        resp = mock.MagicMock()
+        resp.json = mock.AsyncMock(
+            return_value={"error": {"code": 2008, "message": "disabled"}}
+        )
+        session = mock.MagicMock()
+        session.get.return_value.__aenter__ = mock.AsyncMock(return_value=resp)
+        session.get.return_value.__aexit__ = mock.AsyncMock(return_value=False)
+        with pytest.raises(ValueError, match="2008"):
+            await fetch_forecast(session, "Boston")
+
+    async def test_requests_seven_days(self, monkeypatch):
+        import unittest.mock as mock
+
+        from led_ticker_weather.forecast_data import fetch_forecast
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+        resp = mock.MagicMock()
+        resp.json = mock.AsyncMock(return_value=_payload())
+        session = mock.MagicMock()
+        session.get.return_value.__aenter__ = mock.AsyncMock(return_value=resp)
+        session.get.return_value.__aexit__ = mock.AsyncMock(return_value=False)
+        await fetch_forecast(session, "Boston")
+        params = session.get.call_args.kwargs["params"]
+        assert params["days"] == 7
+        assert params["q"] == "Boston"
