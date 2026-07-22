@@ -161,9 +161,10 @@ async def fetch_forecast(session: aiohttp.ClientSession | None, location: str) -
     }
     timeout = aiohttp.ClientTimeout(total=10)
     if session is None:
-        async with aiohttp.ClientSession() as own, own.get(
-            FORECAST_URL, params=params, timeout=timeout
-        ) as resp:
+        async with (
+            aiohttp.ClientSession() as own,
+            own.get(FORECAST_URL, params=params, timeout=timeout) as resp,
+        ):
             data = await resp.json()
     else:
         async with session.get(FORECAST_URL, params=params, timeout=timeout) as resp:

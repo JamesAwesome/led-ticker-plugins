@@ -50,8 +50,17 @@ class TestCondKind:
 class TestKindSlugs:
     def test_every_kind_has_an_entry(self):
         kinds = {
-            "sunny", "clear", "partly", "partly_night", "cloudy",
-            "overcast", "rain", "rain_patchy", "thunder", "snow", "fog",
+            "sunny",
+            "clear",
+            "partly",
+            "partly_night",
+            "cloudy",
+            "overcast",
+            "rain",
+            "rain_patchy",
+            "thunder",
+            "snow",
+            "fog",
         }
         assert set(KIND_SLUGS) == kinds
 
@@ -181,7 +190,12 @@ class TestDemoData:
         assert DEMO_DATA.current.temp_f == 78
         assert DEMO_DATA.current.kind == "partly"
         assert [d.label for d in DEMO_DATA.days] == [
-            "TUE", "WED", "THU", "FRI", "SAT", "SUN",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI",
+            "SAT",
+            "SUN",
         ]
         assert DEMO_DATA.days[1].kind == "thunder"
         assert DEMO_DATA.days[2].pop == 80

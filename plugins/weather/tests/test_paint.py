@@ -139,8 +139,16 @@ class TestBlitEmojiScaled:
     def test_every_curated_weather_slug_blits(self):
         from led_ticker.plugin import HeadlessBackend
 
-        for slug in ("sun", "moon", "cloud", "partly_cloudy", "rain", "snow",
-                     "thunder", "fog"):
+        for slug in (
+            "sun",
+            "moon",
+            "cloud",
+            "partly_cloudy",
+            "rain",
+            "snow",
+            "thunder",
+            "fog",
+        ):
             real = HeadlessBackend(16, 8).create_canvas()
             paint.blit_emoji_scaled(real, slug, 0, 0, 1)
             assert real.count_nonzero() > 0, slug
