@@ -100,3 +100,47 @@ class TestVdivider:
         paint.vdivider(real, 112, 6, 58)
         r, g, b = real.get_pixel(112, 6)
         assert (r, g, b) == (int(70 * 0.4), int(90 * 0.4), int(130 * 0.4))
+
+
+class TestBlitEmojiScaled:
+    def test_k1_matches_direct_draw(self, lit):
+        from led_ticker.plugin import HeadlessBackend, draw_emoji_at
+
+        direct = HeadlessBackend(16, 8).create_canvas()
+        draw_emoji_at(direct, "sun", 0, 0)
+        blitted = HeadlessBackend(16, 8).create_canvas()
+        paint.blit_emoji_scaled(blitted, "sun", 0, 0, 1)
+        for y in range(8):
+            for x in range(8):
+                assert blitted.get_pixel(x, y) == direct.get_pixel(x, y)
+
+    def test_k2_expands_each_pixel_to_2x2(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        one = HeadlessBackend(16, 8).create_canvas()
+        paint.blit_emoji_scaled(one, "rain", 0, 0, 1)
+        two = HeadlessBackend(32, 16).create_canvas()
+        paint.blit_emoji_scaled(two, "rain", 0, 0, 2)
+        for y in range(8):
+            for x in range(8):
+                p = one.get_pixel(x, y)
+                for j in range(2):
+                    for i in range(2):
+                        assert two.get_pixel(x * 2 + i, y * 2 + j) == p
+
+    def test_offset_and_bounds_clip(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        real = HeadlessBackend(20, 20).create_canvas()
+        # 8*3=24 wide from x=10 overflows a 20-wide canvas: must not raise
+        paint.blit_emoji_scaled(real, "sun", 10, 10, 3)
+        assert real.count_nonzero() > 0
+
+    def test_every_curated_weather_slug_blits(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        for slug in ("sun", "moon", "cloud", "partly_cloudy", "rain", "snow",
+                     "thunder", "fog"):
+            real = HeadlessBackend(16, 8).create_canvas()
+            paint.blit_emoji_scaled(real, slug, 0, 0, 1)
+            assert real.count_nonzero() > 0, slug

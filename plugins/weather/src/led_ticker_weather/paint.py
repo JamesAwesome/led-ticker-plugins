@@ -10,11 +10,14 @@ its text masks to visible ink — see design/led-engine-bundle.js
 `rasterize()`); convert through `cap_top` before calling `hires()`.
 """
 
+import functools
 import math
 
 from led_ticker.plugin import (
     Color,
+    HeadlessBackend,
     ScaledCanvas,
+    draw_emoji_at,
     draw_text,
     make_color,
     measure_width,
@@ -99,3 +102,40 @@ def vdivider(real, x: int, y0: int, y1: int) -> None:
     """Dotted vertical rule (handoff `vdivider`: LABEL at 0.4, every 3rd row)."""
     for y in range(y0, y1, 3):
         px(real, x, y, LABEL, 0.4)
+
+
+# 8x8 lowres sprite box (curated weather emoji are all 8x8).
+_SPRITE_BOX = 8
+
+
+@functools.lru_cache(maxsize=32)
+def _emoji_pixels(slug: str) -> tuple[tuple[int, int, int, int, int], ...]:
+    """Lit (dx, dy, r, g, b) offsets of a curated lowres sprite.
+
+    Offscreen-rasterize the 8x8 through the PUBLIC surface (`draw_emoji_at`
+    on a throwaway `HeadlessBackend` canvas) and read back via `get_pixel`
+    — the one documented supported readback (baseball `_mask.py`
+    precedent). Cached: the scan runs once per slug per process.
+    """
+    real = HeadlessBackend(_SPRITE_BOX * 2, _SPRITE_BOX).create_canvas()
+    draw_emoji_at(real, slug, 0, 0)
+    out = []
+    for dy in range(_SPRITE_BOX):
+        for dx in range(_SPRITE_BOX):
+            r, g, b = real.get_pixel(dx, dy)
+            if (r, g, b) != (0, 0, 0):
+                out.append((dx, dy, r, g, b))
+    return tuple(out)
+
+
+def blit_emoji_scaled(real, slug: str, x: int, y: int, k: int) -> None:
+    """Stamp the curated lowres sprite at physical (x, y), each sprite
+    pixel expanded to a k x k block (the strip-icon sizes: k=2 bigsign,
+    k=3 longboi). Bounds-clipped per pixel."""
+    for dx, dy, r, g, b in _emoji_pixels(slug):
+        bx, by = x + dx * k, y + dy * k
+        for j in range(k):
+            for i in range(k):
+                xx, yy = bx + i, by + j
+                if 0 <= xx < real.width and 0 <= yy < real.height:
+                    real.SetPixel(xx, yy, r, g, b)
