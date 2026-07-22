@@ -355,7 +355,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "led-ticker-core"
-version = "4.18.0"
+version = "4.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -364,9 +364,9 @@ dependencies = [
     { name = "pillow" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/15/d1/6b7611644485939052245311778e1fd8c73e0121718c6fea9ab9279c250b/led_ticker_core-4.18.0.tar.gz", hash = "sha256:a04df2ac57248a761b4a995f49345341148357b1c3dba3aefc1050fcb8caab42", size = 28503336, upload-time = "2026-07-17T15:31:41.5Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1b/83/3fff564daf65eaa7b63447f9d64943e9af3b4ec370ad095f4ae6f6b144ce/led_ticker_core-4.27.0.tar.gz", hash = "sha256:50a50b86f3a8283962d1c975faeabf30d8ee734dba918dcbd523d7073ac52e1d", size = 36077495, upload-time = "2026-07-22T01:54:16.263Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/d6/920cc421556744087c0730f6dc48224dd6cc250fd2f7f29c1c16f8a52916/led_ticker_core-4.18.0-py3-none-any.whl", hash = "sha256:a418876dd9a2c3bb340eb76c1c9c20dae1a5623d1f8a78a5efbf86b8ed2c19b6", size = 1063553, upload-time = "2026-07-17T15:31:39.447Z" },
+    { url = "https://files.pythonhosted.org/packages/91/52/021479777f25c4e0e5bde1d9d5c6ff2c9fb244b5849575af009fb037f1c3/led_ticker_core-4.27.0-py3-none-any.whl", hash = "sha256:ecca38906e548d887d5308a03c54a2ab9a5dd9b0e460e7af99e2577534d262f0", size = 4180639, upload-time = "2026-07-22T01:54:13.991Z" },
 ]
 
 [[package]]
@@ -419,7 +419,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "led-ticker-core", specifier = ">=4.18" },
+    { name = "led-ticker-core", specifier = ">=4.27" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

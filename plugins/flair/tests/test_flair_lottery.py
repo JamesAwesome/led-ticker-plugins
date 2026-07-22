@@ -1112,16 +1112,148 @@ class TestFaceLegibility:
             "fit measurement must resolve at the thin-stroke threshold"
         )
 
-    def test_config_set_font_raises_helpfully(self):
-        """The 'font' TOML key is core-reserved (coerced to a Font OBJECT
-        before construction) — the widget must reject a non-string with a
+    def test_config_set_font_raises_helpfully_on_non_string(self):
+        """RESOLVES_OWN_FONT keeps `font` a raw NAME string — core no
+        longer coerces it to a Font object. A non-string here would mean
+        that contract broke (or a caller bypassed it); reject it with a
         clear message instead of crashing deep in the paint path."""
         import pytest
 
         from led_ticker_flair.flair.lottery import Lottery
 
-        class _FakeCoercedFont:  # what the core loader hands over
+        class _FakeCoercedFont:  # what core used to hand over, pre-RESOLVES_OWN_FONT
             pass
 
-        with pytest.raises(ValueError, match="reserved by the core"):
+        with pytest.raises(ValueError, match="must be a font name string"):
             Lottery(words=["A"], font=_FakeCoercedFont())
+
+
+class TestConfigSelectedFont:
+    """RESOLVES_OWN_FONT (core >=4.27): a config-set `font` stays a raw
+    NAME string instead of being coerced to a Font object, so the lottery
+    can pick a font (e.g. a pixel font) and auto-size it at render time."""
+
+    def test_resolves_own_font_marker_is_set(self):
+        from led_ticker_flair.flair.lottery import Lottery
+
+        assert Lottery.RESOLVES_OWN_FONT is True
+
+    def test_default_font_omitted_still_works(self):
+        from led_ticker_flair.flair.lottery import Lottery
+
+        lot = Lottery(words=["HALAL"])
+        assert lot.font == "Inter-Bold"
+
+    def test_config_set_pixel_font_is_accepted_and_used(self):
+        """Previously any config-set `font` (even a valid name) was
+        rejected outright by `_font_is_a_name`. Now a valid name — a
+        pixel font in particular, the point of the grid-snap — builds
+        cleanly and is used as-is (not silently ignored)."""
+        from led_ticker_flair.flair.lottery import Lottery
+
+        lot = Lottery(words=["HALAL"], font="spleen-6x12")
+        assert lot.font == "spleen-6x12"
+
+    def test_unknown_font_name_still_raises_clearly(self):
+        import pytest
+
+        from led_ticker_flair.flair.lottery import Lottery
+
+        with pytest.raises(ValueError, match="no-such-font"):
+            Lottery(words=["A"], font="no-such-font")
+
+
+class TestConfigSelectedFontEndToEnd:
+    """`test_config_set_pixel_font_is_accepted_and_used` above calls
+    `Lottery(...)` directly — it never proves core's real config-load path
+    (validate_widget_cfg -> _resolve_fonts) actually leaves `font` alone for
+    this widget. Before the RESOLVES_OWN_FONT rework, a hires name like
+    `spleen-6x12` with no `font_size` would raise ("requires font_size,
+    e.g. font_size = 24...") right here in _resolve_fonts, before Lottery's
+    own validate_config/constructor ever saw it — the exact bug this class
+    guards against regressing."""
+
+    async def test_config_pixel_font_survives_the_real_factory_path(self):
+        from led_ticker import _plugin_loader as L
+
+        L.reset_plugins()
+        try:
+            L.load_plugins(None, entry_points_enabled=True)
+
+            from led_ticker.app.factories import validate_widget_cfg
+
+            cfg = {
+                "type": "flair.lottery",
+                "words": ["HALAL"],
+                "font": "spleen-6x12",
+            }
+            # No font_size — a normal (non-RESOLVES_OWN_FONT) widget with a
+            # hires font name here would raise in _resolve_fonts.
+            await validate_widget_cfg(cfg, None)
+
+            # The load-bearing assertion: RESOLVES_OWN_FONT left `font` as
+            # the raw NAME string. A widget without the opt-out would have
+            # it replaced by a resolved Font/HiresFont object by now.
+            assert cfg["font"] == "spleen-6x12"
+        finally:
+            L.reset_plugins()
+
+    async def test_hires_font_without_font_size_still_raises_for_a_normal_widget(
+        self,
+    ):
+        """Sanity check that the failure mode this test guards against is
+        real: a widget WITHOUT RESOLVES_OWN_FONT still hits the
+        font_size-required error for the same hires name, on the same
+        real path."""
+        from led_ticker import _plugin_loader as L
+
+        L.reset_plugins()
+        try:
+            L.load_plugins(None, entry_points_enabled=True)
+
+            from led_ticker.app.factories import validate_widget_cfg
+
+            cfg = {
+                "type": "message",
+                "text": "hi",
+                "font": "spleen-6x12",
+            }
+            with pytest.raises(ValueError, match="requires font_size"):
+                await validate_widget_cfg(cfg, None)
+        finally:
+            L.reset_plugins()
+
+
+class TestAutoFontSizePixelGrid:
+    def test_pixel_font_returns_only_native_multiples(self):
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        # Across a range of ball diameters, a pixel font must resolve to a
+        # native multiple (or 0 = doesn't fit) — never an off-grid size.
+        for diam in (40, 48, 56, 64, 80):
+            for word in ("HALAL", "GYRO", "RICE"):
+                size = auto_font_size(word, diam, "spleen-6x12", 4)
+                assert size == 0 or size % 12 == 0, (diam, word, size)
+
+    def test_pixel_font_snaps_down_not_up(self):
+        # A diameter whose continuous fit lands between 12 and 24 must snap
+        # DOWN to 12 (fits), never up to 24 (would overflow).
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        size = auto_font_size("RICE", 48, "spleen-6x12", 4)
+        assert size in (0, 12, 24, 36)  # on-grid only
+        # 48px ball: continuous fit ~15 -> snaps to 12
+        assert size == 12
+
+    def test_tiny_ball_returns_zero_when_native_overflows(self):
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        # A ball too small for even native 12px pixel text -> 0 (doesn't fit).
+        assert auto_font_size("HALAL", 16, "spleen-6x12", 4) == 0
+
+    def test_outline_font_unchanged(self):
+        # Inter keeps the continuous search (may return any int).
+        from led_ticker_flair.flair.lottery import auto_font_size
+
+        size = auto_font_size("RICE", 48, "Inter-Bold", 4)
+        assert size > 0  # unchanged continuous behavior

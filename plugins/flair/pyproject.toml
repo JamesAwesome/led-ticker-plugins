@@ -34,8 +34,11 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    # 4.18 ships emoji_slugs on led_ticker.plugin (flair.stickers slug pool)
-    "led-ticker-core>=4.18",
+    # 4.26 ships pixel_native_size on led_ticker.plugin (lottery pixel-grid
+    # snap for auto_font_size — crisp Spleen ball faces). 4.27 honors
+    # RESOLVES_OWN_FONT (lottery.Lottery sets it so a config-set `font`
+    # stays a raw name instead of being coerced to a Font object).
+    "led-ticker-core>=4.27",
 ]
 
 [project.urls]
