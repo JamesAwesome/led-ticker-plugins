@@ -1112,19 +1112,55 @@ class TestFaceLegibility:
             "fit measurement must resolve at the thin-stroke threshold"
         )
 
-    def test_config_set_font_raises_helpfully(self):
-        """The 'font' TOML key is core-reserved (coerced to a Font OBJECT
-        before construction) — the widget must reject a non-string with a
+    def test_config_set_font_raises_helpfully_on_non_string(self):
+        """RESOLVES_OWN_FONT keeps `font` a raw NAME string — core no
+        longer coerces it to a Font object. A non-string here would mean
+        that contract broke (or a caller bypassed it); reject it with a
         clear message instead of crashing deep in the paint path."""
         import pytest
 
         from led_ticker_flair.flair.lottery import Lottery
 
-        class _FakeCoercedFont:  # what the core loader hands over
+        class _FakeCoercedFont:  # what core used to hand over, pre-RESOLVES_OWN_FONT
             pass
 
-        with pytest.raises(ValueError, match="reserved by the core"):
+        with pytest.raises(ValueError, match="must be a font name string"):
             Lottery(words=["A"], font=_FakeCoercedFont())
+
+
+class TestConfigSelectedFont:
+    """RESOLVES_OWN_FONT (core >=4.27): a config-set `font` stays a raw
+    NAME string instead of being coerced to a Font object, so the lottery
+    can pick a font (e.g. a pixel font) and auto-size it at render time."""
+
+    def test_resolves_own_font_marker_is_set(self):
+        from led_ticker_flair.flair.lottery import Lottery
+
+        assert Lottery.RESOLVES_OWN_FONT is True
+
+    def test_default_font_omitted_still_works(self):
+        from led_ticker_flair.flair.lottery import Lottery
+
+        lot = Lottery(words=["HALAL"])
+        assert lot.font == "Inter-Bold"
+
+    def test_config_set_pixel_font_is_accepted_and_used(self):
+        """Previously any config-set `font` (even a valid name) was
+        rejected outright by `_font_is_a_name`. Now a valid name — a
+        pixel font in particular, the point of the grid-snap — builds
+        cleanly and is used as-is (not silently ignored)."""
+        from led_ticker_flair.flair.lottery import Lottery
+
+        lot = Lottery(words=["HALAL"], font="spleen-6x12")
+        assert lot.font == "spleen-6x12"
+
+    def test_unknown_font_name_still_raises_clearly(self):
+        import pytest
+
+        from led_ticker_flair.flair.lottery import Lottery
+
+        with pytest.raises(ValueError, match="no-such-font"):
+            Lottery(words=["A"], font="no-such-font")
 
 
 class TestAutoFontSizePixelGrid:

@@ -406,18 +406,32 @@ _INSET_WITH_BORDER = 3
 
 
 def _font_is_a_name(_inst, _attr, value):
-    """`font` in a TOML widget block is a core-RESERVED key: the config
-    loader coerces it to a Font OBJECT before construction, which this widget
-    cannot use (it re-resolves the NAME at multiple sizes for the ball-face
-    auto-fit). Without this guard a config-set `font` crashed deep in the
-    paint path with an unhashable/unknown-font error."""
+    """`font` selects the ball-face font by NAME.
+
+    ``Lottery`` sets ``RESOLVES_OWN_FONT = True``, which tells core's
+    ``_resolve_fonts`` to leave a config-set ``font`` as the raw NAME
+    string instead of coercing it to a Font object — the widget re-resolves
+    that name itself at each auto-computed size (``auto_font_size`` /
+    ``paint_face``), so it needs the name, not a pre-sized object.
+
+    This validator only confirms the name is real: a non-string still
+    raises (a stray Font/HiresFont object would mean ``RESOLVES_OWN_FONT``
+    stopped being honored, or a caller bypassed it), and an unknown name
+    raises via ``resolve_font`` itself (``UnknownFontError``, a ``ValueError``
+    subclass whose message lists every known font — the same error a typo
+    in any other widget's ``font`` gets). The probe resolves at the
+    legibility floor (``_MIN_FONT_SIZE``) purely to validate the name; the
+    render path re-resolves at the actual fit size, so the object built
+    here is discarded.
+    """
     if not isinstance(value, str):
         raise ValueError(
-            "flair.lottery: the 'font' config key is reserved by the core "
-            "loader and cannot select the ball font — remove it (the "
-            "lottery auto-sizes Inter-Bold at a thin-stroke threshold; "
-            "ball faces are too small for other faces to matter)."
+            f"flair.lottery: 'font' must be a font name string, got "
+            f"{type(value).__name__} ({value!r}) — RESOLVES_OWN_FONT should "
+            "have kept it a raw name; the lottery re-resolves it itself at "
+            "each auto-computed ball size."
         )
+    resolve_font(value, _MIN_FONT_SIZE, _FACE_THRESHOLD)
 
 
 @attrs.define
@@ -443,6 +457,17 @@ class Lottery(FrameAwareBase):
     ``_rest_surface`` (once per settle event, not per frame) so already-
     settled balls cost one flat blit per tick regardless of ``n``.
     """
+
+    # Opts out of core's font-name -> Font-object coercion (`_resolve_fonts`
+    # in `app/factories.py`, core >=4.27): `font` stays the raw NAME string
+    # config set (or the "Inter-Bold" default), and core doesn't require a
+    # `font_size` alongside it. The widget re-resolves that name itself at
+    # each auto-computed size (`auto_font_size` / `paint_face`) — it never
+    # holds a single pre-sized Font object. Plain unannotated class
+    # attribute: `@attrs.define` only turns annotated names into fields, so
+    # this is inert to attrs (verified against core's own
+    # `test_resolves_own_font_leaves_raw_name`).
+    RESOLVES_OWN_FONT = True
 
     words: list[str]
     ball_style: str = "classic"
