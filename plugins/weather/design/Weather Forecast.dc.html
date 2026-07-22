@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="_ds/led-ticker-flight-tracker-b0436575-c437-4b55-9f53-849d4e5692c6/_ds_bundle.js"></script>
+<style>
+  html,body{margin:0;background:#07090d;color:#e7ecf3;font-family:Inter,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#ffb400;text-decoration:none}
+  a:hover{color:#ffca4d}
+  *{box-sizing:border-box}
+</style>
+</helmet>
+<div style="max-width:1120px;margin:0 auto;padding:34px 26px 90px">
+
+  <header style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:22px;margin-bottom:8px">
+    <div>
+      <div style="font-family:Silkscreen,monospace;font-size:11px;letter-spacing:.28em;color:#465a82;margin-bottom:12px">LED-TICKER · WEATHER PLUGIN</div>
+      <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.05">Weather — Multi-Day Forecast</h1>
+      <p style="margin:10px 0 0;max-width:600px;color:#9aa7ba;font-size:14px;line-height:1.5">A new forecast mode in the dot-matrix language of the flight tracker. Conditions are hand-built LED glyphs; hi&#8203;/&#8203;lo temps run warm-orange over cool-blue. The hi-res signs get a <b style="color:#e7ecf3">today hero + forecast strip</b> and scale the day count to their width — <b style="color:#e7ecf3">smallsign</b> 3-day, <b style="color:#e7ecf3">bigsign</b> 5-day, <b style="color:#e7ecf3">longboi</b> 7-day.</p>
+    </div>
+  </header>
+
+  <div style="position:sticky;top:0;z-index:20;margin:0 -26px 30px;padding:12px 26px;background:rgba(7,9,13,.82);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+    <span style="font-family:Silkscreen,monospace;font-size:10px;letter-spacing:.2em;color:#465a82">CONTROLS</span>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#c4cfdd;cursor:pointer">
+      <input id="ctl-glow" type="checkbox" checked style="accent-color:#3cdc3c;width:15px;height:15px"> GLOW
+    </label>
+    <button id="ctl-units" style="font-family:Inter;font-size:12.5px;font-weight:600;color:#07090d;background:#ffb400;border:0;border-radius:7px;padding:7px 15px;cursor:pointer">°F</button>
+    <span style="margin-left:auto;font-family:Silkscreen,monospace;font-size:9.5px;letter-spacing:.12em;color:#2f3d55">STATIC FORECAST · SAMPLE FEED</span>
+  </div>
+
+  <section data-screen-label="Smallsign" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#00dcff">00</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">smallsign · 3-day</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">160×16, BDF only — no room for a hero, so it runs a clean 3-day strip: condition glyph, day, hi&#8203;/&#8203;lo.</p>
+    </div>
+    <div style="width:640px;max-width:100%">
+      <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">SMALLSIGN · STRIP · 160×16</div>
+      <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-wx-small"></canvas></div>
+    </div>
+  </section>
+
+  <section data-screen-label="Bigsign" style="margin-bottom:46px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#ffb400">01</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">bigsign · 5-day</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">256×64 — today hero on the left (big glyph, current temp, hi&#8203;/&#8203;lo), then a 4-day strip.</p>
+    </div>
+    <div style="width:1024px;max-width:100%">
+      <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">BIGSIGN · HERO + STRIP · 256×64</div>
+      <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-wx-big"></canvas></div>
+    </div>
+  </section>
+
+  <section data-screen-label="Longboi" style="margin-bottom:20px">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px">
+      <span style="font-family:Silkscreen,monospace;font-size:13px;color:#ff50ff">02</span>
+      <h2 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em">longboi · 7-day</h2>
+      <p style="margin:0;color:#8593a8;font-size:13px">512×64 — the widescreen target. Expanded hero (temp, hi&#8203;/&#8203;lo, feels-like) plus a 6-day strip carrying precip %.</p>
+    </div>
+    <div style="width:1024px;max-width:100%">
+      <div style="font-family:Silkscreen,monospace;font-size:9px;letter-spacing:.16em;color:#465a82;margin-bottom:8px">LONGBOI · HERO + STRIP · 512×64</div>
+      <div style="background:#000;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.7)"><canvas id="cv-wx-long"></canvas></div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  // ---- palette (0..255, normalized to 0..1 in boot) ----
+  C = {
+    ident:[255,255,255], label:[70,90,130], amber:[255,180,0],
+    hi:[255,148,36], lo:[70,180,255], cyan:[0,200,255],
+    sun:[255,192,32], moon:[212,224,255],
+    cloudLt:[168,182,208], cloudDk:[92,108,146], fog:[128,144,174],
+    rain:[0,196,255], snow:[224,236,255], bolt:[255,208,40],
+  };
+  LOC = "BOSTON";
+  // WEATHER — weatherapi.com  GET /v1/forecast.json?key=KEY&q=<loc>&days=7&aqi=no&alerts=no
+  //   location.name -> LOC
+  //   current.temp_f -> CUR.tempF · current.feelslike_f -> feelsF · current.wind_mph -> windMph
+  //   current.humidity -> hum · current.condition.code + current.is_day -> kind (see condKind)
+  //   forecast.forecastday[] each: date -> weekday label
+  //     day.maxtemp_f -> hiF · day.mintemp_f -> loF · day.daily_chance_of_rain -> pop (%)
+  //     day.condition.code -> kind
+  //   condKind(code,isDay): 1000 sunny/clear · 1003 partly · 1006 cloudy · 1009 overcast ·
+  //     1030/1135/1147 fog · 1063/1150-1201/1240-1246 rain · 1066/1114/1210-1225/1255-1258 snow ·
+  //     1087/1273-1282 thunder. is_day=0 swaps sunny->clear, partly->partlyNight (moon).
+  CUR = {tempF:78, kind:"partly", feelsF:80, hiF:82, loF:64, windMph:9, hum:55, pop:20};
+  FC = [
+    {d:"TUE", kind:"sunny",   hiF:86, loF:66, pop:0},
+    {d:"WED", kind:"thunder", hiF:79, loF:68, pop:60},
+    {d:"THU", kind:"rain",    hiF:74, loF:65, pop:80},
+    {d:"FRI", kind:"cloudy",  hiF:77, loF:63, pop:30},
+    {d:"SAT", kind:"sunny",   hiF:83, loF:62, pop:5},
+    {d:"SUN", kind:"partly",  hiF:85, loF:64, pop:15},
+  ];
+
+  // ---------- temperature / units ----------
+  TF(f){ return this.st.units==="C" ? Math.round((f-32)*5/9) : Math.round(f); }
+  temp(f){ return this.TF(f)+"\u00B0"; }
+
+  // ---------- pixel primitives (physical coords) ----------
+  disc(sign,cx,cy,r,col,b){ var R=Math.ceil(r), rr=r*r+r*0.7; for(var dy=-R;dy<=R;dy++) for(var dx=-R;dx<=R;dx++) if(dx*dx+dy*dy<=rr) sign.px(cx+dx,cy+dy,col,b==null?1:b); }
+  rect(sign,x,y,w,h,col,b){ x=Math.round(x);y=Math.round(y); for(var i=0;i<w;i++) for(var j=0;j<h;j++) sign.px(x+i,y+j,col,b==null?1:b); }
+  line(sign,x0,y0,x1,y1,col,b){ x0=Math.round(x0);y0=Math.round(y0);x1=Math.round(x1);y1=Math.round(y1);
+    var dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1,err=dx-dy;
+    while(true){ sign.px(x0,y0,col,b==null?1:b); if(x0===x1&&y0===y1) break; var e2=2*err; if(e2>-dy){err-=dy;x0+=sx;} if(e2<dx){err+=dx;y0+=sy;} } }
+  fatline(sign,x0,y0,x1,y1,col,b){ this.line(sign,x0,y0,x1,y1,col,b); this.line(sign,x0+1,y0,x1+1,y1,col,b); }
+
+  // ---------- weather glyphs (square box at x,y sized s) ----------
+  gSun(sign,cx,cy,r,col){
+    this.disc(sign,cx,cy,r,col);
+    var d=[[0,-1],[0,1],[-1,0],[1,0],[0.71,-0.71],[-0.71,-0.71],[0.71,0.71],[-0.71,0.71]], o=r+2, e=r+(r>4?4:3);
+    for(var i=0;i<d.length;i++) this.line(sign, cx+d[i][0]*o, cy+d[i][1]*o, cx+d[i][0]*e, cy+d[i][1]*e, col, 1);
+  }
+  gMoon(sign,x,y,s,col){
+    var cx=x+s*0.52, cy=y+s*0.5, R=s*0.32, ox=s*0.20, rr=R*R+R*0.7, or2=R*R+R*0.7, Rc=Math.ceil(R);
+    for(var dy=-Rc;dy<=Rc;dy++) for(var dx=-Rc;dx<=Rc;dx++){
+      var inMain=dx*dx+dy*dy<=rr, ddx=dx-ox, ddy=dy-s*0.06, inCut=ddx*ddx+ddy*ddy<=or2;
+      if(inMain && !inCut) sign.px(cx+dx,cy+dy,col,1);
+    }
+  }
+  gCloud(sign,x,y,s,col){
+    this.disc(sign, x+s*0.33, y+s*0.56, s*0.17, col);
+    this.disc(sign, x+s*0.52, y+s*0.42, s*0.22, col);
+    this.disc(sign, x+s*0.70, y+s*0.55, s*0.16, col);
+    this.rect(sign, x+s*0.19, y+s*0.55, Math.round(s*0.56), Math.round(s*0.17), col, 1);
+  }
+  gRainStreaks(sign,x,y,s,col){ for(var i=0;i<3;i++){ var sx=x+s*(0.30+i*0.20); this.line(sign,sx,y+s*0.70,sx-s*0.10,y+s*0.93,col,1); } }
+  gBolt(sign,x,y,s,col){
+    var cx=x+s*0.50, t=y+s*0.60;
+    this.fatline(sign, cx+s*0.05, t,          cx-s*0.07, t+s*0.16, col,1);
+    this.fatline(sign, cx-s*0.07, t+s*0.16,   cx+s*0.05, t+s*0.16, col,1);
+    this.fatline(sign, cx+s*0.05, t+s*0.16,   cx-s*0.08, t+s*0.38, col,1);
+  }
+  gFlakes(sign,x,y,s,col){ var pts=[[0.32,0.80],[0.55,0.90],[0.72,0.78]]; for(var i=0;i<pts.length;i++){ var fx=x+s*pts[i][0], fy=y+s*pts[i][1]; this.line(sign,fx-1,fy,fx+1,fy,col,1); this.line(sign,fx,fy-1,fx,fy+1,col,1); } }
+  gFogLines(sign,x,y,s,col){ this.line(sign, x+s*0.18, y+s*0.66, x+s*0.82, y+s*0.66, col,1); this.line(sign, x+s*0.26, y+s*0.82, x+s*0.74, y+s*0.82, col,1); }
+  drawIcon(sign,kind,x,y,s){
+    var C=this.C;
+    switch(kind){
+      case "sunny":   this.gSun(sign, x+s*0.5, y+s*0.5, s*0.26, C.sun); break;
+      case "clear":   this.gMoon(sign, x, y, s, C.moon); break;
+      case "partly":
+        this.gSun(sign, x+s*0.34, y+s*0.32, s*0.15, C.sun);
+        this.gCloud(sign, x+s*0.08, y+s*0.30, s*0.80, C.cloudLt); break;
+      case "partlyNight":
+        this.gMoon(sign, x+s*0.02, y-s*0.04, s*0.55, C.moon);
+        this.gCloud(sign, x+s*0.08, y+s*0.30, s*0.80, C.cloudLt); break;
+      case "cloudy":  this.gCloud(sign, x+s*0.05, y+s*0.06, s*0.9, C.cloudLt); break;
+      case "overcast":this.gCloud(sign, x, y+s*0.08, s, C.cloudDk); break;
+      case "rain":    this.gCloud(sign, x+s*0.05, y, s*0.9, C.cloudLt); this.gRainStreaks(sign,x,y,s,C.rain); break;
+      case "thunder": this.gCloud(sign, x+s*0.05, y, s*0.9, C.cloudLt); this.gBolt(sign,x,y,s,C.bolt); break;
+      case "snow":    this.gCloud(sign, x+s*0.05, y, s*0.9, C.cloudLt); this.gFlakes(sign,x,y,s,C.snow); break;
+      case "fog":     this.gCloud(sign, x+s*0.05, y-s*0.02, s*0.9, C.fog); this.gFogLines(sign,x,y,s,C.fog); break;
+      default:        this.gCloud(sign, x+s*0.05, y+s*0.06, s*0.9, C.cloudLt);
+    }
+  }
+
+  // ---------- hi-res text helpers ----------
+  hw(sign,t,px,wt){ return sign.hiresMask(t,px,wt||"700").w; }
+  fitText(sign,t,maxW,px,wt){ if(this.hw(sign,t,px,wt)<=maxW) return t; var s=t; while(s.length>1 && this.hw(sign,s.replace(/\s+$/,"")+"\u2026",px,wt)>maxW) s=s.slice(0,-1); return s.replace(/\s+$/,"")+"\u2026"; }
+  ctext(sign,t,x,w,y,rgb,px,wt){ var tw=this.hw(sign,t,px,wt); sign.hires(t, Math.round(x+(w-tw)/2), y, rgb, px, wt); }
+  centerSegs(sign,segs,x,w,y,px,wt){ var tot=0,i; for(i=0;i<segs.length;i++) tot+=this.hw(sign,segs[i][0],px,wt); var cx=Math.round(x+(w-tot)/2); for(i=0;i<segs.length;i++) cx+=sign.hires(segs[i][0],cx,y,segs[i][1],px,wt); }
+  tempSegs(cell,deg){ var hi=deg===false?""+this.TF(cell.hiF):this.temp(cell.hiF), lo=deg===false?""+this.TF(cell.loF):this.temp(cell.loF); return [[hi,this.C.hi],["/",this.C.label],[lo,this.C.lo]]; }
+
+  // ---------- hi-res strip cell (bigsign / longboi) ----------
+  stripCell(sign,x,w,cell,o){
+    var C=this.C;
+    this.ctext(sign, cell.d, x, w, o.dayY, C.amber, o.dayPx, "700");
+    this.drawIcon(sign, cell.kind, x+(w-o.iconS)/2, o.iconY, o.iconS);
+    if(o.stack){
+      this.ctext(sign, ""+this.TF(cell.hiF), x, w, o.tempY, C.hi, o.tempPx, "700");
+      this.ctext(sign, ""+this.TF(cell.loF), x, w, o.tempY+o.lineH, C.lo, o.tempPx, "700");
+    } else {
+      this.centerSegs(sign, this.tempSegs(cell,false), x, w, o.tempY, o.tempPx, "700");
+    }
+    if(o.popY!=null) this.ctext(sign, cell.pop+"%", x, w, o.popY, cell.pop>=50?C.cyan:C.label, o.popPx, "600");
+  }
+  vdivider(sign,x,y0,y1){ for(var y=y0;y<y1;y+=3) sign.px(x,y,this.C.label,0.4); }
+
+  // ---------- SMALLSIGN (160×16, BDF only) ----------
+  weatherSmall(sign,ctx){
+    var C=this.C, cells=[
+      {d:"TDY", kind:this.CUR.kind, hiF:this.CUR.hiF, loF:this.CUR.loF},
+      this.FC[0], this.FC[1],
+    ];
+    var cw=53;
+    for(var i=0;i<3;i++){
+      var x=2+i*cw, c=cells[i];
+      this.drawIcon(sign, c.kind, x, 1, 14);
+      var tx=x+17;
+      sign.bdf(c.d, tx, 1, C.amber, 7);
+      sign.bdf(this.TF(c.hiF)+"/"+this.TF(c.loF), tx, 9, C.ident, 7);
+      if(i<2) for(var yy=2;yy<14;yy+=2) sign.px(x+cw-3, yy, C.label, 0.3);
+    }
+  }
+
+  // ---------- BIGSIGN (256×64) — today hero + 4-day strip ----------
+  weatherBig(sign,ctx){
+    var C=this.C, cur=this.CUR;
+    sign.hires(this.LOC, 6, 2, C.label, 9, "700");
+    this.drawIcon(sign, cur.kind, 4, 13, 30);
+    sign.hires(this.temp(cur.tempF), 44, 13, C.ident, 27, "700");
+    this.centerSegs(sign, this.tempSegs({hiF:cur.hiF,loF:cur.loF}), 44, 60, 41, 11, "700");
+    sign.hires("FEELS "+this.temp(cur.feelsF), 44, 53, C.cyan, 8, "600");
+    this.vdivider(sign, 112, 6, 58);
+    var x0=118, tot=252-x0, n=4, cw=tot/n;
+    for(var i=0;i<n;i++) this.stripCell(sign, x0+i*cw, cw, this.FC[i], {dayY:2,dayPx:9,iconS:18,iconY:13,tempY:37,tempPx:12,stack:true,lineH:12});
+  }
+
+  // ---------- LONGBOI (512×64) — expanded hero + 6-day strip ----------
+  weatherLong(sign,ctx){
+    var C=this.C, cur=this.CUR, hx=70;
+    sign.hires(this.fitText(sign,this.LOC,148,11,"700"), 6, 2, C.label, 11, "700");
+    this.drawIcon(sign, cur.kind, 4, 15, 40);
+    sign.hires(this.temp(cur.tempF), hx, 14, C.ident, 28, "700");
+    this.centerSegs(sign, this.tempSegs({hiF:cur.hiF,loF:cur.loF}), hx, 150-hx, 43, 11, "700");
+    sign.hires("FEELS "+this.temp(cur.feelsF), hx, 56, C.cyan, 8, "600");
+    this.vdivider(sign, 156, 6, 58);
+    var x0=162, tot=506-x0, n=6, cw=tot/n;
+    for(var i=0;i<n;i++) this.stripCell(sign, x0+i*cw, cw, this.FC[i], {dayY:2,dayPx:10,iconS:22,iconY:13,tempY:40,tempPx:12,popY:52,popPx:9});
+  }
+
+  // ---------- boot / loop ----------
+  DEFS = [
+    {id:"wx-small", fn:"weatherSmall", cfg:{logW:160,logH:16,scale:1,cell:5}},
+    {id:"wx-big",   fn:"weatherBig",   cfg:{logW:64, logH:16,scale:4,cell:4}},
+    {id:"wx-long",  fn:"weatherLong",  cfg:{logW:128,logH:16,scale:4,cell:3}},
+  ];
+  componentDidMount(){
+    this.st = {glow:true, units:"F"};
+    var self=this;
+    function go(){
+      if(!window.LED){ setTimeout(go,60); return; }
+      var fl=[]; try{ fl=[document.fonts.load("8px Silkscreen"),document.fonts.load("700 30px Inter"),document.fonts.load("600 10px Inter")]; }catch(e){}
+      Promise.all(fl).catch(function(){}).then(function(){ return document.fonts?document.fonts.ready:null; }).then(function(){ self.boot(); });
+    }
+    go();
+  }
+  componentWillUnmount(){ if(this.timer) clearInterval(this.timer); }
+  cacheRaster(s){
+    var cache={}, orig=s.hiresMask.bind(s);
+    function get(t,px,wt){ var k=t+"|"+px+"|"+(wt||"700"); var m=cache[k]; if(!m){ m=orig(t,px,wt); cache[k]=m; } return m; }
+    s.hiresMask=function(t,px,wt){ return get(t,px,wt); };
+    s.hires=function(t,x,y,rgb,px,wt,opts){ var m=get(t,px,wt); s.blit(m,x,y,rgb,1,opts||{}); return m.w; };
+  }
+  boot(){
+    var self=this; this.signs=[];
+    if(!this._normed){ this._normed=true; var n=function(a){return [a[0]/255,a[1]/255,a[2]/255];}; for(var k in this.C) this.C[k]=n(this.C[k]); }
+    this.DEFS.forEach(function(d){
+      var cv=document.getElementById("cv-"+d.id); if(!cv) return;
+      var s=new LED.Sign(cv,Object.assign({glow:self.st.glow}, d.cfg));
+      self.cacheRaster(s);
+      self.signs.push({sign:s, draw:self[d.fn], cv:cv, visible:true});
+    });
+    this.bindControls();
+    if("IntersectionObserver" in window){
+      var io=new IntersectionObserver(function(ents){ ents.forEach(function(e){ for(var i=0;i<self.signs.length;i++) if(self.signs[i].cv===e.target){ self.signs[i].visible=e.isIntersecting; break; } }); },{rootMargin:"120px"});
+      this.signs.forEach(function(r){ io.observe(r.cv); });
+    }
+    this.render2(); this.timer=setInterval(function(){ self.render2(); }, 1000/15);
+  }
+  render2(){
+    var ctx={};
+    for(var i=0;i<this.signs.length;i++){ var S=this.signs[i]; if(!S.visible) continue; S.sign.glow=this.st.glow; S.sign.clear(); S.draw.call(this,S.sign,ctx); S.sign.render(); }
+  }
+  bindControls(){
+    var self=this, gl=document.getElementById("ctl-glow"), un=document.getElementById("ctl-units");
+    if(gl){ gl.checked=self.st.glow; gl.addEventListener("change",function(){ self.st.glow=gl.checked; }); }
+    if(un) un.addEventListener("click",function(){ self.st.units=self.st.units==="F"?"C":"F"; un.textContent="\u00B0"+self.st.units; });
+  }
+  renderVals(){ return {}; }
+}
+</script>
+</body>
+</html>
