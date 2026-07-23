@@ -52,7 +52,15 @@ def render_strip_small(
         hi_f = cur.hi_f if day is None else day.hi_f
         lo_f = cur.lo_f if day is None else day.lo_f
         lowres, _ = KIND_SLUGS[kind]
-        draw_emoji_at(canvas, lowres, x + 3, _SMALL_ICON_Y + y_offset)
+        # max_emoji_height=8: the strip's column geometry assumes an
+        # 8-logical-row icon slot, but core's hires gate is
+        # `is_scaled(canvas)`, not `scale > 1` — a scale=1/2 ScaledCanvas
+        # (e.g. an explicit `scale` override on a bigsign/longboi section)
+        # still passes that gate, so without this cap a 32x32 hires sprite
+        # would land in the slot instead of the curated 8x8 lowres one.
+        draw_emoji_at(
+            canvas, lowres, x + 3, _SMALL_ICON_Y + y_offset, max_emoji_height=8
+        )
         tx = x + _SMALL_TEXT_DX
         draw_text(
             canvas,

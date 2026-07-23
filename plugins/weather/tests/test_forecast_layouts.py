@@ -56,6 +56,37 @@ class TestRenderStripSmall:
         render_strip_small(smallsign, DEMO_DATA, "imperial", y_offset=4)
         assert not _colors(smallsign, 0, 0, 160, 4)
 
+    def test_strip_icons_stay_lowres_through_scale1_wrapper(self):
+        """A bigsign/longboi section with an explicit `scale = 1` override
+        still wraps in a ScaledCanvas (core wraps whenever
+        `scale > 1 OR content_height < canvas.height`) — core's hires gate
+        on `draw_emoji_at` is `is_scaled(canvas)`, not `scale > 1`, so
+        without `max_emoji_height=8` a 32x32 hires sprite would land in the
+        strip's 8-logical-row icon slot instead of the curated 8x8 lowres
+        one, overpainting neighboring text and spilling outside the
+        vertically-centered 16-row content band."""
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        real = HeadlessBackend(256, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=1, content_height=16)
+        render_strip_small(canvas, DEMO_DATA, "imperial")
+
+        band_y0, band_y1 = canvas.y_offset_real, canvas.y_offset_real + 16
+        # Nothing lit outside the vertically-centered 16-row content band.
+        assert not _colors(real, 0, 0, real.width, band_y0)
+        assert not _colors(real, 0, band_y1, real.width, real.height)
+
+        # First icon slot has ink, but no more than an 8x8 sprite's worth
+        # of lit pixels (a 32x32 hires sprite would light far more).
+        icon_x0 = 2 + 3
+        lit_count = sum(
+            1
+            for y in range(band_y0, band_y1)
+            for x in range(icon_x0, icon_x0 + 8)
+            if real.get_pixel(x, y) != (0, 0, 0)
+        )
+        assert 0 < lit_count <= 64
+
 
 class TestStripCell:
     def _cell(self, real, geo, day=None):
