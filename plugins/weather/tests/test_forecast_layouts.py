@@ -228,6 +228,20 @@ class TestRenderHeroBig:
         assert lit(real, 118, 0, 185, 62)
         assert lit(real, 185, 0, 252, 62)
 
+    def test_wide_location_does_not_bleed_into_strip(self, bigsign, lit):
+        import attrs
+        from led_ticker.plugin import unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        wide = attrs.evolve(DEMO_DATA, location="MONTE SAN GIOVANNI CAMPANO")
+        render_hero_big(bigsign, wide, "imperial")
+        real = unwrap_to_real(bigsign)
+        # never bleeds past the divider into the strip's label row.
+        # x=112 is the divider's own column (its dots are mandated lit by
+        # test_divider_dotted_at_x112), so the check starts at x=113.
+        assert not lit(real, 113, 0, 118, 13)
+
     def test_no_days_draws_hero_only(self, bigsign, lit):
         import attrs
         from led_ticker.plugin import unwrap_to_real

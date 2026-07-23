@@ -245,7 +245,12 @@ def render_hero_big(
     shim, real = phys_wrap(canvas)
     oy = y_offset * safe_scale(canvas)
     cur = data.current
-    hires(shim, data.location, 6, cap_top(2, 9) + oy, LABEL, 9)
+    # render_hero_long clamps its location the same way (fit_text) — the
+    # handoff's unclamped draw here assumed its hardcoded "BOSTON"; a real
+    # API-resolved wide city name bleeds through the divider gap into the
+    # strip's label row without this. Divider sits at x112; 102px keeps
+    # >=4px clearance from it.
+    hires(shim, fit_text(data.location, 102, 9), 6, cap_top(2, 9) + oy, LABEL, 9)
     _hero_icon(canvas, cur.kind, 1, 3, y_offset)
     temp = f"{display_temp(cur.temp_f, units)}°"
     hires(shim, temp, 44, cap_top(13, 27) + oy, IDENT, 27)
