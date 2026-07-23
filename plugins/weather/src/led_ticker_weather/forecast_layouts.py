@@ -30,7 +30,12 @@ from led_ticker_weather.palette import AMBER, CYAN, HI, IDENT, LABEL, LO, RGB
 
 _SMALL_CW = 53  # column width
 _SMALL_X0 = 2
-_SMALL_TEXT_DX = 17  # text block starts right of the icon slot
+_SMALL_TEXT_DX = 13  # text block starts right of the icon slot: the
+# handoff's 17 assumed its own 14px icon slot, but ours is the 8x8 sprite
+# drawn at x+3 (ends x+10) — 13 keeps a 2px icon gap and gives the 7-char
+# worst-case temp pair ("-99/-99" at FONT_SMALL's advance) clearance before
+# the separator dots at x + _SMALL_CW - 3 (F1: the old 17 let a 7-char pair
+# paint into the separator column).
 # FONT_SMALL is 5x8 (nearest bundled BDF to the handoff's px7 Silkscreen —
 # documented divergence 2): two 8-row bands stack exactly in 16 rows.
 _SMALL_LABEL_BASELINE = 7

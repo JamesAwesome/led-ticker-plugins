@@ -120,19 +120,25 @@ def parse_forecast_payload(payload: dict) -> ForecastData:
     cur = payload["current"]
     fdays = payload["forecast"]["forecastday"]
     today = fdays[0]["day"]
+    # Coerce numeric fields at parse time (float()/int(), same as `pop`
+    # already did): a string-typed numeric from the API ("86.0") must fail
+    # HERE, inside update()'s ValueError/exception handling (a benign
+    # monitor-loop retry that keeps stale-but-valid data) — not later at
+    # draw time inside display_temp, which trips core's render breaker and
+    # drops the widget entirely.
     current = CurrentConditions(
-        temp_f=cur["temp_f"],
-        feels_f=cur["feelslike_f"],
+        temp_f=float(cur["temp_f"]),
+        feels_f=float(cur["feelslike_f"]),
         kind=cond_kind(cur["condition"]["code"], cur["is_day"]),
-        hi_f=today["maxtemp_f"],
-        lo_f=today["mintemp_f"],
+        hi_f=float(today["maxtemp_f"]),
+        lo_f=float(today["mintemp_f"]),
     )
     days = tuple(
         DayForecast(
             label=_day_label(fd["date"]),
             kind=cond_kind(fd["day"]["condition"]["code"], 1),
-            hi_f=fd["day"]["maxtemp_f"],
-            lo_f=fd["day"]["mintemp_f"],
+            hi_f=float(fd["day"]["maxtemp_f"]),
+            lo_f=float(fd["day"]["mintemp_f"]),
             pop=int(fd["day"]["daily_chance_of_rain"]),
         )
         for fd in fdays[1:]

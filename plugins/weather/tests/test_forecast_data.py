@@ -168,6 +168,46 @@ class TestParseForecastPayload:
         p["current"]["is_day"] = 0
         assert parse_forecast_payload(p).current.kind == "partly_night"
 
+    def test_string_typed_numerics_coerce_to_float(self):
+        """F4: a string-typed numeric from the API ('86.0') must parse to
+        a float, not survive as a str and blow up later at draw time."""
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        p = _payload()
+        p["current"]["temp_f"] = "78.0"
+        p["current"]["feelslike_f"] = "80.0"
+        p["forecast"]["forecastday"][0]["day"]["maxtemp_f"] = "86.0"
+        p["forecast"]["forecastday"][0]["day"]["mintemp_f"] = "66.0"
+        p["forecast"]["forecastday"][1]["day"]["maxtemp_f"] = "81.0"
+        p["forecast"]["forecastday"][1]["day"]["mintemp_f"] = "61.0"
+
+        data = parse_forecast_payload(p)
+        assert data.current.temp_f == 78.0
+        assert isinstance(data.current.temp_f, float)
+        assert data.current.feels_f == 80.0
+        assert isinstance(data.current.feels_f, float)
+        assert data.current.hi_f == 86.0
+        assert isinstance(data.current.hi_f, float)
+        assert data.current.lo_f == 66.0
+        assert isinstance(data.current.lo_f, float)
+        assert data.days[0].hi_f == 81.0
+        assert isinstance(data.days[0].hi_f, float)
+        assert data.days[0].lo_f == 61.0
+        assert isinstance(data.days[0].lo_f, float)
+
+    def test_non_numeric_string_raises_inside_parse(self):
+        """F4: a non-numeric payload value must fail HERE (inside
+        parse_forecast_payload, called from update()) as a ValueError —
+        never survive parsing to raise TypeError later at draw time,
+        which would trip core's render breaker instead of a benign
+        monitor-loop retry."""
+        from led_ticker_weather.forecast_data import parse_forecast_payload
+
+        p = _payload()
+        p["current"]["temp_f"] = "N/A"
+        with pytest.raises(ValueError):
+            parse_forecast_payload(p)
+
 
 class TestDisplayTemp:
     def test_imperial_rounds(self):

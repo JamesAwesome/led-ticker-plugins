@@ -25,11 +25,12 @@ class TestRenderStripSmall:
     def test_day_labels_amber_top_band(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial")
         # label band (rows 0-7) carries amber text right of the icon
-        assert (255, 180, 0) in _colors(smallsign, 19, 0, 55, 8)
+        # (text block starts at x + _SMALL_TEXT_DX = 2 + 13 = 15)
+        assert (255, 180, 0) in _colors(smallsign, 15, 0, 55, 8)
 
     def test_hi_lo_white_bottom_band(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial")
-        assert (255, 255, 255) in _colors(smallsign, 19, 8, 55, 16)
+        assert (255, 255, 255) in _colors(smallsign, 15, 8, 55, 16)
 
     def test_icon_in_left_slot(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial")
@@ -55,6 +56,31 @@ class TestRenderStripSmall:
     def test_y_offset_shifts_content_down(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial", y_offset=4)
         assert not _colors(smallsign, 0, 0, 160, 4)
+
+    def test_strip_worst_case_avoids_separator_collision(self, smallsign):
+        """F1 regression: the widest hi/lo pair ('-99/-99', 7 chars at
+        FONT_SMALL's advance) must clear the dotted separator instead of
+        painting into it (the old _SMALL_TEXT_DX=17 collided here)."""
+        import attrs
+
+        from led_ticker_weather.palette import LABEL
+
+        sep_color = tuple(int(c * 0.3) for c in LABEL)
+        worst_cur = attrs.evolve(DEMO_DATA.current, hi_f=-99, lo_f=-99)
+        worst_days = tuple(
+            attrs.evolve(d, hi_f=-99, lo_f=-99) for d in DEMO_DATA.days[:2]
+        )
+        worst = attrs.evolve(DEMO_DATA, current=worst_cur, days=worst_days)
+        render_strip_small(smallsign, worst, "imperial")
+
+        for i in range(2):
+            sep_x = 2 + i * 53 + 53 - 3
+            next_x0 = 2 + (i + 1) * 53
+            # from the separator column through the gap before the next
+            # cell's icon, only the dim separator color may appear — no
+            # text ink at or beyond the separator's x.
+            region = _colors(smallsign, sep_x, 0, next_x0, 16)
+            assert region == {sep_color}, f"separator {i}: {region}"
 
     def test_strip_icons_stay_lowres_through_scale1_wrapper(self):
         """A bigsign/longboi section with an explicit `scale = 1` override
@@ -307,3 +333,86 @@ class TestWorstCaseCollision:
         render_hero_big(bigsign, self._worst_data(), "imperial")
         # nothing between the divider (112) and the strip origin (118)
         assert not lit(unwrap_to_real(bigsign), 113, 0, 118, 62)
+
+
+class TestHeroYOffsetContract:
+    """F2: pin the y_offset contract per hero renderer. Both mutations that
+    escaped the existing suite — dropping `+ oy` from one hires() call, or
+    passing raw `y_offset` instead of `oy = y_offset * safe_scale(canvas)`
+    (unscaled) — must fail one of these tests: dropping `+ oy` leaves that
+    call's ink un-shifted (present at the y_offset=0 position instead of
+    +8), and unscaling leaves it shifted by only 2 physical rows instead
+    of 8, so in both cases the shifted snapshot no longer equals the base
+    snapshot translated down exactly 8 physical rows (2 logical rows *
+    bigsign/longboi scale 4)."""
+
+    _SHIFT_ROWS = 8  # y_offset=2 * scale=4
+
+    @staticmethod
+    def _render_at(render_fn, width, height, y_offset):
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        from led_ticker_weather.forecast_data import DEMO_DATA
+
+        real = HeadlessBackend(width, height).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        render_fn(canvas, DEMO_DATA, "imperial", y_offset=y_offset)
+        return real
+
+    def _assert_shifts_uniformly(self, render_fn, width, height, lit):
+        real0 = self._render_at(render_fn, width, height, 0)
+        real2 = self._render_at(render_fn, width, height, self._SHIFT_ROWS // 4)
+
+        base = lit(real0, 0, 0, width, height)
+        assert base, "nothing rendered at y_offset=0"
+        shifted = set(lit(real2, 0, 0, width, height))
+
+        # translate every base pixel down by the fixed shift; a pixel
+        # whose target row would clip past the bottom edge is dropped
+        # from the expectation rather than asserted absent-or-present.
+        expected = {
+            (x, y + self._SHIFT_ROWS, c)
+            for x, y, c in base
+            if y + self._SHIFT_ROWS < height
+        }
+        assert shifted == expected
+
+    def test_render_hero_big_y_offset_shifts_8_physical_rows(self, lit):
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        self._assert_shifts_uniformly(render_hero_big, 256, 64, lit)
+
+    def test_render_hero_long_y_offset_shifts_8_physical_rows(self, lit):
+        from led_ticker_weather.forecast_layouts import render_hero_long
+
+        self._assert_shifts_uniformly(render_hero_long, 512, 64, lit)
+
+
+class TestHeroIconKindSelection:
+    """F3: pin that `_hero_icon` reads KIND_SLUGS[kind][1] (the HIRES
+    column), not [0] (lowres) — a tuple-order-swap mutation escaped the
+    existing suite because demo's current kind ("partly") has identical
+    lowres/hires slugs. "overcast" (hires: sun_behind_large_cloud, a pack
+    sprite) vs "cloudy" (hires: cloud, curated) draw visibly different
+    hero icons only when the hires column is the one read."""
+
+    def test_overcast_and_cloudy_render_different_hero_icons(self, lit):
+        import attrs
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        from led_ticker_weather.forecast_layouts import render_hero_big
+
+        def _icon_pixels(kind):
+            real = HeadlessBackend(256, 64).create_canvas()
+            canvas = ScaledCanvas(real, scale=4, content_height=16)
+            data = attrs.evolve(
+                DEMO_DATA, current=attrs.evolve(DEMO_DATA.current, kind=kind)
+            )
+            render_hero_big(canvas, data, "imperial")
+            return {(x, y) for x, y, _ in lit(real, 4, 12, 40, 46)}
+
+        overcast = _icon_pixels("overcast")
+        cloudy = _icon_pixels("cloudy")
+        assert overcast, "overcast hero icon region empty"
+        assert cloudy, "cloudy hero icon region empty"
+        assert overcast != cloudy
