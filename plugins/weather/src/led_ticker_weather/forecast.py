@@ -92,7 +92,18 @@ class ForecastWidget(FrameAwareBase):
                     "will retry in background",
                     widget.location,
                 )
-            spawn_tracked(run_monitor_loop(widget, widget.update_interval))
+            # An eager fetch that FAILED (widget._data is still None) means
+            # the loop's first pass must poll immediately instead of
+            # sleeping a full update_interval (~3h default) — otherwise a
+            # boot-time network blip hides the widget (should_display()
+            # False) for hours. This also engages the loop's backoff if the
+            # immediate retry fails too. A successful eager fetch keeps
+            # immediate=False (no double-fetch on the happy path).
+            spawn_tracked(
+                run_monitor_loop(
+                    widget, widget.update_interval, immediate=widget._data is None
+                )
+            )
         return widget
 
     async def update(self) -> None:

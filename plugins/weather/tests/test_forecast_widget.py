@@ -105,6 +105,62 @@ class TestUpdate:
             w = await ForecastWidget.start(location="Boston")
         assert not w.should_display()  # hidden, retrying in background
 
+    async def test_start_polls_immediately_after_failed_eager_fetch(self, monkeypatch):
+        # F1: a failed eager fetch must not fall into run_monitor_loop's
+        # default immediate=False (a full update_interval, ~3h, of blind
+        # should_display()==False before the first retry). Patch both
+        # spawn_tracked and run_monitor_loop so no real background task is
+        # created — the assertion is purely on the kwargs the loop is
+        # invoked with.
+        monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+
+        async def _noop_coro():
+            return None
+
+        mock_loop = mock.MagicMock(return_value=_noop_coro())
+        # spawn_tracked normally create_task()s the coroutine; here just
+        # close it so nothing runs and no "never awaited" warning leaks.
+        mock_spawn = mock.Mock(side_effect=lambda coro: coro.close())
+        with (
+            mock.patch(
+                "led_ticker_weather.forecast.fetch_forecast",
+                mock.AsyncMock(side_effect=ValueError("boom")),
+            ),
+            mock.patch("led_ticker_weather.forecast.run_monitor_loop", mock_loop),
+            mock.patch("led_ticker_weather.forecast.spawn_tracked", mock_spawn),
+        ):
+            w = await ForecastWidget.start(location="Boston")
+
+        assert not w.should_display()
+        mock_loop.assert_called_once_with(w, w.update_interval, immediate=True)
+        mock_spawn.assert_called_once_with(mock_loop.return_value)
+
+    async def test_start_does_not_poll_immediately_after_successful_eager_fetch(
+        self, monkeypatch
+    ):
+        from plugins.weather.tests.test_forecast_data import _payload
+
+        monkeypatch.setenv("WEATHERAPI_KEY", "test-key")
+
+        async def _noop_coro():
+            return None
+
+        mock_loop = mock.MagicMock(return_value=_noop_coro())
+        mock_spawn = mock.Mock(side_effect=lambda coro: coro.close())
+        with (
+            mock.patch(
+                "led_ticker_weather.forecast.fetch_forecast",
+                mock.AsyncMock(return_value=_payload()),
+            ),
+            mock.patch("led_ticker_weather.forecast.run_monitor_loop", mock_loop),
+            mock.patch("led_ticker_weather.forecast.spawn_tracked", mock_spawn),
+        ):
+            w = await ForecastWidget.start(location="Boston")
+
+        assert w.should_display()
+        mock_loop.assert_called_once_with(w, w.update_interval, immediate=False)
+        mock_spawn.assert_called_once_with(mock_loop.return_value)
+
 
 class TestValidateConfig:
     def test_clean_config_passes(self):
