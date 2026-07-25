@@ -68,6 +68,44 @@ def test_series_dashes_won_orange_unwon_dim():
     assert (r, g, b) == (35, 45, 65)  # LABEL dim 0.5
 
 
+def test_challenge_dashes_one_remaining_orange_then_grey():
+    real = _real()
+    prim.challenge_dashes(real, 4, 10, 1)
+    assert real.get_pixel(4, 10) == (255, 140, 0)  # slot 0 remaining: CHALLENGE
+    assert real.get_pixel(4, 15) == (140, 140, 140)  # slot 1 (y+5) used: CHALLENGE_USED
+
+
+def test_challenge_dashes_two_remaining_all_orange():
+    real = _real()
+    prim.challenge_dashes(real, 4, 10, 2)
+    assert real.get_pixel(4, 10) == (255, 140, 0)
+    assert real.get_pixel(4, 15) == (255, 140, 0)
+
+
+def test_challenge_dashes_zero_remaining_all_grey():
+    real = _real()
+    prim.challenge_dashes(real, 4, 10, 0)
+    assert real.get_pixel(4, 10) == (140, 140, 140)
+    assert real.get_pixel(4, 15) == (140, 140, 140)
+
+
+def test_challenge_dashes_caps_two_slots():
+    # A remaining count above the 2-slot display caps at two orange slots
+    # (no third dash painted below slot 1).
+    real = _real()
+    prim.challenge_dashes(real, 4, 10, 5)
+    assert real.get_pixel(4, 10) == (255, 140, 0)
+    assert real.get_pixel(4, 15) == (255, 140, 0)
+    assert real.get_pixel(4, 20) == (0, 0, 0)  # no third slot
+
+
+def test_challenge_uses_distinct_orange_from_series():
+    # CHALLENGE (255,140,0) must stay visually distinct from the series-win
+    # ORANGE (255,128,0) so the two dash pairs don't read as the same field.
+    assert (pal.CHALLENGE.red, pal.CHALLENGE.green, pal.CHALLENGE.blue) == (255, 140, 0)
+    assert (pal.CHALLENGE.green,) != (pal.ORANGE.green,)
+
+
 def test_chip_unknown_team_grey_two_tone_with_knocked_corners():
     real = _real()
     prim.chip(real, 0, 0, 12, "???")

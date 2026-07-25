@@ -20,6 +20,10 @@ LABEL_HI: Color = make_color(
 )  # brighter label for dense hero cards where dim LABEL is hard to read on-panel
 YEL: Color = make_color(255, 217, 0)  # strikes in the count
 ORANGE: Color = make_color(255, 128, 0)  # series-win dashes
+CHALLENGE: Color = make_color(255, 140, 0)  # ABS challenge remaining (kept a
+# touch warmer than series ORANGE 255,128,0 so the two dash pairs don't read
+# as the same field; matches the legacy scale-1 renderer's CHALLENGE_COLOR)
+CHALLENGE_USED: Color = make_color(140, 140, 140)  # ABS challenge used (grey)
 
 
 def dim(color: Color, factor: float) -> Color:

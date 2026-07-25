@@ -9,7 +9,15 @@ from led_ticker.plugin import Color, make_color
 
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._paint import hires, js_round, px
-from led_ticker_baseball._palette import LABEL, LOSS, ORANGE, WIN, dim
+from led_ticker_baseball._palette import (
+    CHALLENGE,
+    CHALLENGE_USED,
+    LABEL,
+    LOSS,
+    ORANGE,
+    WIN,
+    dim,
+)
 from led_ticker_baseball.teams import MLB_TEAM_CHIPS
 
 _GREY_C1 = (150, 160, 175)  # prototype unknown-team chip fallback
@@ -69,6 +77,19 @@ def series_dashes(real, x: int, y: int, won: int, team_color: Color) -> None:
     for i in range(2):
         w = i < won
         dash(real, x, y + i * 5, 12, ORANGE if w else LABEL, 1.0 if w else 0.5)
+
+
+def challenge_dashes(real, x: int, y: int, remaining: int) -> None:
+    """2 slots (ABS automated ball-strike challenges): the first `remaining`
+    slots CHALLENGE (orange, unused), the rest CHALLENGE_USED (grey). Live
+    games only; the caller guards on a non-None count (None = ABS not
+    equipped / hydration pending -> draw nothing). Mirrors `series_dashes`'
+    2-slot geometry so a per-team challenge indicator beside the score reads
+    the same as the series-win dashes beside the name."""
+    n = min(max(remaining, 0), 2)
+    for i in range(2):
+        unused = i < n
+        dash(real, x, y + i * 5, 12, CHALLENGE if unused else CHALLENGE_USED, 1.0)
 
 
 def dotted_divider(real, x0: int, x1: int, y: int) -> None:

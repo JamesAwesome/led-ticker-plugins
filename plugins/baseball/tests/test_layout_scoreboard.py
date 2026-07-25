@@ -63,6 +63,55 @@ def test_live_thirds_left_name_score_right_name_score_center_cluster():
     assert _lit_in(real, 315, 365, 12, 44)  # bases diamond cluster
 
 
+_CHALLENGE_ORANGE = (255, 140, 0)
+_CHALLENGE_GREY = (140, 140, 140)
+
+
+def _pixels_of_color(real, color):
+    return {xy for xy, v in real._pixels.items() if v == color}
+
+
+def test_live_challenge_dashes_render_per_team():
+    canvas, real = _longboi()
+    render_scoreboard(canvas, _live_game(away_challenges=2, home_challenges=1), TZ)
+    orange = _pixels_of_color(real, _CHALLENGE_ORANGE)
+    grey = _pixels_of_color(real, _CHALLENGE_GREY)
+    # away (2 remaining) -> two orange slots on the left; home (1 remaining)
+    # -> one orange slot on the right.
+    assert any(x < 176 for x, _ in orange), "away challenge dashes missing (left)"
+    assert any(x > 340 for x, _ in orange), "home challenge dashes missing (right)"
+    # home has 1 used slot -> a grey dash on the right, in the score band.
+    assert any(x > 340 and 28 <= y <= 48 for x, y in grey), (
+        "home used-challenge dash (grey) missing (right)"
+    )
+    # challenge dashes sit in the score band (y>=28), never up in the
+    # name/series-dash row (y~8) — so they can't be confused with series wins.
+    assert orange and all(y >= 28 for _, y in orange)
+
+
+def test_final_game_has_no_challenge_dashes():
+    canvas, real = _longboi()
+    # a final game never carries live ABS challenge state.
+    render_scoreboard(
+        canvas,
+        _live_game(
+            state="final", inning=None, away_challenges=None, home_challenges=None
+        ),
+        TZ,
+    )
+    assert not _pixels_of_color(real, _CHALLENGE_ORANGE)
+
+
+def test_live_game_without_challenge_data_draws_no_dashes():
+    canvas, real = _longboi()
+    # ABS not equipped / hydration pending -> None -> nothing drawn (orange is
+    # unique to the challenge indicator, so its absence is the clean signal).
+    render_scoreboard(
+        canvas, _live_game(away_challenges=None, home_challenges=None), TZ
+    )
+    assert not _pixels_of_color(real, _CHALLENGE_ORANGE)
+
+
 def test_outs_pips_two_filled_one_empty():
     canvas, real = _longboi()
     render_scoreboard(canvas, _live_game(outs=2), TZ)
