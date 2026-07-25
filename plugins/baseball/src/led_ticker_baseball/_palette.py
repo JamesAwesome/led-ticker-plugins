@@ -20,9 +20,10 @@ LABEL_HI: Color = make_color(
 )  # brighter label for dense hero cards where dim LABEL is hard to read on-panel
 YEL: Color = make_color(255, 217, 0)  # strikes in the count
 ORANGE: Color = make_color(255, 128, 0)  # series-win dashes
-CHALLENGE: Color = make_color(255, 140, 0)  # ABS challenge remaining (kept a
-# touch warmer than series ORANGE 255,128,0 so the two dash pairs don't read
-# as the same field; matches the legacy scale-1 renderer's CHALLENGE_COLOR)
+CHALLENGE: Color = make_color(255, 140, 0)  # ABS challenge remaining (matches
+# the legacy scale-1 renderer's CHALLENGE_COLOR). It's a hair warmer than the
+# series ORANGE (255,128,0), but what actually keeps the two dash pairs apart
+# is their BAND: series wins sit by the name (top), challenges by the score.
 CHALLENGE_USED: Color = make_color(140, 140, 140)  # ABS challenge used (grey)
 
 
