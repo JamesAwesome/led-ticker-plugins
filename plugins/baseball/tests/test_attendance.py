@@ -733,6 +733,7 @@ class TestFallbackStates:
         assert w.feed_stories == []
 
     async def test_no_data_show_off_day_renders_hires(self):
+        import attrs
         from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
         from led_ticker_baseball._attendance_card import MLBAttendanceCard
@@ -744,14 +745,26 @@ class TestFallbackStates:
         assert len(w.feed_stories) == 1
         card = w.feed_stories[0]
         assert isinstance(card, MLBAttendanceCard)
+        assert card.fallback_text  # sanity: the hires branch is reachable
 
         real = HeadlessBackend(512, 64).create_canvas()
         canvas = ScaledCanvas(real, scale=4, content_height=16)
         card.draw(canvas, 0)
         lit_rows = {y for (_x, y), v in real._pixels.items() if v != (0, 0, 0)}
         assert lit_rows
-        # Hires span, not the ~12px BDF cell.
-        assert max(lit_rows) - min(lit_rows) >= 15
+        # Hires span, upper-bounded below the ~35px a block-scaled BDF line
+        # would produce through the same wrapper.
+        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+        # Mutation-proof: the same card with fallback_text="" forwards to
+        # the BDF `legacy` line instead (the actual regression this test
+        # guards against — a scale>1 no-attendance branch that forwards to
+        # `legacy` unconditionally). The renders must differ pixel-for-pixel.
+        bdf_card = attrs.evolve(card, fallback_text="")
+        real_bdf = HeadlessBackend(512, 64).create_canvas()
+        canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+        bdf_card.draw(canvas_bdf, 0)
+        assert real._pixels != real_bdf._pixels
 
 
 def _freeze_today():
@@ -1006,6 +1019,7 @@ class TestUpdateTeam:
         # Default no_data="show": the not-yet-Final game still yields one
         # MLBAttendanceCard, whose no-attendance fallback renders hires at
         # scale>1 (not the block-scaled BDF legacy line).
+        import attrs
         from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
         patcher, today = _freeze_today()
@@ -1028,13 +1042,25 @@ class TestUpdateTeam:
             await w.update()
         assert len(w.feed_stories) == 1
         card = w.feed_stories[0]
+        assert card.fallback_text  # sanity: the hires branch is reachable
 
         real = HeadlessBackend(512, 64).create_canvas()
         canvas = ScaledCanvas(real, scale=4, content_height=16)
         card.draw(canvas, 0)
         lit_rows = {y for (_x, y), v in real._pixels.items() if v != (0, 0, 0)}
         assert lit_rows
-        assert max(lit_rows) - min(lit_rows) >= 15
+        # Hires span, upper-bounded below the ~35px a block-scaled BDF line
+        # would produce through the same wrapper.
+        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+        # Mutation-proof: the same card with fallback_text="" forwards to
+        # the BDF `legacy` line instead (the actual regression this test
+        # guards against). The renders must differ pixel-for-pixel.
+        bdf_card = attrs.evolve(card, fallback_text="")
+        real_bdf = HeadlessBackend(512, 64).create_canvas()
+        canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+        bdf_card.draw(canvas_bdf, 0)
+        assert real._pixels != real_bdf._pixels
 
     async def test_update_logs_info(self, caplog):
         patcher, today = _freeze_today()

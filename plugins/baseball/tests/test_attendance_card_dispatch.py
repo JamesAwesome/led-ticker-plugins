@@ -69,18 +69,26 @@ def test_no_attendance_falls_back_to_legacy():
 
 def test_no_attendance_hires_fallback_at_scale_gt_1():
     """No attendance (paid=None) + a non-empty fallback_text at scale>1
-    renders a HIRES line, not the block-scaled legacy BDF — asserted by the
-    lit-pixel VERTICAL SPAN (hires spans considerably more rows than a BDF
-    cell), matching the sibling layout tests' extent-only convention (never
-    exact-pin freetype)."""
+    renders a HIRES line, not the block-scaled legacy BDF.
+
+    Two guards: (1) the mutation-proof one — the identical card but with
+    fallback_text="" forwards to the BDF `legacy` line instead (the actual
+    regression this test exists to catch), so the two renders must differ
+    pixel-for-pixel; (2) a vertical-span check, upper-bounded so a
+    block-scaled BDF line (which also clears a naive lower-bound-only
+    check) can't slip through. Empirically 18 rows at px24 (headroom below
+    for cross-platform freetype variance) — well past a plain BDF cell's
+    ~12px span, and comfortably under the ~35px a BDF line reaches once
+    block-scaled through this same scale=4 wrapper."""
+    record = AttendanceGame(
+        paid=None,
+        capacity=56000,
+        avg=39442,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+    )
     card = _card(
-        record=AttendanceGame(
-            paid=None,
-            capacity=56000,
-            avg=39442,
-            venue="Dodger Stadium",
-            home_abbr="LAD",
-        ),
+        record=record,
         fallback_text="PHI · Citizens Bank Park",
         fallback_color=colors.RGB_WHITE,
     )
@@ -89,9 +97,17 @@ def test_no_attendance_hires_fallback_at_scale_gt_1():
     card.draw(canvas, 0)
     lit_rows = {y for (x, y), v in real._pixels.items() if v != (0, 0, 0)}
     assert lit_rows
-    # Empirically 18 rows at px24 (headroom below for cross-platform
-    # freetype variance) — well past a plain BDF cell's ~12px span.
-    assert max(lit_rows) - min(lit_rows) >= 15
+    assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+    bdf_card = _card(
+        record=record,
+        fallback_text="",
+        fallback_color=colors.RGB_WHITE,
+    )
+    real_bdf = HeadlessBackend(512, 64).create_canvas()
+    canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+    bdf_card.draw(canvas_bdf, 0)
+    assert real._pixels != real_bdf._pixels
 
 
 def test_no_attendance_scale_one_still_bdf_ignores_fallback_text():
