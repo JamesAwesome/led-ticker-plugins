@@ -690,7 +690,9 @@ class TestFallbackStates:
         widget = make_widget(session=session, team="TOR")
         widget._team_id = 0  # resolve failed
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        # Wrapped in an MLBAttendanceCard now (hires fallback at scale>1) —
+        # the plain text lives on its `.legacy` TickerMessage.
+        assert widget.feed_stories[0].legacy.text == "Next games: Mar 26"
         assert "teamId" not in captured["url"]
 
     async def test_probe_finds_next_game_team_mode(self):
@@ -699,21 +701,21 @@ class TestFallbackStates:
         w = make_widget(session=session, team="TOR")
         w._team_id = 141
         await w._set_no_games_state(TODAY)
-        assert w.feed_stories[0].text == "Next game: Mar 26"
+        assert w.feed_stories[0].legacy.text == "Next game: Mar 26"
 
     async def test_probe_empty_says_no_games_soon(self):
         session = make_session({"startDate": {"dates": []}})
         w = make_widget(session=session, team="TOR")
         w._team_id = 141
         await w._set_no_games_state(TODAY)
-        assert w.feed_stories[0].text == "No games soon"
+        assert w.feed_stories[0].legacy.text == "No games soon"
 
     async def test_probe_league_mode_next_games(self):
         # League mode (no team) names the next slate: "Next games: <date>".
         session = make_session({"startDate": {"dates": [{"date": "2027-03-26"}]}})
         w = make_widget(session=session)
         await w._set_no_games_state(TODAY)
-        assert w.feed_stories[0].text == "Next games: Mar 26"
+        assert w.feed_stories[0].legacy.text == "Next games: Mar 26"
 
     async def test_probe_failure_degrades(self):
         session = mock.MagicMock()
@@ -721,7 +723,48 @@ class TestFallbackStates:
         w = make_widget(session=session, team="TOR")
         w._team_id = 141
         await w._set_no_games_state(TODAY)
-        assert w.feed_stories[0].text == "No games soon"
+        assert w.feed_stories[0].legacy.text == "No games soon"
+
+    async def test_no_data_hide_off_day_empties_feed(self):
+        session = make_session({"startDate": {"dates": [{"date": "2027-03-26"}]}})
+        w = make_widget(session=session, team="TOR", no_data="hide")
+        w._team_id = 141
+        await w._set_no_games_state(TODAY)
+        assert w.feed_stories == []
+
+    async def test_no_data_show_off_day_renders_hires(self):
+        import attrs
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        from led_ticker_baseball._attendance_card import MLBAttendanceCard
+
+        session = make_session({"startDate": {"dates": [{"date": "2027-03-26"}]}})
+        w = make_widget(session=session, team="TOR", no_data="show")
+        w._team_id = 141
+        await w._set_no_games_state(TODAY)
+        assert len(w.feed_stories) == 1
+        card = w.feed_stories[0]
+        assert isinstance(card, MLBAttendanceCard)
+        assert card.fallback_text  # sanity: the hires branch is reachable
+
+        real = HeadlessBackend(512, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        card.draw(canvas, 0)
+        lit_rows = {y for (_x, y), v in real._pixels.items() if v != (0, 0, 0)}
+        assert lit_rows
+        # Hires span, upper-bounded below the ~35px a block-scaled BDF line
+        # would produce through the same wrapper.
+        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+        # Mutation-proof: the same card with fallback_text="" forwards to
+        # the BDF `legacy` line instead (the actual regression this test
+        # guards against — a scale>1 no-attendance branch that forwards to
+        # `legacy` unconditionally). The renders must differ pixel-for-pixel.
+        bdf_card = attrs.evolve(card, fallback_text="")
+        real_bdf = HeadlessBackend(512, 64).create_canvas()
+        canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+        bdf_card.draw(canvas_bdf, 0)
+        assert real._pixels != real_bdf._pixels
 
 
 def _freeze_today():
@@ -943,11 +986,81 @@ class TestUpdateTeam:
         w = self._widget(routes)
         with patcher:
             await w.update()
-        assert w.feed_stories[0].text == "Next game: Jun 20"
+        assert w.feed_stories[0].legacy.text == "Next game: Jun 20"
         # The team has no game today, so the probe result is stable for the
         # day → snapshot and gate-skip until the date rolls (or the slate
         # changes). The today schedule had 1 Final game → count 1.
         assert w._last_derive == (today, 1)
+
+    async def test_no_data_hide_not_final_empties_feed(self):
+        # A Live (not yet Final) game has no attendance yet — no_data="hide"
+        # drops the widget from the rotation instead of showing the fallback.
+        patcher, today = _freeze_today()
+        sched = schedule(
+            sched_game(
+                99,
+                "Live",
+                home="TOR",
+                away="BOS",
+                venue="Rogers Centre",
+                capacity=46000,
+            )
+        )
+        routes = {
+            "hydrate=venue(fieldInfo),team": sched,
+            "/game/99/feed/live": feed(att=None),
+        }
+        w = self._widget(routes, no_data="hide")
+        with patcher:
+            await w.update()
+        assert w.feed_stories == []
+
+    async def test_no_data_show_not_final_renders_hires(self):
+        # Default no_data="show": the not-yet-Final game still yields one
+        # MLBAttendanceCard, whose no-attendance fallback renders hires at
+        # scale>1 (not the block-scaled BDF legacy line).
+        import attrs
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        patcher, today = _freeze_today()
+        sched = schedule(
+            sched_game(
+                99,
+                "Live",
+                home="TOR",
+                away="BOS",
+                venue="Rogers Centre",
+                capacity=46000,
+            )
+        )
+        routes = {
+            "hydrate=venue(fieldInfo),team": sched,
+            "/game/99/feed/live": feed(att=None),
+        }
+        w = self._widget(routes, no_data="show")
+        with patcher:
+            await w.update()
+        assert len(w.feed_stories) == 1
+        card = w.feed_stories[0]
+        assert card.fallback_text  # sanity: the hires branch is reachable
+
+        real = HeadlessBackend(512, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        card.draw(canvas, 0)
+        lit_rows = {y for (_x, y), v in real._pixels.items() if v != (0, 0, 0)}
+        assert lit_rows
+        # Hires span, upper-bounded below the ~35px a block-scaled BDF line
+        # would produce through the same wrapper.
+        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+        # Mutation-proof: the same card with fallback_text="" forwards to
+        # the BDF `legacy` line instead (the actual regression this test
+        # guards against). The renders must differ pixel-for-pixel.
+        bdf_card = attrs.evolve(card, fallback_text="")
+        real_bdf = HeadlessBackend(512, 64).create_canvas()
+        canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+        bdf_card.draw(canvas_bdf, 0)
+        assert real._pixels != real_bdf._pixels
 
     async def test_update_logs_info(self, caplog):
         patcher, today = _freeze_today()
@@ -1090,6 +1203,20 @@ class TestValidateConfig:
         msgs = self._v({"team": "TOR", "stats": ["rowdiest"]})
         assert len(msgs) == 1
         assert "rowdiest" in msgs[0]
+
+    def test_rejects_bad_no_data(self):
+        msgs = self._v({"no_data": "bogus"})
+        assert len(msgs) == 1
+        assert "no_data" in msgs[0]
+
+    def test_no_data_show_passes(self):
+        assert self._v({"no_data": "show"}) == []
+
+    def test_no_data_hide_passes(self):
+        assert self._v({"no_data": "hide"}) == []
+
+    def test_no_data_absent_passes(self):
+        assert self._v({}) == []
 
 
 class TestScheduleAbbrNormalization:

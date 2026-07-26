@@ -67,6 +67,100 @@ def test_no_attendance_falls_back_to_legacy():
     assert real_a._pixels == real_b._pixels
 
 
+def test_no_attendance_hires_fallback_at_scale_gt_1():
+    """No attendance (paid=None) + a non-empty fallback_text at scale>1
+    renders a HIRES line, not the block-scaled legacy BDF.
+
+    Two guards: (1) the mutation-proof one — the identical card but with
+    fallback_text="" forwards to the BDF `legacy` line instead (the actual
+    regression this test exists to catch), so the two renders must differ
+    pixel-for-pixel; (2) a vertical-span check, upper-bounded so a
+    block-scaled BDF line (which also clears a naive lower-bound-only
+    check) can't slip through. Empirically 18 rows at px24 (headroom below
+    for cross-platform freetype variance) — well past a plain BDF cell's
+    ~12px span, and comfortably under the ~35px a BDF line reaches once
+    block-scaled through this same scale=4 wrapper."""
+    record = AttendanceGame(
+        paid=None,
+        capacity=56000,
+        avg=39442,
+        venue="Dodger Stadium",
+        home_abbr="LAD",
+    )
+    card = _card(
+        record=record,
+        fallback_text="PHI · Citizens Bank Park",
+        fallback_color=colors.RGB_WHITE,
+    )
+    real = HeadlessBackend(512, 64).create_canvas()
+    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    card.draw(canvas, 0)
+    lit_rows = {y for (x, y), v in real._pixels.items() if v != (0, 0, 0)}
+    assert lit_rows
+    assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+
+    bdf_card = _card(
+        record=record,
+        fallback_text="",
+        fallback_color=colors.RGB_WHITE,
+    )
+    real_bdf = HeadlessBackend(512, 64).create_canvas()
+    canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
+    bdf_card.draw(canvas_bdf, 0)
+    assert real._pixels != real_bdf._pixels
+
+
+def test_no_attendance_scale_one_still_bdf_ignores_fallback_text():
+    """At scale<=1 the card forwards to `legacy` (BDF) verbatim, even when
+    `fallback_text` is populated — the hires fallback is scale>1 only."""
+    legacy = _legacy()
+    card = _card(
+        record=AttendanceGame(
+            paid=None,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        ),
+        legacy=legacy,
+        fallback_text="PHI · Citizens Bank Park",
+    )
+    real_a = HeadlessBackend(160, 16).create_canvas()
+    canvas_a = ScaledCanvas(real_a, scale=1, content_height=16)
+    card.draw(canvas_a, 0)
+
+    real_b = HeadlessBackend(160, 16).create_canvas()
+    canvas_b = ScaledCanvas(real_b, scale=1, content_height=16)
+    legacy.draw(canvas_b, 0)
+    assert real_a._pixels == real_b._pixels
+
+
+def test_no_attendance_empty_fallback_text_forwards_to_legacy():
+    """Safety net: an empty `fallback_text` at scale>1 forwards to `legacy`
+    rather than blanking or crashing (mirrors `test_no_attendance_falls_back_
+    to_legacy`, explicit about the empty-string trigger)."""
+    legacy = _legacy()
+    card = _card(
+        record=AttendanceGame(
+            paid=None,
+            capacity=56000,
+            avg=39442,
+            venue="Dodger Stadium",
+            home_abbr="LAD",
+        ),
+        legacy=legacy,
+        fallback_text="",
+    )
+    real_a = HeadlessBackend(512, 64).create_canvas()
+    canvas_a = ScaledCanvas(real_a, scale=4, content_height=16)
+    card.draw(canvas_a, 0)
+
+    real_b = HeadlessBackend(512, 64).create_canvas()
+    canvas_b = ScaledCanvas(real_b, scale=4, content_height=16)
+    legacy.draw(canvas_b, 0)
+    assert real_a._pixels == real_b._pixels
+
+
 def test_fill_clock_advances_only_unpaused():
     card = _card()
     card.advance_frame()

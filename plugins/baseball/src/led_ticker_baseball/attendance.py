@@ -276,6 +276,12 @@ class MLBAttendanceMonitor:
     # scale <= 1 every layout forwards verbatim to the legacy line, so this
     # field is a no-op on smallsign. Validated in validate_config below.
     layout: str = "auto"
+    # "show" (default) renders the no-attendance state (a team game not yet
+    # Final, or an off day) as a hires fallback line at scale>1 / legacy BDF
+    # at scale<=1; "hide" drops the widget from the rotation instead
+    # (`feed_stories = []`) until real attendance data (or a game) arrives.
+    # Validated in validate_config below.
+    no_data: str = "show"
     bg_color: Color | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
@@ -437,6 +443,17 @@ class MLBAttendanceMonitor:
             font_color=self.font_color,
         )
 
+    def _build_team_fallback_text(self, *, venue: str, day_label: str) -> str:
+        """Plain-text no-attendance fallback line: reuses `_build_team_line`
+        (attendance and weather both explicitly omitted — attendance is None
+        in this state anyway, and dropping weather keeps the hires fallback
+        line short) so the day_label/team/venue formatting can't drift from
+        the legacy line's own."""
+        line = self._build_team_line(
+            venue=venue, attendance=None, capacity=0, weather=None, day_label=day_label
+        )
+        return "".join(seg for seg, _color in line.segments)
+
     def _build_team_card_from_avg(
         self,
         *,
@@ -480,6 +497,10 @@ class MLBAttendanceMonitor:
             cfg_layout=self.layout,
             bg_color=self.bg_color,
             font_color=self.font_color,
+            fallback_text=self._build_team_fallback_text(
+                venue=game_venue.venue, day_label=day_label
+            ),
+            fallback_color=self._plain_body_color(),
         )
 
     async def _build_team_card(
@@ -601,7 +622,9 @@ class MLBAttendanceMonitor:
 
         Team mode names the next game, league mode the next slate; both gate on
         ``_team_id`` so a failed resolve degrades honestly to the league line.
-        The 30-day probe lives in ``teams.next_game_date``.
+        The 30-day probe lives in ``teams.next_game_date``. ``no_data="hide"``
+        drops the widget entirely (``feed_stories = []``) instead of showing
+        this line.
         """
         next_date = await next_game_date(self.session, today, team_id=self._team_id)
         if next_date is None:
@@ -610,9 +633,30 @@ class MLBAttendanceMonitor:
             text = f"Next game: {next_date.strftime('%b %-d')}"
         else:
             text = f"Next games: {next_date.strftime('%b %-d')}"
+        if self.no_data == "hide":
+            self.feed_stories = []
+            logger.info("MLB Attendance updated: hidden (no_data=hide, %s)", text)
+            return
+        # Wrapped in MLBAttendanceCard so the line renders hires at scale>1
+        # (the card's no-attendance fallback path) rather than the block-
+        # scaled BDF a bare TickerMessage would draw; a minimal `paid=None`
+        # AttendanceGame is enough to make `_has_attendance` false.
         self.feed_stories = [
-            TickerMessage(
-                text, font_color=self._body_color(), center=True, bg_color=self.bg_color
+            MLBAttendanceCard(
+                record=AttendanceGame(
+                    paid=None, capacity=0, avg=None, venue="", home_abbr=""
+                ),
+                legacy=TickerMessage(
+                    text,
+                    font_color=self._body_color(),
+                    center=True,
+                    bg_color=self.bg_color,
+                ),
+                cfg_layout=self.layout,
+                bg_color=self.bg_color,
+                font_color=self.font_color,
+                fallback_text=text,
+                fallback_color=self._body_color(),
             ),
         ]
         logger.info("MLB Attendance updated: fallback (%s)", text)
@@ -666,6 +710,12 @@ class MLBAttendanceMonitor:
             msgs.append(
                 f"attendance layout={layout!r} is not valid. "
                 "Use 'auto', 'big', or 'long'."
+            )
+
+        no_data = cfg.get("no_data", "show")
+        if no_data not in ("show", "hide"):
+            msgs.append(
+                f"attendance no_data={no_data!r} is not valid. Use 'show' or 'hide'."
             )
 
         stats = cfg.get("stats")
@@ -814,15 +864,19 @@ class MLBAttendanceMonitor:
         game = self._pick_team_game(games or [])
         if game is not None:
             att, weather, venue, cap = await self._fetch_game_data(game.game_pk)
-            self.feed_stories = [
-                await self._build_team_card(
-                    game_venue=replace(game, venue=venue or game.venue),
-                    att=att,
-                    cap=cap or game.capacity,
-                    weather=weather,
-                    day_label="",
-                )
-            ]
+            card = await self._build_team_card(
+                game_venue=replace(game, venue=venue or game.venue),
+                att=att,
+                cap=cap or game.capacity,
+                weather=weather,
+                day_label="",
+            )
+            # "hide" drops the widget from the rotation while attendance is
+            # still unknown (att is None) instead of showing the fallback
+            # line; once att is known the hero card always shows.
+            self.feed_stories = (
+                [] if (self.no_data == "hide" and att is None) else [card]
+            )
             logger.info("MLB Attendance updated: team %s (today)", self.team)
             # A Final game with no announced crowd yet → keep polling for it.
             return not (game.state == "Final" and att is None)
@@ -833,15 +887,16 @@ class MLBAttendanceMonitor:
         ygame = self._pick_team_game(ygames or [])
         if ygame is not None:
             att, weather, venue, cap = await self._fetch_game_data(ygame.game_pk)
-            self.feed_stories = [
-                await self._build_team_card(
-                    game_venue=replace(ygame, venue=venue or ygame.venue),
-                    att=att,
-                    cap=cap or ygame.capacity,
-                    weather=weather,
-                    day_label=yest.strftime("%-m/%-d"),
-                )
-            ]
+            card = await self._build_team_card(
+                game_venue=replace(ygame, venue=venue or ygame.venue),
+                att=att,
+                cap=cap or ygame.capacity,
+                weather=weather,
+                day_label=yest.strftime("%-m/%-d"),
+            )
+            self.feed_stories = (
+                [] if (self.no_data == "hide" and att is None) else [card]
+            )
             logger.info("MLB Attendance updated: team %s (%s)", self.team, yest)
             return True
         await self._set_no_games_state(today)
