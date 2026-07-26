@@ -21,7 +21,12 @@ from led_ticker.plugin import safe_scale
 from led_ticker_baseball import _palette as pal
 from led_ticker_baseball._models import _format_game_time
 from led_ticker_baseball._paint import hires, js_round, phys_wrap, text_width
-from led_ticker_baseball._primitives import diamond, pip, series_dashes
+from led_ticker_baseball._primitives import (
+    challenge_dashes,
+    diamond,
+    pip,
+    series_dashes,
+)
 from led_ticker_baseball.teams import MLB_TEAM_NAMES, _team_color
 
 
@@ -81,7 +86,9 @@ def _render_next(shim, game, tz, w, yo, ac, hc):
 def _render_scored(shim, real, game, w, yo, ac, hc):
     anw = hires(shim, _name(game.away_abbr), 8, 6 + yo, ac, 20)
     series_dashes(real, 8 + anw + 8, 8 + yo, getattr(game, "series_away_wins", 0), ac)
-    hires(shim, str(game.away_score or 0), 8, 28 + yo, _score_color(game, "a"), 34)
+    asw = hires(
+        shim, str(game.away_score or 0), 8, 28 + yo, _score_color(game, "a"), 34
+    )
 
     hnw = text_width(20, _name(game.home_abbr))
     hires(shim, _name(game.home_abbr), 504 - hnw, 6 + yo, hc, 20)
@@ -93,6 +100,15 @@ def _render_scored(shim, real, game, w, yo, ac, hc):
     hires(shim, str(game.home_score or 0), 504 - hsw, 28 + yo, home_score_color, 34)
 
     if game.state == "live":
+        # ABS (automated ball-strike) challenge dashes beside each score,
+        # mirroring the series-win dashes beside each name. Live-only (a
+        # game carries challenge state only while in progress); a None count
+        # (ABS not equipped / hydration pending) draws nothing.
+        if game.away_challenges is not None:
+            challenge_dashes(real, 8 + asw + 8, 34 + yo, game.away_challenges)
+        if game.home_challenges is not None:
+            challenge_dashes(real, (504 - hsw) - 8 - 12, 34 + yo, game.home_challenges)
+
         ix = 176
         ix += hires(shim, game.inning or "", ix, 5 + yo, pal.IDENT, 18) + 11
         outs = game.outs or 0
