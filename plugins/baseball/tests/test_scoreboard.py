@@ -480,11 +480,19 @@ async def test_layout_scoreboard_builds_scoreboard_messages():
 
 @pytest.mark.asyncio
 async def test_layout_ticker_builds_game_messages():
+    # The series-title is the only top-level SegmentMessage-shaped story in
+    # "ticker" layout (per-game messages live inside MLBGameCard, wrapped);
+    # it now renders through HiresLine (scale-dispatched: hi-res on a
+    # bigsign/longboi, byte-identical BDF SegmentMessage on a smallsign) —
+    # see _build_series_title / HiresLine.
+    from led_ticker_baseball._hires_line import HiresLine
     from led_ticker_baseball.scores import SegmentMessage
 
     monitor = await _run_update_with_schedule("ticker", _phi_nym_schedule())
-    game_stories = [s for s in monitor.feed_stories if isinstance(s, SegmentMessage)]
-    assert len(game_stories) >= 1
+    title_stories = [s for s in monitor.feed_stories if isinstance(s, HiresLine)]
+    assert len(title_stories) >= 1
+    for title in title_stories:
+        assert isinstance(title.legacy, SegmentMessage)
 
 
 # ---------------------------------------------------------------------------

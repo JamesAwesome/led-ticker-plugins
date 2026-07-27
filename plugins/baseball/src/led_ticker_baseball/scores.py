@@ -24,6 +24,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_baseball._card import MLBGameCard
+from led_ticker_baseball._hires_line import HiresLine
 from led_ticker_baseball._models import (
     DEMO_TEAM,
     GameInfo,
@@ -90,6 +91,8 @@ __all__ = [
     "SegmentMessage",
     # card (scale-dispatching story)
     "MLBGameCard",
+    # shared scale-dispatched status line (series-title, no-games-today)
+    "HiresLine",
     # monitor
     "MLBScoreMonitor",
 ]
@@ -117,6 +120,7 @@ _TWO_ROW_CAPABLE_LAYOUTS: tuple[str, ...] = ("two_row", "auto")
 _MLBStoryT = (
     TickerMessage
     | SegmentMessage
+    | HiresLine
     | MLBScoreboardMessage
     | MLBTwoRowMessage
     | MLBGameCard
@@ -462,13 +466,18 @@ class MLBScoreMonitor:
                     time_str = _format_game_time(next_game.start_time, tz)
                 else:
                     time_str = "TBD"
+                # In-season, no game today ("off day" between series) — the
+                # regularly-hit case, unlike the rare error/offseason states
+                # below, so it renders hi-res at scale>1 via HiresLine.
+                next_text = f"Next: vs {opp_name}, {time_str}"
+                next_legacy = TickerMessage(
+                    next_text,
+                    font_color=body_color,
+                    bg_color=self.bg_color,
+                )
                 self.feed_stories = [
                     title,
-                    TickerMessage(
-                        f"Next: vs {opp_name}, {time_str}",
-                        font_color=body_color,
-                        bg_color=self.bg_color,
-                    ),
+                    HiresLine([(next_text, body_color)], legacy=next_legacy),
                 ]
             else:
                 self.feed_stories = [
