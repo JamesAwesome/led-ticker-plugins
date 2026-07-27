@@ -31,6 +31,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._hires_line import HiresLine
 from led_ticker_baseball._models import DEMO_TEAM
 from led_ticker_baseball._promo_card import MLBPromoCard
 from led_ticker_baseball.teams import (
@@ -55,6 +56,13 @@ _INTERVAL_SIX_HOURS: int = 21600
 _PROMO_VALID_LAYOUTS: tuple[str, ...] = ("auto", "ticker", "card")
 
 _PromoT = TypeVar("_PromoT")
+
+# feed_stories element shape — mirrors scores.py's _MLBStoryT. HiresLine
+# covers the in-season non-hero lines (_set_next_home_state, the in-season
+# branches of _set_fallback_state); MLBPromoCard is the hero card path;
+# TickerMessage/SegmentMessage cover the title + the error/offseason BDF
+# lines that stay unconverted (see _hires_story_line's docstring).
+_PromoStoryT = TickerMessage | SegmentMessage | MLBPromoCard | HiresLine
 
 # "Loonie Dogs Night presented by Schneiders" → "Loonie Dogs Night"
 _SPONSOR_RE: re.Pattern[str] = re.compile(
@@ -266,9 +274,7 @@ class MLBPromotionsMonitor:
     feed_title: TickerMessage | SegmentMessage | None = attrs.field(
         init=False, default=None
     )
-    feed_stories: list[TickerMessage | SegmentMessage | MLBPromoCard] = attrs.field(
-        init=False, factory=list
-    )
+    feed_stories: list[_PromoStoryT] = attrs.field(init=False, factory=list)
     _promos: list[PromoInfo] = attrs.field(init=False, factory=list)
 
     @classmethod
@@ -635,7 +641,7 @@ class MLBPromotionsMonitor:
 
     def _build_promo_cards(
         self, infos: list[PromoInfo], label: str
-    ) -> list[TickerMessage | SegmentMessage | MLBPromoCard]:
+    ) -> list[_PromoStoryT]:
         """One `MLBPromoCard` per displayed promo, from a SINGLE ordered
         pass over `infos` (via `_build_promo_card_stories`). Shared by
         `update()` (live `target_infos`, already scoped to the picked home
@@ -748,6 +754,23 @@ class MLBPromotionsMonitor:
             font_color=self.font_color,
         )
 
+    def _hires_story_line(self, text: str) -> HiresLine:
+        """HiresLine-wrapped status line for in-season, regularly-hit
+        non-hero states (no home game matched this window / off-day
+        road-trip fallback) — forwards to `_story_line`'s BDF line at
+        scale<=1, renders hi-res Inter at scale>1. Builds the SAME segments
+        `_story_line` does (team-color prefix + plain body text) so wording
+        and color can't drift between the two. The rare error state
+        (`_set_error_state`) and the offseason "Opens …" fallback stay bare
+        BDF via `_story_line` directly — see those call sites.
+        """
+        legacy = self._story_line(text)
+        segments = [
+            (f"{self.team} ", _team_color(self.team)),
+            (text, self._plain_body_color()),
+        ]
+        return HiresLine(segments, legacy=legacy)
+
     # Contract for the _set_*_state setters below: they manage feed_stories
     # only. update() calls _set_title() unconditionally before dispatching to
     # any of them, so feed_title is always set — including on error paths.
@@ -762,12 +785,16 @@ class MLBPromotionsMonitor:
         )
 
     def _set_next_home_state(self, game_date: date, today: date) -> None:
-        """Home games exist in the window but none had matching promos."""
+        """Home games exist in the window but none had matching promos.
+
+        Regularly-hit in-season state (unlike the rare `_set_error_state`),
+        so it renders hi-res at scale>1 via HiresLine.
+        """
         if game_date == today:
             text = "Home game today"
         else:
             text = f"Next home game: {game_date.strftime('%b %-d')}"
-        self.feed_stories = [self._story_line(text)]
+        self.feed_stories = [self._hires_story_line(text)]
         logger.info("MLB Promotions %s updated: %s", self.team, text)
 
     async def _set_fallback_state(self, tz: ZoneInfo, had_games: bool) -> None:
@@ -776,7 +803,10 @@ class MLBPromotionsMonitor:
         First home game → "Next home game: <date>". Otherwise ``had_games``
         (the main window had away games → mid-season road trip) decides
         between "No home games soon" and the offseason "Opens …" texts.
-        A failed probe degrades to the no-result text silently.
+        A failed probe degrades to the no-result text silently. The first
+        two texts are regularly-hit in-season states and render hi-res at
+        scale>1 via HiresLine; the offseason "Opens …" texts are a distinct
+        rare state (unlike statcast, promotions has one) and stay bare BDF.
         """
         now = datetime.now(tz)
         start = now.strftime("%Y-%m-%d")
@@ -809,12 +839,15 @@ class MLBPromotionsMonitor:
 
         if first_home is not None:
             text = f"Next home game: {first_home.strftime('%b %-d')}"
+            self.feed_stories = [self._hires_story_line(text)]
         elif had_games:
             text = "No home games soon"
+            self.feed_stories = [self._hires_story_line(text)]
         elif first_any is not None:
             text = f"Opens {first_any.strftime('%b %-d')}"
+            self.feed_stories = [self._story_line(text)]
         else:
             text = "Opens soon"
+            self.feed_stories = [self._story_line(text)]
 
-        self.feed_stories = [self._story_line(text)]
         logger.info("MLB Promotions %s updated: fallback (%s)", self.team, text)

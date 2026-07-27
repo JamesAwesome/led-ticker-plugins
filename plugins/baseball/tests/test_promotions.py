@@ -5,6 +5,28 @@ import logging
 import unittest.mock as mock
 from zoneinfo import ZoneInfo
 
+from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+from led_ticker_baseball._hires_line import HiresLine
+
+
+def _render_hires(story, scale, w=512):
+    """Render a scale-dispatched story onto a fresh HeadlessBackend canvas.
+
+    Mirrors scores.py/statcast.py's own test helper of the same name — same
+    shape, reused here so the promotions-widget consumer tests exercise the
+    real draw path the same way.
+    """
+    real = HeadlessBackend(w, 64).create_canvas()
+    story.draw(ScaledCanvas(real, scale=scale, content_height=16), 0)
+    return real
+
+
+def _lit_span(real):
+    """Vertical span (in real px) of every non-black pixel drawn."""
+    ys = [y for (x, y), c in real._pixels.items() if c != (0, 0, 0)]
+    return (max(ys) - min(ys) + 1) if ys else 0
+
 
 def _ctx(json_value):
     """Async context manager mock whose response .json() returns json_value."""
@@ -1291,3 +1313,112 @@ class TestPromotionsDemo:
         # across every demo card.
         opponents = {card.promo.opponent_abbr for card in widget.feed_stories}
         assert len(opponents) == 1
+
+
+# --- HiresLine consumer wiring (promotions no-data/off-day/next-game lines) ---
+
+
+class TestPromotionsHiresConsumers:
+    """The in-season, regularly-hit non-hero lines — `_set_next_home_state`
+    (no promos matched this window, but a home game is known) and
+    `_set_fallback_state`'s in-season road-trip branches ("Next home game: …"
+    / "No home games soon") — render hi-res at scale>1 via HiresLine,
+    mirroring scores.py's "Next: vs" conversion. The rare error state
+    (`_set_error_state`) and the offseason "Opens …" fallback stay bare
+    BDF, per the design's non-goals — unlike statcast, promotions DOES have
+    a distinct offseason line, so it gets its own tripwire below.
+    """
+
+    def test_no_data_line_is_hires(self):
+        widget = make_widget()
+        widget._set_next_home_state(dt.date(2026, 6, 22), TODAY)
+
+        story = widget.feed_stories[0]
+        assert isinstance(story, HiresLine)
+
+        real = _render_hires(story, scale=4)
+        span = _lit_span(real)
+        assert 12 <= span <= 30
+
+        # Mutation-proof: rendering the same story's `legacy` BDF line at
+        # the same scale must produce different pixels (block-scaled BDF,
+        # not hi-res Inter) — otherwise this test would pass even if
+        # HiresLine's scale>1 branch were accidentally stubbed out to just
+        # forward.
+        bdf = HeadlessBackend(512, 64).create_canvas()
+        story.legacy.draw(ScaledCanvas(bdf, scale=4, content_height=16), 0)
+        assert real._pixels != bdf._pixels
+
+    async def test_off_day_next_game_line_is_hires(self):
+        # "No home games soon" branch: probe finds games elsewhere in the
+        # league but none for this team (mid-season road trip).
+        session = make_session(
+            {"gameType=R": probe_schedule(make_game(144, "2026-06-26"))}
+        )
+        widget = make_widget(session=session)
+        await widget._set_fallback_state(NY, had_games=True)
+
+        story = widget.feed_stories[0]
+        assert isinstance(story, HiresLine)
+        assert line_text(story) == "TOR No home games soon"
+
+        real = _render_hires(story, scale=4)
+        span = _lit_span(real)
+        assert 12 <= span <= 30
+
+        bdf = HeadlessBackend(512, 64).create_canvas()
+        story.legacy.draw(ScaledCanvas(bdf, scale=4, content_height=16), 0)
+        assert real._pixels != bdf._pixels
+
+        # "Next home game: …" branch: probe finds this team's own home game.
+        session2 = make_session(
+            {"gameType=R": probe_schedule(make_game(141, "2026-06-26"))}
+        )
+        widget2 = make_widget(session=session2)
+        await widget2._set_fallback_state(NY, had_games=True)
+
+        story2 = widget2.feed_stories[0]
+        assert isinstance(story2, HiresLine)
+        assert line_text(story2) == "TOR Next home game: Jun 26"
+
+    def test_error_state_stays_bdf(self):
+        # Over-conversion tripwire: the "No Data" error state (team never
+        # resolves / API totally failed) must NOT be converted — it's a
+        # rare/bug state per the design's non-goals.
+        widget = make_widget()
+        widget._set_error_state()
+
+        story = widget.feed_stories[0]
+        assert not isinstance(story, HiresLine)
+
+        # An unconverted story's scale>1 draw is byte-identical to its own
+        # draw on a second canvas (no scale-dispatch branch to diverge
+        # through) — the equivalent tripwire to the hi-res != legacy check
+        # above.
+        real = _render_hires(story, scale=4)
+        ref = HeadlessBackend(512, 64).create_canvas()
+        story.draw(ScaledCanvas(ref, scale=4, content_height=16), 0)
+        assert real._pixels == ref._pixels
+        assert real._pixels  # sanity: it actually drew something
+
+    async def test_offseason_stays_bdf(self):
+        # Over-conversion tripwire: promotions has a distinct offseason
+        # "Opens <date>" line (unlike statcast) — it must stay bare BDF.
+        session = make_session(
+            {"gameType=R": probe_schedule(make_game(144, "2027-03-28"))}
+        )
+        widget = make_widget(session=session)
+        await widget._set_fallback_state(NY, had_games=False)
+
+        story = widget.feed_stories[0]
+        assert line_text(story) == "TOR Opens Mar 28"
+        assert not isinstance(story, HiresLine)
+
+        # Also cover the "Opens soon" (no games at all in probe) sibling.
+        session2 = make_session({"gameType=R": {"dates": []}})
+        widget2 = make_widget(session=session2)
+        await widget2._set_fallback_state(NY, had_games=False)
+
+        story2 = widget2.feed_stories[0]
+        assert line_text(story2) == "TOR Opens soon"
+        assert not isinstance(story2, HiresLine)
