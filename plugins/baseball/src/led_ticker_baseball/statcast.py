@@ -33,6 +33,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
+from led_ticker_baseball._hires_line import HiresLine
 from led_ticker_baseball._statcast_card import MLBStatcastCard
 from led_ticker_baseball.teams import (
     API_TO_CANONICAL_ABBR,
@@ -56,6 +57,13 @@ _USER_AGENT: str = (
 _SAVANT_TIMEOUT_S: int = 30
 
 _INTERVAL_THIRTY_MIN: int = 1800
+
+# Every story shape statcast can ever hand the engine — bare BDF lines (title,
+# error state), the SegmentMessage superlative lines, the hi-res hero cards,
+# and the HiresLine-wrapped no-games fallback. A single alias (mirroring
+# scores.py's `_MLBStoryT`) keeps feed_title/feed_stories/`_build_stat_cards`
+# in agreement so a `list[...]` invariant assignment never fights itself.
+_StatcastStoryT = TickerMessage | SegmentMessage | MLBStatcastCard | HiresLine
 
 _STAT_KEYS: tuple[str, ...] = (
     "longest_hr",
@@ -309,12 +317,8 @@ class MLBStatcastMonitor:
     # means no successful derive yet (first run, or the last update ended
     # in an error/fallback state).
     _last_derive: tuple[date, int] | None = attrs.field(init=False, default=None)
-    feed_title: TickerMessage | SegmentMessage | None = attrs.field(
-        init=False, default=None
-    )
-    feed_stories: list[TickerMessage | SegmentMessage | MLBStatcastCard] = attrs.field(
-        init=False, factory=list
-    )
+    feed_title: _StatcastStoryT | None = attrs.field(init=False, default=None)
+    feed_stories: list[_StatcastStoryT] = attrs.field(init=False, factory=list)
 
     @classmethod
     def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
@@ -590,7 +594,7 @@ class MLBStatcastMonitor:
         records: dict[str, StatRecord],
         day_label: str,
         names: dict[int, str],
-    ) -> list[TickerMessage | SegmentMessage | MLBStatcastCard]:
+    ) -> list[_StatcastStoryT]:
         """One MLBStatcastCard per record, wrapping its legacy line.
 
         `_build_stat_stories` builds the legacy `SegmentMessage` lines in
@@ -603,7 +607,7 @@ class MLBStatcastMonitor:
         legacy_lines = self._build_stat_stories(records, day_label, names)
         ordered = [k for k in self.stats if k in records]
         total = len(ordered)
-        cards: list[TickerMessage | SegmentMessage | MLBStatcastCard] = []
+        cards: list[_StatcastStoryT] = []
         for idx, (key, legacy) in enumerate(zip(ordered, legacy_lines, strict=True)):
             record = records[key]
             cards.append(
@@ -640,7 +644,9 @@ class MLBStatcastMonitor:
 
         Team mode names the next game, league mode the next slate; both gate on
         ``_team_id`` so a failed resolve degrades honestly to the league line.
-        The 30-day probe lives in ``teams.next_game_date``.
+        The 30-day probe lives in ``teams.next_game_date``. Regularly-hit
+        in-season state (unlike the rare `_set_error_state` above), so it
+        renders hi-res at scale>1 via HiresLine.
         """
         next_date = await next_game_date(self.session, today, team_id=self._team_id)
         if next_date is None:
@@ -649,12 +655,12 @@ class MLBStatcastMonitor:
             text = f"Next game: {next_date.strftime('%b %-d')}"
         else:
             text = f"Next games: {next_date.strftime('%b %-d')}"
-        self.feed_stories = [
-            TickerMessage(
-                text,
-                font_color=self._body_color(),
-                center=True,
-                bg_color=self.bg_color,
-            ),
-        ]
+        body_color = self._body_color()
+        legacy = TickerMessage(
+            text,
+            font_color=body_color,
+            center=True,
+            bg_color=self.bg_color,
+        )
+        self.feed_stories = [HiresLine([(text, body_color)], legacy=legacy)]
         logger.info("MLB Statcast updated: fallback (%s)", text)

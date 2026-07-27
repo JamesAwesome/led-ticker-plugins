@@ -45,6 +45,7 @@ from led_ticker.plugin import (
     make_color,
 )
 
+from led_ticker_baseball._hires_line import HiresLine
 from led_ticker_baseball._models import (
     GameInfo,
     SeriesInfo,
@@ -331,11 +332,17 @@ def _build_series_title(
     bg_color: Color | None = None,
     font: Font | None = None,
     font_color: Color | ColorProvider | None = None,
-) -> SegmentMessage:
+) -> HiresLine:
     """Build the title message for a series.
 
     Uses AWAY @ HOME when all games share the same home team,
     otherwise falls back to neutral 'vs' separator.
+
+    Returns a ``HiresLine``: hi-res Inter on a scale>1 sign (bigsign /
+    longboi), byte-identical BDF ``SegmentMessage`` fallback at scale<=1
+    (smallsign) — this is the series-record line shown at the top of
+    every scores rotation, so it's the highest-visibility non-hero line
+    in the widget.
     """
     team_c = _team_color(team_abbr)
     opp_c = _team_color(series.opponent_abbr)
@@ -390,10 +397,14 @@ def _build_series_title(
             record = f" {series.team_losses}-{series.team_wins}"
         segments.append((record, colors.RGB_WHITE))
 
-    # Center the title if it fits on screen
-    return SegmentMessage(
+    # Center the title if it fits on screen. HiresLine forwards to this same
+    # SegmentMessage (byte-identical) at scale<=1; at scale>1 it draws
+    # `segments` itself in hi-res, so wording/colors can't drift between the
+    # two paths.
+    legacy = SegmentMessage(
         segments, center=True, bg_color=bg_color, font=font, font_color=font_color
     )
+    return HiresLine(segments, legacy=legacy, center=True)
 
 
 def _build_game_message(

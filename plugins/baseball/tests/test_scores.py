@@ -4,8 +4,10 @@ import unittest.mock as mock
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from led_ticker.plugin import HeadlessBackend, ScaledCanvas, TickerMessage
 from led_ticker.widgets.message import SegmentMessage
 
+from led_ticker_baseball._hires_line import HiresLine
 from led_ticker_baseball.scores import (
     GameInfo,
     MLBGameCard,
@@ -24,6 +26,24 @@ from led_ticker_baseball.teams import (
 )
 
 ET = ZoneInfo("America/New_York")
+
+
+def _render_hires(story, scale, w=512):
+    """Render a scale-dispatched story onto a fresh HeadlessBackend canvas.
+
+    Mirrors _hires_line.py's own test helper (`tests/test_hires_line.py`) —
+    same shape, reused here so the scores-widget consumer tests exercise the
+    real draw path the same way the HiresLine unit tests do.
+    """
+    real = HeadlessBackend(w, 64).create_canvas()
+    story.draw(ScaledCanvas(real, scale=scale, content_height=16), 0)
+    return real
+
+
+def _lit_span(real):
+    """Vertical span (in real px) of every non-black pixel drawn."""
+    ys = [y for (x, y), c in real._pixels.items() if c != (0, 0, 0)]
+    return (max(ys) - min(ys) + 1) if ys else 0
 
 
 # --- Helpers ---
@@ -272,7 +292,8 @@ class TestBuildSeriesTitle:
             team_losses=1,
         )
         msg = _build_series_title("PHI", series, ET)
-        assert isinstance(msg, SegmentMessage)
+        assert isinstance(msg, HiresLine)
+        assert isinstance(msg.legacy, SegmentMessage)
         texts = [t for t, _ in msg.segments]
         assert texts[0] == "Mets"  # away first
         assert texts[1] == " @ "
@@ -1981,3 +2002,156 @@ class TestDemoMirrorsUpdateGameCardKwargs:
             "kwarg sets in sync or demo cards silently drift from live "
             "cards."
         )
+
+
+# --- HiresLine consumer wiring (scores series-title + no-games-today line) ---
+
+
+class TestScoresHiresConsumers:
+    """The two non-hero, in-season, regularly-hit lines scores.py hands to
+    HiresLine: the series-title (top of every rotation) and the "Next: vs"
+    line shown on an in-season off day (no current series, next game found).
+    Error/no-data states are a separate tripwire class below — they must
+    stay BDF (rare states, per the design's non-goals).
+    """
+
+    def test_series_title_is_hires_at_scale_gt1(self):
+        games = [
+            GameInfo(
+                home_abbr="PHI",
+                away_abbr="NYM",
+                state="final",
+                home_score=5,
+                away_score=3,
+            ),
+            GameInfo(home_abbr="PHI", away_abbr="NYM", state="preview"),
+        ]
+        series = SeriesInfo(
+            opponent_abbr="NYM", games=games, team_wins=1, team_losses=0
+        )
+        story = _build_series_title("PHI", series, ET)
+        assert isinstance(story, HiresLine)
+
+        real = _render_hires(story, scale=4)
+        span = _lit_span(real)
+        assert 12 <= span <= 30
+
+        # Mutation-proof: rendering the same story's `legacy` BDF line at the
+        # same scale must produce different pixels (block-scaled BDF, not
+        # hi-res Inter) — otherwise this test would pass even if HiresLine's
+        # scale>1 branch were accidentally stubbed out to just forward.
+        bdf = HeadlessBackend(512, 64).create_canvas()
+        story.legacy.draw(ScaledCanvas(bdf, scale=4, content_height=16), 0)
+        assert real._pixels != bdf._pixels
+
+    async def test_no_games_today_line_is_hires(self):
+        # A single (already-final, long-past) game keeps `games` non-empty
+        # so update() reaches the current-series lookup instead of the
+        # earlier "Season Over" (empty-schedule) short-circuit. The two
+        # lookup helpers are patched directly to force the specific
+        # in-season "no current series, but a next game exists" branch —
+        # constructing real schedule JSON that naturally lands there isn't
+        # possible: `_find_current_series`'s own upcoming-series fallback
+        # would otherwise adopt any series with a future preview game as
+        # "current" before `update()` ever reaches this branch.
+        old_game = {
+            "status": {"abstractGameState": "Final", "detailedState": "Final"},
+            "teams": {
+                "home": {"team": {"abbreviation": "NYM"}},
+                "away": {"team": {"abbreviation": "PHI"}},
+            },
+            "teams_scores": {},
+            "gameDate": (datetime.now(ET) - timedelta(days=5))
+            .astimezone(ZoneInfo("UTC"))
+            .strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "gameType": "R",
+            "gamePk": 1,
+        }
+        session = mock.MagicMock()
+
+        def make_ctx(url, *args, **kwargs):
+            resp = mock.AsyncMock()
+            if "/teams" in url:
+                resp.json.return_value = {"teams": [{"id": 121, "abbreviation": "NYM"}]}
+            elif "/schedule" in url:
+                resp.json.return_value = {"dates": [{"games": [old_game]}]}
+            else:
+                resp.json.return_value = {}
+            ctx = mock.AsyncMock()
+            ctx.__aenter__.return_value = resp
+            return ctx
+
+        session.get.side_effect = make_ctx
+
+        widget = MLBScoreMonitor(session=session, team="NYM")
+        widget._tz = ET
+        widget._team_id = 121
+
+        future = datetime.now(ET) + timedelta(days=3)
+        next_game = GameInfo(
+            home_abbr="NYM",
+            away_abbr="PHI",
+            state="preview",
+            start_time=future,
+        )
+        with (
+            mock.patch.object(
+                MLBScoreMonitor, "_find_current_series", return_value=None
+            ),
+            mock.patch.object(
+                MLBScoreMonitor, "_find_next_game", return_value=next_game
+            ),
+        ):
+            await widget.update()
+
+        assert len(widget.feed_stories) == 2
+        story = widget.feed_stories[1]
+        assert isinstance(story, HiresLine)
+        assert "Next: vs" in "".join(t for t, _ in story.segments)
+
+        real = _render_hires(story, scale=4)
+        span = _lit_span(real)
+        assert 12 <= span <= 30
+
+        bdf = HeadlessBackend(512, 64).create_canvas()
+        story.legacy.draw(ScaledCanvas(bdf, scale=4, content_height=16), 0)
+        assert real._pixels != bdf._pixels
+
+    async def test_error_state_stays_bdf(self):
+        # Over-conversion tripwire: the "No Data" error state (team never
+        # resolves) must NOT be converted — it's a rare/bug state per the
+        # design's non-goals, so feed_stories[0] (the team-name title) stays
+        # a bare BDF TickerMessage, not a HiresLine.
+        session = mock.MagicMock()
+
+        def make_ctx(url, *args, **kwargs):
+            resp = mock.AsyncMock()
+            resp.json.return_value = {}
+            ctx = mock.AsyncMock()
+            ctx.__aenter__.return_value = resp
+            return ctx
+
+        session.get.side_effect = make_ctx
+
+        widget = MLBScoreMonitor(session=session, team="NYM")
+        widget._tz = ET
+        widget._team_id = 0  # never resolved -> "No Data" error path
+
+        await widget.update()
+
+        story = widget.feed_stories[0]
+        # Positive + negative type check: still the plain BDF TickerMessage
+        # update() has always built here, never re-wrapped in HiresLine.
+        assert isinstance(story, TickerMessage)
+        assert not isinstance(story, HiresLine)
+
+        # A HiresLine-wrapped story's scale>1 draw differs from its own
+        # `.legacy` BDF draw (see the two hi-res tests above) — the
+        # equivalent tripwire here is that this UNCONVERTED story draws
+        # byte-identical pixels to itself across two independent canvases
+        # (no scale-dispatch branch to diverge through).
+        real = _render_hires(story, scale=4)
+        ref = HeadlessBackend(512, 64).create_canvas()
+        story.draw(ScaledCanvas(ref, scale=4, content_height=16), 0)
+        assert real._pixels == ref._pixels
+        assert real._pixels  # sanity: it actually drew something
