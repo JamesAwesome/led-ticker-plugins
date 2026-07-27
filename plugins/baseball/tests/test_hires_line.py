@@ -62,6 +62,44 @@ def test_long_line_fits_on_canvas_512_and_256():
         assert xs and min(xs) >= 0 and max(xs) < w  # no overflow/clip past edges
 
 
+def test_oversize_line_left_aligns_not_left_clips():
+    # A multi-segment line where the HEAD (non-last) segment alone already
+    # blows past the usable width at floor size -- the same shape that
+    # forces a deeply negative centered start x (only the last segment
+    # gets ellipsized; a huge head segment pushes `total` past
+    # `real.width`). Pre-fix, the centered start x lands so far negative
+    # that HeadlessCanvas.SetPixel's bounds-check drops the leading
+    # portion of the head segment entirely (the "LEAD" prefix) -- only
+    # some mid-string filler happens to land on-canvas, at x==0 exactly
+    # (the left clip boundary), not near `_MARGIN`. Left-aligning clamps
+    # the start to `_MARGIN`, so the leading segment's own front glyphs
+    # (not arbitrary filler) are what lands on-canvas.
+    segments = [("LEAD · " + "Z" * 200, pal.IDENT), (" tail", pal.LABEL)]
+    real = _render(_line(segments=segments), 4, w=256)
+    xs = [x for (x, y) in real._pixels]
+    assert xs
+    # Pre-fix this is exactly 0 (the left-clip boundary of a deep-negative
+    # draw origin); post-fix it sits at the left-aligned start (_MARGIN).
+    assert _MARGIN - 3 <= min(xs) <= _MARGIN + 4
+
+
+def test_short_line_still_centers():
+    # A normal (fitting) line is unaffected by the left-align clamp — the
+    # centered start x is still well clear of the left margin.
+    real = _render(_line(), 4, w=512)
+    xs = [x for (x, y) in real._pixels]
+    assert xs
+    assert min(xs) > _MARGIN
+
+
+def test_tuple_segment_color_is_coerced():
+    # A raw (r, g, b) tuple segment color (not a Color/ColorProvider) must
+    # be coerced rather than crashing on `.red` access.
+    segments = [("teal text", (0, 200, 180))]
+    real = _render(_line(segments=segments), 4)
+    assert any(c == (0, 200, 180) for c in real._pixels.values())
+
+
 def test_multi_segment_head_overflow_stays_on_canvas():
     # A head (non-last) segment that alone blows past the usable width even
     # at the _MIN_SIZE floor. Only the LAST segment gets ellipsized today —

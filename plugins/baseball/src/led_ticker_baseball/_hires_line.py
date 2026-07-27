@@ -18,6 +18,7 @@ from led_ticker.plugin import (
     ColorProvider,
     DrawResult,
     FrameAwareBase,
+    make_color,
     safe_scale,
 )
 
@@ -74,7 +75,13 @@ class HiresLine(FrameAwareBase):
             drawn[-1] = (fit_text(last_text, max(0, max_w - head_w), size), last_color)
 
         total = sum(text_width(size, t) for t, _ in drawn)
-        x = js_round((real.width - total) / 2) if self.center else _MARGIN
+        # A line too wide to fit even after the shrink + trailing-ellipsize
+        # passes above centers to a negative start, clipping the LEADING
+        # segment off the left edge. Clamp to the left margin instead -- the
+        # line left-aligns and the per-segment right clamp below ellipsizes
+        # the TAIL, preserving reading order. No-op for a normal (fitting)
+        # line, whose centered start is already >= _MARGIN.
+        x = max(_MARGIN, js_round((real.width - total) / 2)) if self.center else _MARGIN
         # Center by the glyphs' visible cap-height, matching the attend_* `_t`
         # convention (js_round(size * 0.72) approximates the cap box).
         glyph_h = js_round(size * 0.72)
@@ -95,11 +102,14 @@ class HiresLine(FrameAwareBase):
             if text_width(size, text) > right - x:
                 text = fit_text(text, right - x, size)
                 clipped = True
-            c = (
-                color.color_for(self._frame_count, 0, 1)
-                if isinstance(color, ColorProvider)
-                else color
-            )
+            if isinstance(color, ColorProvider):
+                c = color.color_for(self._frame_count, 0, 1)
+            elif isinstance(color, tuple):
+                # Raw (r, g, b) tuple, not a Color -- coerce so `.red`
+                # access in the draw path below doesn't crash.
+                c = make_color(*color)
+            else:
+                c = color
             x += hires(shim, text, x, y, c, size)
             if clipped:
                 break
