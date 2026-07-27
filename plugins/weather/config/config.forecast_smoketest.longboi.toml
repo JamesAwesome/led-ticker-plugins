@@ -1,0 +1,94 @@
+# weather.forecast — longboi smoke test (512×64, scale 4)
+#
+# Validates the weather.forecast WIDGET (led-ticker-plugins#87): a held
+# multi-day forecast card that auto-detects its layout from the panel's real
+# width. At 512px wide, `layout = "auto"` resolves to "long" — an expanded
+# today HERO next to a 6-day strip WITH per-day precipitation percentages.
+#
+# Requires:
+#   - the led-ticker-weather plugin WITH the forecast widget (PR #87 / release)
+#   - led-ticker-core >= 4.27   (the hero's pack-emoji slugs need >= 4.21;
+#     draw_emoji_at on older cores raises KeyError)
+#
+# SELF-CONTAINED: every widget below is `demo = true`, so this needs NO
+# WEATHERAPI_KEY and makes NO network call — it renders the fixed sample week
+# (BOSTON) baked into the plugin. To smoke the LIVE path instead, drop
+# `demo = true` and set `location = "Your City"` (and export WEATHERAPI_KEY).
+#
+# What to look for on the panel:
+#   - Section 1: the "long" hero+strip card spans the full 512px — the expanded
+#     hero on the left (condition sprite, hi/lo, "BOSTON"), a vertical divider
+#     at x=156, then SIX upcoming days across the right, each with an icon,
+#     temps, AND a precip %. Nothing bleeds across the divider.
+#   - Section 2: an explicit `layout = "big"` FORCES the narrower bigsign card
+#     (hero + 4-day strip) on the wide panel — proves the layout override works.
+#   - Section 3: a message for panel context + a rainbow border, proving the
+#     card composes in a normal rotation.
+#   - The card is HELD (static) — it does not scroll. Held for `hold_time`.
+#   - Web UI: http://<pi>:8080  — status + live preview.
+#
+# Copy to config.toml on the longboi Pi (or `make try` headless).
+# Reference: https://docs.ledticker.dev/plugins/  (weather.forecast)
+
+[display]
+rows = 64
+cols = 128
+chain_length = 4
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+panel_type = "FM6126A"
+led_rgb_sequence = "BRG"
+gpio_slowdown = 5
+pwm_bits = 7
+limit_refresh_rate_hz = 100
+
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
+
+[title]
+delay = 3
+
+[transitions]
+default = "dissolve"
+duration = 0.5
+easing = "ease_out"
+between_sections = "dissolve"
+
+# ---------------------------------------------------------------------------
+# Playlist. NOTE the schema: sections are [[playlist.section]] and widgets are
+# [[playlist.section.widget]] (singular) — NOT [[sections]]/[[sections.widgets]].
+# ---------------------------------------------------------------------------
+
+# 1) auto layout -> "long" at 512px (expanded hero + 6-day strip w/ precip %).
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8
+
+[[playlist.section.widget]]
+type = "weather.forecast"
+demo = true
+# layout omitted -> "auto" -> resolves to "long" at this 512px width.
+
+# 2) explicit "big" forces the narrower 4-day card on the wide panel.
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8
+
+[[playlist.section.widget]]
+type = "weather.forecast"
+demo = true
+layout = "big"
+
+# 3) composes in a normal rotation alongside a bordered message.
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "message"
+text = "7-DAY FORECAST"
+font_color = "rainbow"
+border = "rainbow"
