@@ -80,13 +80,29 @@ class HiresLine(FrameAwareBase):
         glyph_h = js_round(size * 0.72)
         y = cap_top(js_round((real.height - glyph_h) / 2) + yo, size)
 
+        # Final safety clamp: the shrink + trailing-ellipsize passes above
+        # minimize truncation in the common case, but only ellipsize the
+        # LAST segment — if a non-last (head) segment alone already exceeds
+        # `max_w` even at the floor size, its glyphs would still draw at
+        # full width here, potentially past the right margin. Clip against
+        # the actual cursor position per segment so head overflow can never
+        # push later glyphs (or itself) off the right edge.
+        right = real.width - _MARGIN
         for text, color in drawn:
+            if x >= right:
+                break
+            clipped = False
+            if text_width(size, text) > right - x:
+                text = fit_text(text, right - x, size)
+                clipped = True
             c = (
                 color.color_for(self._frame_count, 0, 1)
                 if isinstance(color, ColorProvider)
                 else color
             )
             x += hires(shim, text, x, y, c, size)
+            if clipped:
+                break
         # Logical wrapper width -> engine takes the HOLD branch (same lesson
         # as the hero cards).
         return canvas, canvas.width
