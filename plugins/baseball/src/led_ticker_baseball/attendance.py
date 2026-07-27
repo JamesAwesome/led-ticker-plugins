@@ -443,16 +443,25 @@ class MLBAttendanceMonitor:
             font_color=self.font_color,
         )
 
-    def _build_team_fallback_text(self, *, venue: str, day_label: str) -> str:
-        """Plain-text no-attendance fallback line: reuses `_build_team_line`
-        (attendance and weather both explicitly omitted — attendance is None
-        in this state anyway, and dropping weather keeps the hires fallback
-        line short) so the day_label/team/venue formatting can't drift from
-        the legacy line's own."""
+    def _build_team_fallback_segments(
+        self, *, venue: str, weather: dict[str, Any] | None, day_label: str
+    ) -> list[tuple[str, Color | ColorProvider]]:
+        """Segment-based no-attendance fallback line: reuses `_build_team_line`
+        (attendance explicitly omitted — always None in this state) so the
+        day_label/team/venue/weather formatting and per-segment colors can't
+        drift from the legacy line's own. Unlike the v1.8.0 plain-text
+        `_build_team_fallback_text` this replaces, `weather` is threaded
+        through — the hires fallback now carries the same temp/wind segment
+        the legacy BDF line already showed (e.g. 'PHI · Ballpark · 72°, wind
+        5 mph')."""
         line = self._build_team_line(
-            venue=venue, attendance=None, capacity=0, weather=None, day_label=day_label
+            venue=venue,
+            attendance=None,
+            capacity=0,
+            weather=weather,
+            day_label=day_label,
         )
-        return "".join(seg for seg, _color in line.segments)
+        return list(line.segments)
 
     def _build_team_card_from_avg(
         self,
@@ -497,10 +506,9 @@ class MLBAttendanceMonitor:
             cfg_layout=self.layout,
             bg_color=self.bg_color,
             font_color=self.font_color,
-            fallback_text=self._build_team_fallback_text(
-                venue=game_venue.venue, day_label=day_label
+            fallback_segments=self._build_team_fallback_segments(
+                venue=game_venue.venue, weather=weather, day_label=day_label
             ),
-            fallback_color=self._plain_body_color(),
         )
 
     async def _build_team_card(
@@ -655,8 +663,7 @@ class MLBAttendanceMonitor:
                 cfg_layout=self.layout,
                 bg_color=self.bg_color,
                 font_color=self.font_color,
-                fallback_text=text,
-                fallback_color=self._body_color(),
+                fallback_segments=[(text, self._body_color())],
             ),
         ]
         logger.info("MLB Attendance updated: fallback (%s)", text)

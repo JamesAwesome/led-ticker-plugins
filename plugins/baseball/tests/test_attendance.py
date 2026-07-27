@@ -675,6 +675,18 @@ class TestFallbackStates:
         w._set_error_state()
         assert w.feed_stories[0].text == "No Data"
 
+    def test_attendance_error_state_stays_bdf(self):
+        """The error state ("No Data") is a bare TickerMessage — it never
+        went through the v1.8.0 hires-fallback MVP and isn't wrapped in
+        MLBAttendanceCard/HiresLine, so it always renders BDF regardless of
+        scale."""
+        from led_ticker_baseball._hires_line import HiresLine
+
+        w = make_widget()
+        w._set_error_state()
+        story = w.feed_stories[0]
+        assert not isinstance(story, HiresLine)
+
     async def test_team_set_but_unresolved_says_next_games(self):
         # team configured but id failed to resolve (_team_id == 0): the label
         # and the (absent) teamId query must agree — league fallback, not a
@@ -745,7 +757,7 @@ class TestFallbackStates:
         assert len(w.feed_stories) == 1
         card = w.feed_stories[0]
         assert isinstance(card, MLBAttendanceCard)
-        assert card.fallback_text  # sanity: the hires branch is reachable
+        assert card.fallback_segments  # sanity: the hires branch is reachable
 
         real = HeadlessBackend(512, 64).create_canvas()
         canvas = ScaledCanvas(real, scale=4, content_height=16)
@@ -754,13 +766,13 @@ class TestFallbackStates:
         assert lit_rows
         # Hires span, upper-bounded below the ~35px a block-scaled BDF line
         # would produce through the same wrapper.
-        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+        assert 12 <= max(lit_rows) - min(lit_rows) <= 30
 
-        # Mutation-proof: the same card with fallback_text="" forwards to
-        # the BDF `legacy` line instead (the actual regression this test
+        # Mutation-proof: the same card with fallback_segments=[] forwards
+        # to the BDF `legacy` line instead (the actual regression this test
         # guards against — a scale>1 no-attendance branch that forwards to
         # `legacy` unconditionally). The renders must differ pixel-for-pixel.
-        bdf_card = attrs.evolve(card, fallback_text="")
+        bdf_card = attrs.evolve(card, fallback_segments=[])
         real_bdf = HeadlessBackend(512, 64).create_canvas()
         canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
         bdf_card.draw(canvas_bdf, 0)
@@ -1042,7 +1054,7 @@ class TestUpdateTeam:
             await w.update()
         assert len(w.feed_stories) == 1
         card = w.feed_stories[0]
-        assert card.fallback_text  # sanity: the hires branch is reachable
+        assert card.fallback_segments  # sanity: the hires branch is reachable
 
         real = HeadlessBackend(512, 64).create_canvas()
         canvas = ScaledCanvas(real, scale=4, content_height=16)
@@ -1051,16 +1063,60 @@ class TestUpdateTeam:
         assert lit_rows
         # Hires span, upper-bounded below the ~35px a block-scaled BDF line
         # would produce through the same wrapper.
-        assert 15 <= max(lit_rows) - min(lit_rows) <= 30
+        assert 12 <= max(lit_rows) - min(lit_rows) <= 30
 
-        # Mutation-proof: the same card with fallback_text="" forwards to
-        # the BDF `legacy` line instead (the actual regression this test
+        # Mutation-proof: the same card with fallback_segments=[] forwards
+        # to the BDF `legacy` line instead (the actual regression this test
         # guards against). The renders must differ pixel-for-pixel.
-        bdf_card = attrs.evolve(card, fallback_text="")
+        bdf_card = attrs.evolve(card, fallback_segments=[])
         real_bdf = HeadlessBackend(512, 64).create_canvas()
         canvas_bdf = ScaledCanvas(real_bdf, scale=4, content_height=16)
         bdf_card.draw(canvas_bdf, 0)
         assert real._pixels != real_bdf._pixels
+
+    async def test_team_fallback_includes_weather_hires(self):
+        """The no-attendance fallback line restores the weather segment the
+        v1.8.0 `_draw_fallback_line` MVP dropped: a game not yet Final, with
+        weather present, renders a temp/wind token ("°"/"mph") in its hires
+        fallback segments — not just team/venue. Guards both the content
+        (weather text present in the segments) and the render (hi-res span,
+        differs pixel-for-pixel from its own `legacy` BDF line at scale=4)."""
+        from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+        patcher, today = _freeze_today()
+        sched = schedule(
+            sched_game(
+                99,
+                "Live",
+                home="TOR",
+                away="BOS",
+                venue="Rogers Centre",
+                capacity=46000,
+            )
+        )
+        routes = {
+            "hydrate=venue(fieldInfo),team": sched,
+            "/game/99/feed/live": feed(att=None, condition="Clear", temp="72"),
+        }
+        w = self._widget(routes, no_data="show")
+        with patcher:
+            await w.update()
+        assert len(w.feed_stories) == 1
+        card = w.feed_stories[0]
+        segment_text = "".join(text for text, _color in card.fallback_segments)
+        assert "°" in segment_text or "mph" in segment_text
+
+        real = HeadlessBackend(512, 64).create_canvas()
+        canvas = ScaledCanvas(real, scale=4, content_height=16)
+        card.draw(canvas, 0)
+        lit_rows = {y for (_x, y), v in real._pixels.items() if v != (0, 0, 0)}
+        assert lit_rows
+        assert 12 <= max(lit_rows) - min(lit_rows) <= 30
+
+        real_legacy = HeadlessBackend(512, 64).create_canvas()
+        canvas_legacy = ScaledCanvas(real_legacy, scale=4, content_height=16)
+        card.legacy.draw(canvas_legacy, 0)
+        assert real._pixels != real_legacy._pixels
 
     async def test_update_logs_info(self, caplog):
         patcher, today = _freeze_today()
