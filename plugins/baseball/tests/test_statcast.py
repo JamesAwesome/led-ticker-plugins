@@ -5,7 +5,28 @@ import logging
 import unittest.mock as mock
 from zoneinfo import ZoneInfo
 
+from led_ticker.plugin import HeadlessBackend, ScaledCanvas
+
+from led_ticker_baseball._hires_line import HiresLine
+
 NY = ZoneInfo("America/New_York")
+
+
+def _render_hires(story, scale, w=512):
+    """Render a scale-dispatched story onto a fresh HeadlessBackend canvas.
+
+    Mirrors _hires_line.py's own test helper (`tests/test_hires_line.py`) and
+    test_scores.py's consumer-test helper of the same name/shape.
+    """
+    real = HeadlessBackend(w, 64).create_canvas()
+    story.draw(ScaledCanvas(real, scale=scale, content_height=16), 0)
+    return real
+
+
+def _lit_span(real):
+    """Vertical span (in real px) of every non-black pixel drawn."""
+    ys = [y for (x, y), c in real._pixels.items() if c != (0, 0, 0)]
+    return (max(ys) - min(ys) + 1) if ys else 0
 
 
 def row(**kwargs):
@@ -649,7 +670,7 @@ class TestFallbackStates:
         )
         widget = make_widget(session=session)
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert widget.feed_stories[0].legacy.text == "Next games: Mar 26"
 
     async def test_no_games_probe_skips_malformed_dates(self):
         # First entry has no usable date, second is unparseable, third is good.
@@ -666,20 +687,20 @@ class TestFallbackStates:
         )
         widget = make_widget(session=session)
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next games: Mar 28"
+        assert widget.feed_stories[0].legacy.text == "Next games: Mar 28"
 
     async def test_no_games_probe_empty(self):
         session = make_session({"startDate": {"dates": []}})
         widget = make_widget(session=session)
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "No games soon"
+        assert widget.feed_stories[0].legacy.text == "No games soon"
 
     async def test_no_games_probe_failure_degrades(self):
         session = mock.MagicMock()
         session.get.side_effect = RuntimeError("network down")
         widget = make_widget(session=session)
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "No games soon"
+        assert widget.feed_stories[0].legacy.text == "No games soon"
 
 
 def _freeze_today():
@@ -817,7 +838,7 @@ class TestUpdate:
         )
         with patcher:
             await widget.update()
-        assert widget.feed_stories[0].text == "No games soon"
+        assert widget.feed_stories[0].legacy.text == "No games soon"
         assert widget._last_derive is None
 
     async def test_gate_skip_keeps_stories_and_skips_savant(self):
@@ -1067,7 +1088,7 @@ class TestNoGamesStateTeamAware:
         widget = make_widget(session=session, team="PHI")
         widget._team_id = 143
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next game: Mar 26"
+        assert widget.feed_stories[0].legacy.text == "Next game: Mar 26"
         assert "teamId=143" in captured["url"]
 
     async def test_league_mode_says_next_games_no_teamid(self):
@@ -1081,7 +1102,7 @@ class TestNoGamesStateTeamAware:
         session.get.side_effect = side_effect
         widget = make_widget(session=session)  # league
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert widget.feed_stories[0].legacy.text == "Next games: Mar 26"
         assert "teamId" not in captured["url"]
 
     async def test_team_set_but_unresolved_degrades_to_next_games(self):
@@ -1099,7 +1120,7 @@ class TestNoGamesStateTeamAware:
         widget = make_widget(session=session, team="PHI")
         widget._team_id = 0  # resolve failed
         await widget._set_no_games_state(TODAY)
-        assert widget.feed_stories[0].text == "Next games: Mar 26"
+        assert widget.feed_stories[0].legacy.text == "Next games: Mar 26"
         assert "teamId" not in captured["url"]
 
 
@@ -1255,3 +1276,45 @@ class TestStatcastDemo:
 
         assert len(widget.feed_stories) == 1
         assert widget.feed_stories[0].record.exit_velo == 118.3
+
+
+# --- HiresLine consumer wiring (statcast no-data line) ---
+
+
+class TestStatcastHiresConsumer:
+    """The regularly-hit off-day/offseason fallback line (`_set_no_games_state`)
+    renders hi-res at scale>1 via HiresLine, mirroring scores.py's "Next: vs"
+    conversion. The rare "No Data" error state (`_set_error_state`) is a
+    separate tripwire below — it must stay bare BDF, per the design's
+    non-goals.
+    """
+
+    async def test_no_data_line_is_hires(self):
+        session = make_session({"startDate": {"dates": []}})
+        widget = make_widget(session=session)
+        await widget._set_no_games_state(TODAY)
+
+        story = widget.feed_stories[0]
+        assert isinstance(story, HiresLine)
+
+        real = _render_hires(story, scale=4)
+        span = _lit_span(real)
+        assert 12 <= span <= 30
+
+        # Mutation-proof: rendering the same story's `legacy` BDF line at the
+        # same scale must produce different pixels (block-scaled BDF, not
+        # hi-res Inter) — otherwise this test would pass even if HiresLine's
+        # scale>1 branch were accidentally stubbed out to just forward.
+        bdf = HeadlessBackend(512, 64).create_canvas()
+        story.legacy.draw(ScaledCanvas(bdf, scale=4, content_height=16), 0)
+        assert real._pixels != bdf._pixels
+
+    def test_error_state_stays_bdf(self):
+        # Over-conversion tripwire: the "No Data" error state must NOT be
+        # converted — it's a rare/bug state per the design's non-goals, so
+        # feed_stories[0] stays a bare BDF TickerMessage, not a HiresLine.
+        widget = make_widget()
+        widget._set_error_state()
+
+        story = widget.feed_stories[0]
+        assert not isinstance(story, HiresLine)
