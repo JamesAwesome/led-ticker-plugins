@@ -194,6 +194,28 @@ class TestBlitHiresDownscaled:
             assert real.count_nonzero() > 0, hires_slug
 
 
+class TestCenterGroupX:
+    def test_full_count_fills_from_x0(self):
+        # 6 cells of pitch 57 across a 344 span starting at 162: ~x0.
+        xs = paint.center_group_x(162, 506, 6, (506 - 162) / 6)
+        assert xs[0] == 162
+        assert xs[-1] == paint.js_round(162 + 5 * ((506 - 162) / 6))
+
+    def test_fewer_cells_center_symmetrically(self):
+        pitch = (506 - 162) / 6
+        xs = paint.center_group_x(162, 506, 3, pitch)
+        left_margin = xs[0] - 162
+        right_margin = 506 - (xs[-1] + pitch)
+        assert abs(left_margin - right_margin) <= 1
+
+    def test_single_cell_centered(self):
+        xs = paint.center_group_x(0, 160, 1, 53)
+        assert xs == [paint.js_round((160 - 53) / 2)]
+
+    def test_returns_n_positions(self):
+        assert len(paint.center_group_x(0, 200, 4, 40)) == 4
+
+
 class TestSpleen:
     def test_width_is_monospace_6px(self):
         assert paint.spleen_width("86/66") == 30

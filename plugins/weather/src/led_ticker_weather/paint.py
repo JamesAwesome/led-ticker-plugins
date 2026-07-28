@@ -43,6 +43,14 @@ def cap_top(y_target: int, size: int) -> int:
     return y_target - size + js_round(size * 0.72)
 
 
+def center_group_x(x0: float, x1: float, n: int, pitch: float) -> list[int]:
+    """Left-edge x of each of `n` cells of width `pitch`, the whole block
+    centered within [x0, x1). n == full-slot count fills from x0; fewer
+    cells center with equal margins (the forecast short-feed fill rule)."""
+    start = x0 + ((x1 - x0) - n * pitch) / 2
+    return [js_round(start + i * pitch) for i in range(n)]
+
+
 def phys_wrap(canvas):
     real = unwrap_to_real(canvas)
     return ScaledCanvas(real, scale=1, content_height=real.height), real
