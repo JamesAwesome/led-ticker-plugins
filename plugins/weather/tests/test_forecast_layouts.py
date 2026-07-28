@@ -38,20 +38,49 @@ class TestRenderStripSmall:
         assert _colors(smallsign, 2, 4, 16, 12)
 
     def test_dotted_separators_between_columns(self, smallsign):
+        # Task 5: cells are now packed edge-to-edge by center_group_x (3
+        # cells of pitch 53 fill [0,160) almost exactly), so the separator
+        # sits at the boundary between adjacent cells rather than 3px in
+        # from a cell's right edge — sep_x is the midpoint of
+        # (xs[i] + _SMALL_CW, xs[i + 1]), computed the same way
+        # render_strip_small computes it.
+        from led_ticker_weather.forecast_layouts import _SMALL_CW
+        from led_ticker_weather.paint import center_group_x, js_round
+
         render_strip_small(smallsign, DEMO_DATA, "imperial")
+        xs = center_group_x(0, smallsign.width, 3, _SMALL_CW)
         for i in range(2):
-            sep_x = 2 + i * 53 + 53 - 3
+            sep_x = js_round((xs[i] + _SMALL_CW + xs[i + 1]) / 2)
             pts = [y for y in range(16) if smallsign.get_pixel(sep_x, y) != (0, 0, 0)]
             assert pts == list(range(2, 14, 2)), f"separator {i}"
 
-    def test_degrades_below_three_columns_on_short_feed(self, smallsign):
-        import attrs
+    def test_short_feed_centers_group_symmetrically(self, smallsign, lit):
+        # 2-cell feed: content is centered, not left-anchored.
+        from led_ticker_weather.forecast_data import (
+            CurrentConditions,
+            DayForecast,
+            ForecastData,
+        )
+        from led_ticker_weather.forecast_layouts import render_strip_small
 
-        short = attrs.evolve(DEMO_DATA, days=DEMO_DATA.days[:1])
-        render_strip_small(smallsign, short, "imperial")
-        # columns 0-1 drawn, column 2 empty
-        assert _colors(smallsign, 2, 0, 55, 16)
-        assert not _colors(smallsign, 110, 0, 158, 16)
+        data = ForecastData(
+            "BOSTON",
+            CurrentConditions(78, 80, "partly", 82, 64),
+            (DayForecast("TUE", "sunny", 86, 66, 0),),  # TODAY + 1 = 2 cells
+        )
+        render_strip_small(smallsign, data, "imperial")
+        xs = [x for x, _, _ in lit(smallsign, 0, 0, 160, 16)]
+        left_gap = min(xs)
+        right_gap = 160 - max(xs)
+        # The cell BLOCK is centered exactly (center_group_x), but each
+        # cell's own content (icon + text) is left-anchored within its
+        # pitch — the old behavior kept, per Task 5 — so the last cell's
+        # unused trailing width (~13-14px, measured) always lands on the
+        # right. That's structurally unavoidable without also re-anchoring
+        # per-cell content (out of scope here); 16 gives headroom over the
+        # measured ~14px while still failing hard on the old left-anchored
+        # fill (measured diff there: 64px).
+        assert abs(left_gap - right_gap) <= 16  # centered, not left-squished
 
     def test_y_offset_shifts_content_down(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial", y_offset=4)
@@ -73,13 +102,17 @@ class TestRenderStripSmall:
         worst = attrs.evolve(DEMO_DATA, current=worst_cur, days=worst_days)
         render_strip_small(smallsign, worst, "imperial")
 
+        from led_ticker_weather.forecast_layouts import _SMALL_CW
+        from led_ticker_weather.paint import center_group_x, js_round
+
+        xs = center_group_x(0, smallsign.width, 3, _SMALL_CW)
         for i in range(2):
-            sep_x = 2 + i * 53 + 53 - 3
-            next_x0 = 2 + (i + 1) * 53
+            sep_x = js_round((xs[i] + _SMALL_CW + xs[i + 1]) / 2)
+            next_icon_x0 = xs[i + 1] + 3  # next cell's icon inset
             # from the separator column through the gap before the next
             # cell's icon, only the dim separator color may appear — no
             # text ink at or beyond the separator's x.
-            region = _colors(smallsign, sep_x, 0, next_x0, 16)
+            region = _colors(smallsign, sep_x, 0, next_icon_x0, 16)
             assert region == {sep_color}, f"separator {i}: {region}"
 
     def test_strip_icons_stay_lowres_through_scale1_wrapper(self):
@@ -104,7 +137,13 @@ class TestRenderStripSmall:
 
         # First icon slot has ink, but no more than an 8x8 sprite's worth
         # of lit pixels (a 32x32 hires sprite would light far more).
-        icon_x0 = 2 + 3
+        # Task 5: cell x0 now comes from center_group_x over the wrapper's
+        # (real, 256px) width rather than the old fixed _SMALL_X0 = 2.
+        from led_ticker_weather.forecast_layouts import _SMALL_CW
+        from led_ticker_weather.paint import center_group_x
+
+        cell0_x = center_group_x(0, real.width, 3, _SMALL_CW)[0]
+        icon_x0 = cell0_x + 3
         lit_count = sum(
             1
             for y in range(band_y0, band_y1)
@@ -278,18 +317,28 @@ class TestRenderHeroBig:
         ink = {p for _, _, p in lit(real, 44, 50, 112, 64)}
         assert any(r == 0 and g > 100 and b > 200 for r, g, b in ink)
 
-    def test_short_feed_widens_columns(self, bigsign, lit):
-        import attrs
-        from led_ticker.plugin import unwrap_to_real
-
+    def test_short_feed_centers_group(self, bigsign, lit):
+        from led_ticker_weather.forecast_data import (
+            CurrentConditions,
+            DayForecast,
+            ForecastData,
+        )
         from led_ticker_weather.forecast_layouts import render_hero_big
 
-        short = attrs.evolve(DEMO_DATA, days=DEMO_DATA.days[:2])
-        render_hero_big(bigsign, short, "imperial")
-        real = unwrap_to_real(bigsign)
-        # two columns spanning the whole strip: content near both ends
-        assert lit(real, 118, 0, 185, 62)
-        assert lit(real, 185, 0, 252, 62)
+        data = ForecastData(
+            "BOSTON",
+            CurrentConditions(78, 80, "partly", 82, 64),
+            (
+                DayForecast("TUE", "sunny", 86, 66, 0),
+                DayForecast("WED", "rain", 74, 65, 60),
+            ),
+        )
+        render_hero_big(bigsign, data, "imperial")
+        real = bigsign.real
+        # strip region [118,252]: 2 centered cells -> roughly symmetric margins.
+        strip = lit(real, 118, 0, 252, 64)
+        xs = [x for x, _, _ in strip]
+        assert 252 - max(xs) - (min(xs) - 118) < 20  # near-symmetric
 
     def test_wide_location_does_not_bleed_into_strip(self, bigsign, lit):
         import attrs

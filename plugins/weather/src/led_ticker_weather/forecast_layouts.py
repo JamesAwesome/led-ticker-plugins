@@ -16,6 +16,7 @@ from led_ticker_weather.forecast_data import (
 from led_ticker_weather.paint import (
     blit_hires_downscaled,
     cap_top,
+    center_group_x,
     dim,
     fit_text,
     hires,
@@ -31,7 +32,6 @@ from led_ticker_weather.palette import AMBER, CYAN, HI, IDENT, LABEL, LO, RGB
 # --- smallsign (160x16, BDF, logical coords) — handoff weatherSmall ---
 
 _SMALL_CW = 53  # column width
-_SMALL_X0 = 2
 _SMALL_TEXT_DX = 13  # text block starts right of the icon slot: the
 # handoff's 17 assumed its own 14px icon slot, but ours is the 8x8 sprite
 # drawn at x+3 (ends x+10) — 13 keeps a 2px icon gap and gives the 7-char
@@ -48,13 +48,16 @@ _SMALL_ICON_Y = 4  # centers the 8x8 sprite vertically
 def render_strip_small(
     canvas, data: ForecastData, units: str, *, y_offset: int = 0
 ) -> None:
-    """Today + next two days: icon | day label / hi-lo, dotted separators."""
+    """Today + next two days centered as a group; icon | day/hi-lo; dotted
+    separators between cells."""
     cur = data.current
     cells: list[tuple[str, DayForecast | None]] = [("TDY", None)]
     for d in data.days[:2]:
         cells.append((d.label, d))
+    n = len(cells)
+    xs = center_group_x(0, canvas.width, n, _SMALL_CW)
     for i, (label, day) in enumerate(cells):
-        x = _SMALL_X0 + i * _SMALL_CW
+        x = xs[i]
         kind = cur.kind if day is None else day.kind
         hi_f = cur.hi_f if day is None else day.hi_f
         lo_f = cur.lo_f if day is None else day.lo_f
@@ -86,8 +89,8 @@ def render_strip_small(
             _SMALL_TEMP_BASELINE + y_offset,
             dim(IDENT),
         )
-        if i < len(cells) - 1:
-            sep_x = x + _SMALL_CW - 3
+        if i < n - 1:
+            sep_x = js_round((xs[i] + _SMALL_CW + xs[i + 1]) / 2)
             for yy in range(2, 14, 2):
                 canvas.SetPixel(
                     sep_x,
@@ -171,14 +174,15 @@ def _hero_icon(canvas, kind: str, log_x: int, log_y: int, y_offset: int) -> None
 
 
 def _strip(shim, real, days, x0, x1, n_slots, geo, units, oy):
-    """Lay out up to n_slots day columns; a short feed widens the columns
-    (cw = span / actual_n, the handoff's own formula with the real count)."""
+    """Center up to n_slots day columns at the design pitch (span / n_slots);
+    a short feed centers the group with equal margins (center_group_x)."""
     n = min(n_slots, len(days))
     if n == 0:
         return
-    cw = (x1 - x0) / n
+    pitch = (x1 - x0) / n_slots
+    xs = center_group_x(x0, x1, n, pitch)
     for i in range(n):
-        _strip_cell(shim, real, x0 + i * cw, cw, days[i], geo, units, oy)
+        _strip_cell(shim, real, xs[i], pitch, days[i], geo, units, oy)
 
 
 def render_hero_big(
