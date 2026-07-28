@@ -156,6 +156,9 @@ def _emoji_pixels(slug: str) -> tuple[tuple[int, int, int, int, int], ...]:
     on a throwaway `HeadlessBackend` canvas) and read back via `get_pixel`
     — the one documented supported readback (baseball `_mask.py`
     precedent). Cached: the scan runs once per slug per process.
+
+    Retained: no production caller after the hires-downscale switch — kept as
+    the lowres reference in the strip-icon discriminator test (test_forecast_layouts).
     """
     real = HeadlessBackend(_SPRITE_BOX * 2, _SPRITE_BOX).create_canvas()
     draw_emoji_at(real, slug, 0, 0)
@@ -171,7 +174,11 @@ def _emoji_pixels(slug: str) -> tuple[tuple[int, int, int, int, int], ...]:
 def blit_emoji_scaled(real, slug: str, x: int, y: int, k: int) -> None:
     """Stamp the curated lowres sprite at physical (x, y), each sprite
     pixel expanded to a k x k block (the strip-icon sizes: k=2 bigsign,
-    k=3 longboi). Bounds-clipped per pixel."""
+    k=3 longboi). Bounds-clipped per pixel.
+
+    Retained: no production caller after the hires-downscale switch — kept as
+    the lowres reference in the strip-icon discriminator test (test_forecast_layouts).
+    """
     for dx, dy, r, g, b in _emoji_pixels(slug):
         bx, by = x + dx * k, y + dy * k
         for j in range(k):

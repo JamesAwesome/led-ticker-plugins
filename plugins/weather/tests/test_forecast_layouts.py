@@ -335,6 +335,7 @@ class TestRenderHeroBig:
     def test_feels_line_cyan(self, bigsign, lit):
         from led_ticker.plugin import HeadlessBackend, unwrap_to_real
 
+        from led_ticker_weather.forecast_data import display_temp
         from led_ticker_weather.forecast_layouts import render_hero_big
         from led_ticker_weather.paint import phys_wrap, spleen
         from led_ticker_weather.palette import CYAN
@@ -354,7 +355,8 @@ class TestRenderHeroBig:
         # so the old FEELS box cannot equal this reference box.
         ref_canvas = HeadlessBackend(256, 64).create_canvas()
         ref_shim, ref_real = phys_wrap(ref_canvas)
-        spleen(ref_shim, "FEELS 80°", 44, 52, CYAN)
+        feels_str = f"FEELS {display_temp(DEMO_DATA.current.feels_f, 'imperial')}°"
+        spleen(ref_shim, feels_str, 44, 52, CYAN)
         assert box == lit(ref_real, 44, 50, 112, 64)
 
     def test_hero_hi_lo_is_spleen_not_inter(self, bigsign, lit):
