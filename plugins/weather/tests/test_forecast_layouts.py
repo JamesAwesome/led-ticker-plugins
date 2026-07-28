@@ -120,30 +120,89 @@ class TestStripCell:
 
         L._strip_cell(shim, real, 0, 60, day, geo, "imperial", 0)
 
+    @staticmethod
+    def _box(canvas, x0, y0, x1, y1):
+        """Full (incl. black) pixel grid — exact-match comparisons need
+        every pixel, not just the nonzero ones `lit` returns."""
+        return [
+            (x, y, canvas.get_pixel(x, y)) for y in range(y0, y1) for x in range(x0, x1)
+        ]
+
     def test_big_geo_stacks_temps(self, bigsign, lit):
         from led_ticker_weather import forecast_layouts as L
         from led_ticker_weather.forecast_data import DayForecast
 
         shim, real = L.phys_wrap(bigsign)
         self._cell(shim, real, L._BIG_GEO, DayForecast("TUE", "sunny", 86, 66, 0))
-        # hi band above lo band (stacked).
-        hi = lit(real, 0, L._BIG_GEO.temp_y, 60, L._BIG_GEO.temp_y + 12)
-        lo = lit(real, 0, L._BIG_GEO.temp_y + 12, 60, L._BIG_GEO.temp_y + 24)
+        # hi band above lo band (stacked), and each band carries the
+        # expected warm/cool ink (not just "something is lit").
+        hi = {
+            p for _, _, p in lit(real, 0, L._BIG_GEO.temp_y, 60, L._BIG_GEO.temp_y + 12)
+        }
+        lo = {
+            p
+            for _, _, p in lit(
+                real, 0, L._BIG_GEO.temp_y + 12, 60, L._BIG_GEO.temp_y + 24
+            )
+        }
         assert hi and lo
+        assert any(r > b for r, _, b in hi)  # HI=(255,148,36): warm-ish ink
+        assert any(b > r for r, _, b in lo)  # LO=(70,180,255): cool-ish ink
 
-    def test_strip_uses_HIRES_slug_not_lowres(self, longboi, lit):
-        # The unification guard: the strip icon is the hero's hires sprite.
+    def test_strip_icon_is_hires_downscaled_not_lowres(self, longboi, lit):
+        # The unification guard: the strip icon is the hero's hires sprite,
+        # box-downscaled — not the old lowres sprite upscaled. Pixel-exact
+        # comparisons against both references so this actually fails if
+        # `_strip_cell` reverts to the lowres-upscale path (verified against
+        # the pre-Task-4 implementation: old icon == lowres ref, old icon !=
+        # hires ref).
+        from led_ticker.plugin import HeadlessBackend
+
         from led_ticker_weather import forecast_layouts as L
         from led_ticker_weather.forecast_data import KIND_SLUGS, DayForecast
+        from led_ticker_weather.paint import blit_emoji_scaled, blit_hires_downscaled
 
         shim, real = L.phys_wrap(longboi)
-        self._cell(shim, real, L._LONG_GEO, DayForecast("TUE", "overcast", 80, 60, 0))
-        strip_lit = real.count_nonzero()
-        # A reference downscale of the HIRES overcast slug lights the icon box;
-        # the LOWRES 'cloud' would look different. Assert non-empty + that the
-        # hires slug for overcast is the pack sprite (not 'cloud').
+        day = DayForecast("TUE", "overcast", 80, 60, 0)
+        self._cell(shim, real, L._LONG_GEO, day)
+        lowres_slug, hires_slug = KIND_SLUGS[day.kind]
+
+        # cx=30 (w=60), icon_px=24, icon_y=13 -> box origin (18, 13).
+        icon_box = self._box(real, 18, 13, 42, 37)
+
+        ref_hires = HeadlessBackend(64, 64).create_canvas()
+        blit_hires_downscaled(ref_hires, hires_slug, 18, 13, 24)
+        assert icon_box == self._box(ref_hires, 18, 13, 42, 37)
+
+        ref_lowres = HeadlessBackend(64, 64).create_canvas()
+        blit_emoji_scaled(ref_lowres, lowres_slug, 18, 13, 3)
+        assert icon_box != self._box(ref_lowres, 18, 13, 42, 37)
+
+        # Secondary data-table sanity check (proves nothing about the
+        # render by itself, kept as documentation of the slug mapping).
         assert KIND_SLUGS["overcast"][1] == "sun_behind_large_cloud"
-        assert strip_lit > 0
+
+    def test_day_label_is_spleen_not_inter(self, longboi):
+        # Pixel-exact match against a standalone `spleen_center` render at
+        # the same position/color proves `_strip_cell` wires spleen (not
+        # Inter/`_ctext`) for the day label. Verified against the
+        # pre-Task-4 implementation: old day-label != spleen ref.
+        from led_ticker.plugin import HeadlessBackend
+
+        from led_ticker_weather import forecast_layouts as L
+        from led_ticker_weather.forecast_data import DayForecast
+        from led_ticker_weather.paint import spleen_center
+        from led_ticker_weather.palette import AMBER
+
+        shim, real = L.phys_wrap(longboi)
+        day = DayForecast("TUE", "overcast", 80, 60, 0)
+        self._cell(shim, real, L._LONG_GEO, day)
+        day_box = self._box(real, 0, 0, 60, 13)
+
+        ref_canvas = HeadlessBackend(64, 64).create_canvas()
+        ref_shim, ref_real = L.phys_wrap(ref_canvas)
+        spleen_center(ref_shim, day.label, 30, L._LONG_GEO.day_y, AMBER)
+        assert day_box == self._box(ref_real, 0, 0, 60, 13)
 
     def test_long_geo_horizontal_temps_and_pop(self, longboi, lit):
         from led_ticker_weather import forecast_layouts as L
@@ -166,13 +225,22 @@ class TestStripCell:
         assert LABEL in colors and CYAN not in colors  # low pop -> dim label
 
     def test_precip_fits_within_64px(self, longboi, lit):
-        # Tight-budget tripwire: nothing in the strip cell paints past row 63.
+        # Tight-budget tripwire on the GEOMETRY CONSTANTS, not the render:
+        # `SetPixel` silently clips out-of-bounds writes, so scanning the
+        # rendered canvas can't catch an overflowing pop_y/temp_y (every
+        # returned point is <=63 by construction of the scan region). Assert
+        # the cell-bottom invariant directly so a future retune that pushes
+        # a row off-panel fails loudly instead of clipping invisibly.
         from led_ticker_weather import forecast_layouts as L
         from led_ticker_weather.forecast_data import DayForecast
 
+        assert L._LONG_GEO.pop_y + 12 <= 64  # longboi precip cell bottom
+        assert L._BIG_GEO.temp_y + L._BIG_GEO.line_h * 2 <= 64  # bigsign lo-temp bottom
+
+        # Render-based presence check, kept as a secondary smoke test.
         shim, real = L.phys_wrap(longboi)
         self._cell(shim, real, L._LONG_GEO, DayForecast("THU", "snow", 74, 65, 90))
-        assert all(y <= 63 for _, y, _ in lit(real, 0, 0, 60, 64))
+        assert lit(real, 0, L._LONG_GEO.pop_y, 60, L._LONG_GEO.pop_y + 12)
 
 
 class TestRenderHeroBig:

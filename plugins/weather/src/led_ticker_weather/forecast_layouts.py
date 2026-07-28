@@ -121,20 +121,6 @@ _BIG_GEO = StripGeo(day_y=2, icon_px=16, icon_y=15, temp_y=33, stack=True)
 _LONG_GEO = StripGeo(day_y=1, icon_px=24, icon_y=13, temp_y=38, stack=False, pop_y=51)
 
 
-def _ctext(shim, text, x, w, y_target, rgb, size, oy, *, bold=True):
-    """Center `text` in the [x, x+w) band at handoff cap-top `y_target`."""
-    tw = text_width(size, text, bold=bold)
-    hires(
-        shim,
-        text,
-        js_round(x + (w - tw) / 2),
-        cap_top(y_target, size) + oy,
-        rgb,
-        size,
-        bold=bold,
-    )
-
-
 def _center_segs(shim, segs, x, w, y_target, size, oy):
     """Center multi-color segments as one run (handoff centerSegs)."""
     total = sum(text_width(size, t) for t, _ in segs)
