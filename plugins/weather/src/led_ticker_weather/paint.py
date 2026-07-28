@@ -88,6 +88,38 @@ def text_width(size: int, text: str, *, bold: bool = True) -> int:
     return measure_width(font, text, _PROBE)
 
 
+# Spleen pixel font: crisp at native 12px, monospace 6px advance. Measured:
+# Digits, uppercase, %, and ° (the forecast's content) rasterize with
+# ink-top at the passed y_top — no cap_top conversion. / and lowercase sit
+# ±1px per the font's native per-glyph bbox; the forecast draws neither at
+# a clipping y. Small forecast text (day labels, hi/lo, FEELS, precip) uses this.
+_SPLEEN = resolve_font("spleen-6x12", 12, _HIRES_THRESHOLD)
+_SPLEEN_ADVANCE = 6
+
+
+def spleen_width(text: str) -> int:
+    return _SPLEEN_ADVANCE * len(text)
+
+
+def spleen(shim, text: str, x: int, y_top: int, rgb: RGB) -> int:
+    """Paint spleen text; digits/uppercase/percent/degree ink-top sits AT y_top.
+    Returns 6*len advance."""
+    draw_text(shim, _SPLEEN, text, x, y_top + _SPLEEN.ascent - 1, dim(rgb))
+    return spleen_width(text)
+
+
+def spleen_center(shim, text: str, cx: float, y_top: int, rgb: RGB) -> None:
+    spleen(shim, text, js_round(cx - spleen_width(text) / 2), y_top, rgb)
+
+
+def spleen_segs(shim, segs: list[tuple[str, tuple]], cx: float, y_top: int) -> None:
+    """Center multi-color segments as one monospace run."""
+    total = sum(spleen_width(t) for t, _ in segs)
+    x = js_round(cx - total / 2)
+    for t, rgb in segs:
+        x += spleen(shim, t, x, y_top, rgb)
+
+
 def fit_text(text: str, max_w: int, size: int, *, bold: bool = True) -> str:
     """Handoff `fitText`: ellipsis-truncate until the text fits `max_w`."""
     if text_width(size, text, bold=bold) <= max_w:

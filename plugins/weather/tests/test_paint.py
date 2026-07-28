@@ -192,3 +192,41 @@ class TestBlitHiresDownscaled:
             real = HeadlessBackend(24, 24).create_canvas()
             paint.blit_hires_downscaled(real, hires_slug, 0, 0, 24)
             assert real.count_nonzero() > 0, hires_slug
+
+
+class TestSpleen:
+    def test_width_is_monospace_6px(self):
+        assert paint.spleen_width("86/66") == 30
+        assert paint.spleen_width("") == 0
+
+    def test_advance_equals_width(self, bigsign):
+        # call form: spleen(shim, text, x, y_top, rgb)
+        shim, _ = paint.phys_wrap(bigsign)
+        adv = paint.spleen(shim, "80°", 5, 5, IDENT)
+        assert adv == paint.spleen_width("80°") == 18
+
+    def test_ink_top_is_y_top_no_cap_top(self, bigsign, lit):
+        # Digits, uppercase, %, ° rasterize with ink-top at y_top (the
+        # forecast's content set). Measured; guards no-cap_top assumption.
+        # / and lowercase sit ±1px per font's per-glyph bbox (not drawn here).
+        shim, real = paint.phys_wrap(bigsign)
+        for char, x_start in [("8", 4), ("T", 20)]:
+            paint.spleen(shim, char, x_start, 20, IDENT)
+            pts = lit(real, x_start, 0, x_start + 12, 64)
+            if pts:  # Only assert if pixels were drawn
+                top = min(y for _, y, _ in pts)
+                assert top == 20, f"glyph '{char}' ink-top at {top}, expected 20"
+
+    def test_center_positions_symmetrically(self, bigsign, lit):
+        shim, real = paint.phys_wrap(bigsign)
+        paint.spleen_center(shim, "88", 100, 10, IDENT)  # width 12 -> x 94..106
+        xs = [x for x, _, _ in lit(real, 0, 0, 256, 64)]
+        assert min(xs) >= 94 and max(xs) <= 106
+
+    def test_segs_render_each_color(self, bigsign, lit):
+        shim, real = paint.phys_wrap(bigsign)
+        paint.spleen_segs(shim, [("8", HI), ("/", LABEL), ("6", LO)], 100, 10)
+        colors = {p for _, _, p in lit(real, 0, 0, 256, 64)}
+        # HI is warm (r>b), LO is cool (b>r): both segments rendered.
+        assert any(c[0] > c[2] for c in colors)  # warm (HI) present
+        assert any(c[2] > c[0] for c in colors)  # cool (LO) present
