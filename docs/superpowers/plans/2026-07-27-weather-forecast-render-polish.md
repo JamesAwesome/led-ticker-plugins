@@ -196,9 +196,8 @@ class TestSpleen:
         assert paint.spleen_width("") == 0
 
     def test_advance_equals_width(self, bigsign):
-        shim, _ = paint.phys_wrap(bigsign)
-        assert paint.spleen("80°", 5, 5, IDENT, shim=shim) if False else True
         # call form: spleen(shim, text, x, y_top, rgb)
+        shim, _ = paint.phys_wrap(bigsign)
         adv = paint.spleen(shim, "80°", 5, 5, IDENT)
         assert adv == paint.spleen_width("80°") == 18
 
@@ -221,8 +220,8 @@ class TestSpleen:
         shim, real = paint.phys_wrap(bigsign)
         paint.spleen_segs(shim, [("8", HI), ("/", LABEL), ("6", LO)], 100, 10)
         colors = {p for _, _, p in lit(real, 0, 0, 256, 64)}
-        # dim(rgb, 1.0) == rgb here; all three semantic colors present.
-        assert paint.dim(HI) in colors or any(c[0] > c[2] for c in colors)  # warm present
+        # HI is warm (r>b), LO is cool (b>r): both segments rendered.
+        assert any(c[0] > c[2] for c in colors)  # warm (HI) present
         assert any(c[2] > c[0] for c in colors)  # cool (LO) present
 ```
 
@@ -593,7 +592,6 @@ And in `TestRenderHeroBig`:
              DayForecast("WED", "rain", 74, 65, 60)),
         )
         render_hero_big(bigsign, data, "imperial")
-        _, real = paint.phys_wrap(bigsign) if False else (None, None)
         real = bigsign.real
         # strip region [118,252]: 2 centered cells -> roughly symmetric margins.
         strip = lit(real, 118, 0, 252, 64)
