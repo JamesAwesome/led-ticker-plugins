@@ -102,6 +102,12 @@ consistent across imperial/metric. `PoolMonitor` is an `attrs.define` class with
 `kw_only=True` fields (`font`, `layout`, `label_color`, `top_font`, `bottom_font`, `top_row_height`)
 — construct with named args for those.
 
+**`--list-fields` hints are widget-owned.** `layout` and `label_color` are plugin-owned field
+names, so core carries no name-keyed hint for them (a shared core hint would be wrong for every
+other layout-bearing plugin — core issue #438). `PoolMonitor._LIST_FIELD_HINTS` supplies them
+(resolved ahead of core's table). The `layout` hint's advertised enum must stay in lockstep with
+`_VALID_LAYOUTS` — `test_hint_matches_validated_enum` fails if they drift, so update both together.
+
 ## Tests / CI
 
 `uv run pytest -q` runs the suite (`tests/`):
