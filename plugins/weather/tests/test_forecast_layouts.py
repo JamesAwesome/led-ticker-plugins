@@ -82,6 +82,31 @@ class TestRenderStripSmall:
         # fill (measured diff there: 64px).
         assert abs(left_gap - right_gap) <= 16  # centered, not left-squished
 
+    def test_single_cell_when_no_days(self, smallsign):
+        """n == 1 (today-only, no forecast days): exactly one cell, centered
+        at center_group_x(0, 160, 1, _SMALL_CW), and no dotted separator (no
+        second cell to separate from). The brief's explicitly-named edge
+        case that previously had no direct coverage."""
+        import attrs
+
+        from led_ticker_weather.forecast_layouts import _SMALL_CW
+        from led_ticker_weather.paint import center_group_x
+        from led_ticker_weather.palette import LABEL
+
+        today_only = attrs.evolve(DEMO_DATA, days=())
+        render_strip_small(smallsign, today_only, "imperial")
+
+        x0 = center_group_x(0, 160, 1, _SMALL_CW)[0]
+        # exactly one cell of content, roughly centered.
+        assert _colors(smallsign, x0, 0, x0 + 50, 16)
+        # nothing drawn outside that single cell's span (no ghost 2nd/3rd
+        # cell from a stale index / off-by-one in the centering math).
+        assert not _colors(smallsign, 0, 0, x0 - 5, 16)
+        assert not _colors(smallsign, x0 + 50, 0, 160, 16)
+
+        sep_color = tuple(int(c * 0.3) for c in LABEL)
+        assert sep_color not in _colors(smallsign, 0, 0, 160, 16)
+
     def test_y_offset_shifts_content_down(self, smallsign):
         render_strip_small(smallsign, DEMO_DATA, "imperial", y_offset=4)
         assert not _colors(smallsign, 0, 0, 160, 4)
@@ -335,10 +360,18 @@ class TestRenderHeroBig:
         )
         render_hero_big(bigsign, data, "imperial")
         real = bigsign.real
-        # strip region [118,252]: 2 centered cells -> roughly symmetric margins.
+        # strip region [118,252]: 2 cells at the design pitch
+        # (span/n_slots = 33.5) pack TIGHTER than the old "widen" fill
+        # (span/actual_n = 67) — a spread (max-min lit x) check catches a
+        # revert of _strip's pitch formula that a symmetry-only check
+        # would miss (both old-widen and new-center-group are symmetric
+        # for exactly 2 equal cells spanning this fixture). Measured:
+        # center-group spread = 49px, old-widen spread = 83px for this
+        # fixture — 60 sits with comfortable margin below both.
         strip = lit(real, 118, 0, 252, 64)
         xs = [x for x, _, _ in strip]
-        assert 252 - max(xs) - (min(xs) - 118) < 20  # near-symmetric
+        spread = max(xs) - min(xs)
+        assert spread < 60, f"spread {spread} (widen would be ~83)"
 
     def test_wide_location_does_not_bleed_into_strip(self, bigsign, lit):
         import attrs
