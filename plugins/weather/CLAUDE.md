@@ -60,13 +60,52 @@ palette values should be reading it, not guessing.
 - **Hires text y-targets are visual cap-top** — the design engine crops its text masks to
   visible ink, so a handoff `y` must go through `paint.cap_top` before `hires()`, never
   passed raw.
-- **Hires text is never exact-pinned in tests** — freetype rendering varies across
-  platforms, so `test_forecast_layouts.py` asserts hires text shape-level only; lowres
-  emoji blits and dotted dividers ARE exact SetPixel math and may be pinned.
-- **Strip icons are curated-lowres-only** — `render_strip_small` passes
+- **Hires (Inter) text is never exact-pinned in tests** — freetype rendering varies
+  across platforms, so `test_forecast_layouts.py` asserts Inter/hires text shape-level
+  only. Lowres emoji blits, dotted dividers, AND spleen text (see below — it's
+  deterministic SetPixel math, not freetype) ARE exact SetPixel math and may be pinned.
+- **smallsign strip icons are curated-lowres-only** — `render_strip_small` passes
   `max_emoji_height=8`; the hires gate it relies on is `is_scaled(canvas)`, NOT
   `scale > 1`, so a scale=1/2 `ScaledCanvas` still renders lowres (tripwire:
   `test_strip_icons_stay_lowres_through_scale1_wrapper`).
+- **Hi-res strip icons (bigsign/longboi) are the hero's HIRES slug, box-downscaled** —
+  `_strip_cell` blits `KIND_SLUGS[kind][1]` (the same slug the hero uses) through
+  `paint.blit_hires_downscaled`, never the lowres 8x8 sprite upscaled. This unifies the
+  icon language across hero and strip (including standard-pack-only hero distinctions
+  like overcast / patchy-rain, which now render identically wherever they appear) and
+  gives crisper edges than integer-upscaling an 8x8 source. The 32→target box-average is
+  independent of paint position, so it's cached in `paint._downscaled_pixels`
+  (`@functools.lru_cache`, keyed on `(slug, target)`) — `blit_hires_downscaled` itself
+  only offsets and stamps the cached target-space pixels; the forecast card redraws every
+  50ms engine tick, so this keeps repeat blits of the same slug/size cheap. Tripwire:
+  `test_paint.py::TestBlitHiresDownscaled::test_downscale_compute_is_cached`.
+- **Small hi-res text is spleen, not Inter** — `_strip_cell` (day label, hi/lo,
+  precip %) and the hero's hi/lo + FEELS lines use `paint.spleen` /
+  `spleen_center` / `spleen_segs` (`spleen-6x12`, monospace 6px advance), NOT
+  `hires()`/Inter. Digits, uppercase, `%`, and `°` — the forecast's entire small-text
+  content set — rasterize with ink-top exactly AT the passed `y_top`; there is NO
+  `cap_top` conversion for spleen (unlike Inter/`hires()`, which always needs it).
+  Tripwire: `test_paint.py::TestSpleen::test_ink_top_is_y_top_no_cap_top` (hard-asserts
+  pixels were actually drawn before checking the top — a blank render fails loudly
+  rather than being silently skipped). The BIG hero temperature and the location label
+  stay Inter (`hires()`) — they're the two elements sized/weighted enough that Inter's
+  bearing-box behavior reads correctly and cap_top math is worth the freetype
+  cross-platform variance. smallsign is unaffected — it never touches this path; its
+  strip renders with the bundled BDF font (`FONT_SMALL`) at logical coordinates, same as
+  before.
+- **Short-feed fill is center-group on every hi-res strip** — `_strip` computes
+  `pitch = (x1 - x0) / n_slots` (the full-width design pitch) and calls
+  `paint.center_group_x(x0, x1, n, pitch)` where `n = min(n_slots, len(days))`, so a
+  feed with fewer days than slots (e.g. a 2-day API response on a 4-slot bigsign strip)
+  centers the shorter group with equal margins at the FULL pitch, rather than stretching
+  cells to fill the row or left-justifying with a ragged gap. Applies uniformly to
+  bigsign (`_BIG_GEO`, 4 slots) and longboi (`_LONG_GEO`, 6 slots).
+- **Longboi precip-row fit is a compile-time constant tripwire, not a render assertion**
+  — a rendered canvas can't catch an overflowing `pop_y`/`temp_y` (every scanned point is
+  `<=63` by construction of the scan region), so `test_forecast_layouts.py` directly
+  asserts `L._LONG_GEO.pop_y + 12 <= 64` (and the bigsign analog,
+  `L._BIG_GEO.temp_y + L._BIG_GEO.line_h * 2 <= 64`) against the geometry constants
+  themselves. Changing `_LONG_GEO`/`_BIG_GEO` must keep these true.
 - **Held-cursor returns the wrapper's LOGICAL width** — `ForecastWidget.draw` returns
   `canvas.width` (never `unwrap_to_real(canvas).width`); the engine compares the cursor
   against the wrapper's width, and the real width would wrongly route through the scroll
