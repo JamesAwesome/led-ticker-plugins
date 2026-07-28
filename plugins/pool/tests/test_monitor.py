@@ -840,3 +840,51 @@ class TestValidateConfig:
             )
             == []
         )
+
+
+class TestListFieldHints:
+    """`--list-fields pool.monitor` shows this widget's own layout /
+    label_color hints. Core carries no name-keyed hint for these
+    plugin-owned field names (core issue #438) — the widget-class
+    `_LIST_FIELD_HINTS` supplies them, resolved ahead of core's table.
+    """
+
+    def _list_fields(self):
+        # Register into core's widget registry the way entry-point discovery
+        # would, then drive core's introspection path directly.
+        from led_ticker.app.factories import _list_widget_fields
+        from led_ticker.widgets import _WIDGET_REGISTRY
+
+        prior = _WIDGET_REGISTRY.get("pool.monitor")
+        _WIDGET_REGISTRY["pool.monitor"] = PoolMonitor
+        try:
+            return _list_widget_fields("pool.monitor")
+        finally:
+            if prior is None:
+                _WIDGET_REGISTRY.pop("pool.monitor", None)
+            else:
+                _WIDGET_REGISTRY["pool.monitor"] = prior
+
+    def test_layout_hint_shows_pool_enum(self):
+        out = self._list_fields()
+        assert '"ticker" | "two_row"' in out
+        assert "trend arrow" in out
+        # The stale core hint claimed a nonexistent third value — make sure
+        # the pool widget never advertises it.
+        assert "scoreboard" not in out
+
+    def test_label_color_hint_present(self):
+        out = self._list_fields()
+        assert "prefix labels and separators" in out
+
+    def test_hint_matches_validated_enum(self):
+        # The advertised enum must equal what validate_config actually
+        # accepts — a drift here is exactly the bug class #438 fixed.
+        from led_ticker_pool.monitor import _VALID_LAYOUTS
+
+        display_type = PoolMonitor._LIST_FIELD_HINTS["layout"][0]
+        for value in _VALID_LAYOUTS:
+            assert f'"{value}"' in display_type
+        # no extra values advertised beyond the real enum
+        advertised = {tok.strip().strip('"') for tok in display_type.split("|")}
+        assert advertised == set(_VALID_LAYOUTS)

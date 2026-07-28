@@ -7,7 +7,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import aiohttp
 import attrs
@@ -224,6 +224,30 @@ _DEFAULT_INTERVAL = 300
 @attrs.define
 class PoolMonitor:
     """Pool water temperature, cycled as title/today/7-day/season screens."""
+
+    # Per-widget hint overrides for ``--list-fields pool.monitor``. `layout`
+    # and `label_color` are plugin-owned field names — core carries no
+    # name-keyed hint for them (a shared hint would be wrong for every other
+    # layout-bearing plugin; core issue #438), so this widget supplies its
+    # own. Defined as plain 3-tuples (display_type, description,
+    # default_display) to avoid importing ``FieldHint`` from
+    # ``led_ticker.app.factories`` — that import would be circular (factories
+    # imports widgets). ``_list_widget_fields`` coerces plain tuples to
+    # ``FieldHint`` before use.
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"ticker" | "two_row"',
+            "ticker = single-row segmented line with a trend arrow; "
+            "two_row = stacked label-on-top / big-value-on-bottom "
+            "(bigsign-recommended)",
+            '"ticker"',
+        ),
+        "label_color": (
+            "[r, g, b]",
+            "color for the prefix labels and separators",
+            "white",
+        ),
+    }
 
     session: aiohttp.ClientSession
     title: str = "POOL TEMPS"
