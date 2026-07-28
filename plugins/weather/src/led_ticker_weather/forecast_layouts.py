@@ -22,9 +22,9 @@ from led_ticker_weather.paint import (
     hires,
     js_round,
     phys_wrap,
+    spleen,
     spleen_center,
     spleen_segs,
-    text_width,
     vdivider,
 )
 from led_ticker_weather.palette import AMBER, CYAN, HI, IDENT, LABEL, LO, RGB
@@ -124,14 +124,6 @@ _BIG_GEO = StripGeo(day_y=2, icon_px=16, icon_y=15, temp_y=33, stack=True)
 _LONG_GEO = StripGeo(day_y=1, icon_px=24, icon_y=13, temp_y=38, stack=False, pop_y=51)
 
 
-def _center_segs(shim, segs, x, w, y_target, size, oy):
-    """Center multi-color segments as one run (handoff centerSegs)."""
-    total = sum(text_width(size, t) for t, _ in segs)
-    cx = js_round(x + (w - total) / 2)
-    for t, rgb in segs:
-        cx += hires(shim, t, cx, cap_top(y_target, size) + oy, rgb, size)
-
-
 def _temp_segs(hi_f, lo_f, units, *, degree) -> list[tuple[str, RGB]]:
     suffix = "°" if degree else ""
     return [
@@ -201,18 +193,10 @@ def render_hero_big(
     _hero_icon(canvas, cur.kind, 1, 3, y_offset)
     temp = f"{display_temp(cur.temp_f, units)}°"
     hires(shim, temp, 44, cap_top(13, 27) + oy, IDENT, 27)
-    _center_segs(
-        shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 44, 60, 41, 11, oy
-    )
-    hires(
-        shim,
-        f"FEELS {display_temp(cur.feels_f, units)}°",
-        44,
-        cap_top(53, 8) + oy,
-        CYAN,
-        8,
-        bold=False,
-    )
+    # hi/lo: spleen, centered in the temp column [44,104].
+    spleen_segs(shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 74, 41 + oy)
+    # FEELS: spleen, left-aligned under the temp column (clears the x112 divider).
+    spleen(shim, f"FEELS {display_temp(cur.feels_f, units)}°", 44, 52 + oy, CYAN)
     vdivider(real, 112, 6 + oy, 58 + oy)
     _strip(shim, real, data.days, 118, 252, 4, _BIG_GEO, units, oy)
 
@@ -229,17 +213,7 @@ def render_hero_long(
     _hero_icon(canvas, cur.kind, 1, 4, y_offset)
     temp = f"{display_temp(cur.temp_f, units)}°"
     hires(shim, temp, 70, cap_top(14, 28) + oy, IDENT, 28)
-    _center_segs(
-        shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 70, 80, 43, 11, oy
-    )
-    hires(
-        shim,
-        f"FEELS {display_temp(cur.feels_f, units)}°",
-        70,
-        cap_top(56, 8) + oy,
-        CYAN,
-        8,
-        bold=False,
-    )
+    spleen_segs(shim, _temp_segs(cur.hi_f, cur.lo_f, units, degree=True), 110, 41 + oy)
+    spleen(shim, f"FEELS {display_temp(cur.feels_f, units)}°", 70, 52 + oy, CYAN)
     vdivider(real, 156, 6 + oy, 58 + oy)
     _strip(shim, real, data.days, 162, 506, 6, _LONG_GEO, units, oy)

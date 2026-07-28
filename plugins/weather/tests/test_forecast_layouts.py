@@ -333,14 +333,58 @@ class TestRenderHeroBig:
         assert xs == {(112, y) for y in range(6, 58, 3)}
 
     def test_feels_line_cyan(self, bigsign, lit):
-        from led_ticker.plugin import unwrap_to_real
+        from led_ticker.plugin import HeadlessBackend, unwrap_to_real
 
         from led_ticker_weather.forecast_layouts import render_hero_big
+        from led_ticker_weather.paint import phys_wrap, spleen
+        from led_ticker_weather.palette import CYAN
 
         render_hero_big(bigsign, DEMO_DATA, "imperial")
         real = unwrap_to_real(bigsign)
-        ink = {p for _, _, p in lit(real, 44, 50, 112, 64)}
+        box = lit(real, 44, 50, 112, 64)
+        ink = {p for _, _, p in box}
         assert any(r == 0 and g > 100 and b > 200 for r, g, b in ink)
+
+        # Pixel-exact match against a standalone `spleen` render of the same
+        # string/position/color proves the FEELS line wires spleen (not
+        # Inter/`hires`): the old implementation drew Inter-Regular size 8
+        # via `hires(..., cap_top(53, 8) + oy, CYAN, 8, bold=False)` — a
+        # different y (ascent-box top 51, not the spleen ink-top 52) AND
+        # entirely different (proportional, anti-aliased) glyph shapes —
+        # so the old FEELS box cannot equal this reference box.
+        ref_canvas = HeadlessBackend(256, 64).create_canvas()
+        ref_shim, ref_real = phys_wrap(ref_canvas)
+        spleen(ref_shim, "FEELS 80°", 44, 52, CYAN)
+        assert box == lit(ref_real, 44, 50, 112, 64)
+
+    def test_hero_hi_lo_is_spleen_not_inter(self, bigsign, lit):
+        from led_ticker.plugin import HeadlessBackend, unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import _temp_segs, render_hero_big
+        from led_ticker_weather.paint import phys_wrap, spleen_segs
+
+        render_hero_big(bigsign, DEMO_DATA, "imperial")
+        real = unwrap_to_real(bigsign)
+        # temp column [44,104]; band clears the big Inter temp above (ends
+        # well before y=38) and the FEELS line below (starts at y=52, with
+        # two blank rows of separation — see hero row-budget scan).
+        box = lit(real, 44, 38, 104, 51)
+        assert box, "nothing rendered in the hi/lo band"
+
+        # Pixel-exact match against a standalone `spleen_segs` render at the
+        # same cx/y_top proves the hi/lo line wires spleen (not the deleted
+        # `_center_segs` Inter helper): old code called
+        # `_center_segs(shim, segs, 44, 60, 41, 11, oy)`, which converts
+        # y_target=41 through `cap_top(41, 11)` (ascent-box top 38) and
+        # draws proportional Inter-Bold digits — neither the position nor
+        # the glyph shapes match this monospace spleen reference.
+        ref_canvas = HeadlessBackend(256, 64).create_canvas()
+        ref_shim, ref_real = phys_wrap(ref_canvas)
+        segs = _temp_segs(
+            DEMO_DATA.current.hi_f, DEMO_DATA.current.lo_f, "imperial", degree=True
+        )
+        spleen_segs(ref_shim, segs, 74, 41)
+        assert box == lit(ref_real, 44, 38, 104, 51)
 
     def test_short_feed_centers_group(self, bigsign, lit):
         from led_ticker_weather.forecast_data import (
@@ -439,6 +483,52 @@ class TestRenderHeroLong:
         render_hero_long(longboi, DEMO_DATA, "imperial")
         real = unwrap_to_real(longboi)
         assert lit(real, 162, 50, 506, 62)  # pop % row on every column
+
+    def test_feels_line_is_spleen_cyan(self, longboi, lit):
+        from led_ticker.plugin import HeadlessBackend, unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import render_hero_long
+        from led_ticker_weather.paint import phys_wrap, spleen
+        from led_ticker_weather.palette import CYAN
+
+        render_hero_long(longboi, DEMO_DATA, "imperial")
+        real = unwrap_to_real(longboi)
+        box = lit(real, 70, 50, 156, 64)
+        ink = {p for _, _, p in box}
+        assert any(r == 0 and g > 100 and b > 200 for r, g, b in ink)
+
+        # Pixel-exact match against a standalone `spleen` reference — see
+        # TestRenderHeroBig.test_feels_line_cyan for why this discriminates
+        # against the old Inter/`hires` implementation (different y AND
+        # different glyph shapes).
+        ref_canvas = HeadlessBackend(512, 64).create_canvas()
+        ref_shim, ref_real = phys_wrap(ref_canvas)
+        spleen(ref_shim, "FEELS 80°", 70, 52, CYAN)
+        assert box == lit(ref_real, 70, 50, 156, 64)
+
+    def test_hero_hi_lo_is_spleen_not_inter(self, longboi, lit):
+        from led_ticker.plugin import HeadlessBackend, unwrap_to_real
+
+        from led_ticker_weather.forecast_layouts import _temp_segs, render_hero_long
+        from led_ticker_weather.paint import phys_wrap, spleen_segs
+
+        render_hero_long(longboi, DEMO_DATA, "imperial")
+        real = unwrap_to_real(longboi)
+        # temp column [70,150]; band clears the big Inter temp above and
+        # the FEELS line below (see TestRenderHeroBig's equivalent test).
+        box = lit(real, 70, 38, 150, 51)
+        assert box, "nothing rendered in the hi/lo band"
+
+        # Pixel-exact match against a standalone `spleen_segs` reference —
+        # see TestRenderHeroBig.test_hero_hi_lo_is_spleen_not_inter for why
+        # this discriminates against the deleted `_center_segs` Inter path.
+        ref_canvas = HeadlessBackend(512, 64).create_canvas()
+        ref_shim, ref_real = phys_wrap(ref_canvas)
+        segs = _temp_segs(
+            DEMO_DATA.current.hi_f, DEMO_DATA.current.lo_f, "imperial", degree=True
+        )
+        spleen_segs(ref_shim, segs, 110, 41)
+        assert box == lit(ref_real, 70, 38, 150, 51)
 
 
 class TestWorstCaseCollision:
