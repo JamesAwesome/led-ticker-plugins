@@ -388,7 +388,7 @@ class TestRenderHeroBig:
         spleen_segs(ref_shim, segs, 74, 41)
         assert box == lit(ref_real, 44, 38, 104, 51)
 
-    def test_short_feed_centers_group(self, bigsign, lit):
+    def test_short_feed_justifies_to_fill(self, bigsign, lit):
         from led_ticker_weather.forecast_data import (
             CurrentConditions,
             DayForecast,
@@ -396,28 +396,24 @@ class TestRenderHeroBig:
         )
         from led_ticker_weather.forecast_layouts import render_hero_big
 
+        # 3-day feed on bigsign JUSTIFIES (spread_cells_x: ideal spacing 58 <=
+        # cap 67), so the LAST day's content hugs the strip's right edge
+        # (x1=252). The old center-group / center-the-group fill left it well
+        # short (~x227). A right-reach check discriminates the fill strategy —
+        # a revert to center-group would fail (max lit x drops below 240).
         data = ForecastData(
             "BOSTON",
             CurrentConditions(78, 80, "partly", 82, 64),
             (
                 DayForecast("TUE", "sunny", 86, 66, 0),
                 DayForecast("WED", "rain", 74, 65, 60),
+                DayForecast("THU", "cloudy", 77, 63, 30),
             ),
         )
         render_hero_big(bigsign, data, "imperial")
         real = bigsign.real
-        # strip region [118,252]: 2 cells at the design pitch
-        # (span/n_slots = 33.5) pack TIGHTER than the old "widen" fill
-        # (span/actual_n = 67) — a spread (max-min lit x) check catches a
-        # revert of _strip's pitch formula that a symmetry-only check
-        # would miss (both old-widen and new-center-group are symmetric
-        # for exactly 2 equal cells spanning this fixture). Measured:
-        # center-group spread = 49px, old-widen spread = 83px for this
-        # fixture — 60 sits with comfortable margin below both.
-        strip = lit(real, 118, 0, 252, 64)
-        xs = [x for x, _, _ in strip]
-        spread = max(xs) - min(xs)
-        assert spread < 60, f"spread {spread} (widen would be ~83)"
+        xs = [x for x, _, _ in lit(real, 118, 0, 252, 64)]
+        assert max(xs) >= 240, f"last day reached only {max(xs)} (center-group ~227)"
 
     def test_wide_location_does_not_bleed_into_strip(self, bigsign, lit):
         import attrs

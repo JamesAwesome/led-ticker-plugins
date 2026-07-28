@@ -25,6 +25,8 @@ from led_ticker_weather.paint import (
     spleen,
     spleen_center,
     spleen_segs,
+    spleen_width,
+    spread_cells_x,
     vdivider,
 )
 from led_ticker_weather.palette import AMBER, CYAN, HI, IDENT, LABEL, LO, RGB
@@ -165,16 +167,41 @@ def _hero_icon(canvas, kind: str, log_x: int, log_y: int, y_offset: int) -> None
     draw_emoji_at(canvas, hires_slug, log_x, log_y + y_offset)
 
 
+def _column_content_w(day: DayForecast, geo: StripGeo, units) -> float:
+    """The widest element a strip column draws (icon, day label, temps, or
+    precip) — the edge-anchor box so the FILL keeps ALL content within
+    [x0, x1] (a 3-digit or worst-case `-99/-99` temp is wider than the
+    icon and would otherwise overhang the divider on the first column)."""
+    w = float(geo.icon_px)
+    w = max(w, spleen_width(day.label))
+    if geo.stack:
+        w = max(
+            w,
+            spleen_width(str(display_temp(day.hi_f, units))),
+            spleen_width(str(display_temp(day.lo_f, units))),
+        )
+    else:
+        segs = _temp_segs(day.hi_f, day.lo_f, units, degree=False)
+        w = max(w, sum(spleen_width(t) for t, _ in segs))
+    if geo.pop_y is not None:
+        w = max(w, spleen_width(f"{day.pop}%"))
+    return w
+
+
 def _strip(shim, real, days, x0, x1, n_slots, geo, units, oy):
-    """Center up to n_slots day columns at the design pitch (span / n_slots);
-    a short feed centers the group with equal margins (center_group_x)."""
+    """Lay out up to n_slots day columns to FILL the strip (minimize empty
+    space): justify so the first/last columns hug x0/x1 when the feed is
+    full-ish, cap the spacing and center the group when it's sparse
+    (spread_cells_x). The anchor box is the widest column's content, so no
+    element overhangs [x0, x1]; content centers on each column."""
     n = min(n_slots, len(days))
     if n == 0:
         return
-    pitch = (x1 - x0) / n_slots
-    xs = center_group_x(x0, x1, n, pitch)
+    design_pitch = (x1 - x0) / n_slots
+    cell_w = max(_column_content_w(days[i], geo, units) for i in range(n))
+    xs = spread_cells_x(x0, x1, n, cell_w, design_pitch)
     for i in range(n):
-        _strip_cell(shim, real, xs[i], pitch, days[i], geo, units, oy)
+        _strip_cell(shim, real, xs[i], cell_w, days[i], geo, units, oy)
 
 
 def render_hero_big(

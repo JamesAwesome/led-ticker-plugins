@@ -46,9 +46,39 @@ def cap_top(y_target: int, size: int) -> int:
 def center_group_x(x0: float, x1: float, n: int, pitch: float) -> list[int]:
     """Left-edge x of each of `n` cells of width `pitch`, the whole block
     centered within [x0, x1). n == full-slot count fills from x0; fewer
-    cells center with equal margins (the forecast short-feed fill rule)."""
+    cells center with equal margins (the smallsign short-feed fill rule)."""
     start = x0 + ((x1 - x0) - n * pitch) / 2
     return [js_round(start + i * pitch) for i in range(n)]
+
+
+def spread_cells_x(
+    x0: float, x1: float, n: int, cell_w: float, design_pitch: float
+) -> list[int]:
+    """Left-edge x of each of `n` cells (width `cell_w`) laid across [x0, x1)
+    to minimize empty space (the hires-strip fill rule).
+
+    JUSTIFY — first cell hugs x0, last hugs x1, even spacing between — when
+    that keeps center-to-center spacing within `2 * design_pitch`. For a
+    sparse feed where justifying would leave a big center void, CAP the
+    spacing at `2 * design_pitch` and center the group instead. `design_pitch`
+    is the full-count column pitch (`(x1 - x0) / max_slots`). `n == 1` centers
+    a single cell; content centers on each returned cell (`cell_w` is the
+    edge-anchor box — the icon is the visual column anchor)."""
+    if n <= 0:
+        return []
+    half = cell_w / 2
+    if n == 1:
+        centers = [(x0 + x1) / 2]
+    else:
+        cap = 2 * design_pitch
+        ideal = (x1 - x0 - cell_w) / (n - 1)  # center spacing to hug both edges
+        if ideal <= cap:
+            centers = [x0 + half + (x1 - x0 - cell_w) * i / (n - 1) for i in range(n)]
+        else:
+            total = cell_w + cap * (n - 1)
+            start = (x0 + x1) / 2 - total / 2 + half
+            centers = [start + cap * i for i in range(n)]
+    return [js_round(c - half) for c in centers]
 
 
 def phys_wrap(canvas):

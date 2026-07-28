@@ -93,13 +93,21 @@ palette values should be reading it, not guessing.
   cross-platform variance. smallsign is unaffected — it never touches this path; its
   strip renders with the bundled BDF font (`FONT_SMALL`) at logical coordinates, same as
   before.
-- **Short-feed fill is center-group on every hi-res strip** — `_strip` computes
-  `pitch = (x1 - x0) / n_slots` (the full-width design pitch) and calls
-  `paint.center_group_x(x0, x1, n, pitch)` where `n = min(n_slots, len(days))`, so a
-  feed with fewer days than slots (e.g. a 2-day API response on a 4-slot bigsign strip)
-  centers the shorter group with equal margins at the FULL pitch, rather than stretching
-  cells to fill the row or left-justifying with a ragged gap. Applies uniformly to
-  bigsign (`_BIG_GEO`, 4 slots) and longboi (`_LONG_GEO`, 6 slots).
+- **Hi-res strip fill JUSTIFIES to fill the row (minimize empty space)** — `_strip`
+  uses `paint.spread_cells_x(x0, x1, n, cell_w, design_pitch)`: the first/last columns
+  hug `x0`/`x1` with even spacing between (justify) as long as that keeps center-to-center
+  spacing within `2 * design_pitch` (`design_pitch = (x1 - x0) / n_slots`); a sparse feed
+  that would otherwise leave a big center void (e.g. a 2-day API response on longboi) CAPS
+  the spacing at `2 * design_pitch` and centers the group instead. Applies to bigsign
+  (`_BIG_GEO`, 4 slots) and longboi (`_LONG_GEO`, 6 slots). **The anchor box is the
+  widest column's CONTENT, not the icon** (`_column_content_w`): a 3-digit or worst-case
+  `-99/-99` horizontal temp is wider than the 24px icon and would overhang the divider on
+  the justified first column if the icon were the anchor — anchoring on the widest element
+  keeps all content inside `[x0, x1]` (tripwire: `TestWorstCaseCollision`). Chosen over
+  center-group after on-sign review: center-group clustered short feeds in the middle with
+  dead space both sides (the "compacted left" longboi report). SMALLSIGN is different —
+  `render_strip_small` keeps `paint.center_group_x` (its dotted separators strand in the
+  gap under justify, and its 3-cell max fills at full count anyway).
 - **Longboi precip-row fit is a compile-time constant tripwire, not a render assertion**
   — a rendered canvas can't catch an overflowing `pop_y`/`temp_y` (every scanned point is
   `<=63` by construction of the scan region), so `test_forecast_layouts.py` directly

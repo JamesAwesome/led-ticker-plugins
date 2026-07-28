@@ -234,6 +234,44 @@ class TestCenterGroupX:
         assert len(paint.center_group_x(0, 200, 4, 40)) == 4
 
 
+class TestSpreadCellsX:
+    # longboi strip geometry: x0=162, x1=506, design pitch (6 slots) ≈ 57.3,
+    # icon cell 24. cap = 2*57.3 ≈ 114.7.
+    X0, X1, DP, CW = 162, 506, (506 - 162) / 6, 24
+
+    def test_justify_hugs_both_edges(self):
+        # 6 days: ideal spacing 64 <= cap 114.7 -> justify. First cell's left
+        # edge sits at x0, last cell's right edge at x1 (±1 rounding).
+        xs = paint.spread_cells_x(self.X0, self.X1, 6, self.CW, self.DP)
+        assert abs(xs[0] - self.X0) <= 1
+        assert abs((xs[-1] + self.CW) - self.X1) <= 1
+
+    def test_justify_reaches_further_than_center_group(self):
+        # 4 days justify (ideal 106.7 <= cap 114.7). The discriminator vs the
+        # old center-group fill: spread's last cell reaches the strip's right
+        # edge, center_group leaves it well short.
+        spread = paint.spread_cells_x(self.X0, self.X1, 4, self.CW, self.DP)
+        cg = paint.center_group_x(self.X0, self.X1, 4, self.DP)
+        assert abs((spread[-1] + self.CW) - self.X1) <= 1  # spread hugs x1
+        assert (cg[-1] + self.DP) < self.X1 - 40  # center-group stops short
+
+    def test_sparse_feed_caps_and_centers(self):
+        # 2 days: ideal 320 > cap 114.7 -> cap the spacing, center the pair.
+        xs = paint.spread_cells_x(self.X0, self.X1, 2, self.CW, self.DP)
+        c0 = xs[0] + self.CW / 2
+        c1 = xs[1] + self.CW / 2
+        assert abs((c1 - c0) - 2 * self.DP) <= 1  # spacing capped at 2*pitch
+        midpoint = (c0 + c1) / 2
+        assert abs(midpoint - (self.X0 + self.X1) / 2) <= 1  # centered
+
+    def test_single_cell_centered(self):
+        xs = paint.spread_cells_x(self.X0, self.X1, 1, self.CW, self.DP)
+        assert xs == [paint.js_round((self.X0 + self.X1) / 2 - self.CW / 2)]
+
+    def test_empty_when_no_cells(self):
+        assert paint.spread_cells_x(self.X0, self.X1, 0, self.CW, self.DP) == []
+
+
 class TestSpleen:
     def test_width_is_monospace_6px(self):
         assert paint.spleen_width("86/66") == 30
