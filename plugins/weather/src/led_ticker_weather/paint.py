@@ -62,8 +62,9 @@ def spread_cells_x(
     sparse feed where justifying would leave a big center void, CAP the
     spacing at `2 * design_pitch` and center the group instead. `design_pitch`
     is the full-count column pitch (`(x1 - x0) / max_slots`). `n == 1` centers
-    a single cell; content centers on each returned cell (`cell_w` is the
-    edge-anchor box — the icon is the visual column anchor)."""
+    a single cell. `cell_w` is the edge-anchor box sized by the caller (the
+    widest element it will draw in a cell); content narrower than `cell_w` is
+    centered within it, so nothing overhangs `[x0, x1]`."""
     if n <= 0:
         return []
     half = cell_w / 2
