@@ -14,13 +14,15 @@ from led_ticker_weather.forecast_data import (
     display_temp,
 )
 from led_ticker_weather.paint import (
-    blit_emoji_scaled,
+    blit_hires_downscaled,
     cap_top,
     dim,
     fit_text,
     hires,
     js_round,
     phys_wrap,
+    spleen_center,
+    spleen_segs,
     text_width,
     vdivider,
 )
@@ -101,44 +103,22 @@ def render_strip_small(
 
 @attrs.frozen
 class StripGeo:
-    """One hires strip's geometry (the handoff stripCell options dict)."""
+    """One hires strip's geometry. All text is spleen (12px cell, no cap_top);
+    icons are hires sprites downscaled to icon_px."""
 
-    day_y: int  # day label cap-top y
-    day_px: int
-    icon_k: int  # lowres blit factor (icon is 8*k px square)
+    day_y: int
+    icon_px: int  # downscaled hires icon size (16 big / 24 long)
     icon_y: int
     temp_y: int
-    temp_px: int
     stack: bool  # True: hi over lo; False: horizontal hi/lo segs
-    line_h: int = 0  # stacked line advance
+    line_h: int = 12  # spleen cell advance for stacked temps
     pop_y: int | None = None  # precip % row (longboi only)
-    pop_px: int = 9
 
 
-# Handoff weatherBig: {dayY:2,dayPx:9,iconS:18,iconY:13,tempY:37,tempPx:12,
-# stack:true,lineH:12} — iconS 18 snaps to a 16px (k=2) sprite blit.
-_BIG_GEO = StripGeo(
-    day_y=2,
-    day_px=9,
-    icon_k=2,
-    icon_y=13,
-    temp_y=37,
-    temp_px=12,
-    stack=True,
-    line_h=12,
-)
-# Handoff weatherLong: {dayY:2,dayPx:10,iconS:22,iconY:13,tempY:40,
-# tempPx:12,popY:52,popPx:9} — iconS 22 snaps to a 24px (k=3) blit.
-_LONG_GEO = StripGeo(
-    day_y=2,
-    day_px=10,
-    icon_k=3,
-    icon_y=13,
-    temp_y=40,
-    temp_px=12,
-    stack=False,
-    pop_y=52,
-)
+# bigsign: day(2-13) icon(15-30,16px) hi(33-44) lo(45-56) — fits 64 w/ headroom.
+_BIG_GEO = StripGeo(day_y=2, icon_px=16, icon_y=15, temp_y=33, stack=True)
+# longboi: day(1-12) icon(13-36,24px) temps(38-49) precip(51-62) — fits 64.
+_LONG_GEO = StripGeo(day_y=1, icon_px=24, icon_y=13, temp_y=38, stack=False, pop_y=51)
 
 
 def _ctext(shim, text, x, w, y_target, rgb, size, oy, *, bold=True):
@@ -173,46 +153,23 @@ def _temp_segs(hi_f, lo_f, units, *, degree) -> list[tuple[str, RGB]]:
 
 
 def _strip_cell(shim, real, x, w, day: DayForecast, geo: StripGeo, units, oy):
-    _ctext(shim, day.label, x, w, geo.day_y, AMBER, geo.day_px, oy)
-    lowres, _ = KIND_SLUGS[day.kind]
-    icon_w = 8 * geo.icon_k
-    blit_emoji_scaled(
-        real, lowres, js_round(x + (w - icon_w) / 2), geo.icon_y + oy, geo.icon_k
+    cx = x + w / 2
+    spleen_center(shim, day.label, cx, geo.day_y + oy, AMBER)
+    _, hires_slug = KIND_SLUGS[day.kind]
+    blit_hires_downscaled(
+        real, hires_slug, js_round(cx - geo.icon_px / 2), geo.icon_y + oy, geo.icon_px
     )
     if geo.stack:
-        _ctext(
-            shim,
-            str(display_temp(day.hi_f, units)),
-            x,
-            w,
-            geo.temp_y,
-            HI,
-            geo.temp_px,
-            oy,
-        )
-        _ctext(
-            shim,
-            str(display_temp(day.lo_f, units)),
-            x,
-            w,
-            geo.temp_y + geo.line_h,
-            LO,
-            geo.temp_px,
-            oy,
-        )
+        hi_txt = str(display_temp(day.hi_f, units))
+        spleen_center(shim, hi_txt, cx, geo.temp_y + oy, HI)
+        lo_txt = str(display_temp(day.lo_f, units))
+        spleen_center(shim, lo_txt, cx, geo.temp_y + geo.line_h + oy, LO)
     else:
-        _center_segs(
-            shim,
-            _temp_segs(day.hi_f, day.lo_f, units, degree=False),
-            x,
-            w,
-            geo.temp_y,
-            geo.temp_px,
-            oy,
-        )
+        segs = _temp_segs(day.hi_f, day.lo_f, units, degree=False)
+        spleen_segs(shim, segs, cx, geo.temp_y + oy)
     if geo.pop_y is not None:
         rgb = CYAN if day.pop >= 50 else LABEL
-        _ctext(shim, f"{day.pop}%", x, w, geo.pop_y, rgb, geo.pop_px, oy, bold=False)
+        spleen_center(shim, f"{day.pop}%", cx, geo.pop_y + oy, rgb)
 
 
 # --- hero layouts (bigsign / longboi) — handoff weatherBig / weatherLong ---
