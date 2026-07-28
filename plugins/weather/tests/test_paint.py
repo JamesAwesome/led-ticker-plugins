@@ -152,3 +152,43 @@ class TestBlitEmojiScaled:
             real = HeadlessBackend(16, 8).create_canvas()
             paint.blit_emoji_scaled(real, slug, 0, 0, 1)
             assert real.count_nonzero() > 0, slug
+
+
+class TestBlitHiresDownscaled:
+    def test_downscales_hires_sprite_into_target_box(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        real = HeadlessBackend(24, 24).create_canvas()
+        paint.blit_hires_downscaled(real, "sun", 0, 0, 24)
+        # A 32x32 sun downscaled to 24 lights a substantial share of the box.
+        assert real.count_nonzero() > 24 * 24 * 0.15
+
+    def test_target_16_fits_and_lights(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        real = HeadlessBackend(16, 16).create_canvas()
+        paint.blit_hires_downscaled(real, "rain", 0, 0, 16)
+        assert real.count_nonzero() > 0
+        # Nothing drawn outside the 16x16 box.
+        big = HeadlessBackend(40, 40).create_canvas()
+        paint.blit_hires_downscaled(big, "rain", 0, 0, 16)
+        for y in range(40):
+            for x in range(40):
+                if x >= 16 or y >= 16:
+                    assert big.get_pixel(x, y) == (0, 0, 0)
+
+    def test_offset_and_bounds_clip_no_raise(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        real = HeadlessBackend(20, 20).create_canvas()
+        paint.blit_hires_downscaled(real, "sun", 8, 8, 24)  # overflows: must not raise
+        assert real.count_nonzero() > 0
+
+    def test_every_hero_hires_slug_downscales(self):
+        from led_ticker.plugin import HeadlessBackend
+        from led_ticker_weather.forecast_data import KIND_SLUGS
+
+        for _, hires_slug in KIND_SLUGS.values():
+            real = HeadlessBackend(24, 24).create_canvas()
+            paint.blit_hires_downscaled(real, hires_slug, 0, 0, 24)
+            assert real.count_nonzero() > 0, hires_slug

@@ -139,3 +139,58 @@ def blit_emoji_scaled(real, slug: str, x: int, y: int, k: int) -> None:
                 xx, yy = bx + i, by + j
                 if 0 <= xx < real.width and 0 <= yy < real.height:
                     real.SetPixel(xx, yy, r, g, b)
+
+
+@functools.lru_cache(maxsize=32)
+def _hires_pixels(slug: str) -> tuple[tuple[int, int, int, int, int], ...]:
+    """Lit (dx, dy, r, g, b) offsets of a 32x32 HIRES sprite.
+
+    Rasterize the hires variant through the public surface: `draw_emoji_at`
+    fires hires on a `ScaledCanvas` (any scale), so wrap a throwaway 32x32
+    `HeadlessBackend` at scale=1 and read back the 32x32 physical grid via
+    `get_pixel` (the one documented supported readback — baseball `_mask.py`
+    precedent). Cached: runs once per slug per process.
+    """
+    real = HeadlessBackend(32, 32).create_canvas()
+    sc = ScaledCanvas(real, scale=1, content_height=32)
+    draw_emoji_at(sc, slug, 0, 0)
+    out = []
+    for dy in range(32):
+        for dx in range(32):
+            r, g, b = real.get_pixel(dx, dy)
+            if (r, g, b) != (0, 0, 0):
+                out.append((dx, dy, r, g, b))
+    return tuple(out)
+
+
+def blit_hires_downscaled(real, slug: str, x: int, y: int, target: int) -> None:
+    """Stamp the 32x32 hires sprite at physical (x, y), box-area-downscaled
+    to `target` x `target` (strip icon sizes: 16 bigsign, 24 longboi).
+
+    Each target pixel is the mean of the 32-space source pixels it covers;
+    a fully-black target pixel is skipped (transparent). Per-pixel
+    bounds-clipped, like `blit_emoji_scaled`.
+    """
+    S = 32
+    # Accumulate source lit pixels into target buckets (sum + count of the
+    # FULL footprint incl. black, so edges anti-alias down rather than
+    # staying full-bright).
+    sums: dict[tuple[int, int], list[int]] = {}
+    lit = {(dx, dy): (r, g, b) for dx, dy, r, g, b in _hires_pixels(slug)}
+    for sy in range(S):
+        ty = sy * target // S
+        for sx in range(S):
+            tx = sx * target // S
+            r, g, b = lit.get((sx, sy), (0, 0, 0))
+            acc = sums.setdefault((tx, ty), [0, 0, 0, 0])
+            acc[0] += r
+            acc[1] += g
+            acc[2] += b
+            acc[3] += 1
+    for (tx, ty), (rs, gs, bs, n) in sums.items():
+        r, g, b = rs // n, gs // n, bs // n
+        if (r, g, b) == (0, 0, 0):
+            continue
+        px_, py_ = x + tx, y + ty
+        if 0 <= px_ < real.width and 0 <= py_ < real.height:
+            real.SetPixel(px_, py_, r, g, b)
