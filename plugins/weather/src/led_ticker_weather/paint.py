@@ -203,13 +203,18 @@ def _hires_pixels(slug: str) -> tuple[tuple[int, int, int, int, int], ...]:
     return tuple(out)
 
 
-def blit_hires_downscaled(real, slug: str, x: int, y: int, target: int) -> None:
-    """Stamp the 32x32 hires sprite at physical (x, y), box-area-downscaled
-    to `target` x `target` (strip icon sizes: 16 bigsign, 24 longboi).
+@functools.lru_cache(maxsize=32)
+def _downscaled_pixels(
+    slug: str, target: int
+) -> tuple[tuple[int, int, int, int, int], ...]:
+    """Lit (tx, ty, r, g, b) target-space pixels of the 32x32 hires sprite
+    box-area-downscaled to `target` x `target`.
 
     Each target pixel is the mean of the 32-space source pixels it covers;
-    a fully-black target pixel is skipped (transparent). Per-pixel
-    bounds-clipped, like `blit_emoji_scaled`.
+    a fully-black target pixel is dropped (transparent). Cached per
+    (slug, target) pair — the forecast card redraws every 50ms engine tick,
+    so this compute (independent of the paint x/y offset) runs once per
+    process rather than on every draw.
     """
     S = 32
     # Accumulate source lit pixels into target buckets (sum + count of the
@@ -227,10 +232,23 @@ def blit_hires_downscaled(real, slug: str, x: int, y: int, target: int) -> None:
             acc[1] += g
             acc[2] += b
             acc[3] += 1
+    out = []
     for (tx, ty), (rs, gs, bs, n) in sums.items():
         r, g, b = rs // n, gs // n, bs // n
         if (r, g, b) == (0, 0, 0):
             continue
+        out.append((tx, ty, r, g, b))
+    return tuple(out)
+
+
+def blit_hires_downscaled(real, slug: str, x: int, y: int, target: int) -> None:
+    """Stamp the 32x32 hires sprite at physical (x, y), box-area-downscaled
+    to `target` x `target` (strip icon sizes: 16 bigsign, 24 longboi).
+
+    Per-pixel bounds-clipped, like `blit_emoji_scaled`. The downscale itself
+    is cached (`_downscaled_pixels`); this function only offsets + stamps.
+    """
+    for tx, ty, r, g, b in _downscaled_pixels(slug, target):
         px_, py_ = x + tx, y + ty
         if 0 <= px_ < real.width and 0 <= py_ < real.height:
             real.SetPixel(px_, py_, r, g, b)

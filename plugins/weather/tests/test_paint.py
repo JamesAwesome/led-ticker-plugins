@@ -186,12 +186,30 @@ class TestBlitHiresDownscaled:
 
     def test_every_hero_hires_slug_downscales(self):
         from led_ticker.plugin import HeadlessBackend
+
         from led_ticker_weather.forecast_data import KIND_SLUGS
 
         for _, hires_slug in KIND_SLUGS.values():
             real = HeadlessBackend(24, 24).create_canvas()
             paint.blit_hires_downscaled(real, hires_slug, 0, 0, 24)
             assert real.count_nonzero() > 0, hires_slug
+
+    def test_downscale_compute_is_cached(self):
+        from led_ticker.plugin import HeadlessBackend
+
+        paint._downscaled_pixels.cache_clear()
+        real = HeadlessBackend(24, 24).create_canvas()
+        paint.blit_hires_downscaled(real, "sun", 0, 0, 24)
+        misses_after_first = paint._downscaled_pixels.cache_info().misses
+        assert misses_after_first == 1
+
+        # Repeat calls (including at a different x/y offset) must hit the
+        # cache rather than recomputing the downscale.
+        paint.blit_hires_downscaled(real, "sun", 4, 4, 24)
+        paint.blit_hires_downscaled(real, "sun", 0, 0, 24)
+        info = paint._downscaled_pixels.cache_info()
+        assert info.misses == misses_after_first
+        assert info.hits >= 2
 
 
 class TestCenterGroupX:
@@ -235,9 +253,9 @@ class TestSpleen:
         for char, x_start in [("8", 4), ("T", 20)]:
             paint.spleen(shim, char, x_start, 20, IDENT)
             pts = lit(real, x_start, 0, x_start + 12, 64)
-            if pts:  # Only assert if pixels were drawn
-                top = min(y for _, y, _ in pts)
-                assert top == 20, f"glyph '{char}' ink-top at {top}, expected 20"
+            assert pts, f"no pixels for glyph {char!r}"
+            top = min(y for _, y, _ in pts)
+            assert top == 20, f"glyph '{char}' ink-top at {top}, expected 20"
 
     def test_center_positions_symmetrically(self, bigsign, lit):
         shim, real = paint.phys_wrap(bigsign)
