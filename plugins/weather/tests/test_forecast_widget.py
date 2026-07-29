@@ -23,6 +23,23 @@ class TestConstruction:
         w = ForecastWidget(location={"lat": 40.71, "lon": -74.01})
         assert w.location == "40.71,-74.01"
 
+    def test_demo_days_truncates_the_demo_feed(self):
+        # demo_days lets a demo preview a SHORT feed (fewer strip days) so the
+        # justify fill can be seen on-sign without a live API key.
+        full = _demo()
+        assert len(full._data.days) == 6  # DEMO_DATA is a fixed 6-day week
+        short = ForecastWidget(location="", demo=True, demo_days=4)
+        assert len(short._data.days) == 4
+        assert short._data.days == full._data.days[:4]  # keeps the leading days
+
+    def test_demo_days_zero_keeps_full_week(self):
+        assert len(ForecastWidget(location="", demo=True, demo_days=0)._data.days) == 6
+
+    def test_demo_days_ignored_without_demo(self):
+        # demo_days only affects the demo feed; a live widget is unaffected.
+        w = ForecastWidget(location="Boston", demo=False, demo_days=4)
+        assert w._data is None  # no demo seed; live fetch fills it later
+
 
 class TestHeldCursor:
     def test_returns_logical_width_on_every_sign(self, smallsign, bigsign, longboi):
@@ -184,6 +201,14 @@ class TestValidateConfig:
                 {"location": "x", "update_interval": bad}
             )
             assert any("update_interval" in e for e in errs), bad
+
+    def test_demo_days_bool_and_negative_rejected(self):
+        for bad in (True, -1, 2.5):
+            errs = ForecastWidget.validate_config({"demo": True, "demo_days": bad})
+            assert any("demo_days" in e for e in errs), bad
+
+    def test_demo_days_valid_passes(self):
+        assert ForecastWidget.validate_config({"demo": True, "demo_days": 4}) == []
 
     def test_warnings_for_impossible_layouts(self):
         ctx = mock.Mock(scale=1, panel_width=160)

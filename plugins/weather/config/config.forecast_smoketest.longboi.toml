@@ -20,8 +20,11 @@
 #     hero on the left (condition sprite, hi/lo, "BOSTON"), a vertical divider
 #     at x=156, then SIX upcoming days across the right, each with an icon,
 #     temps, AND a precip %. Nothing bleeds across the divider.
-#   - Section 2: an explicit `layout = "big"` FORCES the narrower bigsign card
-#     (hero + 4-day strip) on the wide panel — proves the layout override works.
+#   - Section 2: `demo_days = 4` truncates the demo week to a SHORT feed — the
+#     "long" layout with only 4 days, which JUSTIFIES to spread those 4 days
+#     across the full 512px (first day hugs the divider, last hugs the right
+#     edge) instead of clustering. This previews the short-feed fill you'd get
+#     from a WeatherAPI plan returning fewer forecast days.
 #   - Section 3: a message for panel context + a rainbow border, proving the
 #     card composes in a normal rotation.
 #   - The card is HELD (static) — it does not scroll. Held for `hold_time`.
@@ -72,7 +75,8 @@ type = "weather.forecast"
 demo = true
 # layout omitted -> "auto" -> resolves to "long" at this 512px width.
 
-# 2) explicit "big" forces the narrower 4-day card on the wide panel.
+# 2) demo_days = 4 -> a SHORT feed in the "long" layout: the 4 days JUSTIFY to
+#    spread across the full 512px width (not clustered in the middle).
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 8
@@ -80,7 +84,7 @@ hold_time = 8
 [[playlist.section.widget]]
 type = "weather.forecast"
 demo = true
-layout = "big"
+demo_days = 4
 
 # 3) composes in a normal rotation alongside a bordered message.
 [[playlist.section]]

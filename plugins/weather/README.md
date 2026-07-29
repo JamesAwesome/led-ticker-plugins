@@ -72,6 +72,7 @@ location = "Boston, MA"
 | `units` | string | `"imperial"` | `"imperial"` \| `"metric"`. |
 | `update_interval` | int (seconds) | `10800` | How often the widget re-polls WeatherAPI.com (3 hours by default — forecasts don't need current-conditions cadence). |
 | `demo` | bool | `false` | Render a fixed sample week (BOSTON) instead of calling the network — no API key or location needed. Useful for previews. |
+| `demo_days` | int | `0` | Demo-only: truncate the fixed sample week to this many strip days (`0` = full 6-day week) so a config can preview a **short feed** — the strip justifying fewer days across the panel — without a live key. Ignored unless `demo = true`. |
 
 ### Requirements
 

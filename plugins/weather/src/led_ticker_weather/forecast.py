@@ -58,6 +58,10 @@ class ForecastWidget(FrameAwareBase):
     units: str = "imperial"
     update_interval: int = attrs.field(default=10800, converter=int)
     demo: bool = False
+    # Demo-only: truncate the fixed demo week to this many strip days (0 =
+    # full 6-day week) so a config can preview a SHORT feed — the justify
+    # fill spreading fewer days across the panel — without a live API key.
+    demo_days: int = attrs.field(default=0, converter=int)
     # The engine's SHARED aiohttp session (core's _build_widget passes it
     # to start()); never close it. None (tests/direct) => fetch_forecast
     # opens a short-lived session per poll.
@@ -76,7 +80,10 @@ class ForecastWidget(FrameAwareBase):
             lon = self.location.get("lon", 0)
             self.location = f"{lat},{lon}"
         if self.demo:
-            self._data = DEMO_DATA
+            data = DEMO_DATA
+            if self.demo_days > 0:
+                data = attrs.evolve(data, days=data.days[: self.demo_days])
+            self._data = data
         elif not self.location:
             raise ValueError("weather.forecast requires location (or demo = true)")
 
@@ -156,6 +163,13 @@ class ForecastWidget(FrameAwareBase):
             or interval <= 0
         ):
             errs.append(f"update_interval must be a positive number, got {interval!r}")
+        demo_days = cfg.get("demo_days", 0)
+        if (
+            isinstance(demo_days, bool)
+            or not isinstance(demo_days, int)
+            or demo_days < 0
+        ):
+            errs.append(f"demo_days must be a non-negative integer, got {demo_days!r}")
         return errs
 
     @classmethod
