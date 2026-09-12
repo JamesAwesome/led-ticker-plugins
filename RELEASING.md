@@ -15,7 +15,7 @@ approval.
 ## Publishable plugins
 
 `pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `flair`, `telnet`,
-`storefront`, `flight` (the allowlist in `scripts/check_release.py`). A tag for
+`storefront`, `flight`, `stocks`, `tennis` (the allowlist in `scripts/check_release.py`). A tag for
 anything else is rejected.
 
 ## Cut a release
