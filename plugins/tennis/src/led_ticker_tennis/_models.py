@@ -15,7 +15,7 @@ walks it (one column per set).
 
 import contextlib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -59,6 +59,7 @@ class MatchInfo:
     round_code: str = ""
     start_time: datetime | None = None
     is_doubles: bool = False
+    stale: bool = False
 
     @property
     def current_set(self) -> int:
@@ -84,7 +85,7 @@ def surname(name: str) -> str:
     return parts[-1] if parts else s
 
 
-def format_points(points: tuple[str | None, str | None], is_tiebreak: bool) -> str:
+def format_points(points: tuple[str | None, str | None], _is_tiebreak: bool) -> str:
     """ "15-40" during a game, "6-6" during a tiebreak, "" when unknown.
 
     Points are strings on the wire ("0"/"15"/"30"/"40"/"AD", or plain
@@ -137,6 +138,8 @@ def status_label(m: MatchInfo) -> str:
     """The one-word match state: "SET 2" / "SUSP" for live, "FINAL" /
     "RET" / "W/O" / "DEF" / "ABD" / "CANC" for a finished match, "" for an
     upcoming one (the renderers show the start time instead)."""
+    if m.stale:
+        return "STALE"
     if m.state == "live":
         if m.event_status.lower() == "interrupted":
             return "SUSP"
@@ -202,7 +205,8 @@ def _dt(v: Any) -> datetime | None:
     if not v or not isinstance(v, str):
         return None
     with contextlib.suppress(ValueError, TypeError):
-        return datetime.fromisoformat(v.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
     return None
 
 
@@ -215,7 +219,7 @@ def _pair_games(raw: Any) -> list[tuple[int, int]]:
     if not isinstance(a, list) or not isinstance(b, list):
         return []
     out: list[tuple[int, int]] = []
-    for ga, gb in zip(a, b, strict=False):
+    for ga, gb in zip(a[:5], b[:5], strict=False):
         ia, ib = _int(ga), _int(gb)
         if ia is None or ib is None:
             break
@@ -236,12 +240,12 @@ def _sets(raw: Any, games: list[tuple[int, int]]) -> tuple[int, int]:
         if a is not None and b is not None:
             return a, b
     # Derive from completed sets when the tally is missing.
-    p1 = sum(1 for ga, gb in games if ga > gb and (ga >= 6 or ga == 10))
-    p2 = sum(1 for ga, gb in games if gb > ga and (gb >= 6 or gb == 10))
+    p1 = sum(1 for ga, gb in games if ga > gb and ga >= 6)
+    p2 = sum(1 for ga, gb in games if gb > ga and gb >= 6)
     return p1, p2
 
 
-def _state(status: str, event_status: str) -> tuple[str, str]:
+def _state(status: str) -> tuple[str, str]:
     s = (status or "").lower()
     if s == "live":
         return "live", ""
@@ -261,7 +265,7 @@ def parse_match(raw: dict[str, Any]) -> MatchInfo:
     p2 = players.get("p2") or {}
     score = raw.get("score") or {}
     games = _pair_games(score.get("games"))
-    state, forced_outcome = _state(str(raw.get("status") or ""), "")
+    state, forced_outcome = _state(str(raw.get("status") or ""))
     outcome = forced_outcome or str(raw.get("outcome") or "")
     p1_full = str(p1.get("name") or "?")
     p2_full = str(p2.get("name") or "?")
@@ -287,6 +291,7 @@ def parse_match(raw: dict[str, Any]) -> MatchInfo:
         round_code=str(raw.get("round_code") or ""),
         start_time=_dt(raw.get("scheduled_time")),
         is_doubles=bool(raw.get("is_doubles")) or "/" in p1_full,
+        stale=bool(raw.get("_stale")),
     )
 
 

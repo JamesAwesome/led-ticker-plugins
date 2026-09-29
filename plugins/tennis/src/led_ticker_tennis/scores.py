@@ -12,8 +12,9 @@ merely defaulted — and a fetch failure keeps the last good payload.
 
 import difflib
 import logging
+from datetime import UTC, datetime
 from typing import Any, Self
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 import attrs
@@ -45,6 +46,7 @@ from led_ticker_tennis._source import (
     LiveTennisSource,
     clamp_interval,
     resolve_api_key,
+    shared_source,
 )
 from led_ticker_tennis.layouts import VALID_LAYOUTS
 
@@ -103,6 +105,10 @@ class TennisScoreMonitor:
     def validate_config(cls, cfg: dict[str, Any]) -> list[str]:
         """Pre-coercion config check (returns messages, never raises)."""
         msgs: list[str] = []
+        try:
+            ZoneInfo(cfg.get("timezone", "America/New_York"))
+        except ZoneInfoNotFoundError, ValueError, TypeError:
+            msgs.append("tennis.scores timezone must name an IANA timezone")
         layout = cfg.get("layout", "auto")
         if layout not in VALID_LAYOUTS:
             close = difflib.get_close_matches(
@@ -163,7 +169,7 @@ class TennisScoreMonitor:
             widget.feed_stories = [widget._line(NO_KEY_TEXT, pal.AMBER)]
             return widget
         interval = clamp_interval(update_interval)
-        widget._source = LiveTennisSource(session, key, interval=interval)
+        widget._source = shared_source(session, key, interval=interval)
         await widget.update()
         logger.info(
             "tennis.scores: %d stories, polling every %ds",
@@ -201,10 +207,20 @@ class TennisScoreMonitor:
             return False
         return not (self.draw == "doubles" and not m.is_doubles)
 
-    def _select(self, rows: list[dict[str, Any]]) -> list[MatchInfo]:
+    def _select(
+        self, rows: list[dict[str, Any]], *, upcoming: bool = False
+    ) -> list[MatchInfo]:
         matches = [parse_match(r) for r in rows]
         matches = [m for m in matches if self._wanted(m)]
-        matches.sort(key=sort_key)
+        if upcoming:
+            now = datetime.now(UTC)
+            matches = [
+                m
+                for m in matches
+                if m.state == "upcoming"
+                and (m.start_time is None or m.start_time > now)
+            ]
+        matches.sort(key=lambda m: (m.state != "final", sort_key(m)))
         return matches[: max(1, self.max_matches)]
 
     def _load_demo(self) -> None:
@@ -220,11 +236,19 @@ class TennisScoreMonitor:
         if self._source is None:
             return
         snap = await self._source.poll()
-        if snap.key_rejected and not snap.live and not snap.upcoming:
+        if (
+            snap.key_rejected
+            and not snap.live
+            and not snap.upcoming
+            and not snap.recent
+        ):
             self.feed_stories = [self._line(BAD_KEY_TEXT, pal.LOSS)]
             return
-        live = self._select(snap.live)
+        live = self._select(snap.recent + snap.live)
         if live:
+            self._source.remember_displayed([m.match_id for m in live])
+            for m in live:
+                m.stale = m.stale or (snap.stale and m.state != "final")
             self.feed_stories = [
                 self._card(m, i, len(live)) for i, m in enumerate(live)
             ]
@@ -234,14 +258,17 @@ class TennisScoreMonitor:
                 " (stale)" if snap.stale else "",
             )
             return
-        upcoming = [m for m in self._select(snap.upcoming) if m.state == "upcoming"]
+        upcoming = self._select(snap.upcoming, upcoming=True)
         if upcoming:
+            for m in upcoming:
+                m.stale = snap.stale
             self.feed_stories = [
                 self._card(m, i, len(upcoming)) for i, m in enumerate(upcoming)
             ]
             logger.info("tennis.scores: no live play; %d upcoming", len(upcoming))
             return
-        self.feed_stories = [self._line(NO_MATCHES_TEXT, pal.LABEL_HI)]
+        text = "Tennis: update failed" if snap.stale else NO_MATCHES_TEXT
+        self.feed_stories = [self._line(text, pal.LABEL_HI)]
         logger.info(
             "tennis.scores: nothing to show (%s)", snap.last_error or "empty listings"
         )

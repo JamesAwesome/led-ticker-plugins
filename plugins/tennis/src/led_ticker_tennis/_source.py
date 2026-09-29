@@ -1,28 +1,13 @@
-"""LiveTennisSource — the Live Tennis API fetcher, with the free-tier
-cadence ENFORCED here rather than trusted to config.
+"""Shared tennis snapshots, with one request per interval across all endpoints.
 
-The free tier is 100 requests/day. One request every 15 minutes is 96/day,
-so `MIN_UPDATE_INTERVAL = 900` is a hard floor: a smaller `update_interval`
-is clamped (and logged) and, independently, `poll()` refuses to issue a
-request before the previous one's interval has elapsed — however often the
-engine (or a test) calls it. One tick == at most one request, except for
-the very first tick after boot, which may spend a second request on the
-upcoming listing when nothing is live (so the sign shows fixtures within
-one tick instead of two).
-
-Which listing a tick fetches: `status=live` whenever the last live payload
-had matches; otherwise live/upcoming alternate, so a quiet sign still
-notices new play within two ticks while its fixtures stay fresh.
-
-Failure policy (never raises — `poll()` is called from the widget's
-`update()`, which must never break the render loop): a 429 / 5xx /
-timeout / network error keeps the last good payload, marks the snapshot
-`stale`, and backs off exponentially (2x the interval, doubling, capped at
-`MAX_BACKOFF`; a 429's `Retry-After` is honoured when larger). A rejected
-key (401/403) parks the source for an hour and flags `key_rejected` so the
-widget can say so on the panel instead of retrying into a wall.
+The 900-second floor permits 96 requests per day against the free 100/day quota.
+Result lookups replace listing polls and alternate with live polls.
+Only displayed matches get a lookup after disappearing from the live listing.
+A failed request keeps the last good payload and backs off.
+Rejected keys wait at least an hour, or longer when the interval requires it.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -48,12 +33,8 @@ _USER_AGENT = "led-ticker-tennis (+https://github.com/JamesAwesome/led-ticker-pl
 
 
 def resolve_api_key(configured: str | None) -> str:
-    """The key from config (`api_key = "..."`) or the `LIVETENNIS_API_KEY`
-    environment variable, whichever is set (config wins); "" when neither."""
-    key = (configured or "").strip()
-    if key:
-        return key
-    return (os.environ.get(ENV_KEY) or "").strip()
+    """Prefer the environment, with config as a fallback."""
+    return (os.environ.get(ENV_KEY) or "").strip() or (configured or "").strip()
 
 
 def clamp_interval(interval: Any) -> int:
@@ -81,6 +62,7 @@ class Snapshot:
 
     live: list[dict[str, Any]] = field(default_factory=list)
     upcoming: list[dict[str, Any]] = field(default_factory=list)
+    recent: list[dict[str, Any]] = field(default_factory=list)
     stale: bool = False  # the most recent attempt failed; data is older
     last_error: str | None = None
     key_rejected: bool = False
@@ -108,6 +90,40 @@ class LiveTennisSource:
         self._next_allowed: float = float("-inf")
         self._backoff: int = 0
         self._last_kind: str = ""
+        self._lock = asyncio.Lock()
+        self._watched: dict[int, dict[str, Any]] = {}
+        self._pending: dict[int, dict[str, Any]] = {}
+        self._resolved: set[int] = set()
+        self._recent: dict[int, tuple[dict[str, Any], float]] = {}
+        self._last_was_detail = False
+
+    def remember_displayed(self, match_ids: list[int]) -> None:
+        """Track only matches selected for a widget's rotation."""
+        selected = set(match_ids)
+        for row in self.snapshot.live:
+            match_id = row.get("id")
+            if isinstance(match_id, int) and match_id > 0 and match_id in selected:
+                self._watched[match_id] = row
+
+    def _refresh_recent(self) -> None:
+        now = self._clock()
+        self._recent = {k: v for k, v in self._recent.items() if v[1] > now}
+        self.snapshot.recent = [row for row, _ in self._recent.values()] + [
+            {**row, "_stale": True} for row in self._pending.values()
+        ]
+
+    def _replace_live(self, rows: list[dict[str, Any]]) -> None:
+        current = {
+            match_id: row for row in rows if isinstance(match_id := row.get("id"), int)
+        }
+        for match_id, row in self._watched.items():
+            if match_id not in current and match_id not in self._resolved:
+                self._pending.setdefault(match_id, row)
+        self._watched = {k: current[k] for k in self._watched if k in current}
+        for match_id in current:
+            self._pending.pop(match_id, None)
+            self._recent.pop(match_id, None)
+        self.snapshot.live = rows
 
     # --- scheduling ---------------------------------------------------
 
@@ -120,8 +136,12 @@ class LiveTennisSource:
         return max(0.0, self._next_allowed - self._clock())
 
     async def poll(self) -> Snapshot:
-        """Fetch if the cadence allows; return the (possibly unchanged)
-        snapshot. Never raises."""
+        """Serialize callers so concurrent widgets share one request."""
+        async with self._lock:
+            return await self._poll()
+
+    async def _poll(self) -> Snapshot:
+        self._refresh_recent()
         now = self._clock()
         if now < self._next_allowed:
             logger.debug(
@@ -130,28 +150,23 @@ class LiveTennisSource:
             )
             return self.snapshot
 
-        kind = self._next_kind()
-        ok = await self._fetch(kind)
-        if (
-            ok
-            and kind == "live"
-            and not self.snapshot.live
-            and self.snapshot.upcoming_fetched_at is None
-        ):
-            # Boot (or first quiet tick): nothing live and no fixtures cached
-            # yet -> spend one more request now so the panel has something
-            # to show. Bounded: only until the first upcoming fetch succeeds.
-            # Counts as the "upcoming" turn of the alternation, so the next
-            # quiet tick polls live again.
-            ok = await self._fetch("upcoming")
-            kind = "upcoming"
+        match_id = (
+            next(iter(self._pending), None) if not self._last_was_detail else None
+        )
+        kind = "live" if self._last_was_detail else self._next_kind()
+        # Reserve the interval before awaiting I/O, including cancellation.
+        self._next_allowed = now + self.interval
+        ok = await self._fetch(kind, match_id=match_id)
+        self._last_was_detail = match_id is not None
 
         if ok:
             # Only a SUCCESSFUL fetch advances the alternation: a failed
             # live fetch is retried as live once the backoff clears.
-            self._last_kind = kind
+            if match_id is None:
+                self._last_kind = kind
             self._backoff = 0
             self._next_allowed = self._clock() + self.interval
+        self._refresh_recent()
         return self.snapshot
 
     # --- fetching -----------------------------------------------------
@@ -170,7 +185,7 @@ class LiveTennisSource:
         self._next_allowed = self._clock() + self._backoff
         logger.warning("tennis: %s; next request in %ds", message, self._backoff)
 
-    async def _fetch(self, kind: str) -> bool:
+    async def _fetch(self, kind: str, *, match_id: int | None = None) -> bool:
         snap = self.snapshot
         snap.requests_made += 1
         headers = {
@@ -178,7 +193,11 @@ class LiveTennisSource:
             "Accept": "application/json",
             "User-Agent": _USER_AGENT,
         }
-        url = self._url(kind)
+        url = (
+            self._url(kind)
+            if match_id is None
+            else f"{self.base_url}/matches/{match_id}"
+        )
         try:
             timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
             async with self.session.get(url, headers=headers, timeout=timeout) as resp:
@@ -195,6 +214,12 @@ class LiveTennisSource:
                         "rate limited (HTTP 429)", retry_after=_retry_after(resp)
                     )
                     return False
+                if match_id is not None and status in (404, 410):
+                    row = {**self._pending.pop(match_id), "_stale": True}
+                    self._recent[match_id] = (row, self._clock() + 2 * self.interval)
+                    self._resolved.add(match_id)
+                    self._fail(f"match detail unavailable (HTTP {status})")
+                    return False
                 if status >= 400:
                     self._fail(f"HTTP {status} from {url}")
                     return False
@@ -209,6 +234,22 @@ class LiveTennisSource:
             self._fail(f"unexpected error: {exc.__class__.__name__}: {exc}")
             return False
 
+        if match_id is not None:
+            if not isinstance(body, dict) or body.get("id") != match_id:
+                self._fail("malformed match detail")
+                return False
+            if body.get("status") not in ("live", "upcoming", "completed", "cancelled"):
+                self._fail("unknown match status")
+                return False
+            self._pending.pop(match_id, None)
+            self._resolved.add(match_id)
+            row = {**body, "_stale": body["status"] in ("live", "upcoming")}
+            self._recent[match_id] = (row, self._clock() + 2 * self.interval)
+            snap.stale = False
+            snap.last_error = None
+            snap.key_rejected = False
+            return True
+
         rows = _rows(body)
         if rows is None:
             self._fail("malformed response (no `data` list)")
@@ -216,7 +257,7 @@ class LiveTennisSource:
 
         now = self._clock()
         if kind == "live":
-            snap.live = rows
+            self._replace_live(rows)
             snap.live_fetched_at = now
         else:
             snap.upcoming = rows
@@ -226,6 +267,22 @@ class LiveTennisSource:
         snap.key_rejected = False
         logger.info("tennis: fetched %d %s match(es)", len(rows), kind)
         return True
+
+
+_SHARED_SOURCES: dict[str, LiveTennisSource] = {}
+
+
+def shared_source(session: Any, api_key: str, *, interval: int) -> LiveTennisSource:
+    """Keep one snapshot and request gate per key in this process."""
+    source = _SHARED_SOURCES.get(api_key)
+    if source is None:
+        source = LiveTennisSource(session, api_key, interval=interval)
+        _SHARED_SOURCES[api_key] = source
+    else:
+        source.interval = min(source.interval, clamp_interval(interval))
+        if getattr(source.session, "closed", False) is True:
+            source.session = session
+    return source
 
 
 def _rows(body: Any) -> list[dict[str, Any]] | None:

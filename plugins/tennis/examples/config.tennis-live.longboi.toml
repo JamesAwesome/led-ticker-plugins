@@ -1,0 +1,22 @@
+# Demo needs no key. Live mode reads LIVETENNIS_API_KEY from the environment.
+# Use these settings for the named sign. Check small letters and score columns.
+
+[display]
+rows = 64
+cols = 128
+chain_length = 4
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+panel_type = "FM6126A"
+led_rgb_sequence = "BRG"
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8.0
+
+[[playlist.section.widget]]
+type = "tennis.scores"
+layout = "auto"
+timezone = "America/New_York"
+update_interval = 900
+demo = false

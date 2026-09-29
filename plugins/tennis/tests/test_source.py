@@ -2,6 +2,7 @@
 backoff on failure with the last good payload retained, key rejection.
 No network: a fake aiohttp-shaped session and an injected clock."""
 
+import asyncio
 import logging
 
 import aiohttp
@@ -96,9 +97,9 @@ class TestClampInterval:
 
 
 class TestResolveApiKey:
-    def test_config_wins(self, monkeypatch):
+    def test_env_wins(self, monkeypatch):
         monkeypatch.setenv("LIVETENNIS_API_KEY", "env-key")
-        assert resolve_api_key(" cfg-key ") == "cfg-key"
+        assert resolve_api_key(" cfg-key ") == "env-key"
 
     def test_env_fallback(self, monkeypatch):
         monkeypatch.setenv("LIVETENNIS_API_KEY", " env-key ")
@@ -155,9 +156,13 @@ class TestCadence:
 
 
 class TestUpcomingFallback:
-    async def test_boot_with_nothing_live_also_fetches_upcoming_once(self):
+    async def test_boot_with_nothing_live_waits_before_fetching_upcoming(self):
         session = FakeSession(FakeResp(200, EMPTY), FakeResp(200, UPCOMING))
-        s, _ = _source(session)
+        s, clock = _source(session)
+        snap = await s.poll()
+        assert len(session.calls) == 1
+        assert snap.upcoming == []
+        clock.t += 900
         snap = await s.poll()
         assert [u.split("status=")[1].split("&")[0] for u in session.urls] == [
             "live",
@@ -169,7 +174,7 @@ class TestUpcomingFallback:
     async def test_quiet_sign_alternates_live_and_upcoming_one_request_per_tick(self):
         session = FakeSession(*(FakeResp(200, EMPTY) for _ in range(6)))
         s, clock = _source(session)
-        await s.poll()  # boot: live + upcoming (2 requests, once)
+        await s.poll()
         kinds = []
         for _ in range(4):
             clock.t += 900
@@ -177,13 +182,15 @@ class TestUpcomingFallback:
             await s.poll()
             assert len(session.calls) == before + 1, "one request per tick"
             kinds.append(session.urls[-1].split("status=")[1].split("&")[0])
-        assert kinds == ["live", "upcoming", "live", "upcoming"]
+        assert kinds == ["upcoming", "live", "upcoming", "live"]
 
     async def test_upcoming_payload_survives_a_later_empty_live_poll(self):
         session = FakeSession(
             FakeResp(200, EMPTY), FakeResp(200, UPCOMING), FakeResp(200, EMPTY)
         )
         s, clock = _source(session)
+        await s.poll()
+        clock.t += 900
         await s.poll()
         clock.t += 900
         snap = await s.poll()
@@ -289,6 +296,147 @@ class TestFailures:
 
 
 def test_module_constants_match_the_free_tier():
-    # 100 requests/day: a 900s floor is 96/day, leaving headroom for boot.
+    # Listings and result lookups share these 96 daily request slots.
     assert 86400 // src.MIN_UPDATE_INTERVAL <= 96
     assert src.DEFAULT_BASE_URL == "https://api.livetennisapi.com/api/public/v1"
+
+
+class TestResults:
+    async def test_displayed_match_resolves_once_and_expires(self):
+        final = {"id": 1, "status": "completed", "outcome": "retired", "winner": 2}
+        session = FakeSession(FakeResp(200, LIVE), FakeResp(), FakeResp(body=final))
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1])
+        clock.t += 900
+        snap = await source.poll()
+        assert snap.recent[0]["_stale"] is True
+        assert snap.recent[0]["status"] == "live"
+        assert len(session.calls) == 2
+        clock.t += 900
+        snap = await source.poll()
+        assert session.urls[-1] == f"{DEFAULT_BASE_URL}/matches/1"
+        assert snap.recent[0]["winner"] == 2
+        assert snap.recent[0]["outcome"] == "retired"
+        for _ in range(5):
+            await source.poll()
+        assert len(session.calls) == 3
+        clock.t += 900
+        assert (await source.poll()).recent
+        clock.t += 900
+        assert (await source.poll()).recent == []
+        assert session.urls.count(f"{DEFAULT_BASE_URL}/matches/1") == 1
+
+    async def test_unshown_matches_do_not_cost_result_lookups(self):
+        session = FakeSession(FakeResp(200, LIVE), FakeResp(), FakeResp())
+        source, clock = _source(session)
+        for _ in range(3):
+            await source.poll()
+            clock.t += 900
+        assert all("status=" in url for url in session.urls)
+
+    async def test_results_alternate_with_live_polls(self):
+        rows = [{"id": i, "status": "live"} for i in (1, 2, 3)]
+        session = FakeSession(
+            FakeResp(body={"data": rows}),
+            FakeResp(),
+            FakeResp(body={"id": 1, "status": "completed"}),
+            FakeResp(),
+            FakeResp(body={"id": 2, "status": "completed"}),
+        )
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1, 2])
+        for _ in range(4):
+            clock.t += 900
+            before = len(session.calls)
+            await source.poll()
+            assert len(session.calls) == before + 1
+        assert [url.split("/matches")[1] for url in session.urls] == [
+            "?status=live&limit=200",
+            "?status=live&limit=200",
+            "/1",
+            "?status=live&limit=200",
+            "/2",
+        ]
+
+    @pytest.mark.parametrize("status", [404, 410])
+    async def test_unavailable_result_is_not_fabricated_or_requested_again(
+        self, status
+    ):
+        session = FakeSession(FakeResp(body=LIVE), FakeResp(), FakeResp(status))
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1])
+        for _ in range(2):
+            clock.t += 900
+            snap = await source.poll()
+        assert snap.stale
+        assert snap.recent[0]["status"] == "live"
+        assert snap.recent[0]["_stale"] is True
+        clock.t += source.seconds_until_allowed()
+        await source.poll()
+        assert session.urls.count(f"{DEFAULT_BASE_URL}/matches/1") == 1
+
+    @pytest.mark.parametrize("body", [{}, {"id": 2}, {"id": 1, "status": "junk"}])
+    async def test_bad_detail_keeps_last_seen_match(self, body):
+        session = FakeSession(FakeResp(body=LIVE), FakeResp(), FakeResp(body=body))
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1])
+        for _ in range(2):
+            clock.t += 900
+            snap = await source.poll()
+        assert snap.stale and snap.recent[0]["id"] == 1
+        assert snap.recent[0]["status"] == "live"
+
+    async def test_nonfinal_detail_never_invents_a_winner(self):
+        session = FakeSession(
+            FakeResp(body=LIVE), FakeResp(), FakeResp(body=LIVE["data"][0])
+        )
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1])
+        for _ in range(2):
+            clock.t += 900
+            snap = await source.poll()
+        assert snap.recent[0]["_stale"]
+        assert "winner" not in snap.recent[0]
+
+
+class TestSharedSource:
+    async def test_widgets_with_same_key_share_concurrent_fetch(self):
+        class SlowResponse(FakeResp):
+            async def json(self):
+                await asyncio.sleep(0)
+                return await super().json()
+
+        session = FakeSession(SlowResponse(body=LIVE))
+        first = src.shared_source(session, "same", interval=1800)
+        second = src.shared_source(FakeSession(), "same", interval=900)
+        assert first is second and first.interval == 900
+        snapshots = await asyncio.gather(*(first.poll() for _ in range(5)))
+        assert len(session.calls) == 1
+        assert all(s is snapshots[0] for s in snapshots)
+        assert src.shared_source(session, "different", interval=900) is not first
+
+    def test_closed_session_is_replaced_without_resetting_gate(self):
+        session = FakeSession()
+        first = src.shared_source(session, "same", interval=900)
+        first._next_allowed = 12345
+        session.closed = True
+        replacement = FakeSession()
+        assert src.shared_source(replacement, "same", interval=900) is first
+        assert first.session is replacement and first._next_allowed == 12345
+
+    async def test_full_day_stays_below_free_quota_even_when_empty(self):
+        source, clock = _source(FakeSession())
+        for _ in range(86400 // 900):
+            await asyncio.gather(source.poll(), source.poll())
+            clock.t += 900
+        assert source.snapshot.requests_made == 96
+
+    async def test_long_interval_key_rejection_waits_longer_than_one_hour(self):
+        source, _ = _source(FakeSession(FakeResp(401)), interval=3600)
+        await source.poll()
+        assert source.seconds_until_allowed() == 7200

@@ -67,8 +67,12 @@ def segments(
         day, clock = format_start_time(m.start_time, tz)
         segs.append(("·", pal.LABEL))
         segs.append((f"{day} {clock}".strip(), pal.AMBER))
+        if m.stale:
+            segs.append(("STALE", pal.AMBER))
     else:
         games = " ".join(f"{a}-{b}" for a, b in m.games)
+        if not games and m.state == "final":
+            games = f"{m.sets[0]}-{m.sets[1]} sets"
         if games:
             segs.append((games, pal.AMBER))
         pts = format_points(m.points, m.is_tiebreak) if m.state == "live" else ""

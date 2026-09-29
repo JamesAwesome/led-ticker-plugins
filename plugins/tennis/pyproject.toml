@@ -33,7 +33,7 @@ classifiers = [
 ]
 dependencies = [
     "led-ticker-core>=4.16",
-    "aiohttp",
+    "aiohttp>=3.12",
 ]
 
 # The plugin is contributed to led-ticker via this entry point. The entry-point

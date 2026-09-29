@@ -12,8 +12,16 @@ import pytest
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
 from led_ticker_tennis._models import MatchInfo
+from led_ticker_tennis._source import _SHARED_SOURCES
 
 TZ = ZoneInfo("America/New_York")
+
+
+@pytest.fixture(autouse=True)
+def reset_sources():
+    _SHARED_SOURCES.clear()
+    yield
+    _SHARED_SOURCES.clear()
 
 
 @pytest.fixture

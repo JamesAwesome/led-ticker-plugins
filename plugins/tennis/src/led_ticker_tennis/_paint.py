@@ -20,9 +20,8 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
-# Thin Inter strokes drop out at the default 128 threshold on small sizes;
-# 80 is the documented thin-font value (core CLAUDE.md `font_threshold`).
-_HIRES_THRESHOLD = 80
+# Inter-Bold needs the normal threshold to separate small adjacent glyphs.
+_HIRES_THRESHOLD = 128
 _FONT = "Inter-Bold"
 
 

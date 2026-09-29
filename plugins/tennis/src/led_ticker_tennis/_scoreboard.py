@@ -78,6 +78,8 @@ class TennisScoreboardMessage(FrameAwareBase):
                 name_c = num_c = pal.WIN if m.winner == side else pal.LABEL_HI
             cells: list[tuple[str, Color]] = [(name, name_c)]
             if m.state != "upcoming":
+                if not m.games:
+                    cells.append((str(m.sets[side - 1]), num_c))
                 for a, b in m.games:
                     cells.append((str(a if side == 1 else b), num_c))
                 pts = (
@@ -92,7 +94,7 @@ class TennisScoreboardMessage(FrameAwareBase):
         # right-most cell: status on band 1, round/time on band 2
         if m.state == "upcoming":
             day, clock = format_start_time(m.start_time, tz)
-            rows[0].append((day or "NEXT", pal.AMBER))
+            rows[0].append(("STALE" if m.stale else day or "NEXT", pal.AMBER))
             rows[1].append((clock, pal.AMBER))
         else:
             label = status_label(m)

@@ -56,24 +56,18 @@ imports are fine.
 
 **Python 3.14 / PEP 649** — no `from __future__ import annotations`.
 
-**The free-tier cadence lives in the fetcher, not in config** (`_source.py`):
-`MIN_UPDATE_INTERVAL = 900` floors `update_interval` (`clamp_interval`, logged), AND
-`LiveTennisSource.poll()` refuses to issue a request before `_next_allowed` — so the API
-sees at most one request per 15 minutes however often `update()` is called (hot reloads,
-tests, a future core that calls `update()` eagerly). One tick == one request: `status=live`
-while the last live payload was non-empty, otherwise live/upcoming alternate. The ONLY
-double-request is the first tick with nothing live and no fixtures cached yet (bounded by
-`upcoming_fetched_at is None`). Tripwires: `TestCadence` / `TestUpcomingFallback` in
-`tests/test_source.py`. Do not add a second endpoint per tick without re-doing the
-100/day budget in the README.
+**Request pacing** (`_source.py`): all widgets with the same API key share
+one source in the process. Its lock and 900-second floor cover listings and
+result lookups. One poll makes at most one request, including startup.
+Only displayed matches enter the result queue. Detail lookups alternate with
+live polls and completed results remain visible for two intervals.
+Successful lookups are cached for the process lifetime. Separate processes
+and restarts do not share this cache. The README describes their quota cost.
 
-**`poll()` never raises and never blanks** — every failure path goes through `_fail()`:
-the snapshot keeps the last good `live`/`upcoming`, sets `stale`/`last_error`, and backs
-off (2x interval, doubling, `MAX_BACKOFF` 4h; `Retry-After` honoured; 401/403 park for
-`KEY_REJECTED_BACKOFF` and set `key_rejected`). The widget's `update()` renders from the
-snapshot and never raises into the render loop either. Don't let core's
-`run_monitor_loop` backoff (60s on an exception) become the rate limiter — it would poll
-into the quota.
+**Failure handling**: failed requests retain cached data and mark it stale.
+Backoff starts at twice the interval and doubles, capped at four hours.
+Rejected keys wait at least an hour. Stale scores carry a visible label.
+Never infer a final result or winner from a match disappearing.
 
 **Break point rule** (`_models.is_break_point`): receiver at AD, or receiver at 40 while
 the server is at 0/15/30; never in a tiebreak; False on any null (server, either point).

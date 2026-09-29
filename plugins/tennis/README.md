@@ -58,7 +58,7 @@ timezone = "America/New_York"   # for fixture start times
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `api_key` | string | `""` | Live Tennis API key. Overrides `LIVETENNIS_API_KEY`. Prefer the environment variable so the key stays out of `config.toml`. |
+| `api_key` | string | `""` | Live Tennis API key. The environment variable `LIVETENNIS_API_KEY` takes precedence. Keep credentials out of `config.toml`. |
 | `tours` | list of strings | `[]` (all) | Any of `"atp"`, `"wta"`, `"challenger"`, `"itf"`, `"juniors"`. Filtered client-side, so it never costs extra requests. |
 | `draw` | string | `"all"` | `"all"`, `"singles"` or `"doubles"`. Doubles teams show as `CASH/GLASSPOOL`. |
 | `max_matches` | int | `8` | Cap on matches per rotation (main tours first, then earliest start). |
@@ -94,11 +94,34 @@ A match is best-of-3 (or 5) **sets**; a set is first to 6 **games** (by two, or 
 
 ### Free-tier cadence
 
-The free tier allows 100 requests per day. The widget makes **one request per poll** (`GET /matches?status=live`, or `status=upcoming` on alternate polls while nothing is live) and floors `update_interval` at **900 s** — 96 requests/day — regardless of config (a lower value is clamped and logged). The floor lives in the fetcher, so even a hot-reload storm cannot poll faster. The first poll after boot may spend one extra request on the upcoming listing when nothing is live, so the panel has something to show immediately.
+The free tier allows 100 requests per day. All tennis widgets in one process share a source for each API key.
+Every request waits at least 900 seconds after the previous request. This allows at most 96 requests per day during continuous operation.
+The smallest configured interval wins, with a 900-second floor. Listings and result lookups use the same request slots.
+There is no extra startup request. An empty live listing sends the next poll to the upcoming listing.
 
-On `429`, a `5xx`, a timeout or a network error the widget keeps showing the last good payload and backs off (2× the interval, doubling, up to 4 h; a `Retry-After` header is honoured). A rejected key (`401`/`403`) shows `Tennis: API key rejected` and retries hourly. Nothing in the fetch path raises into the render loop.
+When a displayed match disappears, its last score stays visible with a `STALE` label.
+The source queues a free `GET /matches/{matchId}` lookup, alternating result lookups with live polls.
+A completed response supplies the final score, outcome and winner. Finished matches take priority for two intervals before leaving the rotation.
 
-Live scores update at most every 15 minutes on this tier — fine for a sign, not for a scoreboard you bet on. A paid key raises the quota; the floor is still applied, so drop it in `_source.MIN_UPDATE_INTERVAL` if you fork the plugin for a higher tier.
+A successful lookup is cached and never repeated during that process lifetime.
+Missing detail responses show the last score as stale. A match that still reports live is never labelled final.
+Network failures retry after backoff. No winner is guessed from an unfinished score.
+
+The shared cache is local to one process. Separate processes and restarts do not share its request budget.
+For three signs sharing a key, set every sign's interval to at least 2700 seconds. That totals 96 requests per day during continuous operation.
+Other clients share the same quota. Frequent restarts add requests, so leave headroom in the interval.
+
+A failed request keeps the cached score and marks it `STALE` on the panel.
+Backoff doubles from twice the interval, up to four hours. Authentication failures wait at least an hour, or longer when the interval requires it.
+At the default interval, result lookups can extend the live listing cadence to 30 minutes.
+This plugin keeps the same minimum interval for paid keys.
+
+### Sign checks
+
+The examples directory has separate demo and live configs for smallsign, bigsign and longboi.
+Use `config.tennis-demo.<sign>.toml` without a key, or `config.tennis-live.<sign>.toml` with `LIVETENNIS_API_KEY` in the environment.
+Validate the chosen file with `led-ticker validate <path>` before starting the sign.
+Check that `BP`, round labels and tournament names have separated letters. Check every score column stays inside the panel.
 
 ## Data
 

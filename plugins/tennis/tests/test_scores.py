@@ -2,6 +2,7 @@
 story building (live / upcoming fallback / nothing / rejected key)."""
 
 import unittest.mock as mock
+from datetime import datetime, timedelta
 
 from led_ticker.plugin import TickerMessage
 
@@ -47,6 +48,9 @@ class FakeSource:
     async def poll(self):
         self.polls += 1
         return self.snapshot
+
+    def remember_displayed(self, match_ids):
+        self.displayed = match_ids
 
 
 def _widget(snapshot=None, **kw):
@@ -124,7 +128,7 @@ class TestStart:
             w.feed_stories[0], TennisMatchCard
         )
 
-    async def test_config_key_beats_env(self, monkeypatch):
+    async def test_env_key_beats_config(self, monkeypatch):
         monkeypatch.setenv("LIVETENNIS_API_KEY", "ltapi_env")
         # explicit Mocks: patch.object would auto-AsyncMock the async
         # run_monitor_loop and leave an un-awaited coroutine behind.
@@ -136,7 +140,7 @@ class TestStart:
             ),
         ):
             w = await TennisScoreMonitor.start(mock.Mock(), api_key="ltapi_cfg")
-        assert w._source is not None and w._source.api_key == "ltapi_cfg"
+        assert w._source is not None and w._source.api_key == "ltapi_env"
 
     async def test_demo_needs_no_key_and_no_session(self, monkeypatch):
         monkeypatch.delenv("LIVETENNIS_API_KEY", raising=False)
@@ -188,7 +192,12 @@ class TestUpdate:
         assert len(w.feed_stories) == 1
 
     async def test_falls_back_to_upcoming_when_nothing_live(self):
-        upcoming = _row(id=7, status="upcoming", score=None)
+        upcoming = _row(
+            id=7,
+            status="upcoming",
+            score=None,
+            scheduled_time=(datetime.now(mod.UTC) + timedelta(days=1)).isoformat(),
+        )
         w = _widget(Snapshot(live=[], upcoming=[upcoming, COMPLETED_ROW]))
         await w.update()
         assert [c.match.match_id for c in w.feed_stories] == [7]

@@ -130,7 +130,9 @@ def _number_columns(m: MatchInfo, g: _Geom) -> list[tuple[str, str, str]]:
     if m.state == "upcoming":
         return []
     cols: list[tuple[str, str, str]] = []
-    if g.per_set_games:
+    if not m.games:
+        cols.append((str(m.sets[0]), str(m.sets[1]), "sets"))
+    elif g.per_set_games:
         cols.extend((str(a), str(b), "games") for a, b in m.games)
     else:
         cols.append((str(m.sets[0]), str(m.sets[1]), "sets"))
@@ -148,7 +150,7 @@ def _status_lines(m: MatchInfo, tz) -> list[tuple[str, object]]:
     lines: list[tuple[str, object]] = []
     if m.state == "upcoming":
         day, clock = format_start_time(m.start_time, tz)
-        lines.append((day or "NEXT", pal.AMBER))
+        lines.append(("STALE" if m.stale else day or "NEXT", pal.AMBER))
         lines.append((clock, pal.AMBER))
     else:
         label = status_label(m)
