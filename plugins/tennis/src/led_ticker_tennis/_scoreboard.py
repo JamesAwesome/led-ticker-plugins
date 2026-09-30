@@ -82,9 +82,7 @@ class TennisScoreboardMessage(FrameAwareBase):
                     cells.append((str(m.sets[side - 1]), num_c))
                 for a, b in m.games:
                     cells.append((str(a if side == 1 else b), num_c))
-                pts = (
-                    format_points(m.points, m.is_tiebreak) if m.state == "live" else ""
-                )
+                pts = format_points(m.points) if m.state == "live" else ""
                 if pts:
                     a, b = m.points
                     cells.append((str(a if side == 1 else b), pal.CYAN))
@@ -101,9 +99,12 @@ class TennisScoreboardMessage(FrameAwareBase):
             rows[0].append(
                 (_short_status(label), pal.WIN if m.state == "live" else pal.LABEL_HI)
             )
-            second = "TB" if (m.state == "live" and m.is_tiebreak) else m.round_code
-            if second:
-                rows[1].append((second, pal.TB if second == "TB" else pal.LABEL_HI))
+            if m.stale:  # under the state cell, in the round/TB slot
+                rows[1].append(("STALE", pal.AMBER))
+            elif m.state == "live" and m.is_tiebreak:
+                rows[1].append(("TB", pal.TB))
+            elif m.round_code:
+                rows[1].append((m.round_code, pal.LABEL_HI))
         return rows
 
     def draw(

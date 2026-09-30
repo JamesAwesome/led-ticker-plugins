@@ -9,6 +9,7 @@ collision surface; the flight/stocks precedent). Assertions are
 invariant-based, never exact freetype pins.
 """
 
+import dataclasses
 from datetime import datetime, timedelta
 
 import pytest
@@ -90,6 +91,17 @@ def test_worst_case_keeps_min_clearance(sign, request, monkeypatch):
 
 
 @pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_stale_worst_case_keeps_state_and_clearance(sign, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    m = dataclasses.replace(WORST, stale=True)
+    calls = _spy_extents(monkeypatch, canvas, m)
+    _assert_separated(calls, unwrap_to_real(canvas))
+    status = [c for c in calls if c[0] in ("SET 5", "STALE")]
+    assert [c[0] for c in status] == ["SET 5", "STALE"]
+    assert status[0][3] < status[1][3]  # the label sits under the state
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
 def test_every_state_keeps_min_clearance(sign, request, monkeypatch):
     canvas = request.getfixturevalue(sign)
     start = datetime.now(TZ) + timedelta(days=1)
@@ -100,6 +112,9 @@ def test_every_state_keeps_min_clearance(sign, request, monkeypatch):
         live_match(state="upcoming", games=[], points=(None, None), start_time=start),
         live_match(state="upcoming", games=[], points=(None, None), start_time=None),
         live_match(event_status="Interrupted"),
+        live_match(stale=True),
+        live_match(state="final", outcome="walkover", winner=2, games=[], stale=True),
+        live_match(state="upcoming", games=[], points=(None, None), stale=True),
         MatchInfo(),  # sparse: nothing known
     ]
     for m in cases:

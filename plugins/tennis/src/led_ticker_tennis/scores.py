@@ -220,7 +220,8 @@ class TennisScoreMonitor:
                 if m.state == "upcoming"
                 and (m.start_time is None or m.start_time > now)
             ]
-        matches.sort(key=lambda m: (m.state != "final", sort_key(m)))
+        # Matches in progress first; finished results fill the remaining slots.
+        matches.sort(key=lambda m: (m.state == "final", sort_key(m)))
         return matches[: max(1, self.max_matches)]
 
     def _load_demo(self) -> None:

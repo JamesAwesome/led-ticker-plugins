@@ -371,12 +371,56 @@ class TestResults:
         for _ in range(2):
             clock.t += 900
             snap = await source.poll()
-        assert snap.stale
         assert snap.recent[0]["status"] == "live"
         assert snap.recent[0]["_stale"] is True
         clock.t += source.seconds_until_allowed()
         await source.poll()
         assert session.urls.count(f"{DEFAULT_BASE_URL}/matches/1") == 1
+
+    async def test_resolved_matches_expire_and_can_be_looked_up_again(self):
+        final = {"id": 1, "status": "completed"}
+        session = FakeSession(
+            FakeResp(body=LIVE),
+            FakeResp(),
+            FakeResp(404),
+            FakeResp(body=LIVE),  # reappears within the TTL
+            FakeResp(),  # and vanishes again: no second lookup yet
+        )
+        source, clock = _source(session)
+        await source.poll()
+        source.remember_displayed([1])
+        for _ in range(4):
+            clock.t += 900
+            await source.poll()
+            source.remember_displayed([1])
+        assert session.urls.count(f"{DEFAULT_BASE_URL}/matches/1") == 1
+        assert set(source._resolved) == {1} and not source._pending
+        ttl = src.RESOLVED_TTL_INTERVALS * 900
+        clock.t += ttl
+        await source.poll()
+        assert source._resolved == {}
+        session.queue = [FakeResp(body=LIVE), FakeResp(), FakeResp(body=final)]
+        for _ in range(3):
+            clock.t += 900
+            await source.poll()
+            source.remember_displayed([1])
+        assert session.urls.count(f"{DEFAULT_BASE_URL}/matches/1") == 2
+
+    async def test_resolved_set_stays_bounded_over_a_long_run(self):
+        source, clock = _source(FakeSession())
+        for match_id in range(1, 500):
+            row = {"id": match_id, "status": "live"}
+            source.session.queue = [
+                FakeResp(body={"data": [row]}),
+                FakeResp(),
+                FakeResp(404),
+            ]
+            for _ in range(3):
+                await source.poll()
+                source.remember_displayed([match_id])
+                clock.t += 900
+        assert source.session.urls.count(f"{DEFAULT_BASE_URL}/matches/499") == 1
+        assert 1 <= len(source._resolved) <= src.RESOLVED_TTL_INTERVALS + 1
 
     @pytest.mark.parametrize("body", [{}, {"id": 2}, {"id": 1, "status": "junk"}])
     async def test_bad_detail_keeps_last_seen_match(self, body):
@@ -419,6 +463,15 @@ class TestSharedSource:
         assert len(session.calls) == 1
         assert all(s is snapshots[0] for s in snapshots)
         assert src.shared_source(session, "different", interval=900) is not first
+
+    def test_shared_sources_are_capped_least_recent_first(self):
+        session = FakeSession()
+        keep = src.shared_source(session, "key-0", interval=900)
+        for i in range(1, src._MAX_SHARED_SOURCES + 3):
+            src.shared_source(session, f"key-{i}", interval=900)
+            assert src.shared_source(session, "key-0", interval=900) is keep
+        assert len(src._SHARED_SOURCES) == src._MAX_SHARED_SOURCES
+        assert "key-1" not in src._SHARED_SOURCES
 
     def test_closed_session_is_replaced_without_resetting_gate(self):
         session = FakeSession()

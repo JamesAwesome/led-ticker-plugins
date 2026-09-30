@@ -41,6 +41,24 @@ def test_board_rows_tiebreak_final_upcoming():
     assert [t for t, _ in r2] == ["FILS", "TBD"]
 
 
+def test_board_rows_keep_the_state_when_stale():
+    r1, r2 = _build_scoreboard_message(live_match(stale=True), TZ)._rows()
+    assert r1[-1][0] == "S2" and r2[-1][0] == "STALE"
+    tb = live_match(games=[(6, 6)], points=("5", "6"), is_tiebreak=True, stale=True)
+    r1, r2 = _build_scoreboard_message(tb, TZ)._rows()
+    assert r1[-1][0] == "S1" and r2[-1][0] == "STALE"
+    fin = live_match(state="final", outcome="retired", winner=1, stale=True)
+    r1, r2 = _build_scoreboard_message(fin, TZ)._rows()
+    assert r1[-1][0] == "RET" and r2[-1][0] == "STALE"
+
+
+def test_stale_board_still_fits(smallsign):
+    msg = _build_scoreboard_message(live_match(stale=True), TZ)
+    _, cursor = msg.draw(smallsign, 0)
+    assert cursor == 160
+    assert all(x < 160 for x, _ in lit(smallsign))
+
+
 def test_board_draws_both_bands_and_returns_width(smallsign):
     msg = _build_scoreboard_message(live_match(), TZ)
     _, cursor = msg.draw(smallsign, 0)

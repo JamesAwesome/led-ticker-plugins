@@ -40,17 +40,17 @@ class TestSurname:
 
 class TestFormatPoints:
     def test_game_points(self):
-        assert format_points(("15", "40"), False) == "15-40"
+        assert format_points(("15", "40")) == "15-40"
 
     def test_tiebreak_points_are_plain_numbers(self):
-        assert format_points(("6", "6"), True) == "6-6"
+        assert format_points(("6", "6")) == "6-6"
 
     def test_null_side_renders_nothing(self):
-        assert format_points((None, None), False) == ""
-        assert format_points(("40", None), False) == ""
+        assert format_points((None, None)) == ""
+        assert format_points(("40", None)) == ""
 
     def test_malformed_tuple(self):
-        assert format_points(("40",), False) == ""  # type: ignore[arg-type]
+        assert format_points(("40",)) == ""  # type: ignore[arg-type]
 
 
 class TestBreakPoint:
@@ -120,6 +120,10 @@ class TestStatusLabel:
     )
     def test_final_outcomes(self, outcome, want):
         assert status_label(live_match(state="final", outcome=outcome)) == want
+
+    def test_staleness_does_not_replace_the_state(self):
+        assert status_label(live_match(stale=True)) == "SET 2"
+        assert status_label(live_match(state="final", stale=True)) == "FINAL"
 
     def test_upcoming_is_blank(self):
         assert status_label(live_match(state="upcoming")) == ""

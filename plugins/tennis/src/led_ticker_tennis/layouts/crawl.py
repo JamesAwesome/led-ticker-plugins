@@ -67,15 +67,13 @@ def segments(
         day, clock = format_start_time(m.start_time, tz)
         segs.append(("·", pal.LABEL))
         segs.append((f"{day} {clock}".strip(), pal.AMBER))
-        if m.stale:
-            segs.append(("STALE", pal.AMBER))
     else:
         games = " ".join(f"{a}-{b}" for a, b in m.games)
         if not games and m.state == "final":
             games = f"{m.sets[0]}-{m.sets[1]} sets"
         if games:
             segs.append((games, pal.AMBER))
-        pts = format_points(m.points, m.is_tiebreak) if m.state == "live" else ""
+        pts = format_points(m.points) if m.state == "live" else ""
         if pts:
             segs.append((f"({pts})", pal.CYAN))
         if m.state == "live" and is_break_point(m.points, m.server, m.is_tiebreak):
@@ -84,6 +82,8 @@ def segments(
         segs.append((status_label(m), pal.WIN if m.state == "live" else pal.LABEL_HI))
         if m.state == "live" and m.is_tiebreak:
             segs.append(("TB", pal.TB))
+    if m.stale:
+        segs.append(("STALE", pal.AMBER))
     tail = " ".join(t for t in (m.round_code, m.tournament.upper()) if t)
     if tail:
         segs.append(("·", pal.LABEL))

@@ -46,6 +46,18 @@ def test_final_and_upcoming_wording():
     ]
 
 
+def test_stale_is_shown_beside_the_state():
+    t = _texts(live_match(stale=True))
+    assert t[t.index("SET 2") + 1] == "STALE"
+    tb = _texts(live_match(games=[(6, 6)], is_tiebreak=True, stale=True))
+    assert tb[tb.index("SET 1") :][:3] == ["SET 1", "TB", "STALE"]
+    fin = _texts(live_match(state="final", outcome="retired", winner=1, stale=True))
+    assert fin[fin.index("RET") + 1] == "STALE"
+    up = live_match(state="upcoming", games=[], points=(None, None), stale=True)
+    assert "STALE" in _texts(up)
+    assert "STALE" not in _texts(live_match())
+
+
 def test_show_ranking_appends_rank():
     assert _texts(live_match(), show_ranking=True)[0] == "LEHECKA (21)"
     assert _texts(live_match(p1_rank=None), show_ranking=True)[0] == "LEHECKA"

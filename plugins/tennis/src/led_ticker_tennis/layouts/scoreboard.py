@@ -140,13 +140,14 @@ def _number_columns(m: MatchInfo, g: _Geom) -> list[tuple[str, str, str]]:
         cols.append((str(ga), str(gb), "games"))
     if m.state == "live":
         a, b = m.points
-        if format_points(m.points, m.is_tiebreak):
+        if format_points(m.points):
             cols.append((str(a), str(b), "points"))
     return cols
 
 
 def _status_lines(m: MatchInfo, tz) -> list[tuple[str, object]]:
-    """Up to three right-aligned lines: state, round-or-time, tournament."""
+    """Up to three right-aligned lines: state, round-or-time, tournament.
+    A stale match shows `STALE` on the second line, under its state."""
     lines: list[tuple[str, object]] = []
     if m.state == "upcoming":
         day, clock = format_start_time(m.start_time, tz)
@@ -155,7 +156,9 @@ def _status_lines(m: MatchInfo, tz) -> list[tuple[str, object]]:
     else:
         label = status_label(m)
         lines.append((label, pal.WIN if m.state == "live" else pal.LABEL_HI))
-        if m.state == "live" and m.is_tiebreak:
+        if m.stale:  # beside the state, in the round/TB slot
+            lines.append(("STALE", pal.AMBER))
+        elif m.state == "live" and m.is_tiebreak:
             lines.append(("TB", pal.TB))
         else:
             lines.append((m.round_code, pal.LABEL_HI))

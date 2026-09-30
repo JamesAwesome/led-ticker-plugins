@@ -99,12 +99,12 @@ Every request waits at least 900 seconds after the previous request. This allows
 The smallest configured interval wins, with a 900-second floor. Listings and result lookups use the same request slots.
 There is no extra startup request. An empty live listing sends the next poll to the upcoming listing.
 
-When a displayed match disappears, its last score stays visible with a `STALE` label.
+When a displayed match disappears, its last score and state stay visible with a `STALE` label beside them.
 The source queues a free `GET /matches/{matchId}` lookup, alternating result lookups with live polls.
-A completed response supplies the final score, outcome and winner. Finished matches take priority for two intervals before leaving the rotation.
+A completed response supplies the final score, outcome and winner. Finished matches stay in the rotation for two intervals, after any live matches. When `max_matches` is smaller than the live count, finished matches are left out.
 
-A successful lookup is cached and never repeated during that process lifetime.
-Missing detail responses show the last score as stale. A match that still reports live is never labelled final.
+A match that was looked up is not looked up again for four intervals, even if it briefly reappears.
+A 404 or 410 lookup keeps the last score as stale. It does not mark other matches stale or lengthen the backoff. A match that still reports live is never labelled final.
 Network failures retry after backoff. No winner is guessed from an unfinished score.
 
 The shared cache is local to one process. Separate processes and restarts do not share its request budget.

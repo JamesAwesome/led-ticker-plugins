@@ -85,12 +85,13 @@ def surname(name: str) -> str:
     return parts[-1] if parts else s
 
 
-def format_points(points: tuple[str | None, str | None], _is_tiebreak: bool) -> str:
-    """ "15-40" during a game, "6-6" during a tiebreak, "" when unknown.
+def format_points(points: tuple[str | None, str | None]) -> str:
+    """The two point strings joined as they arrive ("15-40", or "6-6" in a
+    tiebreak), "" when either side is missing.
 
-    Points are strings on the wire ("0"/"15"/"30"/"40"/"AD", or plain
-    integer strings in a tiebreak); a missing/None side renders nothing
-    rather than a half score, since "40-" reads as a defect on the panel.
+    No tiebreak handling is needed: the wire already sends game points and
+    tiebreak counts as display strings. A half score ("40-") would read as
+    a defect on the panel, so it renders nothing.
     """
     a, b = points if len(points) == 2 else (None, None)
     if a is None or b is None:
@@ -137,9 +138,10 @@ _OUTCOME_LABELS: dict[str, str] = {
 def status_label(m: MatchInfo) -> str:
     """The one-word match state: "SET 2" / "SUSP" for live, "FINAL" /
     "RET" / "W/O" / "DEF" / "ABD" / "CANC" for a finished match, "" for an
-    upcoming one (the renderers show the start time instead)."""
-    if m.stale:
-        return "STALE"
+    upcoming one (the renderers show the start time instead).
+
+    Staleness is not a state: renderers add a separate `STALE` label next
+    to this one when `m.stale` is set."""
     if m.state == "live":
         if m.event_status.lower() == "interrupted":
             return "SUSP"
@@ -170,7 +172,7 @@ def format_start_time(dt: datetime | None, tz: ZoneInfo) -> tuple[str, str]:
 def score_line(m: MatchInfo) -> str:
     """ "6-4 3-4 (15-40)" — the tennis-notation one-liner for the ticker."""
     parts = [f"{a}-{b}" for a, b in m.games]
-    pts = format_points(m.points, m.is_tiebreak)
+    pts = format_points(m.points)
     if m.state == "live" and pts:
         parts.append(f"({pts})")
     return " ".join(parts)

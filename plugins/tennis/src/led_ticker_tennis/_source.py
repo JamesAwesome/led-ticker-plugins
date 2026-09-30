@@ -26,6 +26,8 @@ FREE_KEY_URL = "https://livetennisapi.com/subscribe/free"
 MIN_UPDATE_INTERVAL = 900  # seconds — 96 requests/day on a 100/day quota
 MAX_BACKOFF = 4 * 3600
 KEY_REJECTED_BACKOFF = 3600
+RESOLVED_TTL_INTERVALS = 4  # a looked-up match is not looked up again for this long
+_MAX_SHARED_SOURCES = 8  # distinct API keys kept per process (hot reloads add keys)
 REQUEST_TIMEOUT = 20  # seconds, whole request
 LIVE_LIMIT = 200  # API maximum per page
 UPCOMING_LIMIT = 100
@@ -93,7 +95,7 @@ class LiveTennisSource:
         self._lock = asyncio.Lock()
         self._watched: dict[int, dict[str, Any]] = {}
         self._pending: dict[int, dict[str, Any]] = {}
-        self._resolved: set[int] = set()
+        self._resolved: dict[int, float] = {}  # match id -> expiry (monotonic)
         self._recent: dict[int, tuple[dict[str, Any], float]] = {}
         self._last_was_detail = False
 
@@ -108,6 +110,7 @@ class LiveTennisSource:
     def _refresh_recent(self) -> None:
         now = self._clock()
         self._recent = {k: v for k, v in self._recent.items() if v[1] > now}
+        self._resolved = {k: t for k, t in self._resolved.items() if t > now}
         self.snapshot.recent = [row for row, _ in self._recent.values()] + [
             {**row, "_stale": True} for row in self._pending.values()
         ]
@@ -175,6 +178,10 @@ class LiveTennisSource:
         limit = LIVE_LIMIT if kind == "live" else UPCOMING_LIMIT
         return f"{self.base_url}/matches?status={kind}&limit={limit}"
 
+    def _resolve(self, match_id: int) -> None:
+        ttl = RESOLVED_TTL_INTERVALS * self.interval
+        self._resolved[match_id] = self._clock() + ttl
+
     def _fail(self, message: str, *, retry_after: int | None = None) -> None:
         snap = self.snapshot
         snap.stale = True
@@ -215,10 +222,17 @@ class LiveTennisSource:
                     )
                     return False
                 if match_id is not None and status in (404, 410):
+                    # The normal answer for a match the API no longer serves,
+                    # not a failure: keep the last-seen row, stop asking, and
+                    # leave staleness and backoff alone for the other matches.
                     row = {**self._pending.pop(match_id), "_stale": True}
                     self._recent[match_id] = (row, self._clock() + 2 * self.interval)
-                    self._resolved.add(match_id)
-                    self._fail(f"match detail unavailable (HTTP {status})")
+                    self._resolve(match_id)
+                    logger.info(
+                        "tennis: match %d detail unavailable (HTTP %d)",
+                        match_id,
+                        status,
+                    )
                     return False
                 if status >= 400:
                     self._fail(f"HTTP {status} from {url}")
@@ -242,7 +256,7 @@ class LiveTennisSource:
                 self._fail("unknown match status")
                 return False
             self._pending.pop(match_id, None)
-            self._resolved.add(match_id)
+            self._resolve(match_id)
             row = {**body, "_stale": body["status"] in ("live", "upcoming")}
             self._recent[match_id] = (row, self._clock() + 2 * self.interval)
             snap.stale = False
@@ -273,15 +287,22 @@ _SHARED_SOURCES: dict[str, LiveTennisSource] = {}
 
 
 def shared_source(session: Any, api_key: str, *, interval: int) -> LiveTennisSource:
-    """Keep one snapshot and request gate per key in this process."""
-    source = _SHARED_SOURCES.get(api_key)
+    """Keep one snapshot and request gate per key in this process.
+
+    Core has no per-widget teardown hook, so entries are not released when a
+    widget goes away. The map is keyed by API key and capped: past
+    `_MAX_SHARED_SOURCES` keys, the least recently requested one is dropped.
+    """
+    source = _SHARED_SOURCES.pop(api_key, None)
     if source is None:
         source = LiveTennisSource(session, api_key, interval=interval)
-        _SHARED_SOURCES[api_key] = source
     else:
         source.interval = min(source.interval, clamp_interval(interval))
         if getattr(source.session, "closed", False) is True:
             source.session = session
+    _SHARED_SOURCES[api_key] = source
+    while len(_SHARED_SOURCES) > _MAX_SHARED_SOURCES:
+        del _SHARED_SOURCES[next(iter(_SHARED_SOURCES))]
     return source
 
 

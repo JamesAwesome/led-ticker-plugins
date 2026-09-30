@@ -61,12 +61,17 @@ one source in the process. Its lock and 900-second floor cover listings and
 result lookups. One poll makes at most one request, including startup.
 Only displayed matches enter the result queue. Detail lookups alternate with
 live polls and completed results remain visible for two intervals.
-Successful lookups are cached for the process lifetime. Separate processes
-and restarts do not share this cache. The README describes their quota cost.
+A looked-up match is not looked up again for four intervals (`_resolved`
+expires). A 404/410 lookup is an answer, not a failure: it never calls
+`_fail()`, so it leaves `snap.stale` and backoff alone. Live matches sort
+ahead of finished ones. `_SHARED_SOURCES` is capped at eight keys, since core
+has no per-widget teardown hook. Separate processes and restarts do not share
+this cache. The README describes their quota cost.
 
 **Failure handling**: failed requests retain cached data and mark it stale.
 Backoff starts at twice the interval and doubles, capped at four hours.
-Rejected keys wait at least an hour. Stale scores carry a visible label.
+Rejected keys wait at least an hour. Stale scores carry a visible `STALE`
+label beside the state (`SET 2`), never in place of it.
 Never infer a final result or winner from a match disappearing.
 
 **Break point rule** (`_models.is_break_point`): receiver at AD, or receiver at 40 while
