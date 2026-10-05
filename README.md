@@ -6,8 +6,8 @@
 The official first-party plugin pack for [led-ticker](https://github.com/JamesAwesome/led-ticker) — the
 asyncio toolkit that drives Adafruit RGB Matrix HAT / HUB75 LED panels from a Raspberry Pi.
 These plugins add live data and effects to your sign: current **weather**, **RSS/Atom**
-headlines, **cryptocurrency** prices, **calendar** agendas, **MLB** scores, **pool**
-water-temperature, and homage **sprite-trail transitions**. Developed together in one uv
+headlines, **cryptocurrency** prices, **calendar** agendas, **MLB** scores, **live tennis**
+scores, **pool** water-temperature, and homage **sprite-trail transitions**. Developed together in one uv
 workspace and **distributed per-plugin** so you install only what you want.
 
 ## Install a plugin
@@ -28,6 +28,7 @@ pip install led-ticker-<name>   # e.g. pip install led-ticker-weather
 | Calendar | `led-ticker-calendar` | `calendar.events` | iCalendar (`.ics`) URL |
 | Baseball / MLB | `led-ticker-baseball` | `baseball.scores`, `.standings`, `.promotions`, `.statcast`, `.attendance` | MLB Stats API |
 | Pool | `led-ticker-pool` | `pool.monitor` | InfluxDB v2 |
+| Tennis | `led-ticker-tennis` | `tennis.scores` | [Live Tennis API](https://livetennisapi.com) free tier (maintained by the API's vendor) |
 | Flair | `led-ticker-flair` | sprite-trail transitions `nyancat.*`, `pokeball.*`, `pacman.*`, `sailor_moon.*` (+ `:pokeball.ball:` emoji) | bundled sprite artwork |
 
 ## Develop
@@ -52,7 +53,7 @@ The `led-ticker-flair` pack (`nyancat`, `pokeball`, `pacman`, `sailor_moon`)
 contains **unofficial fan homages** — the character names/designs and any bundled
 sprite artwork belong to their respective owners and are **not** covered by this
 project's license. See [NOTICE.md](NOTICE.md) for details. The data plugins
-(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`) are original
+(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `tennis`) are original
 works.
 
 ## License

@@ -1,0 +1,45 @@
+# led-ticker-tennis — live tennis scores.
+#
+# Minimal, runnable example: a smallsign-shaped config with a single
+# `tennis.scores` widget. Copy the [[playlist.section.widget]] block into
+# your own config.toml, or point --config at this file directly to try it.
+#
+# The widget auto-registers via the `led_ticker.plugins` entry point once
+# `led-ticker-tennis` is installed — no [plugins] config change is needed.
+# Put your free key in the environment: LIVETENNIS_API_KEY=ltapi_...
+# (https://livetennisapi.com/subscribe/free). Set `demo = true` to render
+# fixture matches with no key and no network.
+
+[display]
+rows = 16
+cols = 32
+chain_length = 5
+parallel = 1
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 2
+
+[[playlist.section]]
+
+[[playlist.section.widget]]
+type = "tennis.scores"
+
+# Tours to show; omit for every tour. Any of "atp", "wta", "challenger",
+# "itf", "juniors". Filtered locally — costs no extra API requests.
+tours = ["atp", "wta"]
+
+# "all" | "singles" | "doubles". Default "all".
+draw = "all"
+
+# "auto" | "ticker" | "scoreboard". auto -> ticker on a scale-1 sign, held
+# scoreboard on scale>1 (bigsign, longboi). Default "auto".
+layout = "auto"
+
+# IANA timezone for fixture start times. Default "America/New_York".
+timezone = "America/New_York"
+
+# Seconds between API polls. Floored at 900 (the free tier is 100
+# requests/day) whatever you set here. Default 900.
+update_interval = 900
+
+# demo = true
