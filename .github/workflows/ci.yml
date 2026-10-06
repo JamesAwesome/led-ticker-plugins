@@ -93,8 +93,38 @@ jobs:
         working-directory: led-ticker-plugins
         run: uv run pytest plugins/${{ matrix.member }} --cov=plugins/${{ matrix.member }}/src --cov-report=term-missing
 
+  # The repo-root tests/ dir (versioning + release-guard tripwires) is NOT part
+  # of the per-member matrix — those tests are about the workspace as a whole, so
+  # they run once here rather than 12x. Before this job existed they ran NOWHERE
+  # in CI, which is how test_versions_are_tag_scoped rotted unnoticed while this
+  # workflow carried a comment claiming fetch-depth: 0 existed to serve it.
+  root-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          # Tags required: test_versioning.py compares each plugin's installed
+          # version against its own `<plugin>-v*` tags.
+          fetch-depth: 0
+          path: led-ticker-plugins
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+      - name: Sync workspace
+        working-directory: led-ticker-plugins
+        run: uv sync --extra dev
+      - name: Ruff check
+        working-directory: led-ticker-plugins
+        run: uv run ruff check tests
+      - name: Ruff format check
+        working-directory: led-ticker-plugins
+        run: uv run ruff format --check tests
+      - name: Test
+        working-directory: led-ticker-plugins
+        run: uv run pytest tests
+
   ci-passed:
-    needs: check
+    needs: [check, root-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -102,4 +132,7 @@ jobs:
           if [ "${{ needs.check.result }}" != "success" ]; then
             echo "matrix check did not succeed: ${{ needs.check.result }}"; exit 1
           fi
-          echo "all member checks passed"
+          if [ "${{ needs.root-tests.result }}" != "success" ]; then
+            echo "root tests/ did not succeed: ${{ needs.root-tests.result }}"; exit 1
+          fi
+          echo "all member checks + root tests passed"

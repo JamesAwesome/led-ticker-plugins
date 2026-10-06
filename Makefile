@@ -4,14 +4,14 @@ dev:
 	uv sync --extra dev
 
 test:
-	uv run pytest plugins $(foreach m,$(wildcard plugins/*/src),--cov=$(m)) --cov-report=term-missing
+	uv run pytest plugins tests $(foreach m,$(wildcard plugins/*/src),--cov=$(m)) --cov-report=term-missing
 
 lint:
-	uv run ruff check plugins
+	uv run ruff check plugins tests
 	uv run pyright plugins/*/src
 
 format:
-	uv run ruff format plugins
+	uv run ruff format plugins tests
 
 format-check:
-	uv run ruff format --check plugins
+	uv run ruff format --check plugins tests

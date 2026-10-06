@@ -4,13 +4,22 @@ from pathlib import Path
 
 from scripts.check_release import resolve
 
-PUBLISHABLE = ["pool", "baseball", "crypto", "calendar", "rss", "weather", "flair", "telnet"]
+PUBLISHABLE = [
+    "pool",
+    "baseball",
+    "crypto",
+    "calendar",
+    "rss",
+    "weather",
+    "flair",
+    "telnet",
+]
 
 
 def _mk(tmp_path: Path, plugin: str) -> str:
     d = tmp_path / "plugins" / plugin
     d.mkdir(parents=True)
-    (d / "pyproject.toml").write_text('[project]\nname = "led-ticker-%s"\n' % plugin)
+    (d / "pyproject.toml").write_text(f'[project]\nname = "led-ticker-{plugin}"\n')
     return str(tmp_path / "plugins")
 
 
@@ -66,13 +75,19 @@ def test_cli_exit_codes(tmp_path):
     root = _mk(tmp_path, "pool")
     ok = subprocess.run(
         [sys.executable, "scripts/check_release.py", latest_pool, root],
-        capture_output=True, text=True)
+        capture_output=True,
+        text=True,
+    )
     bad = subprocess.run(
         [sys.executable, "scripts/check_release.py", "bogus-v1.0.0", root],
-        capture_output=True, text=True)
+        capture_output=True,
+        text=True,
+    )
     stale = subprocess.run(
         [sys.executable, "scripts/check_release.py", "pool-v0.0.1", root],
-        capture_output=True, text=True)
+        capture_output=True,
+        text=True,
+    )
     assert ok.returncode == 0 and ok.stdout.strip().endswith("pool"), ok.stderr
     assert bad.returncode == 1
     assert stale.returncode == 1 and "order" in stale.stderr
@@ -80,7 +95,7 @@ def test_cli_exit_codes(tmp_path):
 
 # --- Release order guard (v4.16.1/v4.17.0 core incident, 2026-07-16) -------
 
-from scripts.check_release import check_release_order
+from scripts.check_release import check_release_order  # noqa: E402
 
 
 def _ancestry(pairs):
@@ -100,16 +115,12 @@ def test_order_ok_newer_version_newer_commit():
 
 
 def test_order_incident_lower_version_fails():
-    err = check_release_order(
-        "stocks-v0.6.1", ["stocks-v0.6.2"], _ancestry(set())
-    )
+    err = check_release_order("stocks-v0.6.1", ["stocks-v0.6.2"], _ancestry(set()))
     assert err is not None and "0.6.2" in err
 
 
 def test_order_mirror_higher_version_older_commit_fails():
-    err = check_release_order(
-        "stocks-v0.7.0", ["stocks-v0.6.2"], _ancestry(set())
-    )
+    err = check_release_order("stocks-v0.7.0", ["stocks-v0.6.2"], _ancestry(set()))
     assert err is not None and "ancestor" in err
 
 
