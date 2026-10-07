@@ -27,9 +27,14 @@ from led_ticker.plugin import (
 
 from led_ticker_weather.palette import LABEL, RGB
 
-# Thin Inter strokes drop out at the default 128 threshold on small sizes;
-# 80 is the documented thin-font value (core CLAUDE.md `font_threshold`).
-_HIRES_THRESHOLD = 80
+# The default 128. An earlier 80 here was inherited from the pack's
+# thin-font guidance (core CLAUDE.md `font_threshold`), but nothing in
+# this plugin paints Inter-Regular — `hires()` defaults to bold and no
+# call site overrides it. At 80 bold ink grows wider than its own
+# advance, so adjacent glyphs merged: the hero location rendered
+# "BOSTON" as 2 ink blobs at size 9 and 4 at size 11, where 6 is
+# correct. See tests/test_glyph_separation.py.
+_HIRES_THRESHOLD = 128
 
 
 def js_round(v: float) -> int:
