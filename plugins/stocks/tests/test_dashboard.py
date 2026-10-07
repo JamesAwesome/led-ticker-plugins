@@ -248,29 +248,69 @@ def test_hero_symbol_shrinks_to_clear_price_block():
 def test_watch_row_symbol_and_pct_never_overlap():
     """REGRESSION (hardware, longboi): the watch column drew a 7-char pair +
     its right-aligned pct with no collision guard — 'EUR/USD' and '-0.2%'
-    touched/overlapped. The shared row size must fit both in the column."""
-    from led_ticker_stocks._paint import text_width
-    from led_ticker_stocks.layouts.dashboard import (
-        _WATCH_GAP,
-        _WATCH_SIZES,
-        _fit_watch_size,
-    )
+    touched/overlapped. The row is Spleen (monospace 6px) now, so the only
+    knob is the pct's precision: full 2-decimal pct when it fits beside the
+    symbol, integer pct when it would not."""
+    from led_ticker_stocks._paint import spleen_width
+    from led_ticker_stocks.layouts.dashboard import _WATCH_GAP, _fit_watch_pct
 
     col = 74  # 512 - 434 - _MARGIN, the real longboi watch column
-    for sym, pv in [
-        ("EUR/USD", "−0.20%"),
-        ("EUR/USD", "−10.55%"),
-        ("BTC/USD", "−1.17%"),
-    ]:
-        size = _fit_watch_size(sym, pv, col)
-        used = (
-            text_width(size, sym, bold=True)
-            + _WATCH_GAP
-            + text_width(size, pv, bold=False)
-        )
-        assert used <= col or size == _WATCH_SIZES[-1]
-    # Short equity rows keep the design size.
-    assert _fit_watch_size("AAPL", "−0.69%", col) == _WATCH_SIZES[0]
+    for sym, pct in [("EUR/USD", -0.20), ("EUR/USD", -10.55), ("BTC/USD", -1.17)]:
+        pv = _fit_watch_pct(sym, pct, col)
+        assert spleen_width(sym) + _WATCH_GAP + spleen_width(pv) <= col, (sym, pv)
+    # Short equity rows keep full precision.
+    assert _fit_watch_pct("AAPL", -0.69, col) == "\u22120.69%"
+    # A 7-char pair degrades precision, never the symbol.
+    assert _fit_watch_pct("EUR/USD", -10.55, col) == "\u221211%"
+
+
+def test_watch_row_glyphs_render_distinct():
+    """The watch rows used to paint Inter-Bold at 8–10px, where even the
+    right threshold leaves `NVDA` as 1–3 blobs of 4. Spleen at its native
+    12px rasterizes 1-bit exact: every glyph is its own ink blob."""
+    real = HeadlessBackend(512, 64).create_canvas()
+    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    quotes = _quotes()
+    syms = list(quotes)
+    draw_dashboard_story(
+        canvas,
+        quotes[syms[0]],
+        MarketState.OPEN,
+        quotes,
+        syms,
+        focus_index=0,
+        total=len(syms),
+        frame=0,
+    )
+    # Watch row 0 is syms[1]; its band is rows 6..13 (8-row Spleen caps).
+    lit = {
+        (x, y)
+        for y in range(4, 20)
+        for x in range(430, 512)
+        if real.get_pixel(x, y) != (0, 0, 0)
+    }
+    neighbours = ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
+    remaining, blobs = set(lit), 0
+    while remaining:
+        blobs += 1
+        stack = [remaining.pop()]
+        while stack:
+            x, y = stack.pop()
+            for dx, dy in neighbours:
+                n = (x + dx, y + dy)
+                if n in remaining:
+                    remaining.discard(n)
+                    stack.append(n)
+    sym = syms[1]
+    pct_glyphs = len(_fmt_pct_for(quotes[sym]))
+    # Each glyph is at least one blob (`%` is three); fewer means fusion.
+    assert blobs >= len(sym) + pct_glyphs, (sym, blobs)
+
+
+def _fmt_pct_for(q):
+    from led_ticker_stocks.layouts.dashboard import _fit_watch_pct
+
+    return _fit_watch_pct(q.sym, q.pct, 74)
 
 
 def test_watch_row_renders_separated_pixels():

@@ -70,12 +70,12 @@ def _subst(text: str) -> str:
     return text
 
 
-# Inter's default rasterization threshold (128 = 50% coverage) drops thin
-# glyph strokes at small pixel sizes — the "1" digit loses its stem and "0"s
-# break up on the change line / watch column / PREV. A lower threshold keeps
-# sub-50%-coverage edge pixels so small glyphs render whole. 80 is the
-# documented value for thin fonts (core CLAUDE.md `font_threshold`).
-_HIRES_THRESHOLD = 80
+# No rasterization threshold is passed anywhere in this module: core defaults
+# it PER FONT (led-ticker-core >= 4.30 — Inter-Bold 128, Inter-Regular 80).
+# This pack used to pin 80 for both weights, copied from the thin-font
+# guidance that protects Regular's hairlines; at 80, Bold ink outgrows its
+# own advance and adjacent letters fuse — MSFT/NVDA/TSLA rendered as blobs
+# in the dashboard's watch column. See tests/test_glyph_separation.py.
 
 
 def hires(
@@ -84,18 +84,14 @@ def hires(
     """Paint Inter `text` at physical (x, y_top); return the ADVANCE width in
     physical px (NOT end-x — call sites do `x += hires(...) + gap`)."""
     text = _subst(text)
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 
 
 def right_align_x(
     size: int, text: str, real_width: int, margin: int, *, bold: bool = True
 ) -> int:
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return real_width - measure_width(font, _subst(text), _PROBE) - margin
 
 
@@ -110,11 +106,35 @@ def text_width(size: int, text: str, *, bold: bool = True) -> int:
     `measure_width` is now core's public surface (promoted from this exact
     pattern, stocks #54)."""
     return hires_text_width(
-        _subst(text),
-        size,
-        font="Inter-Bold" if bold else "Inter-Regular",
-        threshold=_HIRES_THRESHOLD,
+        _subst(text), size, font="Inter-Bold" if bold else "Inter-Regular"
     )
+
+
+# Spleen pixel font for the dashboard's watch rows. Below ~11px Inter is
+# unreadable at ANY threshold (even Bold at 128 leaves NVDA at 1-3 blobs of
+# 4), and the ~72px watch column can't hold a readable Inter size beside a
+# 7-char pct. Spleen at its native 12px rasterizes 1-bit exact — no
+# antialiasing, no fusion — with a fixed 6px advance, so a row's width is
+# arithmetic. Uppercase, digits, `%` and `.` paint 8 rows with ink-top AT
+# the passed y_top (ascent 9, bearing 8 -> the `- 1`), as measured for the
+# weather pack's strip labels.
+_SPLEEN = "spleen-6x12"
+_SPLEEN_SIZE = 12
+_SPLEEN_ADVANCE = 6
+
+
+def spleen_width(text: str) -> int:
+    """Physical advance of `text` in the watch-row pixel font."""
+    return _SPLEEN_ADVANCE * len(_subst(text))
+
+
+def spleen(shim, text: str, x: int, y_top: int, color: Color) -> int:
+    """Paint `text` in Spleen with its ink-top at physical (x, y_top);
+    return the advance. Applies the same U+2212 substitution as `hires()` —
+    Spleen has no MINUS SIGN glyph either."""
+    font = resolve_font(_SPLEEN, _SPLEEN_SIZE)
+    draw_text(shim, font, _subst(text), x, y_top + font.ascent - 1, color)
+    return spleen_width(text)
 
 
 def px(real, x: int, y: int, color: Color) -> None:
