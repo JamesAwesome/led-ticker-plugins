@@ -37,7 +37,7 @@ The entry-point name `stocks` is the plugin namespace, so the config types are
 
 ## Commands
 
-`led-ticker-core` resolves from PyPI (`>=4.9`) like any other dependency — no sibling
+`led-ticker-core` resolves from PyPI (`>=4.30`, for the per-font hi-res threshold default `_paint.hires()` relies on) like any other dependency — no sibling
 checkout, no `[tool.uv.sources]`, no deploy key. Tests that need a headless canvas obtain
 one via `HeadlessBackend(...).create_canvas()` from `led_ticker.plugin` — no rgbmatrix stub
 on the path.
