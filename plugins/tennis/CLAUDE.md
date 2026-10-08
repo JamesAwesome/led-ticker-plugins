@@ -27,7 +27,7 @@ uv run ruff check plugins/tennis && uv run ruff format --check plugins/tennis
 uv run pyright plugins/tennis/src
 ```
 
-Python **3.14+** only. `led-ticker-core >= 4.16` (`hires_text_width` / `fit_text_size`).
+Python **3.14+** only. `led-ticker-core >= 4.30` (per-font hi-res threshold default; `_paint.hires()` passes none). `hires_text_width` / `fit_text_size` date from 4.16.
 
 ## Package layout
 

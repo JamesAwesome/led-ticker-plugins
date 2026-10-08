@@ -31,7 +31,7 @@ names are all `baseball.<name>` (see `register()` in `__init__.py`).
 
 ## Commands
 
-`led-ticker-core` resolves from PyPI (`>=2.1`) like any other dependency — no sibling
+`led-ticker-core` resolves from PyPI (`>=4.30`, for the per-font hi-res threshold default `_paint.hires()` relies on) like any other dependency — no sibling
 checkout, no `[tool.uv.sources]`, no deploy key. (To co-develop against an unreleased
 engine, add it editable on top: `uv pip install -e ../../../led-ticker`, assuming led-ticker and led-ticker-plugins are checked out as siblings.) Tests
 that need a real headless canvas obtain one via `HeadlessBackend(...).create_canvas()` from

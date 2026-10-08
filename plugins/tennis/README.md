@@ -6,7 +6,7 @@ Live tennis scores — ATP, WTA, Challenger, ITF and juniors — for [led-ticker
 
 ## Prerequisites
 
-- A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install (`led-ticker-core >= 4.16`).
+- A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install (`led-ticker-core >= 4.30`).
 - A Live Tennis API key — free at <https://livetennisapi.com/subscribe/free>. Put it in the environment as `LIVETENNIS_API_KEY` (recommended) or in the widget config as `api_key`.
 - Internet access on the Pi.
 

@@ -133,12 +133,13 @@ palette values should be reading it, not guessing.
 
 ## Commands
 
-`led-ticker-core` resolves from PyPI (`>=4.27`); no sibling checkout or
-`[tool.uv.sources]`. The floor is 4.27, not merely "whatever ships the forecast hero's
-standard-pack emoji slugs" — `sun_behind_large_cloud` / `sun_behind_rain_cloud` (used by
-the "big"/"long" hero layouts) only exist in core >= 4.21, and `draw_emoji_at` on an older
-core raises `KeyError` for them; 4.27 is the version this suite actually validates
-against. Tests obtain a canvas via `HeadlessBackend(...).create_canvas()` from
+`led-ticker-core` resolves from PyPI (`>=4.30`); no sibling checkout or
+`[tool.uv.sources]`. The floor is 4.30 for the per-font hi-res threshold default
+(`paint.hires()` passes no threshold and relies on core resolving Inter-Bold at 128 — an
+older core would hand it 128 for Regular too, but more to the point this suite validates
+against 4.30). Earlier floors each had a reason too: `sun_behind_large_cloud` /
+`sun_behind_rain_cloud` (used by the "big"/"long" hero layouts) only exist in core >= 4.21,
+and `draw_emoji_at` on an older core raises `KeyError` for them. Tests obtain a canvas via `HeadlessBackend(...).create_canvas()` from
 `led_ticker.plugin` (shipped in led-ticker-core ≥ 2.1); no rgbmatrix stub on the path. Run
 tooling from the repo root:
 
