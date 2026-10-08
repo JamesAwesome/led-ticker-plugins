@@ -20,8 +20,9 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
-# Inter-Bold needs the normal threshold to separate small adjacent glyphs.
-_HIRES_THRESHOLD = 128
+# No rasterization threshold is passed: core defaults it per font
+# (led-ticker-core >= 4.30), and Inter-Bold's default is the 128 this pack
+# needs to keep small adjacent glyphs separate.
 _FONT = "Inter-Bold"
 
 
@@ -46,19 +47,19 @@ def phys_wrap(canvas):
 def hires(shim, text: str, x: int, y_top: int, color: Color, size: int) -> int:
     """Paint Inter-Bold text at physical (x, y_top); return ADVANCE width in
     physical px (call sites do `x += hires(...) + gap`)."""
-    font = resolve_font(_FONT, size, _HIRES_THRESHOLD)
+    font = resolve_font(_FONT, size)
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 
 
 def text_width(size: int, text: str) -> int:
     """Physical advance width of `text` at `size` — core's measurement."""
-    return hires_text_width(text, size, font=_FONT, threshold=_HIRES_THRESHOLD)
+    return hires_text_width(text, size, font=_FONT)
 
 
 def fit_size(text: str, sizes: tuple[int, ...], max_w: int) -> int:
     """Largest ladder size at which `text` fits `max_w` (the floor when
     nothing fits) — core's `fit_text_size` with this pack's font."""
-    return fit_text_size(text, sizes, max_w, font=_FONT, threshold=_HIRES_THRESHOLD)
+    return fit_text_size(text, sizes, max_w, font=_FONT)
 
 
 def fit_text(text: str, max_w: int, size: int) -> str:

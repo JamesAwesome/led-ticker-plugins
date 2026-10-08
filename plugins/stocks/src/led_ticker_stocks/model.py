@@ -77,8 +77,8 @@ def format_change(v: float | None, decimals: int) -> str:
     return f"{sign}{abs(v):.{decimals}f}"
 
 
-def format_pct(v: float | None) -> str:
+def format_pct(v: float | None, decimals: int = 2) -> str:
     if v is None:
         return _DASH
     sign = "+" if v >= 0 else _MINUS
-    return f"{sign}{abs(v):.2f}%"
+    return f"{sign}{abs(v):.{decimals}f}%"

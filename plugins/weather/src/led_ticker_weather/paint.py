@@ -27,14 +27,10 @@ from led_ticker.plugin import (
 
 from led_ticker_weather.palette import LABEL, RGB
 
-# The default 128. An earlier 80 here was inherited from the pack's
-# thin-font guidance (core CLAUDE.md `font_threshold`), but nothing in
-# this plugin paints Inter-Regular — `hires()` defaults to bold and no
-# call site overrides it. At 80 bold ink grows wider than its own
-# advance, so adjacent glyphs merged: the hero location rendered
-# "BOSTON" as 2 ink blobs at size 9 and 4 at size 11, where 6 is
-# correct. See tests/test_glyph_separation.py.
-_HIRES_THRESHOLD = 128
+# No rasterization threshold is passed in this module: core defaults it
+# per font (led-ticker-core >= 4.30 — Inter-Bold 128, Inter-Regular 80).
+# An earlier pinned 80 fused the hero location ("BOSTON" as 2-4 blobs
+# instead of 6); see tests/test_glyph_separation.py.
 
 
 def js_round(v: float) -> int:
@@ -109,9 +105,7 @@ def hires(
     """Paint Inter text at physical (x, y_top); return ADVANCE width in
     physical px (call sites do `x += hires(...) + gap`, so returning
     draw_text's absolute end-x would double-count)."""
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return draw_text(shim, font, text, x, y_top + font.ascent, dim(rgb)) - x
 
 
@@ -126,9 +120,7 @@ _PROBE = _ScaleOneProbe()
 
 
 def text_width(size: int, text: str, *, bold: bool = True) -> int:
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return measure_width(font, text, _PROBE)
 
 
@@ -137,7 +129,7 @@ def text_width(size: int, text: str, *, bold: bool = True) -> int:
 # ink-top at the passed y_top — no cap_top conversion. / and lowercase sit
 # ±1px per the font's native per-glyph bbox; the forecast draws neither at
 # a clipping y. Small forecast text (day labels, hi/lo, FEELS, precip) uses this.
-_SPLEEN = resolve_font("spleen-6x12", 12, _HIRES_THRESHOLD)
+_SPLEEN = resolve_font("spleen-6x12", 12)
 _SPLEEN_ADVANCE = 6
 
 

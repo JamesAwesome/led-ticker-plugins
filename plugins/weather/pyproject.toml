@@ -29,7 +29,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 dependencies = [
-    "led-ticker-core>=4.27",
+    "led-ticker-core>=4.30",
     "aiohttp",
 ]
 

@@ -20,9 +20,10 @@ from led_ticker.plugin import (
 
 from led_ticker_baseball._palette import IDENT, LABEL
 
-# Thin Inter strokes drop out at the default 128 threshold on small sizes;
-# 80 is the documented thin-font value (core CLAUDE.md `font_threshold`).
-_HIRES_THRESHOLD = 80
+# No rasterization threshold is passed in this module: core defaults it PER
+# FONT (led-ticker-core >= 4.30 — Inter-Bold 128, Inter-Regular 80). The 80
+# this pack used to pin for both weights fused bold text (adjacent letters
+# merging); see tests/test_glyph_separation.py.
 
 # Inter has no U+2212 MINUS glyph (tofu). Substitute ASCII hyphen-minus in
 # the hires path only (same belt as stocks `_paint._subst`).
@@ -128,16 +129,12 @@ def hires(
     """Paint Inter text at physical (x, y_top); return ADVANCE width in
     physical px (call sites do `x += hires(...) + gap`)."""
     text = _subst(text)
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return draw_text(shim, font, text, x, y_top + font.ascent, color) - x
 
 
 def text_width(size: int, text: str, *, bold: bool = True) -> int:
-    font = resolve_font(
-        "Inter-Bold" if bold else "Inter-Regular", size, _HIRES_THRESHOLD
-    )
+    font = resolve_font("Inter-Bold" if bold else "Inter-Regular", size)
     return measure_width(font, _subst(text), _PROBE)
 
 

@@ -24,9 +24,11 @@ from pathlib import Path
 
 import attrs
 import pytest
-from led_ticker.plugin import draw_text, resolve_font
+from led_ticker.plugin import default_threshold, draw_text, resolve_font
 
-from led_ticker_weather.paint import _HIRES_THRESHOLD
+# What `paint.hires()` resolves Inter-Bold at: it passes no threshold, so
+# core's per-font default applies.
+_BOLD_THRESHOLD = default_threshold("Inter-Bold")
 
 # 4-connectivity would split the diagonal-only joins inside a glyph (and
 # count one letter twice); 8-connectivity treats a glyph as one blob, so
@@ -112,15 +114,15 @@ def _expected_floor(text: str) -> int:
 def test_glyphs_do_not_fuse_at_any_painted_size(text, size):
     """No painted string collapses toward a single blob.
 
-    On failure the string is rendering as mush on a real panel. Raise
-    `_HIRES_THRESHOLD`, or the size at that call site — do NOT lower
+    On failure the string is rendering as mush on a real panel. Fix the
+    per-font default in core, or the size at that call site — do NOT lower
     `_MIN_SEPARATED_FRACTION` to make this pass.
     """
     glyphs = len(text.replace(" ", ""))
     floor = _expected_floor(text)
-    got = _ink_components(text, size, _HIRES_THRESHOLD)
+    got = _ink_components(text, size, _BOLD_THRESHOLD)
     assert got >= floor, (
-        f"{text!r} at size {size}, threshold {_HIRES_THRESHOLD}: only "
+        f"{text!r} at size {size}, threshold {_BOLD_THRESHOLD}: only "
         f"{got} of {glyphs} glyphs render as distinct ink blobs "
         f"(floor {floor}) — adjacent glyphs merged, so this reads as "
         f"mush on the panel"
@@ -152,6 +154,6 @@ def test_the_old_threshold_would_still_fuse_the_hero_location():
     fused = _ink_components("BOSTON", 11, 80)
     assert fused < _expected_floor("BOSTON"), (
         "threshold 80 no longer fuses BOSTON at size 11 — if core's "
-        "rasterizer changed, re-derive _HIRES_THRESHOLD from scratch "
+        "rasterizer changed, re-derive the per-font default from scratch "
         "rather than trusting this test's premise"
     )

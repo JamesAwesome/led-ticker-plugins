@@ -18,7 +18,8 @@ from led_ticker_stocks._paint import (
     hires,
     paging_dots,
     phys_wrap,
-    right_align_x,
+    spleen,
+    spleen_width,
     text_width,
 )
 from led_ticker_stocks._sparkline import draw_sparkline
@@ -33,13 +34,16 @@ _MARGIN = 6
 # The hero symbol (from x=32) runs toward the price block at fixed x=150; the
 # watch rows pack a symbol (x=434) + a right-aligned pct into the ~74px column.
 # Both were tuned for <=5-char equity symbols — a 7-char pair (EUR/USD) needs a
-# guard or the later-drawn text lands on the earlier. Shrink-to-fit ladders,
-# measured with the same metrics the paint uses (text_width), platform-exact.
+# guard or the later-drawn text lands on the earlier. The hero shrinks down a
+# ladder measured with the same metrics the paint uses (text_width). The watch
+# rows are Spleen (fixed 6px advance; see `_paint.spleen`), so their only
+# shrink knob is the pct's precision — the symbol is the row's identity and
+# never gives.
 _PRICE_BLOCK_X = 150
 _HERO_SYM_GAP = 6
 _HERO_SYM_SIZES = (26, 22, 20, 18)
 _WATCH_GAP = 4
-_WATCH_SIZES = (10, 9, 8)
+_WATCH_PCT_DECIMALS = (2, 0)
 
 
 def _fit_hero_sym_size(sym: str, x: int) -> int:
@@ -51,15 +55,16 @@ def _fit_hero_sym_size(sym: str, x: int) -> int:
     return _HERO_SYM_SIZES[-1]
 
 
-def _fit_watch_size(sym: str, pv: str, col_width: int) -> int:
-    """Largest shared size at which a watch row's symbol + gap + pct fit the
-    column (uniform shrink reads better than mixed sizes)."""
-    for size in _WATCH_SIZES:
-        used = text_width(size, sym, bold=True) + _WATCH_GAP
-        used += text_width(size, pv, bold=False)
-        if used <= col_width:
-            return size
-    return _WATCH_SIZES[-1]
+def _fit_watch_pct(sym: str, pct: float | None, col_width: int) -> str:
+    """The most precise pct rendering that fits beside `sym` in the watch
+    column: two decimals when there is room, else an integer pct (the floor
+    — returned even if it still would not fit, which no symbol <= 7 chars
+    reaches in the real 74px column)."""
+    for decimals in _WATCH_PCT_DECIMALS:
+        pv = format_pct(pct, decimals)
+        if spleen_width(sym) + _WATCH_GAP + spleen_width(pv) <= col_width:
+            return pv
+    return format_pct(pct, _WATCH_PCT_DECIMALS[-1])
 
 
 def draw_dashboard_story(
@@ -161,25 +166,23 @@ def draw_dashboard_story(
     else:
         hires(shim, "—", 150, 4 + yoff, pal.dim(pal.LABEL, dim), 24, bold=True)
 
-    # watch column: next 3 symbols. Per row, symbol + right-aligned pct share
-    # ~74px — pick a shared size that fits both (a 7-char pair like EUR/USD at
-    # 10px collides with its pct; uniform shrink keeps the row readable).
+    # watch column: next 3 symbols in Spleen. Per row, symbol + right-aligned
+    # pct share ~74px; a 7-char pair like EUR/USD drops the pct to an integer
+    # rather than shrinking the type (the rows used to be Inter-Bold at
+    # 10/9/8px, which fuses to blobs at any threshold).
     for r in range(3):
         g_sym = symbols[(focus_index + 1 + r) % len(symbols)]
         g = quotes.get(g_sym)
         y = 6 + r * 18 + yoff
-        pv = format_pct(g.pct) if g is not None else ""
-        row_size = _fit_watch_size(g_sym, pv, w - _MARGIN - 434) if pv else 10
-        hires(shim, g_sym, 434, y, pal.dim(pal.SYM, dim), row_size, bold=True)
+        spleen(shim, g_sym, 434, y, pal.dim(pal.SYM, dim))
         if g is not None:
-            hires(
+            pv = _fit_watch_pct(g_sym, g.pct, w - _MARGIN - 434)
+            spleen(
                 shim,
                 pv,
-                right_align_x(row_size, pv, w, _MARGIN, bold=False),
+                w - _MARGIN - spleen_width(pv),
                 y,
                 _chg_color(g, dim, green_up=green_up),
-                row_size,
-                bold=False,
             )
 
     paging_dots(
