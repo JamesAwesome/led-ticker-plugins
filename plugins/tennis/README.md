@@ -121,6 +121,9 @@ This plugin keeps the same minimum interval for paid keys.
 The examples directory has separate demo and live configs for smallsign, bigsign and longboi.
 Use `config.tennis-demo.<sign>.toml` without a key, or `config.tennis-live.<sign>.toml` with `LIVETENNIS_API_KEY` in the environment.
 Validate the chosen file with `led-ticker validate <path>` before starting the sign.
+Every file carries a `[web]` block (the webui sidecar restart-loops without one) and the longboi
+files carry the FM6126A panel tuning (`gpio_slowdown = 5`, `pwm_bits = 7`,
+`limit_refresh_rate_hz = 100`) — without it that panel flickers, which is the panel, not the widget.
 Check that `BP`, round labels and tournament names have separated letters. Check every score column stays inside the panel.
 
 ## Data

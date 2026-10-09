@@ -10,6 +10,14 @@ default_scale = 1
 hardware_mapping = "adafruit-hat"
 gpio_slowdown = 2
 
+# The webui sidecar (COMPOSE_PROFILES=webui) exits and restart-loops without a
+# [web] block, for as long as this config is in place. Harmless on signs that
+# don't run the sidecar.
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
+
 [[playlist.section]]
 mode = "ticker"
 hold_time = 8.0
