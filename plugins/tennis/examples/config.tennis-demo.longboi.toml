@@ -9,6 +9,20 @@ default_scale = 4
 hardware_mapping = "adafruit-hat"
 panel_type = "FM6126A"
 led_rgb_sequence = "BRG"
+# Panel tuning for FM6126A panels — required, not cosmetic. Without these the
+# driver falls back to gpio_slowdown=1, pwm_bits=11 and no refresh cap, and the
+# panel visibly flickers/ghosts. That is the panel, not the widget.
+gpio_slowdown = 5
+pwm_bits = 7
+limit_refresh_rate_hz = 100
+
+# The webui sidecar (COMPOSE_PROFILES=webui) exits and restart-loops without a
+# [web] block, for as long as this config is in place. Harmless on signs that
+# don't run the sidecar.
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
 
 [[playlist.section]]
 mode = "slideshow"

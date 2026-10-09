@@ -11,6 +11,14 @@ hardware_mapping = "adafruit-hat"
 gpio_slowdown = 3
 pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
 
+# The webui sidecar (COMPOSE_PROFILES=webui) exits and restart-loops without a
+# [web] block, for as long as this config is in place. Harmless on signs that
+# don't run the sidecar.
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
+
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 8.0
