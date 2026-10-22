@@ -18,6 +18,7 @@ keeps the last good games and marks every card `stale`.
 
 import difflib
 import logging
+import math
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -161,6 +162,10 @@ def _is_int(v: Any) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
 
+def _is_number(v: Any) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+
+
 @attrs.define
 class HockeyScoreMonitor:
     """Live NHL scores, one card per game."""
@@ -258,6 +263,13 @@ class HockeyScoreMonitor:
             msgs.append(
                 f"hockey.scores final_hold_hours must be an int >= 0, got {hold!r}"
             )
+        for name in ("hold_time", "padding"):
+            if name in cfg:
+                v = cfg[name]
+                if not _is_number(v) or v < 0:
+                    msgs.append(
+                        f"hockey.scores {name} must be a number >= 0, got {v!r}"
+                    )
         demo = cfg.get("demo")
         if demo is not None and not isinstance(demo, bool):
             msgs.append(f"hockey.scores demo must be a bool (true/false), got {demo!r}")
@@ -280,6 +292,7 @@ class HockeyScoreMonitor:
         widget = cls(session=session, **kwargs)
         widget.teams = [normalize_team(t) or t.strip().upper() for t in widget.teams]
         widget._tz = ZoneInfo(widget.timezone)
+        widget.padding = int(widget.padding)  # validated: a number >= 0
         if widget.demo:
             widget._load_demo()
             return widget

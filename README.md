@@ -7,7 +7,7 @@ The official first-party plugin pack for [led-ticker](https://github.com/JamesAw
 asyncio toolkit that drives Adafruit RGB Matrix HAT / HUB75 LED panels from a Raspberry Pi.
 These plugins add live data and effects to your sign: current **weather**, **RSS/Atom**
 headlines, **cryptocurrency** prices, **calendar** agendas, **MLB** scores, **live tennis**
-scores, **pool** water-temperature, and homage **sprite-trail transitions**. Developed together in one uv
+scores, **NHL** scores, **pool** water-temperature, and homage **sprite-trail transitions**. Developed together in one uv
 workspace and **distributed per-plugin** so you install only what you want.
 
 ## Install a plugin
@@ -54,7 +54,7 @@ The `led-ticker-flair` pack (`nyancat`, `pokeball`, `pacman`, `sailor_moon`)
 contains **unofficial fan homages** — the character names/designs and any bundled
 sprite artwork belong to their respective owners and are **not** covered by this
 project's license. See [NOTICE.md](NOTICE.md) for details. The data plugins
-(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `tennis`) are original
+(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `tennis`, `hockey`) are original
 works.
 
 ## License

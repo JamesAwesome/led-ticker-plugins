@@ -128,6 +128,24 @@ class TestValidateConfig:
         for bad in (0, True, "15", 10.0):
             assert v({**base, "update_interval": bad}), bad
 
+    def test_hold_time_and_padding_are_numbers_ge_zero(self):
+        v = HockeyScoreMonitor.validate_config
+        base = {"teams": ["PHI"]}
+        for field in ("hold_time", "padding"):
+            for ok in (0, 0.0, 3, 7.5):
+                assert v({**base, field: ok}) == [], (field, ok)
+            for bad in (-1, -0.5, True, False, "6", None, [6], float("nan")):
+                msgs = v({**base, field: bad})
+                assert msgs == [
+                    f"hockey.scores {field} must be a number >= 0, got {bad!r}"
+                ], (field, bad)
+
+    async def test_float_padding_is_coerced_to_int(self):
+        with mock.patch.object(mod, "spawn_tracked", mock.Mock()):
+            w = await HockeyScoreMonitor.start(None, demo=True, padding=8.0)
+        assert w.padding == 8 and isinstance(w.padding, int)
+        assert all(c.padding == 8 for c in w.feed_stories)
+
 
 # ------------------------------------------------------------ selection
 

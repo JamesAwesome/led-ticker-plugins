@@ -180,7 +180,7 @@ class HockeyGameCard(FrameAwareBase):
             return False
         idx, name, f = phase
         goal = playing[idx]
-        if not self._frame_paused and self._frame_count > 0:
+        if self._frame_count > 0:  # a live frame (paused returned above)
             self._shown.add(goal.key)
         if name == "detail":
             if self.bg_color is not None:

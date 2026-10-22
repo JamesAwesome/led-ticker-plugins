@@ -55,7 +55,7 @@ timezone = "America/New_York"   # for start times and the day boundary
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
 | `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10.** A value below 15 speeds up live polling (widgets sharing a process use the fastest ask); a value above 15 does not slow the shared source below 15 s while a game is live. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per goal **plus** the larger of this and 4 s for the board afterwards. |
-| `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. |
+| `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. A number >= 0 (a float is truncated to an int). |
 | `demo` | bool | `false` | Render fixture games (a live power play, a goal celebration, an intermission, an OT final, a next game) with `PHI` and `NYI`, no network — for docs, gifs and hardware checks. The live game's goal celebrates on its first turn and again every third turn after (set `teams = ["PHI"]` or similar: untracked goals only highlight the score). |
 | `bg_color` | RGB list | none | Background fill. Scale-1 / ticker only — the physical renderers paint their own palette. |
 | `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 / ticker only. |
