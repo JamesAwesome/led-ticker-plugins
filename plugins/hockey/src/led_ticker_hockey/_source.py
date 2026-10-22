@@ -194,8 +194,10 @@ class NHLSource:
         return out
 
     async def _poll(self) -> None:
-        polled_at = self._clock()
+        # Wall epoch, the time base renderers tick clocks against
+        # (`time.time()`); the gate/TTL/cadence stay on the monotonic clock.
         now_utc = self._wall()
+        polled_at = now_utc.timestamp()
         local = now_utc.astimezone(self._tz)
         today = local.date()
         since_midnight = local - local.replace(
@@ -285,8 +287,9 @@ class NHLSource:
             ):
                 continue
             self._next_month_at[team] = now
+            wall = self._wall().timestamp()
             game = await self._first_future(
-                f"{BASE_URL}/v1/club-schedule/{team}/month/now", now
+                f"{BASE_URL}/v1/club-schedule/{team}/month/now", wall
             )
             if game is None and (
                 team not in self._next_season_at
@@ -294,7 +297,7 @@ class NHLSource:
             ):
                 self._next_season_at[team] = now
                 game = await self._first_future(
-                    f"{BASE_URL}/v1/club-schedule-season/{team}/now", now
+                    f"{BASE_URL}/v1/club-schedule-season/{team}/now", wall
                 )
             if game is not None:
                 self._next[team] = game

@@ -428,3 +428,13 @@ def test_shared_source_is_per_session_and_capped():
     assert len(src._SHARED_SOURCES) == 8
     assert id(sessions[0]) not in src._SHARED_SOURCES
     assert shared_source(sessions[0]) is not first
+
+
+async def test_polled_at_is_wall_epoch_not_monotonic():
+    """Renderers tick clocks off `time.time()`; `polled_at` must share it."""
+    month = f"{BASE}/v1/club-schedule/BOS/month/now"
+    routes = {TODAY: (200, fx("score_live")), month: (200, fx("club_week_phi"))}
+    s, _, _ = make(routes, teams=("PHI", "BOS"))
+    snap = await s.poll()
+    assert snap.games[LIVE_ID].polled_at == NOON.timestamp()
+    assert snap.next_games["BOS"].polled_at == NOON.timestamp()
