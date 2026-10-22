@@ -32,3 +32,12 @@ def bigsign():
 def longboi():
     real = HeadlessBackend(512, 64).create_canvas()
     return ScaledCanvas(real, scale=4, content_height=16)
+
+
+@pytest.fixture(autouse=True)
+def reset_sources():
+    from led_ticker_hockey._source import _SHARED_SOURCES
+
+    _SHARED_SOURCES.clear()
+    yield
+    _SHARED_SOURCES.clear()
