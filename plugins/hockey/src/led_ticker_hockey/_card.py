@@ -72,6 +72,11 @@ class HockeyGameCard(FrameAwareBase):
     pending: list[Goal] = attrs.field(init=False, factory=list)
     highlight: tuple[str, int] | None = attrs.field(init=False, default=None)
     _shown: set[str] = attrs.field(init=False, factory=set)
+    # The visit's celebration snapshot, taken at visit entry. None = no
+    # visit yet. Goals queued mid-visit wait for the next turn.
+    _playing: list[Goal] | None = attrs.field(init=False, default=None)
+    _hl_shown: bool = attrs.field(init=False, default=False)
+    _hl_frame: int = attrs.field(init=False, default=-1)
     _legacy: Any = attrs.field(init=False, default=None)
     _legacy_for: tuple[str, GameInfo] | None = attrs.field(init=False, default=None)
 
@@ -79,9 +84,8 @@ class HockeyGameCard(FrameAwareBase):
     def hold_time(self) -> float:
         """Per-story hold the engine reads (`max(section, widget)`),
         stretched to play every pending celebration."""
-        if self.pending:
-            return self.base_hold + len(self.pending) * CELEBRATION_FRAMES * 0.05
-        return self.base_hold
+        n = len(self._playing if self._playing is not None else self.pending)
+        return self.base_hold + n * CELEBRATION_FRAMES * 0.05
 
     def queue_goals(self, goals: list[Goal]) -> None:
         """Tracked-team goals celebrate; any other goal highlights the
@@ -103,20 +107,31 @@ class HockeyGameCard(FrameAwareBase):
         ]
 
     def _board_highlight(self) -> tuple[str, float] | None:
+        """The fade to pass the board this draw. The countdown ticks only
+        on live frames that actually draw it (not paused, not frame 0,
+        once per frame), so a celebration painting over it or transition
+        compositing never burns it unseen."""
         if self.highlight is None:
             return None
         team, left = self.highlight
-        return team, 1 - left / HIGHLIGHT_FRAMES
+        fade = (team, 1 - left / HIGHLIGHT_FRAMES)
+        n = self._frame_count
+        if not self._frame_paused and n > 0 and n != self._hl_frame:
+            self._hl_frame = n
+            self._hl_shown = True
+            self.highlight = (team, left - 1) if left > 1 else None
+        return fade
 
     def _celebrate(self, canvas: Any, y_offset: int) -> bool:
         """Paint the celebration frame if one is due; True when painted."""
-        if not self.pending:
+        playing = self._playing
+        if not playing:
             return False
-        phase = phase_at(self._frame_count, len(self.pending))
+        phase = phase_at(self._frame_count, len(playing))
         if phase is None:
             return False
         idx, name, f = phase
-        goal = self.pending[idx]
+        goal = playing[idx]
         if not self._frame_paused and self._frame_count > 0:
             self._shown.add(goal.key)
         if name == "detail":
@@ -210,11 +225,7 @@ class HockeyGameCard(FrameAwareBase):
         return canvas, canvas.width
 
     def advance_frame(self, *, visit_id: int | None = None) -> None:
-        before = self._frame_count
         super().advance_frame(visit_id=visit_id)
-        if self.highlight is not None and self._frame_count != before:
-            team, left = self.highlight
-            self.highlight = (team, left - 1) if left > 1 else None
         if self._legacy is not None:
             self._legacy.advance_frame(visit_id=visit_id)
 
@@ -232,8 +243,11 @@ class HockeyGameCard(FrameAwareBase):
         if self._shown:
             self.pending = [g for g in self.pending if g.key not in self._shown]
             self._shown.clear()
-        if self.highlight is not None and self.highlight[1] < HIGHLIGHT_FRAMES:
+        self._playing = list(self.pending)
+        if self._hl_shown:
             self.highlight = None  # it was on screen: consumed
+        self._hl_shown = False
+        self._hl_frame = -1
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()

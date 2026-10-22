@@ -174,9 +174,19 @@ def _detail_long(shim, real, game: GameInfo, goal: Goal, frame: int, yo: int):
     primary = pal.chip(goal.team)[0]
     rect(real, 6, 8 + yo, 13, 56 + yo, primary)
     _base(shim, "GOAL", 22, 48 + yo, primary, 40)
-    x_score = 400
+    scores = _scores(game, goal, frame)
+    time_s = _time_label(goal)
+    right = real.width - 7
+    time_x = right - text_width(10, time_s) if time_s else right + _GAP
+    # The stacked score column ends >= 6 px left of the time (which shares
+    # its bottom rows), measured, so two-digit scores never crowd it.
+    col_w = max(
+        text_width(18, abbrev) + _GAP + text_width(22, score)
+        for abbrev, _, score, _ in scores
+    )
+    x_score = min(400, time_x - _GAP - col_w)
     for (abbrev, tcolor, score, scolor), (ab, sb) in zip(
-        _scores(game, goal, frame), ((26, 28), (54, 56)), strict=True
+        scores, ((26, 28), (54, 56)), strict=True
     ):
         adv = _base(shim, abbrev, x_score, ab + yo, tcolor, 18)
         _base(shim, score, x_score + adv + _GAP, sb + yo, scolor, 22)
@@ -184,10 +194,8 @@ def _detail_long(shim, real, game: GameInfo, goal: Goal, frame: int, yo: int):
     col_max = x_score - _GAP - x0
     _scorer_line(shim, goal, x0, 32 + yo, col_max, 24, 14)
     _assists_line(shim, goal, x0, 52 + yo, col_max, 12)
-    time_s = _time_label(goal)
     if time_s:
-        right = real.width - 7
-        _base(shim, time_s, right - text_width(10, time_s), 60 + yo, pal.DIM, 10)
+        _base(shim, time_s, time_x, 60 + yo, pal.DIM, 10)
 
 
 # -------------------------------------------------------------- bitmap
@@ -223,10 +231,13 @@ def _detail_small(canvas, game: GameInfo, goal: Goal, frame: int, yo: int, font)
     max_w = width - 5 - (time_w + _GAP if time_s else 0)
     total = f" ({goal.season_total})" if goal.season_total is not None else ""
     line = f"{goal.scorer}{total}".strip()
-    while line and mw(line) > max_w:
-        line = line[:-1]
+    if line and mw(line) > max_w:
+        # Ellipsize at the floor (the bitmap font carries U+2026).
+        while len(line) > 1 and mw(line.rstrip() + "…") > max_w:
+            line = line[:-1]
+        line = line.rstrip() + "…"
     if line:
-        draw_text(canvas, font, line.rstrip(), 5, y1, pal.WHITE)
+        draw_text(canvas, font, line, 5, y1, pal.WHITE)
 
 
 def render_detail(
