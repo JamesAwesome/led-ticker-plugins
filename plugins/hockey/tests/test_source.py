@@ -438,3 +438,93 @@ async def test_polled_at_is_wall_epoch_not_monotonic():
     snap = await s.poll()
     assert snap.games[LIVE_ID].polled_at == NOON.timestamp()
     assert snap.next_games["BOS"].polled_at == NOON.timestamp()
+
+
+# ----------------------------------------- next game vs finals (C1, M2)
+
+MONTH_PHI = f"{BASE}/v1/club-schedule/PHI/month/now"
+
+
+def _select(snap, wall, hold=6):
+    from led_ticker_hockey.scores import select_stories
+
+    return select_stories(
+        snap.games,
+        snap.next_games,
+        mode="teams",
+        teams=["PHI"],
+        max_games=8,
+        now_wall=wall.timestamp(),
+        final_hold_hours=hold,
+        tz=TZ,
+    )
+
+
+async def test_next_game_returns_after_final_hold():
+    # The final lingers in the source (last seen < hold ago) but is past
+    # select_stories' hold: the team must fall back to its next game.
+    final = fx("score_final_ot")
+    final["games"][0]["startTimeUTC"] = "2026-10-22T17:00:00Z"
+    wall = datetime(2026, 10, 23, 2, 0, tzinfo=UTC)  # hold ended 01:30Z
+    routes = {
+        f"{BASE}/v1/score/2026-10-22": (200, final),
+        f"{BASE}/v1/score/2026-10-21": (200, {"games": []}),
+        MONTH_PHI: (200, fx("club_week_phi")),
+    }
+    s, _, _ = make(routes, wall=wall)
+    snap = await s.poll()
+    assert 2026020088 in snap.games  # still held by the source
+    picks = _select(snap, wall)
+    assert [g.game_id for g in picks] == [2026020115]
+
+
+async def test_final_inside_hold_still_wins_over_next():
+    final = fx("score_final_ot")
+    final["games"][0]["startTimeUTC"] = "2026-10-22T17:00:00Z"
+    wall = datetime(2026, 10, 22, 21, 0, tzinfo=UTC)
+    routes = {TODAY: (200, final), MONTH_PHI: (200, fx("club_week_phi"))}
+    s, _, _ = make(routes, wall=wall)
+    snap = await s.poll()
+    assert [g.game_id for g in _select(snap, wall)] == [2026020088]
+
+
+async def test_next_game_uses_shortest_widget_hold():
+    # Two widgets share the source: hold 2 h and 6 h. Three hours after
+    # the final the 2 h widget must still find the next game.
+    final = fx("score_final_ot")
+    final["games"][0]["startTimeUTC"] = "2026-10-22T14:30:00Z"  # ended 17:00Z
+    routes = {TODAY: (200, final), MONTH_PHI: (200, fx("club_week_phi"))}
+    s, _, _ = make(routes, hold=6)
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=2)
+    snap = await s.poll()
+    assert [g.game_id for g in _select(snap, NOON, hold=2)] == [2026020115]
+    assert [g.game_id for g in _select(snap, NOON, hold=6)] == [2026020088]
+
+
+async def test_post_midnight_game_shown_before_puck_drop():
+    # In today's feed, but it starts after local midnight: not "later
+    # today", so the card must come from the next-game lookup.
+    future = fx("score_future")
+    future["games"][0]["startTimeUTC"] = "2026-10-23T04:30:00Z"  # 00:30 local
+    routes = {TODAY: (200, future), MONTH_PHI: (200, fx("club_week_phi"))}
+    s, _, _ = make(routes)
+    snap = await s.poll()
+    assert _select(snap, NOON), "the tracked team has no card before puck drop"
+
+
+async def test_update_interval_below_live_cadence_speeds_live_polls():
+    s, _, _ = make({TODAY: (200, fx("score_live"))})
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=6, live_interval=12)
+    await s.poll()
+    assert s.next_delay() == 12
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=6, live_interval=30)
+    assert s.next_delay() == 12  # union is the fastest ask
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=6, live_interval=3)
+    assert s.next_delay() == src.MIN_INTERVAL  # floored
+
+
+async def test_update_interval_does_not_change_idle_cadence():
+    s, _, _ = make({TODAY: (200, {"games": []})})
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=6, live_interval=12)
+    await s.poll()
+    assert s.next_delay() == IDLE_INTERVAL

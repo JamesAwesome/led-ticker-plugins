@@ -317,6 +317,19 @@ def status_lines(game: GameInfo, now: float, tz: ZoneInfo) -> tuple[str, str]:
     )
 
 
+# The feed carries no end time: a final's hold runs from start + this.
+GAME_LENGTH = timedelta(hours=2, minutes=30)
+
+
+def final_in_hold(g: GameInfo, now_dt: datetime, hold_hours: int) -> bool:
+    """A final is still shown `hold_hours` after its estimated end. The ONE
+    predicate: `scores.select_stories` and the source's next-game lookup
+    share it, so a team never falls between the two."""
+    if g.start_utc is None:
+        return True  # the source already drops games unseen past the hold
+    return now_dt - (g.start_utc + GAME_LENGTH) < timedelta(hours=hold_hours)
+
+
 def winner(game: GameInfo) -> str | None:
     if game.state != "final" or game.away_score == game.home_score:
         return None

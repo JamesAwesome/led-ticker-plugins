@@ -53,7 +53,7 @@ timezone = "America/New_York"   # for start times and the day boundary
 | `final_hold_hours` | int | `6` | How long a final stays in the rotation, measured from the game's start time + 2 h 30 min (the feed carries no end time). |
 | `timezone` | string | `"America/New_York"` | IANA timezone for start times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
-| `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10.** Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
+| `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10.** A value below 15 speeds up live polling (widgets sharing a process use the fastest ask); a value above 15 does not slow the shared source below 15 s while a game is live. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds. The engine uses the larger of this and the section's `hold_time`; the card extends it automatically while a celebration is pending. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. |
 | `demo` | bool | `false` | Render fixture games (a live power play, a goal celebration, an intermission, an OT final, a next game) with `PHI` and `NYI`, no network — for docs, gifs and hardware checks. |
@@ -64,7 +64,7 @@ timezone = "America/New_York"   # for start times and the day boundary
 
 ### Modes
 
-- **`teams` (default)** — only games involving your `teams`, per team in config order: its live game; else a final still inside `final_hold_hours`; else a game later today; else its next scheduled game. Two tracked teams playing each other are one card, not two.
+- **`teams` (default)** — only games involving your `teams`, per team in config order: its live game; else a final still inside `final_hold_hours`; else a game later today; else its next scheduled game (also how a game that starts after local midnight shows before puck drop). Two tracked teams playing each other are one card, not two.
 - **`league`** — every NHL game today: your teams first, then other live games, then finals inside the hold, then games later today by start time. Capped by `max_games`.
 - **`live`** — only games in progress, your teams first. Capped by `max_games`. With nothing live the widget has no stories, so the rotation skips it.
 
@@ -97,7 +97,7 @@ When a team in `teams` scores, that game's card plays a ~4 second celebration **
 
 All `hockey.scores` widgets in one process share a single source, so several widgets (or signs' worth of sections) do not multiply requests to the NHL.
 
-- **Every 15 s** (`update_interval`, floor 10 s) while any relevant game is live.
+- **Every 15 s** while any relevant game is live — faster if a widget sets a lower `update_interval` (floor 10 s).
 - **Every 5 minutes** when relevant games are scheduled today but not started.
 - **About hourly** otherwise.
 - The season schedule (offseason next-game lookup) is fetched at most every 6 hours.

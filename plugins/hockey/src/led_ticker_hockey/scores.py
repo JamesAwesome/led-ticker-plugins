@@ -20,7 +20,7 @@ import difflib
 import logging
 import time
 from collections.abc import Iterable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -37,7 +37,11 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_hockey._card import HockeyGameCard
-from led_ticker_hockey._models import GameInfo, build_demo_games
+from led_ticker_hockey._models import (
+    GameInfo,
+    build_demo_games,
+    final_in_hold,
+)
 from led_ticker_hockey._source import (
     LIVE_INTERVAL,
     MIN_INTERVAL,
@@ -53,8 +57,6 @@ __all__ = ["HockeyScoreMonitor", "HockeyGameCard", "select_stories"]
 logger: logging.Logger = logging.getLogger(__name__)
 
 MODES: tuple[str, ...] = ("teams", "league", "live")
-# The feed carries no end time: a final's hold runs from start + this.
-GAME_LENGTH = timedelta(hours=2, minutes=30)
 _FAR_FUTURE = datetime.max.replace(tzinfo=UTC)
 
 _CardKey = int | str
@@ -65,12 +67,6 @@ _CardKey = int | str
 
 def _start_key(g: GameInfo) -> tuple[datetime, int]:
     return (g.start_utc or _FAR_FUTURE, g.game_id)
-
-
-def _final_in_hold(g: GameInfo, now_dt: datetime, hold_hours: int) -> bool:
-    if g.start_utc is None:
-        return True  # the source already drops games unseen past the hold
-    return now_dt - (g.start_utc + GAME_LENGTH) < timedelta(hours=hold_hours)
 
 
 def _later_today(g: GameInfo, now_dt: datetime, tz: ZoneInfo) -> bool:
@@ -93,7 +89,7 @@ def _team_pick(
     if live:
         return live[0]
     finals = [
-        g for g in mine if g.state == "final" and _final_in_hold(g, now_dt, hold_hours)
+        g for g in mine if g.state == "final" and final_in_hold(g, now_dt, hold_hours)
     ]
     if finals:
         return finals[-1]  # the most recent
@@ -145,7 +141,7 @@ def select_stories(
     finals = [
         g
         for g in ordered
-        if g.state == "final" and _final_in_hold(g, now_dt, final_hold_hours)
+        if g.state == "final" and final_in_hold(g, now_dt, final_hold_hours)
     ]
     return _dedupe(
         [
@@ -288,6 +284,7 @@ class HockeyScoreMonitor:
             all_games=widget.mode != "teams",
             tz=widget._tz,
             final_hold_hours=widget.final_hold_hours,
+            live_interval=update_interval,
         )
         widget._source = source
         await widget.update()

@@ -19,7 +19,13 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from led_ticker_hockey._models import GameInfo, Goal, parse_game, parse_situation
+from led_ticker_hockey._models import (
+    GameInfo,
+    Goal,
+    final_in_hold,
+    parse_game,
+    parse_situation,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -65,6 +71,9 @@ class NHLSource:
         self._all_games = False
         self._tz: ZoneInfo = ZoneInfo("UTC")
         self._hold_hours = 0
+        # The SHORTEST widget hold: past it some widget needs the next game.
+        self._next_hold_hours: int | None = None
+        self._live_interval = LIVE_INTERVAL
         self._displayed_by: dict[int, tuple[float, set[int]]] = {}
         self._latest_ids: set[int] = set()
         self._games: dict[int, GameInfo] = {}
@@ -88,8 +97,10 @@ class NHLSource:
         all_games: bool,
         tz: ZoneInfo,
         final_hold_hours: int,
+        live_interval: int = LIVE_INTERVAL,
     ) -> None:
-        """Union interest: teams union, all_games OR, latest tz, max hold."""
+        """Union interest: teams union, all_games OR, latest tz, max hold
+        (min hold for the next-game lookup), fastest live cadence."""
         grew = bool(
             {t.upper() for t in teams} - self._teams
             or (all_games and not self._all_games)
@@ -98,6 +109,12 @@ class NHLSource:
         self._all_games = self._all_games or all_games
         self._tz = tz
         self._hold_hours = max(self._hold_hours, final_hold_hours)
+        self._next_hold_hours = (
+            final_hold_hours
+            if self._next_hold_hours is None
+            else min(self._next_hold_hours, final_hold_hours)
+        )
+        self._live_interval = min(self._live_interval, live_interval)
         if grew:
             self._next_allowed = float("-inf")
 
@@ -123,7 +140,7 @@ class NHLSource:
     def _cadence(self) -> float:
         games = [g for i, g in self._games.items() if i in self._latest_ids]
         if any(g.state == "live" for g in games):
-            return LIVE_INTERVAL
+            return max(MIN_INTERVAL, self._live_interval)
         if any(g.state == "future" for g in games):
             return PREGAME_INTERVAL
         return IDLE_INTERVAL
@@ -275,8 +292,24 @@ class NHLSource:
                 game, situation=self._situations.get(gid)
             )
 
+    def _playing(self) -> set[str]:
+        """Teams whose card comes from `_games`, not the next-game lookup:
+        a live game, or a final still inside the hold under the SAME
+        predicate `select_stories` uses (at the shortest widget hold). A
+        future game does not count: one after local midnight isn't
+        "later today", so the lookup is what shows it before puck drop."""
+        now_dt = self._wall()
+        hold = self._next_hold_hours or 0
+        return {
+            t
+            for g in self._games.values()
+            if g.state == "live"
+            or (g.state == "final" and final_in_hold(g, now_dt, hold))
+            for t in (g.away, g.home)
+        }
+
     async def _refresh_next(self, fetched: dict[int, GameInfo]) -> None:
-        playing = {t for g in self._games.values() for t in (g.away, g.home)}
+        playing = self._playing()
         now = self._clock()
         for team in sorted(self._teams):
             if team in playing:

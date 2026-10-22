@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import led_ticker_hockey.scores as mod
 from led_ticker_hockey._card import HockeyGameCard
-from led_ticker_hockey._models import GameInfo, Goal, build_demo_games
+from led_ticker_hockey._models import GAME_LENGTH, GameInfo, Goal, build_demo_games
 from led_ticker_hockey._source import MIN_INTERVAL, Snapshot
 from led_ticker_hockey.scores import HockeyScoreMonitor, select_stories
 
@@ -35,7 +35,7 @@ def game(gid, state, away="PHI", home="NYI", *, start=None, **over) -> GameInfo:
 
 def final_ended(gid, hours_ago, away="PHI", home="NYI"):
     """A final whose (estimated) end was `hours_ago` hours before NOW."""
-    start = NOW_DT - timedelta(hours=hours_ago) - mod.GAME_LENGTH
+    start = NOW_DT - timedelta(hours=hours_ago) - GAME_LENGTH
     return game(gid, "final", away, home, start=start)
 
 
@@ -378,6 +378,7 @@ class TestStart:
         kw = src.want.call_args.kwargs
         assert kw["teams"] == {"PHI", "NYI"} and kw["all_games"] is False
         assert kw["final_hold_hours"] == 4 and str(kw["tz"]) == "America/New_York"
+        assert kw["live_interval"] == 3  # the source floors it (M2)
         assert src.polls == 1 and len(w.feed_stories) == 1
         assert w.feed_stories[0].hold_time == 7.5
         assert w.feed_stories[0].tracked == frozenset({"PHI", "NYI"})

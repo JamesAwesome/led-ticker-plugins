@@ -40,10 +40,19 @@ good games. A game that drops out of the feed keeps its last state: NEVER infer 
 from a game disappearing. `polled_at` is wall-clock epoch seconds.
 
 **One shared source per session** — `shared_source(session)`; every widget's `want()`
-merges into it, and cadence is the source's (15 s live / 300 s pregame / 3600 s idle,
-`MIN_INTERVAL` 10 s; season schedule at most every 6 h). The landing "situation" call is
+merges into it, and cadence is the source's (15 s live — or the fastest widget
+`update_interval` below that, via `want(live_interval=...)` — / 300 s pregame / 3600 s
+idle, `MIN_INTERVAL` 10 s floor; season schedule at most every 6 h). The landing "situation" call is
 gated to live games that some consumer displays (`note_displayed`, per consumer, so
 shared widgets do not multiply requests).
+
+**Next game vs `_games` share ONE hold predicate** — `_models.final_in_hold` (with
+`GAME_LENGTH`) is used by both `scores.select_stories` and `NHLSource._playing`. A team
+skips the next-game lookup (and its `next_games` entry is dropped) only while it has a
+LIVE game or a final inside the hold at the SHORTEST widget hold (`_next_hold_hours`). A
+future game never counts — a post-midnight game is not "later today" and must come from
+the lookup. Diverge the two and a team's card vanishes after its final's hold
+(`test_next_game_returns_after_final_hold`).
 
 **First-sight goal baseline lives in the source; celebrated state lives on the widget/card**
 — `NHLSource.goals_after_baseline(game_id)` is NON-consuming: the first sight of a game
