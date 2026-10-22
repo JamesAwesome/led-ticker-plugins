@@ -232,3 +232,42 @@ def test_demo_games(tz):
     assert games[3].venue == "UBS Arena"
     assert status_lines(games[3], now, tz)[1] == "7:00 PM"
     assert status_lines(games[3], now, tz)[0].startswith("FRI")
+
+
+def test_nan_inf_numbers_never_raise():
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        row = {
+            "id": 7,
+            "awayTeam": {"abbrev": "PHI", "score": bad, "sog": bad},
+            "homeTeam": {"abbrev": "NYI"},
+        }
+        g = parse_game(row, polled_at=0.0)
+        assert g.away_score == 0 and g.away_sog is None
+
+
+def _sit(code, secs=60):
+    return parse_situation(
+        {
+            "situation": {
+                "situationCode": code,
+                "secondsRemaining": secs,
+                "awayTeam": {"abbrev": "PHI"},
+                "homeTeam": {"abbrev": "NYI"},
+            }
+        }
+    )
+
+
+def test_situation_effective_skaters():
+    s = _sit("0641")  # away goalie out, 6v4: PP + EN, both away
+    assert (s.pp_team, s.en_team, s.pp_seconds) == ("PHI", "PHI", 60)
+    s = _sit("0651")  # 6v5 effective 5v5
+    assert (s.pp_team, s.pp_seconds, s.en_team) == (None, None, "PHI")
+    s = _sit("1451")
+    assert (s.pp_team, s.en_team) == ("NYI", None)
+    s = _sit("0000")
+    assert (s.pp_team, s.en_team) == (None, None)
+
+
+def test_clock_never_runs_backwards():
+    assert live_clock_seconds(_live(), 50.0) == 754

@@ -91,6 +91,8 @@ def _int(v: Any, default: int | None = 0) -> int | None:
     if isinstance(v, int):
         return v
     if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return default
         return int(v)
     if isinstance(v, str):
         try:
@@ -241,17 +243,20 @@ def parse_situation(landing: dict) -> Situation | None:
     away = _loc(_dict(sit.get("awayTeam")).get("abbrev")) or None
     home = _loc(_dict(sit.get("homeTeam")).get("abbrev")) or None
 
+    # Zero skaters is a nonsense code, not an empty net.
     en_team = None
-    if away_g == 0:
+    if away_g == 0 and away_s > 0:
         en_team = away
-    elif home_g == 0:
+    elif home_g == 0 and home_s > 0:
         en_team = home
 
-    # A power play is the side with more skaters; 6 skaters means the goalie
-    # was pulled for an extra attacker, which is not a PP.
+    # Power play = more EFFECTIVE skaters (a pulled goalie's extra attacker
+    # doesn't count, so 6v5 with an empty net is 5v5, not a PP).
+    eff_away = away_s - (1 if away_g == 0 else 0)
+    eff_home = home_s - (1 if home_g == 0 else 0)
     pp_team = None
-    if away_s != home_s and max(away_s, home_s) <= 5:
-        pp_team = home if home_s > away_s else away
+    if eff_away != eff_home and away_s > 0 and home_s > 0:
+        pp_team = home if eff_home > eff_away else away
     pp_seconds = _int(sit.get("secondsRemaining"), None) if pp_team else None
     return Situation(pp_team=pp_team, pp_seconds=pp_seconds, en_team=en_team)
 
@@ -263,7 +268,7 @@ def _tick(seconds: int | None, game: GameInfo, now: float) -> int | None:
     if seconds is None:
         return None
     if game.clock_running:
-        return max(0, seconds - int(now - game.polled_at))
+        return max(0, seconds - int(max(0.0, now - game.polled_at)))
     return seconds
 
 
