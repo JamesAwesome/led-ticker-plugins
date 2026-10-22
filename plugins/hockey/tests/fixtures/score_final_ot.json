@@ -1,0 +1,222 @@
+{
+  "prevDate": "2026-10-21",
+  "currentDate": "2026-10-21",
+  "nextDate": "2026-10-23",
+  "games": [
+    {
+      "id": 2026020088,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-21",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-21T23:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "OFF",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI",
+        "score": 3,
+        "sog": 31
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI",
+        "score": 2,
+        "sog": 27
+      },
+      "period": 4,
+      "periodDescriptor": {
+        "number": 4,
+        "periodType": "OT",
+        "maxRegulationPeriods": 3
+      },
+      "gameOutcome": {
+        "lastPeriodType": "OT",
+        "otPeriods": 1
+      },
+      "goals": [
+        {
+          "period": 1,
+          "periodDescriptor": {
+            "number": 1,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "07:26",
+          "playerId": 8477404,
+          "name": {
+            "default": "T. Konecny"
+          },
+          "firstName": {
+            "default": "Travis"
+          },
+          "lastName": {
+            "default": "Konecny"
+          },
+          "teamAbbrev": {
+            "default": "PHI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8484387,
+              "name": {
+                "default": "M. Michkov"
+              },
+              "assistsToDate": 9
+            }
+          ],
+          "goalsToDate": 5,
+          "awayScore": 1,
+          "homeScore": 0,
+          "strength": "ev"
+        },
+        {
+          "period": 2,
+          "periodDescriptor": {
+            "number": 2,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "11:40",
+          "playerId": 8478445,
+          "name": {
+            "default": "M. Barzal"
+          },
+          "firstName": {
+            "default": "Mathew"
+          },
+          "lastName": {
+            "default": "Barzal"
+          },
+          "teamAbbrev": {
+            "default": "NYI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8475314,
+              "name": {
+                "default": "B. Horvat"
+              },
+              "assistsToDate": 7
+            }
+          ],
+          "goalsToDate": 4,
+          "awayScore": 1,
+          "homeScore": 1,
+          "strength": "ev"
+        },
+        {
+          "period": 3,
+          "periodDescriptor": {
+            "number": 3,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "03:15",
+          "playerId": 8478445,
+          "name": {
+            "default": "M. Barzal"
+          },
+          "firstName": {
+            "default": "Mathew"
+          },
+          "lastName": {
+            "default": "Barzal"
+          },
+          "teamAbbrev": {
+            "default": "NYI"
+          },
+          "goalModifier": "none",
+          "assists": [],
+          "goalsToDate": 5,
+          "awayScore": 1,
+          "homeScore": 2,
+          "strength": "ev"
+        },
+        {
+          "period": 3,
+          "periodDescriptor": {
+            "number": 3,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "18:44",
+          "playerId": 8480801,
+          "name": {
+            "default": "T. Sanheim"
+          },
+          "firstName": {
+            "default": "Travis"
+          },
+          "lastName": {
+            "default": "Sanheim"
+          },
+          "teamAbbrev": {
+            "default": "PHI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8484387,
+              "name": {
+                "default": "M. Michkov"
+              },
+              "assistsToDate": 10
+            }
+          ],
+          "goalsToDate": 2,
+          "awayScore": 2,
+          "homeScore": 2,
+          "strength": "ev"
+        },
+        {
+          "period": 4,
+          "periodDescriptor": {
+            "number": 4,
+            "periodType": "OT",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "02:11",
+          "playerId": 8484387,
+          "name": {
+            "default": "M. Michkov"
+          },
+          "firstName": {
+            "default": "Matvei"
+          },
+          "lastName": {
+            "default": "Michkov"
+          },
+          "teamAbbrev": {
+            "default": "PHI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8477404,
+              "name": {
+                "default": "T. Konecny"
+              },
+              "assistsToDate": 10
+            }
+          ],
+          "goalsToDate": 3,
+          "awayScore": 3,
+          "homeScore": 2,
+          "strength": "ev"
+        }
+      ]
+    }
+  ],
+  "_handwritten": true
+}

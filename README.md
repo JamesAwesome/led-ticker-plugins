@@ -29,6 +29,7 @@ pip install led-ticker-<name>   # e.g. pip install led-ticker-weather
 | Baseball / MLB | `led-ticker-baseball` | `baseball.scores`, `.standings`, `.promotions`, `.statcast`, `.attendance` | MLB Stats API |
 | Pool | `led-ticker-pool` | `pool.monitor` | InfluxDB v2 |
 | Tennis | `led-ticker-tennis` | `tennis.scores` | [Live Tennis API](https://livetennisapi.com) free tier (maintained by the API's vendor) |
+| Hockey | `led-ticker-hockey` | `hockey.scores` | NHL public web API (no key) |
 | Flair | `led-ticker-flair` | sprite-trail transitions `nyancat.*`, `pokeball.*`, `pacman.*`, `sailor_moon.*` (+ `:pokeball.ball:` emoji) | bundled sprite artwork |
 
 ## Develop

@@ -1,0 +1,83 @@
+{
+  "_handwritten": true,
+  "games": [
+    {
+      "id": 2026020115,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-23T00:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI"
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI"
+      }
+    },
+    {
+      "id": 2026020131,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-24",
+      "venue": {
+        "default": "Wells Fargo Center"
+      },
+      "startTimeUTC": "2026-10-24T23:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 1,
+        "name": {
+          "default": "Devils"
+        },
+        "abbrev": "NJD"
+      },
+      "homeTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI"
+      }
+    },
+    {
+      "id": 2026020149,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-26",
+      "venue": {
+        "default": "Madison Square Garden"
+      },
+      "startTimeUTC": "2026-10-26T23:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI"
+      },
+      "homeTeam": {
+        "id": 3,
+        "name": {
+          "default": "Rangers"
+        },
+        "abbrev": "NYR"
+      }
+    }
+  ]
+}
