@@ -40,9 +40,13 @@ def _team_color(abbrev: str) -> Color:
     return make_color(*team(abbrev).primary)
 
 
-def segments(game: GameInfo, now: float, tz) -> list[tuple[str, Color]]:
-    """The crawl as (text, color) pairs; `"".join(texts)` is the line."""
+def segments(
+    game: GameInfo, now: float, tz, *, stale: bool = False
+) -> list[tuple[str, Color]]:
+    """The crawl as (text, color) pairs; `"".join(texts)` is the line.
+    `stale` adds a DIM ` STALE` right after the state/status run."""
     sep = (" · ", pal.DIM)
+    flag = [(" STALE", pal.DIM)] if stale else []
     a, h = game.away, game.home
     if game.state == "future":
         day, clock = status_lines(game, now, tz)
@@ -52,6 +56,7 @@ def segments(game: GameInfo, now: float, tz) -> list[tuple[str, Color]]:
             (h, _team_color(h)),
             sep,
             (f"{day} {clock}".strip(), pal.AMBER),
+            *flag,
         ]
         if game.venue:
             segs += [sep, (game.venue.upper(), pal.DIM)]
@@ -69,12 +74,13 @@ def segments(game: GameInfo, now: float, tz) -> list[tuple[str, Color]]:
         segs.append(("FINAL", pal.WHITE))
         if game.final_type:
             segs.append((f"/{game.final_type}", pal.AMBER))
-        return segs
+        return segs + flag
 
     label, clock = status_lines(game, now, tz)
     segs.append((label, pal.AMBER))
     if clock:
         segs += [(" ", pal.WHITE), (clock, pal.WHITE)]
+    segs += flag
     sit = game.situation
     if sit is not None and sit.pp_team:
         pp = fmt_clock(live_pp_seconds(game, now))
@@ -96,6 +102,7 @@ def render_crawl(
     *,
     y_offset: int = 0,
     hold_padding: int = 6,
+    stale: bool = False,
 ) -> int:
     """Draw at LOGICAL `cursor_pos`; return the run's advance width, also
     LOGICAL."""
@@ -104,7 +111,7 @@ def render_crawl(
     yo = y_offset * scale
     px_size = _px_size(real.width)
     y = _y_for(px_size)
-    segs = segments(game, now, tz)
+    segs = segments(game, now, tz, stale=stale)
     widths = [text_width(px_size, t) for t, _ in segs]
     run_phys = sum(widths)
     logical_advance = -(-run_phys // scale)

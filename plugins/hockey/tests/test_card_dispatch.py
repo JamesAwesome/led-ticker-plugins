@@ -118,3 +118,26 @@ def test_frame_hooks_never_raise_before_or_after_draw(smallsign):
     c.resume_frame()
     c.reset_frame()
     assert c._legacy is not None
+
+
+def _msg_text(msg):
+    return "".join(t for t, _ in msg.segments)
+
+
+def test_scale1_ticker_shows_stale_and_rebuilds_on_flip(smallsign):
+    c = _card(layout="ticker")
+    c.draw(smallsign)
+    assert "STALE" not in _msg_text(c._legacy)
+    c.stale = True
+    c.draw(smallsign)
+    assert "STALE" in _msg_text(c._legacy)
+    c.stale = False
+    c.draw(smallsign)
+    assert "STALE" not in _msg_text(c._legacy)
+
+
+def test_hires_ticker_passes_stale(bigsign):
+    c = _card(layout="ticker", stale=True)
+    with mock.patch.object(card_mod, "render_crawl", return_value=10) as spy:
+        c.draw(bigsign)
+    assert spy.call_args.kwargs["stale"] is True

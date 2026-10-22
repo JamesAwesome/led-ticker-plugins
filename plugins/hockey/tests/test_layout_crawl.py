@@ -72,3 +72,20 @@ def test_y_offset_shifts_rows(bigsign, tz):
     real.Clear()
     render_crawl(bigsign, live, NOW, tz, 0, y_offset=2)
     assert min(y for _, y in _lit(real)) == top + 8
+
+
+LIVE_G, _INT_G, FINAL_G, NEXT_G = build_demo_games(NOW)
+
+
+def test_segments_stale_follows_status(tz):
+    from led_ticker_hockey import _palette as pal
+
+    for g in (LIVE_G, FINAL_G, NEXT_G):
+        plain = segments(g, NOW, tz)
+        stale = segments(g, NOW, tz, stale=True)
+        assert len(stale) == len(plain) + 1
+        i = next(i for i, s in enumerate(stale) if s[0] == " STALE")
+        assert stale[i][1] == pal.DIM
+        assert stale[:i] + stale[i + 1 :] == plain
+        # right after the status run: nothing but separators/detail follow
+        assert i == len(plain) or stale[i + 1][0] == " · "

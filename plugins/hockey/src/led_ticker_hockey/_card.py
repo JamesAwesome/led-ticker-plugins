@@ -10,8 +10,8 @@ hold-vs-scroll check compares against). The crawl adds `self.padding`.
 
 The widget reuses a card across polls and assigns `game` / `stale` in
 place. The cached legacy story must never show an old game: the band board
-is re-synced on every draw, the ticker message is rebuilt when `game` or
-the layout changes.
+is re-synced on every draw, the ticker message is rebuilt when `game`,
+`stale` or the layout changes.
 
 Goal celebrations: `queue_goals` routes a tracked team's goal to `pending`
 (newest `MAX_QUEUED` kept) and any other goal to a brief score
@@ -78,7 +78,10 @@ class HockeyGameCard(FrameAwareBase):
     _hl_shown: bool = attrs.field(init=False, default=False)
     _hl_frame: int = attrs.field(init=False, default=-1)
     _legacy: Any = attrs.field(init=False, default=None)
-    _legacy_for: tuple[str, GameInfo] | None = attrs.field(init=False, default=None)
+    # (layout, game, stale) the cached legacy story was built for.
+    _legacy_for: tuple[str, GameInfo, bool] | None = attrs.field(
+        init=False, default=None
+    )
 
     @property
     def hold_time(self) -> float:
@@ -161,14 +164,15 @@ class HockeyGameCard(FrameAwareBase):
                 self._legacy = board
             board.game = self.game
             board.stale = self.stale
-            self._legacy_for = (layout, self.game)
+            self._legacy_for = (layout, self.game, self.stale)
             return board
         built = self._legacy_for
         if (
             self._legacy is None
             or built is None
             or built[0] != layout
-            or (built[1] is not self.game)
+            or built[1] is not self.game
+            or built[2] != self.stale
         ):
             self._legacy = build_ticker_message(
                 self.game,
@@ -177,8 +181,9 @@ class HockeyGameCard(FrameAwareBase):
                 font=self.font,
                 bg_color=self.bg_color,
                 font_color=self.font_color,
+                stale=self.stale,
             )
-            self._legacy_for = (layout, self.game)
+            self._legacy_for = (layout, self.game, self.stale)
         return self._legacy
 
     def draw(
@@ -211,6 +216,7 @@ class HockeyGameCard(FrameAwareBase):
                 cursor_pos,
                 y_offset=y_offset,
                 hold_padding=self.padding,
+                stale=self.stale,
             )
             return canvas, w + self.padding
         render_scoreboard(

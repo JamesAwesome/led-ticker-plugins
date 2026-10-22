@@ -74,11 +74,11 @@ timezone = "America/New_York"   # for start times and the day boundary
 
 - **`layout = "auto"` (default)** — `scoreboard` on **all three** signs (smallsign, bigsign, longboi). A held board reads better than a crawl on a 16-row strip, so `auto` never picks `ticker`.
 - **`layout = "scoreboard"`** — a held board per game:
-  - **smallsign (160×16, bitmap font):** two 8-row bands, away on top. Each band has a brand chip, the abbreviation, the score and `SOG nn`; `PP m:ss` sits on the power-play team's band; the period is right-aligned in the top band and the clock in the bottom band.
+  - **smallsign (160×16, bitmap font):** two 8-row bands, away on top. Each band has a brand chip, the abbreviation, the score and `SOG nn` (`STALE` replaces the `SOG` label when the data is stale); `PP m:ss` or `EN` sits on that team's band during play (not in intermission); the period is right-aligned in the top band and the clock in the bottom band. Columns move right as needed so 2-digit scores and shot counts never touch.
   - **bigsign (256×64):** two rows with a dotted divider — chip, abbreviation, large score, `SOG nn` (cyan) — and an amber **PP** badge on the power-play team's row. The right column shows the period (amber), the clock (white) and `PP m:ss`.
   - **longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, `SOG`, huge score), the home team mirrors it on the right, and the centre holds the period, a large clock and the **PP** badge with `TEAM m:ss` beneath. Next-game cards add the team nicknames.
   - **Intermission:** the clock reads `2ND INT` with the countdown. **Empty net:** `EN` marks the team that pulled its goalie. **Final:** `FINAL`, `FINAL/OT` or `FINAL/SO`, the winner's score green and the loser's dimmed. **Next game:** both chips, `@`, the day and date (amber), the time (white) and the arena (dim).
-- **`layout = "ticker"`** — one scrolling line per game, using the same wording as the boards. Scale-1 renders it as a bitmap `SegmentMessage`; scale>1 as a hi-res crawl.
+- **`layout = "ticker"`** — one scrolling line per game, using the same wording as the boards (`STALE` follows the period/clock when the data is stale). Scale-1 renders it as a bitmap `SegmentMessage`; scale>1 as a hi-res crawl.
 
 Team abbreviations shrink to fit on the physical boards (both rows always share one size) and are ellipsized only when even the smallest size would collide. Nothing on the physical boards is user-tunable (fixed palette).
 

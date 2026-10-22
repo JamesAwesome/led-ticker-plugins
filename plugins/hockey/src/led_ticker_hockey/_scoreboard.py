@@ -3,8 +3,12 @@
 signs never reach them.
 
 Band geometry (the mockup's, 160x16): away band rows 0-7, home band rows
-8-15. Chip x0-2; abbrev x5; score x28; `SOG` label x40 + value x60; `PP m:ss`
-(or `EN`) x84; the period (top band) and clock (bottom band) right-aligned.
+8-15. Chip x0-2; abbrev x5; score x28; `SOG` (or `STALE`) label x40 + value
+x60; `PP m:ss` (or `EN`, live play only — hidden in intermission) x84; the
+period (top band) and clock (bottom band) right-aligned. The x anchors are
+MINIMUMS: each column starts at least `_GAP` px past the widest text of
+the column before it (both bands share columns), so 2-digit scores, the
+`STALE` label and 2-digit SOG push later columns right instead of touching.
 """
 
 import time
@@ -44,8 +48,8 @@ _X_ABBREV = 5
 _X_SCORE = 28
 _X_SOG_LABEL = 40
 _X_SOG_VALUE = 60
-_X_SOG_VALUE_STALE = 68  # "STALE" is 25px wide: push the value clear of it
 _X_SITUATION = 84
+_GAP = 6
 
 
 @attrs.define
@@ -118,29 +122,49 @@ class HockeyBandBoard(FrameAwareBase):
             right(bottom, y1, pal.WHITE)
             return canvas, cursor_pos + canvas.width
 
-        sit = g.situation
-        for band, abbrev, score, sog in (
-            (0, g.away, g.away_score, g.away_sog),
-            (1, g.home, g.home_score, g.home_sog),
-        ):
+        def w(text: str) -> int:
+            return measure_width(font, text, canvas)
+
+        def col(minimum: int, texts: list[str], prev: int) -> int:
+            """Column x: the anchor, or clear of the previous column."""
+            return max(minimum, prev + _GAP) if texts else prev
+
+        sit = g.situation if g.state == "live" and not g.in_intermission else None
+        rows = (
+            (g.away, g.away_score, g.away_sog),
+            (g.home, g.home_score, g.home_sog),
+        )
+        scores = [str(score) for _, score, _ in rows]
+        labels = [
+            "STALE" if self.stale else ("SOG" if sog is not None else "")
+            for _, _, sog in rows
+        ]
+        values = [str(sog) if sog is not None else "" for _, _, sog in rows]
+        score_end = _X_SCORE + max(w(t) for t in scores)
+        label_x = max(_X_SOG_LABEL, score_end + _GAP)
+        label_end = label_x + max(w(t) for t in labels)
+        value_x = col(_X_SOG_VALUE, [t for t in labels if t], label_end)
+        value_end = value_x + max(w(t) for t in values)
+        sit_x = col(_X_SITUATION, [t for t in values if t], value_end)
+        for band, (abbrev, _, _) in enumerate(rows):
             y = ys[band]
             r0 = band * half_h
             primary, _ = pal.chip(abbrev)
             rect(real, 0, r0, 2, r0 + half_h - 2 + band, primary)
             draw_text(canvas, font, abbrev, _X_ABBREV, y, primary)
-            draw_text(canvas, font, str(score), _X_SCORE, y, self._score_color(abbrev))
-            if sog is not None:
-                label = "STALE" if self.stale else "SOG"
-                draw_text(canvas, font, label, _X_SOG_LABEL, y, pal.DIM)
-                vx = _X_SOG_VALUE_STALE if self.stale else _X_SOG_VALUE
-                draw_text(canvas, font, str(sog), vx, y, pal.CYAN)
-            if g.state == "live" and sit is not None:
+            color = self._score_color(abbrev)
+            draw_text(canvas, font, scores[band], _X_SCORE, y, color)
+            if labels[band]:
+                draw_text(canvas, font, labels[band], label_x, y, pal.DIM)
+            if values[band]:
+                draw_text(canvas, font, values[band], value_x, y, pal.CYAN)
+            if sit is not None:
                 if sit.pp_team == abbrev:
                     pp = fmt_clock(live_pp_seconds(g, now))
                     text = f"PP {pp}".rstrip()
-                    draw_text(canvas, font, text, _X_SITUATION, y, pal.AMBER)
+                    draw_text(canvas, font, text, sit_x, y, pal.AMBER)
                 elif sit.en_team == abbrev:
-                    draw_text(canvas, font, "EN", _X_SITUATION, y, pal.AMBER)
+                    draw_text(canvas, font, "EN", sit_x, y, pal.AMBER)
 
         if g.state == "final":
             right(top, ys[0], pal.WHITE)
@@ -159,10 +183,11 @@ def build_ticker_message(
     font: Font | None = None,
     bg_color: Color | None = None,
     font_color: Color | ColorProvider | None = None,
+    stale: bool = False,
 ) -> SegmentMessage:
     """One scrolling line — the SAME segments the hi-res crawl paints."""
     return SegmentMessage(
-        segments(game, now, tz),
+        segments(game, now, tz, stale=stale),
         center=True,
         bg_color=bg_color,
         font=font if font is not None else FONT_DEFAULT,
