@@ -1,0 +1,129 @@
+<h2>Live game, first take: PHI @ NYI, 2nd period</h2>
+<p class="subtitle">Flyers 2, Islanders 1 · 12:34 left in the 2nd · Islanders on a power play (1:42 left) · shots 18–22. One design per sign. React to anything.</p>
+
+<div class="section">
+  <h3>Smallsign: 160×16, scale 1, bitmap font</h3>
+  <p class="subtitle">Two 8-row bands, one per team. Period sits top right, clock bottom right. The PP timer goes on the team with the power play.</p>
+  <canvas id="small" style="max-width:100%;background:#000;border-radius:6px"></canvas>
+</div>
+
+<div class="section">
+  <h3>Bigsign: 256×64, hi-res</h3>
+  <p class="subtitle">Two held rows, one per team: chip, name, score, shots. A <b>PP</b> badge marks the team with the power play. The right column shows period, clock and PP time left.</p>
+  <canvas id="big" style="max-width:100%;background:#000;border-radius:6px"></canvas>
+</div>
+
+<div class="section">
+  <h3>Longboi: 512×64, hi-res</h3>
+  <p class="subtitle">Full scoreboard: away team on the left third, home team on the right, game clock in the middle with the power play underneath.</p>
+  <canvas id="long" style="max-width:100%;background:#000;border-radius:6px"></canvas>
+</div>
+
+<script>
+(function () {
+  const G = {
+    '0':['01110','10001','10011','10101','11001','10001','01110'],'1':['00100','01100','00100','00100','00100','00100','01110'],
+    '2':['01110','10001','00001','00010','00100','01000','11111'],'3':['11111','00010','00100','00010','00001','10001','01110'],
+    '4':['00010','00110','01010','10010','11111','00010','00010'],'5':['11111','10000','11110','00001','00001','10001','01110'],
+    '6':['00110','01000','10000','11110','10001','10001','01110'],'7':['11111','00001','00010','00100','01000','01000','01000'],
+    '8':['01110','10001','10001','01110','10001','10001','01110'],'9':['01110','10001','10001','01111','00001','00010','01100'],
+    'A':['01110','10001','10001','11111','10001','10001','10001'],'B':['11110','10001','10001','11110','10001','10001','11110'],
+    'C':['01110','10001','10000','10000','10000','10001','01110'],'D':['11100','10010','10001','10001','10001','10010','11100'],
+    'E':['11111','10000','10000','11110','10000','10000','11111'],'F':['11111','10000','10000','11110','10000','10000','10000'],
+    'G':['01110','10001','10000','10111','10001','10001','01111'],'H':['10001','10001','10001','11111','10001','10001','10001'],
+    'I':['01110','00100','00100','00100','00100','00100','01110'],'L':['10000','10000','10000','10000','10000','10000','11111'],
+    'N':['10001','10001','11001','10101','10011','10001','10001'],'O':['01110','10001','10001','10001','10001','10001','01110'],
+    'P':['11110','10001','10001','11110','10000','10000','10000'],'R':['11110','10001','10001','11110','10100','10010','10001'],
+    'S':['01111','10000','10000','01110','00001','00001','11110'],'T':['11111','00100','00100','00100','00100','00100','00100'],
+    'Y':['10001','10001','10001','01010','00100','00100','00100'],
+    ':':['000','010','010','000','010','010','000'],' ':['000','000','000','000','000','000','000'],
+  };
+  function Sign(id, W, H, pitch) {
+    const cv = document.getElementById(id);
+    cv.width = W * pitch; cv.height = H * pitch;
+    const fb = new Array(W * H).fill(null);
+    const s = {
+      W, H,
+      px(x, y, c) { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < H) fb[y * W + x] = c; },
+      rect(x0, y0, x1, y1, c) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) s.px(x, y, c); },
+      bmpWidth(t) { let w = 0; for (const ch of t) w += (G[ch] || G[' '])[0].length + 1; return w - 1; },
+      bmp(t, x, y, c) {
+        for (const ch of t) { const g = G[ch] || G[' '];
+          g.forEach((row, r) => [...row].forEach((b, k) => { if (b === '1') s.px(x + k, y + r, c); }));
+          x += g[0].length + 1; }
+        return x;
+      },
+      hiresWidth(t, size, weight = 700) {
+        const o = document.createElement('canvas').getContext('2d');
+        o.font = `${weight} ${size}px Inter, system-ui, Helvetica, Arial, sans-serif`;
+        return Math.ceil(o.measureText(t).width);
+      },
+      hires(t, x, base, size, c, weight = 700, align = 'left') {
+        const w = s.hiresWidth(t, size, weight);
+        if (align === 'right') x -= w; else if (align === 'center') x -= w / 2;
+        const oc = document.createElement('canvas'); oc.width = w + 4; oc.height = size * 2;
+        const o = oc.getContext('2d');
+        o.font = `${weight} ${size}px Inter, system-ui, Helvetica, Arial, sans-serif`;
+        o.fillStyle = '#fff'; o.textBaseline = 'alphabetic';
+        const by = Math.round(size * 1.5); o.fillText(t, 0, by);
+        const d = o.getImageData(0, 0, oc.width, oc.height).data;
+        for (let yy = 0; yy < oc.height; yy++) for (let xx = 0; xx < oc.width; xx++)
+          if (d[(yy * oc.width + xx) * 4 + 3] > 128) s.px(Math.round(x) + xx, base - by + yy, c);
+        return w;
+      },
+      render() {
+        const ctx = cv.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+        const r = pitch * 0.42;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const c = fb[y * W + x];
+          ctx.fillStyle = c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#141414';
+          ctx.beginPath(); ctx.arc(x * pitch + pitch / 2, y * pitch + pitch / 2, r, 0, 7); ctx.fill();
+        }
+      },
+    };
+    return s;
+  }
+
+  const PHI = [255, 90, 0], NYI = [40, 110, 255], NYI2 = [255, 130, 40];
+  const WHITE = [255, 255, 255], AMBER = [255, 180, 0], CYAN = [0, 200, 220], DIM = [70, 70, 70];
+
+  // smallsign
+  { const s = Sign('small', 160, 16, 5);
+    s.rect(0, 0, 2, 6, PHI); s.rect(0, 9, 2, 15, NYI);
+    s.bmp('PHI', 5, 0, PHI); s.bmp('NYI', 5, 9, NYI);
+    s.bmp('2', 28, 0, WHITE); s.bmp('1', 28, 9, WHITE);
+    s.bmp('SOG', 40, 0, DIM); s.bmp('18', 60, 0, CYAN);
+    s.bmp('SOG', 40, 9, DIM); s.bmp('22', 60, 9, CYAN);
+    s.bmp('PP 1:42', 84, 9, AMBER);
+    s.bmp('2ND', 160 - s.bmpWidth('2ND'), 0, AMBER);
+    s.bmp('12:34', 160 - s.bmpWidth('12:34'), 9, WHITE);
+    s.render(); }
+
+  // bigsign
+  { const s = Sign('big', 256, 64, 3.5);
+    s.rect(3, 5, 8, 26, PHI); s.rect(3, 37, 8, 58, NYI); s.rect(3, 55, 8, 58, NYI2);
+    s.hires('PHI', 14, 25, 22, PHI); s.hires('NYI', 14, 57, 22, NYI);
+    s.hires('2', 108, 26, 26, WHITE, 800, 'right'); s.hires('1', 108, 58, 26, WHITE, 800, 'right');
+    for (let x = 0; x < 196; x += 3) s.px(x, 32, DIM);
+    s.rect(114, 41, 136, 54, AMBER); // PP badge, unlit text inside
+    s.hires('PP', 125, 52, 11, null, 800, 'center');
+    s.hires('SOG 18', 144, 21, 11, CYAN, 700); s.hires('SOG 22', 144, 53, 11, CYAN, 700);
+    s.hires('2ND', 251, 19, 15, AMBER, 800, 'right');
+    s.hires('12:34', 251, 40, 18, WHITE, 800, 'right');
+    s.hires('PP 1:42', 251, 59, 12, AMBER, 700, 'right');
+    s.render(); }
+
+  // longboi
+  { const s = Sign('long', 512, 64, 2);
+    s.rect(6, 8, 13, 56, PHI); s.rect(498, 8, 505, 56, NYI); s.rect(498, 48, 505, 56, NYI2);
+    s.hires('PHI', 22, 32, 28, PHI); s.hires('SOG 18', 22, 54, 13, CYAN, 700);
+    s.hires('2', 168, 52, 46, WHITE, 800, 'right');
+    s.hires('NYI', 490, 32, 28, NYI, 700, 'right'); s.hires('SOG 22', 490, 54, 13, CYAN, 700, 'right');
+    s.hires('1', 344, 52, 46, WHITE, 800);
+    s.hires('2ND', 256, 17, 15, AMBER, 800, 'center');
+    s.hires('12:34', 256, 44, 26, WHITE, 800, 'center');
+    s.rect(214, 49, 236, 62, AMBER); s.hires('PP', 225, 60, 11, null, 800, 'center');
+    s.hires('NYI 1:42', 242, 60, 12, AMBER, 700);
+    s.render(); }
+})();
+</script>
