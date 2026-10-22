@@ -15,12 +15,19 @@ is re-synced on every draw, the ticker message is rebuilt when `game`,
 
 Goal celebrations: `queue_goals` routes a tracked team's goal to `pending`
 (newest `MAX_QUEUED` kept) and any other goal to a brief score
-`highlight`. While `pending`, `draw()` plays the celebration timeline off
-`_frame_count` (held, on every layout) and `hold_time` stretches to cover
-it. A goal is CONSUMED at the next visit-entry `reset_frame()` only once
-it was actually shown on a live (unpaused, ticking) frame, so a stale
-frame count from an earlier visit or transition compositing never eats
-an unseen celebration.
+`highlight`. A goal with the same `(away_score, home_score)` snapshot as
+one already pending is a scoring change and REPLACES it (`replace_goals`
+does the same for corrections the widget knows were already celebrated,
+and never queues). While `pending`, `draw()` plays the celebration
+timeline off `_frame_count` (held, on every layout; the board while the
+frame counter is paused, i.e. transition compositing) and `hold_time`
+covers it plus the board's own hold. A goal is CONSUMED at the next
+visit-entry `reset_frame()` only once it was actually shown on a live
+(unpaused, ticking) frame, so a stale frame count from an earlier visit
+or transition compositing never eats an unseen celebration.
+
+Demo cards carry `demo_goals`: re-queued after every third completed
+visit so a looping demo keeps showing the celebration.
 """
 
 import time
@@ -40,7 +47,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_hockey._celebration import (
-    CELEBRATION_FRAMES,
+    CELEBRATION_SECONDS,
     HIGHLIGHT_FRAMES,
     MAX_QUEUED,
     phase_at,
@@ -53,6 +60,15 @@ from led_ticker_hockey._scoreboard import HockeyBandBoard, build_ticker_message
 from led_ticker_hockey.layouts import resolve_layout
 from led_ticker_hockey.layouts.crawl import render_crawl
 from led_ticker_hockey.layouts.scoreboard import render_scoreboard
+
+# While a celebration is due the card holds for it AND then shows the board
+# for at least this long, so the celebration never eats the board's hold.
+BOARD_FLOOR = 4.0
+DEMO_EVERY = 3  # demo cards re-celebrate after every 3rd completed visit
+
+
+def _score_of(goal: Goal) -> tuple[int, int]:
+    return (goal.away_score, goal.home_score)
 
 
 @attrs.define
@@ -69,12 +85,14 @@ class HockeyGameCard(FrameAwareBase):
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
+    demo_goals: tuple[Goal, ...] = attrs.field(default=(), kw_only=True)
     pending: list[Goal] = attrs.field(init=False, factory=list)
     highlight: tuple[str, int] | None = attrs.field(init=False, default=None)
     _shown: set[str] = attrs.field(init=False, factory=set)
     # The visit's celebration snapshot, taken at visit entry. None = no
     # visit yet. Goals queued mid-visit wait for the next turn.
     _playing: list[Goal] | None = attrs.field(init=False, default=None)
+    _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
     _hl_frame: int = attrs.field(init=False, default=-1)
     _legacy: Any = attrs.field(init=False, default=None)
@@ -85,20 +103,47 @@ class HockeyGameCard(FrameAwareBase):
 
     @property
     def hold_time(self) -> float:
-        """Per-story hold the engine reads (`max(section, widget)`),
-        stretched to play every pending celebration."""
+        """Per-story hold the engine reads (`max(section, widget)`): with
+        `n` celebrations due, `n * CELEBRATION_SECONDS` for them plus
+        `max(base_hold, BOARD_FLOOR)` for the board after; else
+        `base_hold`."""
         n = len(self._playing if self._playing is not None else self.pending)
-        return self.base_hold + n * CELEBRATION_FRAMES * 0.05
+        if not n:
+            return self.base_hold
+        return n * CELEBRATION_SECONDS + max(self.base_hold, BOARD_FLOOR)
 
     def queue_goals(self, goals: list[Goal]) -> None:
         """Tracked-team goals celebrate; any other goal highlights the
-        score. No tracked teams means nothing celebrates."""
+        score. No tracked teams means nothing celebrates. A goal whose
+        score snapshot is already pending replaces it (scoring change)."""
         for g in goals:
+            if self._swap(g):
+                continue
             if g.team in self.tracked:
                 self.pending.append(g)
             else:
                 self.highlight = (g.team, HIGHLIGHT_FRAMES)
         del self.pending[:-MAX_QUEUED]
+
+    def replace_goals(self, goals: list[Goal]) -> None:
+        """Scoring changes to goals already queued or celebrated: swap a
+        matching entry (so the detail shows the corrected scorer), never
+        celebrate or highlight again."""
+        for g in goals:
+            self._swap(g)
+
+    def _swap(self, goal: Goal) -> bool:
+        """Replace the pending/playing goal with `goal`'s score snapshot."""
+        snap = _score_of(goal)
+        swapped = False
+        for seq in (self.pending, self._playing or []):
+            for i, old in enumerate(seq):
+                if _score_of(old) == snap:
+                    if old.key in self._shown:
+                        self._shown.add(goal.key)
+                    seq[i] = goal
+                    swapped = True
+        return swapped
 
     def drop_overturned(self) -> None:
         """Drop pending goals the current score no longer supports."""
@@ -128,8 +173,8 @@ class HockeyGameCard(FrameAwareBase):
     def _celebrate(self, canvas: Any, y_offset: int) -> bool:
         """Paint the celebration frame if one is due; True when painted."""
         playing = self._playing
-        if not playing:
-            return False
+        if not playing or self._frame_paused:
+            return False  # paused = transition compositing: the board
         phase = phase_at(self._frame_count, len(playing))
         if phase is None:
             return False
@@ -249,11 +294,17 @@ class HockeyGameCard(FrameAwareBase):
         if self._shown:
             self.pending = [g for g in self.pending if g.key not in self._shown]
             self._shown.clear()
-        self._playing = list(self.pending)
         if self._hl_shown:
             self.highlight = None  # it was on screen: consumed
         self._hl_shown = False
         self._hl_frame = -1
+        # A completed visit ticked frames; a transition's extra reset
+        # right before `_show_one`'s does not, so it isn't counted twice.
+        if self.demo_goals and self._frame_count > 0:
+            self._demo_visits += 1
+            if self._demo_visits % DEMO_EVERY == 0 and not self.pending:
+                self.queue_goals(list(self.demo_goals))
+        self._playing = list(self.pending)
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()

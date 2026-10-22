@@ -266,12 +266,32 @@ def test_detail_long_texts_keep_clearance(sign, request):
 
 
 def test_hold_time_extends_while_celebration_pending():
+    # n x 4 s of celebration, THEN the board for max(base_hold, 4 s): the
+    # celebration never eats the board's own hold.
     c = _card(base_hold=3.0)
     assert c.hold_time == 3.0
     c.queue_goals([_goal()])
-    assert c.hold_time == pytest.approx(7.0)  # no visit yet: pending
+    assert c.hold_time == pytest.approx(4.0 + 4.0)  # no visit yet: pending
     c.reset_frame()
-    assert c.hold_time == pytest.approx(7.0)  # the visit's snapshot
+    assert c.hold_time == pytest.approx(8.0)  # the visit's snapshot
+
+
+@pytest.mark.parametrize(
+    ("base", "n", "want"),
+    [(0.0, 1, 8.0), (3.0, 2, 12.0), (10.0, 1, 14.0), (10.0, 3, 22.0)],
+)
+def test_hold_time_is_celebration_plus_board_floor(base, n, want):
+    c = _card(base_hold=base)
+    c.queue_goals([_goal(key=str(i), away_score=i + 1) for i in range(n)])
+    assert abs(card_mod.CELEBRATION_SECONDS - 4.0) < 1e-9
+    assert card_mod.BOARD_FLOOR == 4.0
+    assert c.hold_time == pytest.approx(want)
+
+
+def test_hold_time_without_goals_is_base_hold():
+    c = _card(base_hold=6.0)
+    c.reset_frame()
+    assert c.hold_time == 6.0
 
 
 def test_goal_queued_mid_visit_waits_for_next_turn(bigsign):
@@ -289,7 +309,7 @@ def test_goal_queued_mid_visit_waits_for_next_turn(bigsign):
     assert spy.call_count == 30  # board, not a mid-timeline celebration
     c.reset_frame()
     assert len(c.pending) == 1
-    assert c.hold_time == pytest.approx(7.0)
+    assert c.hold_time == pytest.approx(8.0)
     with (
         mock.patch.object(
             card_mod, "render_flash", wraps=card_mod.render_flash
@@ -318,13 +338,14 @@ def test_no_visit_snapshot_renders_board(bigsign):
 
 def test_cap_eviction_mid_visit_does_not_shift_playing(bigsign):
     c = _card()
-    goals = [_goal(key=str(i)) for i in range(3)]
+    goals = [_goal(key=str(i), away_score=i + 3) for i in range(3)]
     c.queue_goals(goals)
     c.reset_frame()
     for _ in range(CELEBRATION_FRAMES + 20):  # into goal 1
         c.advance_frame()
         c.draw(bigsign)
-    c.queue_goals([_goal(key="x"), _goal(key="y")])  # evicts "0", "1"
+    c.queue_goals([_goal(key="x", away_score=10), _goal(key="y", away_score=11)])
+    # ^ evicts "0", "1" (distinct scores: same-score goals are replacements)
     with mock.patch.object(
         card_mod, "render_detail", wraps=card_mod.render_detail
     ) as detail:
@@ -438,10 +459,10 @@ def test_empty_tracked_highlights_everything():
 
 def test_queue_caps_at_three():
     c = _card()
-    goals = [_goal(key=str(i)) for i in range(5)]
+    goals = [_goal(key=str(i), away_score=i + 3) for i in range(5)]
     c.queue_goals(goals)
     assert c.pending == goals[-3:]
-    c.queue_goals([_goal(key="x")])
+    c.queue_goals([_goal(key="x", away_score=20)])
     assert [g.key for g in c.pending] == ["3", "4", "x"]
 
 
@@ -509,7 +530,7 @@ def test_highlight_not_burned_under_celebration(bigsign):
     c = _card(tracked=("PHI",))
     c.queue_goals([_goal(key="a")])
     c.reset_frame()
-    c.queue_goals([_goal(key="b", team="NYI")])
+    c.queue_goals([_goal(key="b", team="NYI", home_score=2)])
     for _ in range(20):
         c.advance_frame()
         c.draw(bigsign)
@@ -572,3 +593,150 @@ async def test_overturned_goal_drops_pending():
 def test_module_exports():
     for name in ("phase_at", "pulse", "render_flash", "render_detail"):
         assert callable(getattr(cel, name))
+
+
+# ------------------------------------------ transition compositing (M3)
+
+
+def test_paused_card_draws_board_not_celebration(bigsign):
+    c = _card()
+    c.queue_goals([_goal()])
+    c.reset_frame()
+    for _ in range(3):
+        c.advance_frame()
+        c.draw(bigsign)
+    c.pause_frame()
+    with (
+        mock.patch.object(card_mod, "render_flash") as flash,
+        mock.patch.object(card_mod, "render_detail") as detail,
+        mock.patch.object(card_mod, "render_scoreboard") as board_spy,
+    ):
+        c.draw(bigsign)
+    assert flash.call_count == 0 and detail.call_count == 0
+    board_spy.assert_called_once()
+    c.resume_frame()
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        c.advance_frame()
+        c.draw(bigsign)
+    assert flash.call_count == 1  # resumes where it was
+
+
+# ------------------------------------------------ scoring changes (I6)
+
+
+def test_card_queue_same_score_replaces_pending():
+    c = _card()
+    a = _goal(key="a", scorer="KONECNY", away_score=3, home_score=1)
+    b = _goal(key="b", scorer="COUTURIER", away_score=3, home_score=1)
+    c.queue_goals([a])
+    c.queue_goals([b])
+    assert c.pending == [b]
+
+
+def test_replace_goals_swaps_playing_mid_visit(bigsign):
+    c = _card()
+    a = _goal(key="a", scorer="KONECNY", away_score=3, home_score=1)
+    b = _goal(key="b", scorer="COUTURIER", away_score=3, home_score=1)
+    c.queue_goals([a])
+    c.reset_frame()
+    for _ in range(FLASH_FRAMES + 2):
+        c.advance_frame()
+        c.draw(bigsign)
+    c.replace_goals([b])
+    with mock.patch.object(
+        card_mod, "render_detail", wraps=card_mod.render_detail
+    ) as detail:
+        c.advance_frame()
+        c.draw(bigsign)
+    assert detail.call_args.args[2].scorer == "COUTURIER"
+    c.reset_frame()
+    assert c.pending == []  # consumed: it did reach the panel
+
+
+def test_replace_goals_after_consumption_is_silent():
+    c = _card()
+    c.replace_goals([_goal(key="b", away_score=3, home_score=1)])
+    assert c.pending == [] and c.highlight is None
+
+
+def _scored(key, away, home, scorer="KONECNY"):
+    return _goal(key=key, scorer=scorer, away_score=away, home_score=home)
+
+
+async def test_widget_scoring_change_replaces_pending_goal():
+    from .test_scores import FakeSource, _snap, game
+
+    w = HockeyScoreMonitor(session=None, teams=["PHI"])
+    w._tz = TZ
+    w._source = FakeSource(_snap(game(1, "live", away_score=2)), {1: ()})
+    await w.update()
+    first = _scored("p3:1:00:11", 3, 1)
+    w._source.goals[1] = (first,)
+    w._source.snapshot = _snap(game(1, "live", away_score=3))
+    await w.update()
+    card = w.feed_stories[0]
+    assert card.pending == [first]
+    fixed = _scored("p3:1:00:22", 3, 1, scorer="COUTURIER")
+    w._source.goals[1] = (fixed,)
+    await w.update()
+    assert card.pending == [fixed]
+
+
+async def test_widget_scoring_change_after_celebration_does_not_replay(bigsign):
+    from .test_scores import FakeSource, _snap, game
+
+    w = HockeyScoreMonitor(session=None, teams=["PHI"])
+    w._tz = TZ
+    w._source = FakeSource(_snap(game(1, "live", away_score=2)), {1: ()})
+    await w.update()
+    w._source.goals[1] = (_scored("a", 3, 1),)
+    w._source.snapshot = _snap(game(1, "live", away_score=3))
+    await w.update()
+    card = w.feed_stories[0]
+    card.reset_frame()
+    for _ in range(CELEBRATION_FRAMES):
+        card.advance_frame()
+        card.draw(bigsign)
+    card.reset_frame()
+    assert card.pending == []
+    w._source.goals[1] = (_scored("b", 3, 1, scorer="COUTURIER"),)
+    await w.update()
+    assert card.pending == [] and card._playing == []
+
+
+async def test_widget_baseline_goal_correction_is_silent():
+    from .test_scores import FakeSource, _snap, game
+
+    base = _scored("a", 1, 0)
+    live = dataclasses.replace(game(1, "live", away_score=1, home_score=0))
+    w = HockeyScoreMonitor(session=None, teams=["PHI"])
+    w._tz = TZ
+    w._source = FakeSource(_snap(dataclasses.replace(live, goals=(base,))), {1: ()})
+    await w.update()
+    fixed = _scored("b", 1, 0, scorer="COUTURIER")
+    w._source.goals[1] = (fixed,)
+    w._source.snapshot = _snap(dataclasses.replace(live, goals=(fixed,)))
+    await w.update()
+    assert w.feed_stories[0].pending == []
+
+
+async def test_widget_goal_after_disallowed_one_still_celebrates():
+    from .test_scores import FakeSource, _snap, game
+
+    w = HockeyScoreMonitor(session=None, teams=["PHI"])
+    w._tz = TZ
+    w._source = FakeSource(_snap(game(1, "live", away_score=2)), {1: ()})
+    await w.update()
+    w._source.goals[1] = (_scored("a", 3, 1),)
+    w._source.snapshot = _snap(game(1, "live", away_score=3))
+    await w.update()
+    w._source.goals[1] = ()
+    w._source.snapshot = _snap(game(1, "live", away_score=2))  # disallowed
+    await w.update()
+    card = w.feed_stories[0]
+    assert card.pending == []
+    real = _scored("b", 3, 1, scorer="COUTURIER")
+    w._source.goals[1] = (real,)
+    w._source.snapshot = _snap(game(1, "live", away_score=3))
+    await w.update()
+    assert card.pending == [real]

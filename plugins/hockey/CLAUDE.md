@@ -72,11 +72,30 @@ counts or transition compositing never eat an unseen celebration. Goals queued m
 wait for the next turn. Non-tracked goals highlight the score instead; empty `teams` means
 no celebrations.
 
-**`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` + 4 s (80 frames x
-50 ms) per queued goal. Core reads it as `max(section_hold, getattr(story, "hold_time",
-0.0))` in led-ticker `ticker.py` (`_show_one`, around line 762 at time of writing). Keep
-it a property reading `_playing` (fall back to `pending`); if core changes that line the
-celebration is cut short.
+**`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
+with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
+`max(base_hold, BOARD_FLOOR)` (4 s) so the board after the celebration keeps its own hold.
+Core reads it as `max(section_hold, getattr(story, "hold_time", 0.0))` in led-ticker
+`ticker.py` (`_show_one`, around line 762 at time of writing), right AFTER `reset_frame()`.
+Keep it a property reading `_playing` (fall back to `pending`); if core changes that line
+the celebration is cut short.
+
+**Celebration paints only on live frames** — `_celebrate` returns False (the board draws)
+while `_frame_paused` (transition compositing), so a mid-celebration frame is never
+composited into a transition.
+
+**Scoring changes are replacements, keyed by score snapshot** — the feed's goal key is
+`period:time:playerId`, so a scorer correction arrives as a NEW key. The widget keeps
+`_celebrated_scores[gid]` (`(away, home)` snapshots, first-sight seeded from all of the
+game's goals, pruned to <= the current score so a disallowed goal's snapshot is forgotten)
+alongside `_celebrated`; a new key at a known snapshot goes to `card.replace_goals`, which
+swaps the pending/playing entry and never celebrates or highlights. `card.queue_goals` also
+replaces a pending entry with the same snapshot instead of appending. Test helpers that
+queue several goals MUST give them distinct scores.
+
+**Demo re-arm** — demo live cards carry `demo_goals`; `reset_frame` re-queues them after
+every `DEMO_EVERY` (3) COMPLETED visits (`_frame_count > 0` at reset, so a transition's
+extra `reset_frame` before `_show_one`'s is not counted).
 
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the legacy ticker message joins the same list, so the two

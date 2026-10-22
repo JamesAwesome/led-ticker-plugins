@@ -6,8 +6,10 @@ import logging
 import unittest.mock as mock
 from datetime import UTC, datetime, timedelta
 
+import led_ticker_hockey._card as mod_card
 import led_ticker_hockey.scores as mod
 from led_ticker_hockey._card import HockeyGameCard
+from led_ticker_hockey._celebration import CELEBRATION_FRAMES
 from led_ticker_hockey._models import GAME_LENGTH, GameInfo, Goal, build_demo_games
 from led_ticker_hockey._source import MIN_INTERVAL, Snapshot
 from led_ticker_hockey.scores import HockeyScoreMonitor, select_stories
@@ -343,6 +345,22 @@ class TestGoals:
 
 
 class TestStart:
+    async def test_demo_live_card_celebrates_every_third_visit(self, bigsign):
+        with mock.patch.object(mod, "spawn_tracked", mock.Mock()):
+            w = await HockeyScoreMonitor.start(None, demo=True, teams=["PHI", "NYI"])
+        card = w.feed_stories[0]
+        assert card.game.state == "live" and len(card.pending) == 1
+        shown = []
+        for _ in range(7):
+            card.reset_frame()  # a transition's reset lands first ...
+            card.reset_frame()  # ... then _show_one's: one visit, not two
+            with mock.patch.object(mod_card, "render_flash") as flash:
+                for _ in range(CELEBRATION_FRAMES + 10):
+                    card.advance_frame()
+                    card.draw(bigsign)
+            shown.append(flash.call_count > 0)
+        assert shown == [True, False, False, True, False, False, True]
+
     async def test_demo_builds_four_stories_without_network(self):
         spawn = mock.Mock()
         with (

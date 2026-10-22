@@ -39,6 +39,7 @@ from led_ticker.plugin import (
 from led_ticker_hockey._card import HockeyGameCard
 from led_ticker_hockey._models import (
     GameInfo,
+    Goal,
     build_demo_games,
     final_in_hold,
 )
@@ -182,6 +183,10 @@ class HockeyScoreMonitor:
     _source: NHLSource | None = attrs.field(init=False, default=None)
     _cards: dict[_CardKey, HockeyGameCard] = attrs.field(init=False, factory=dict)
     _celebrated: dict[int, set[str]] = attrs.field(init=False, factory=dict)
+    # Per game: (away, home) score snapshots already celebrated or queued.
+    _celebrated_scores: dict[int, set[tuple[int, int]]] = attrs.field(
+        init=False, factory=dict
+    )
     feed_stories: list[HockeyGameCard] = attrs.field(init=False, factory=list)
 
     _LIST_FIELD_HINTS = {
@@ -318,6 +323,11 @@ class HockeyScoreMonitor:
     def _load_demo(self) -> None:
         games = build_demo_games(time.time())
         self._cards = {g.game_id: self._new_card(g) for g in games}
+        for card in self._cards.values():
+            if card.game.state == "live" and card.game.goals:
+                # Celebrate on the first visit, then after every 3rd.
+                card.demo_goals = card.game.goals
+                card.queue_goals(list(card.game.goals))
         self.feed_stories = list(self._cards.values())
         logger.info("hockey.scores demo: %d stories", len(self.feed_stories))
 
@@ -374,21 +384,45 @@ class HockeyScoreMonitor:
         """Queue goals this widget hasn't celebrated onto their cards.
 
         A game's first sight by THIS widget is a silent baseline, so a hot
-        reload with a surviving shared source never replays old goals.
+        reload with a surviving shared source never replays old goals. A
+        new key whose score snapshot was already celebrated or queued is a
+        scoring change (the feed re-keys a goal when the scorer is
+        corrected): it replaces the pending entry, never celebrates again.
+        Snapshots above the current score are forgotten (a disallowed
+        goal), so the next real goal at that score still celebrates.
         """
-        for gid in snap.games:
+        for gid, game in snap.games.items():
             goals = source.goals_after_baseline(gid)
             seen = self._celebrated.get(gid)
             if seen is None:
                 self._celebrated[gid] = {g.key for g in goals}
+                self._celebrated_scores[gid] = {
+                    (g.away_score, g.home_score) for g in game.goals
+                }
                 continue
+            scores = {
+                s
+                for s in self._celebrated_scores.get(gid, set())
+                if s[0] <= game.away_score and s[1] <= game.home_score
+            }
+            self._celebrated_scores[gid] = scores
             new = [g for g in goals if g.key not in seen]
             if not new:
                 continue
             seen.update(g.key for g in new)
+            fresh: list[Goal] = []
+            changed: list[Goal] = []
+            for g in new:
+                score = (g.away_score, g.home_score)
+                (changed if score in scores else fresh).append(g)
+                scores.add(score)
             card = self._cards.get(gid)
             if card is not None:
-                card.queue_goals(new)
+                card.queue_goals(fresh)
+                card.replace_goals(changed)
         self._celebrated = {
             gid: keys for gid, keys in self._celebrated.items() if gid in snap.games
+        }
+        self._celebrated_scores = {
+            gid: s for gid, s in self._celebrated_scores.items() if gid in snap.games
         }

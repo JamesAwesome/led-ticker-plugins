@@ -41,6 +41,7 @@ from led_ticker_hockey._paint import (
 
 FLASH_FRAMES = 12
 CELEBRATION_FRAMES = 80
+CELEBRATION_SECONDS = CELEBRATION_FRAMES * 0.05  # 4 s at the 50 ms tick
 MAX_QUEUED = 3
 HIGHLIGHT_FRAMES = 40
 

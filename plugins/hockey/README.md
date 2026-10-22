@@ -54,9 +54,9 @@ timezone = "America/New_York"   # for start times and the day boundary
 | `timezone` | string | `"America/New_York"` | IANA timezone for start times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
 | `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10.** A value below 15 speeds up live polling (widgets sharing a process use the fastest ask); a value above 15 does not slow the shared source below 15 s while a game is live. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
-| `hold_time` | float | `0.0` | Minimum per-card hold in seconds. The engine uses the larger of this and the section's `hold_time`; the card extends it automatically while a celebration is pending. |
+| `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per goal **plus** the larger of this and 4 s for the board afterwards. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. |
-| `demo` | bool | `false` | Render fixture games (a live power play, a goal celebration, an intermission, an OT final, a next game) with `PHI` and `NYI`, no network — for docs, gifs and hardware checks. |
+| `demo` | bool | `false` | Render fixture games (a live power play, a goal celebration, an intermission, an OT final, a next game) with `PHI` and `NYI`, no network — for docs, gifs and hardware checks. The live game's goal celebrates on its first turn and again every third turn after (set `teams = ["PHI"]` or similar: untracked goals only highlight the score). |
 | `bg_color` | RGB list | none | Background fill. Scale-1 / ticker only — the physical renderers paint their own palette. |
 | `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 / ticker only. |
 | `font` | string | core default | Font for the scale-1 ticker line. |
@@ -86,9 +86,11 @@ Team abbreviations shrink to fit on the physical boards (both rows always share 
 
 When a team in `teams` scores, that game's card plays a ~4 second celebration **the next time its turn comes around** — it never interrupts other content. Three quick flashes of the panel in the scoring team's color with `GOAL` knocked out, then the new score with the scorer's number pulsing, the scorer and season goal count (`KONECNY (5)`), the assists, and the period and time. Then the normal board for the rest of the hold.
 
-- A section's hold is **extended automatically** while a celebration is pending: the card asks for about 4 extra seconds per queued goal, so you do not need to raise `hold_time` for it.
+- A section's hold is **extended automatically** while a celebration is pending: the card asks for 4 s per queued goal plus the larger of the widget's `hold_time` and 4 s for the board that follows (the engine still uses the section's `hold_time` if that is longer). The celebration never eats the board's own time, so you do not need to raise `hold_time` for it.
 - Several goals scored between turns celebrate in order, up to 3 per turn; older ones are dropped.
 - A goal celebrates once per widget: replays on later rotations do not happen, and a celebration is only consumed once it actually reached the panel.
+- **Scoring changes do not replay.** When the NHL corrects a goal (a new scorer or assist), the feed re-issues it; a goal at the same score as one already celebrated or queued replaces it — a queued celebration shows the corrected scorer — and never celebrates twice.
+- During a transition into or out of the card, the board is shown; the celebration plays only once the card is on screen.
 - **First sight is a silent baseline.** Goals already in the feed when the widget first sees a game (boot, restart, hot reload, a game found mid-period) do not celebrate.
 - In `league` / `live` modes, goals by teams you do not track do not flash; the score is highlighted briefly and fades back to white. With an empty `teams` list nothing celebrates.
 - An overturned goal quietly corrects the score and drops any queued celebration for it.
