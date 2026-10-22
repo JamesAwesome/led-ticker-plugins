@@ -103,7 +103,7 @@ def test_queue_goals_stub_stores():
     c = _card()
     g = build_demo_games(NOW)[0].goals[0]
     c.queue_goals([g])
-    assert c.pending_goals == [g]
+    assert c.pending == [g]
 
 
 def test_frame_hooks_never_raise_before_or_after_draw(smallsign):

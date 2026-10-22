@@ -360,6 +360,7 @@ class HockeyScoreMonitor:
             if card is None:
                 card = self._new_card(game)
             card.game = game
+            card.drop_overturned()
             card.stale = snap.stale
             cards[key] = card
         self._cards = cards

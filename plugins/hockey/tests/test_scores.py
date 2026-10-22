@@ -318,17 +318,17 @@ class TestUpdate:
 
 class TestGoals:
     async def test_first_sight_silent_then_only_new_goals_queued(self):
-        g1, g2, g3 = goal("a"), goal("b"), goal("c", "NYI")
+        g1, g2, g3 = goal("a"), goal("b"), goal("c")
         live = game(1, "live")
         w = _widget(_snap(live), goals={1: (g1, g2)})
         await w.update()
         card = w.feed_stories[0]
-        assert card.pending_goals == []
+        assert card.pending == []
         w._source.goals[1] = (g1, g2, g3)
         await w.update()
-        assert card.pending_goals == [g3]
+        assert card.pending == [g3]
         await w.update()
-        assert card.pending_goals == [g3]  # not re-queued
+        assert card.pending == [g3]  # not re-queued
 
     async def test_celebrated_pruned_with_game(self):
         w = _widget(_snap(game(1, "live")), goals={1: (goal("a"),)})
