@@ -219,7 +219,7 @@ Poll algorithm (per `poll()`):
   - `test_band_board_lights_both_bands_and_right_column` (smallsign fixture): lit pixels exist in rows 0–7 and 8–15. Pixels in the `PHI` orange exist at x≤2 in rows 0–7. Lit pixels exist in the right-most 30 columns of both bands.
   - `test_band_board_pp_on_home_band_only`: amber pixels exist in x 84–124 in rows 8–15, and none there in rows 0–7.
   - `test_band_board_final_winner_green`: `GREEN` pixels exist in the score column of the winner's band only.
-  - `test_band_board_highlight_score`: with `highlight="NYI"`, the NYI score column is drawn in `AMBER`, not `WHITE`.
+  - `test_band_board_highlight_score`: with `highlight=("NYI", 0.0)`, the NYI score column is drawn in `AMBER`, not `WHITE`.
 - [ ] **Step 2: Run.** `uv run pytest plugins/hockey/tests -q -k "scoreboard or crawl or resolve"`. Expected: FAIL.
 - [ ] **Step 3: Implement** the files above. `render_crawl` mirrors tennis `layouts/crawl.py`, painting `segments()` in hi-res.
 - [ ] **Step 4: Run** the same command. Expected: PASS.
