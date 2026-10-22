@@ -7,6 +7,8 @@ convention). Two geometries, picked by physical width (`_WIDE_MIN_W`):
 
 - bigsign (< 400px): two 32px team rows (chip | abbrev | score | PP/EN
   badge | SOG) beside a right-aligned status column (period / clock / PP).
+  The dotted row divider stops >= `_MIN_GAP` short of any status line
+  sharing its row (measured).
 - longboi (>= 400px): away on the left, home mirrored on the right, the
   period / clock / power play centered at x=256.
 
@@ -17,7 +19,8 @@ ellipsizes at the floor, and keeps >= `_MIN_GAP` px from any neighbour
 sharing its vertical band. Budgets come from the measured extents of the
 fixed-anchor texts (scores, SOG), so the clearance holds by construction;
 `tests/test_layout_scoreboard.py` spies on `hires()` and asserts it on
-worst-case data.
+worst-case data, and on `rect()` / `_dotted()` for the shapes (chips,
+badges, divider) plus the panel's vertical bounds.
 
 Never raises on sparse `GameInfo` (no SOG, no clock, no situation, no
 start time, unknown teams): a missing value is simply not drawn.
@@ -71,7 +74,7 @@ class _Geom:
 
 _BIG = _Geom(
     wide=False,
-    chip_x=(3, 8),
+    chip_x=(2, 7),  # 6 px wide; >= _MIN_GAP before the abbrev at x14
     name_x=14,
     name_sizes=(22, 20, 18, 16, 14),
     score_x=108,
@@ -243,7 +246,6 @@ def _big_board(shim, real, game, now, tz, yo, stale, highlight):
         if sogs[row]:
             w = _base(shim, sogs[row], _BIG_SOG_X, 21 + dy, pal.CYAN, g.sog_size)
             col_left = max(col_left, _BIG_SOG_X + w)  # ...and the SOG
-    _dotted(real, 32 + yo, _BIG_DIVIDER_X1)
 
     budget = g.status_x - (col_left + _MIN_GAP)
     line1, line2 = status_lines(game, now, tz)
@@ -260,9 +262,17 @@ def _big_board(shim, real, game, now, tz, yo, stale, highlight):
         pp = _pp_clock(game, now)
         if pp is not None:
             lines.append((f"PP {pp}".rstrip(), pal.AMBER, 59, (12, 11, 10)))
+    divider_y = 32 + yo
+    divider_x1 = _BIG_DIVIDER_X1
     for text, color, base, sizes in lines:
         text, size = _fit(text, sizes, budget)
-        _right(shim, text, g.status_x, base + yo, color, size)
+        x0 = _right(shim, text, g.status_x, base + yo, color, size)
+        cap_top = base + yo - js_round(size * 0.72)
+        if text and cap_top <= divider_y <= base + yo:
+            # A status line shares the divider's row: stop >= _MIN_GAP
+            # short of its MEASURED left edge.
+            divider_x1 = min(divider_x1, x0 - _MIN_GAP - 1)
+    _dotted(real, divider_y, divider_x1)
     if stale:
         _right(shim, "STALE", g.status_x, 7 + yo, pal.DIM, g.stale_size)
 

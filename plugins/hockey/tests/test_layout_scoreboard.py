@@ -99,6 +99,43 @@ def _spy(monkeypatch, canvas, game, **kw):
     return calls
 
 
+def _spy_all(monkeypatch, canvas, game, **kw):
+    """Texts (as `_spy`) plus filled shapes: chips, badges (`rect`) and
+    the dotted divider, each as (label, x0, x1_excl, y_top, y_bottom)."""
+    shapes = []
+    orig_rect, orig_dotted = board.rect, board._dotted
+
+    def rect_spy(real, x0, y0, x1, y1, color):
+        shapes.append((f"rect@{x0}", x0, x1 + 1, y0, y1))
+        orig_rect(real, x0, y0, x1, y1, color)
+
+    def dotted_spy(real, y, x1):
+        shapes.append(("divider", 0, x1 + 1, y, y))
+        orig_dotted(real, y, x1)
+
+    monkeypatch.setattr(board, "rect", rect_spy)
+    monkeypatch.setattr(board, "_dotted", dotted_spy)
+    return _spy(monkeypatch, canvas, game, **kw), shapes
+
+
+def _assert_shapes_clear(calls, shapes, real):
+    """Every shape on-panel; every text >= _MIN_GAP from any shape sharing
+    its rows, unless the text sits INSIDE it (a badge's knocked-out label)."""
+    for name, x0, x1, top, bottom in shapes:
+        assert x0 >= 0 and x1 <= real.width, f"{name} off-panel"
+        assert top >= 0 and bottom < real.height, f"{name} off-panel vertically"
+    for text, tx0, tx1, cap, base, _ in calls:
+        assert cap >= 0, f"{text!r} cap top {cap} above the panel"
+        assert base < real.height, f"{text!r} baseline {base} below the panel"
+        for name, x0, x1, top, bottom in shapes:
+            if cap > bottom or top > base:
+                continue  # different rows
+            if x0 <= tx0 and tx1 <= x1:
+                continue  # knocked out of the shape
+            gap = x0 - tx1 if tx0 < x0 else tx0 - x1
+            assert gap >= _MIN_GAP, f"{text!r} {tx0}..{tx1} vs {name} {x0}..{x1}"
+
+
 def _assert_separated(calls, real):
     for i, a in enumerate(calls):
         assert a[1] >= 0, f"{a[0]!r} starts off-panel"
@@ -125,9 +162,11 @@ def _texts(calls):
 @pytest.mark.parametrize("stale", [False, True])
 def test_worst_case_keeps_min_clearance(sign, game, stale, request, monkeypatch):
     canvas = request.getfixturevalue(sign)
-    calls = _spy(monkeypatch, canvas, game, stale=stale)
-    assert calls
-    _assert_separated(calls, unwrap_to_real(canvas))
+    calls, shapes = _spy_all(monkeypatch, canvas, game, stale=stale)
+    assert calls and shapes
+    real = unwrap_to_real(canvas)
+    _assert_separated(calls, real)
+    _assert_shapes_clear(calls, shapes, real)
 
 
 def test_worst_live_shows_everything(bigsign, longboi, monkeypatch):
@@ -292,3 +331,21 @@ def test_y_offset_shifts_content(sign, request, monkeypatch):
     a = {c[0]: c for c in _spy(monkeypatch, canvas, LIVE)}
     b = {c[0]: c for c in _spy(monkeypatch, canvas, LIVE, y_offset=2)}
     assert b["PHI"][4] - a["PHI"][4] == 8  # 2 logical rows at scale 4
+
+
+def test_divider_clears_a_wide_status_line(bigsign, monkeypatch):
+    # The status column's second line shares the divider's row: however
+    # wide it gets (here forced to its fit budget), the dotted divider
+    # stops >= _MIN_GAP short of its MEASURED left edge.
+    monkeypatch.setattr(board, "status_lines", lambda *a: ("2ND", "88:88:88"))
+    calls, shapes = _spy_all(monkeypatch, bigsign, WORST_LIVE)
+    line2 = next(c for c in calls if c[0].startswith("88"))
+    div = next(s for s in shapes if s[0] == "divider")
+    assert line2[1] - div[2] >= _MIN_GAP
+    _assert_shapes_clear(calls, shapes, unwrap_to_real(bigsign))
+
+
+def test_divider_keeps_full_length_when_status_is_narrow(bigsign, monkeypatch):
+    _, shapes = _spy_all(monkeypatch, bigsign, LIVE)
+    div = next(s for s in shapes if s[0] == "divider")
+    assert div[2] == board._BIG_DIVIDER_X1 + 1

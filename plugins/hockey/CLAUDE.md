@@ -105,7 +105,13 @@ paths cannot drift.
 (`_MIN_GAP`) between texts sharing a vertical band, row-uniform name sizes, ellipsis at the
 floor. **Tripwire:** `tests/test_layout_scoreboard.py::test_worst_case_keeps_min_clearance`
 (longest abbreviations, double-digit scores, `SOG 99`, `PP` + `EN`, `FINAL/SO`) on both
-physical signs. Any geometry/ladder change must pass it.
+physical signs; it also spies `rect()` / `_dotted()` so chips, badges and the divider
+keep >= 6 px from any text sharing their rows (a badge's knocked-out label is exempt) and
+everything stays inside the panel vertically (cap top >= 0, baseline < height). The
+bigsign chip is x2-7 for that reason, and the divider clamps to the measured left edge of
+any status line on its row. Any geometry/ladder change must pass it. The smallsign twin is
+`tests/test_scoreboard.py::test_band_board_worst_case_clearance` (texts per band, from
+measured columns).
 
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert
 extents, bands, ordering and colors.
