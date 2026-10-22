@@ -217,8 +217,8 @@ async def test_landing_only_for_displayed_live():
     )
     await s.poll()
     assert landing not in session.urls
-    s.note_displayed({LIVE_ID})
     clock.advance()
+    s.note_displayed(object(), {LIVE_ID})
     snap = await s.poll()
     assert landing in session.urls
     sit = snap.games[LIVE_ID].situation
@@ -228,7 +228,7 @@ async def test_landing_only_for_displayed_live():
 async def test_landing_failure_is_soft():
     landing = f"{BASE}/v1/gamecenter/{LIVE_ID}/landing"
     s, _, _ = make({TODAY: (200, fx("score_live")), landing: (500, {})})
-    s.note_displayed({LIVE_ID})
+    s.note_displayed(object(), {LIVE_ID})
     snap = await s.poll()
     assert snap.stale is False
     assert snap.games[LIVE_ID].situation is None
@@ -251,27 +251,84 @@ def _with_goals(n):
 async def test_first_sight_goals_are_baseline():
     s, session, clock = make({TODAY: (200, _with_goals(2))})
     await s.poll()
-    assert s.new_goals(LIVE_ID) == []
+    assert s.goals_after_baseline(LIVE_ID) == ()
     session.routes[TODAY] = (200, _with_goals(3))
     clock.advance()
     snap = await s.poll()
-    new = s.new_goals(LIVE_ID)
-    assert [g.key for g in new] == [snap.games[LIVE_ID].goals[2].key]
-    assert s.new_goals(LIVE_ID) == []
-    assert s.new_goals(999) == []
+    third = snap.games[LIVE_ID].goals[2]
+    assert s.goals_after_baseline(LIVE_ID) == (third,)
+    # non-consuming: repeat reads (other widgets) see the same thing
+    assert s.goals_after_baseline(LIVE_ID) == (third,)
+    assert s.goals_after_baseline(999) == ()
 
 
-async def test_disallowed_goal_drops_from_baseline():
-    s, session, clock = make({TODAY: (200, _with_goals(3))})
+async def test_disallowed_goal_vanishes_from_result():
+    s, session, clock = make({TODAY: (200, _with_goals(2))})
+    await s.poll()
+    session.routes[TODAY] = (200, _with_goals(3))
+    clock.advance()
+    await s.poll()
+    assert len(s.goals_after_baseline(LIVE_ID)) == 1
+    session.routes[TODAY] = (200, _with_goals(2))
+    clock.advance()
+    await s.poll()
+    assert s.goals_after_baseline(LIVE_ID) == ()
+    # baseline goal removed and returned is still baseline
+    session.routes[TODAY] = (200, _with_goals(1))
+    clock.advance()
     await s.poll()
     session.routes[TODAY] = (200, _with_goals(2))
     clock.advance()
     await s.poll()
-    assert s.new_goals(LIVE_ID) == []
-    session.routes[TODAY] = (200, _with_goals(3))
-    clock.advance()
+    assert s.goals_after_baseline(LIVE_ID) == ()
+
+
+async def test_note_displayed_union_across_consumers():
+    both = fx("score_live")
+    both["games"][1]["gameState"] = "LIVE"
+    both["games"][1]["awayTeam"]["abbrev"] = "NYI"
+    both["games"][1]["homeTeam"]["abbrev"] = "TOR"
+    other = both["games"][1]["id"]
+    l1 = f"{BASE}/v1/gamecenter/{LIVE_ID}/landing"
+    l2 = f"{BASE}/v1/gamecenter/{other}/landing"
+    s, session, clock = make(
+        {TODAY: (200, both), l1: (200, fx("landing_pp")), l2: (200, fx("landing_pp"))},
+        teams=("PHI", "NYI"),
+    )
+    a, b = object(), object()
     await s.poll()
-    assert s.new_goals(LIVE_ID) == []
+    n_score = session.urls.count(TODAY)
+    for _ in range(3):  # alternate, no clock movement
+        s.note_displayed(a, {LIVE_ID})
+        s.note_displayed(b, {other})
+    await s.poll()  # gate reopened once by the union growing
+    s.note_displayed(a, {LIVE_ID})
+    s.note_displayed(b, {other})
+    await s.poll()
+    assert session.urls.count(TODAY) == n_score + 1
+    assert l1 in session.urls and l2 in session.urls
+
+
+async def test_cadence_ignores_vanished_games():
+    s, session, clock = make({TODAY: (200, fx("score_live"))})
+    await s.poll()
+    assert s.next_delay() == LIVE_INTERVAL
+    session.routes[TODAY] = (200, {"games": []})
+    clock.advance()
+    snap = await s.poll()
+    assert LIVE_ID in snap.games
+    assert s.next_delay() == IDLE_INTERVAL
+
+
+async def test_next_games_with_all_games_widget_sharing():
+    month = f"{BASE}/v1/club-schedule/NYI/month/now"
+    s, _, _ = make(
+        {TODAY: (200, {"games": []}), month: (200, fx("club_season_nyi"))},
+        teams=("NYI",),
+        all_games=True,
+    )
+    snap = await s.poll()
+    assert snap.next_games["NYI"].game_id == 2026020115
 
 
 async def test_next_game_falls_back_to_season():

@@ -34,6 +34,7 @@ REQUEST_TIMEOUT = 20
 _MAX_SHARED_SOURCES = 8
 _USER_AGENT = "led-ticker-hockey (+https://github.com/JamesAwesome/led-ticker-plugins)"
 _UPCOMING_STATES = ("FUT", "PRE")
+_DISPLAYED_TTL = 600  # seconds a consumer's displayed set stays valid
 
 
 @dataclass
@@ -64,7 +65,8 @@ class NHLSource:
         self._all_games = False
         self._tz: ZoneInfo = ZoneInfo("UTC")
         self._hold_hours = 0
-        self._displayed: set[int] = set()
+        self._displayed_by: dict[int, tuple[float, set[int]]] = {}
+        self._latest_ids: set[int] = set()
         self._games: dict[int, GameInfo] = {}
         self._last_seen: dict[int, datetime] = {}
         self._yesterday_ids: set[int] = set()
@@ -72,7 +74,6 @@ class NHLSource:
         self._next_month_at: dict[str, float] = {}
         self._next_season_at: dict[str, float] = {}
         self._known_goals: dict[int, set[str]] = {}
-        self._pending_goals: dict[int, list[Goal]] = {}
         self._situations: dict[int, Any] = {}
         self._backoff = 0
         self._next_allowed = float("-inf")
@@ -100,10 +101,18 @@ class NHLSource:
         if grew:
             self._next_allowed = float("-inf")
 
-    def note_displayed(self, game_ids: set[int]) -> None:
-        added = set(game_ids) - self._displayed
-        self._displayed = set(game_ids)
-        if added:
+    def _displayed_union(self) -> set[int]:
+        now = self._clock()
+        self._displayed_by = {
+            k: v for k, v in self._displayed_by.items() if now - v[0] < _DISPLAYED_TTL
+        }
+        return set().union(*(ids for _, ids in self._displayed_by.values()))
+
+    def note_displayed(self, consumer: object, game_ids: set[int]) -> None:
+        """Per-consumer displayed ids; landing calls use the union."""
+        before = self._displayed_union()
+        self._displayed_by[id(consumer)] = (self._clock(), set(game_ids))
+        if self._displayed_union() - before:
             self._next_allowed = float("-inf")
 
     def _wanted(self, game: GameInfo) -> bool:
@@ -112,7 +121,7 @@ class NHLSource:
     # ------------------------------------------------------------- cadence
 
     def _cadence(self) -> float:
-        games = self._games.values()
+        games = [g for i, g in self._games.items() if i in self._latest_ids]
         if any(g.state == "live" for g in games):
             return LIVE_INTERVAL
         if any(g.state == "future" for g in games):
@@ -124,8 +133,16 @@ class NHLSource:
             return float(self._backoff)
         return float(max(MIN_INTERVAL, self._cadence()))
 
-    def new_goals(self, game_id: int) -> list[Goal]:
-        return self._pending_goals.pop(game_id, [])
+    def goals_after_baseline(self, game_id: int) -> tuple[Goal, ...]:
+        """Goals in the current feed that weren't there on first sight.
+
+        Non-consuming: every widget sees the same result and dedupes itself.
+        """
+        game = self._games.get(game_id)
+        baseline = self._known_goals.get(game_id)
+        if game is None or baseline is None:
+            return ()
+        return tuple(g for g in game.goals if g.key not in baseline)
 
     # ---------------------------------------------------------------- poll
 
@@ -215,6 +232,7 @@ class NHLSource:
 
         # Commit: merge, remember last-seen, drop anything past the hold.
         self._yesterday_ids = yday_ids
+        self._latest_ids = {g for g, v in fetched.items() if self._wanted(v)}
         for gid, game in fetched.items():
             if self._wanted(game):
                 self._games[gid] = game
@@ -225,7 +243,6 @@ class NHLSource:
             self._last_seen.pop(gid, None)
             self._situations.pop(gid, None)
             self._known_goals.pop(gid, None)
-            self._pending_goals.pop(gid, None)
         for gid in [g for g in self._games if not self._wanted(self._games[g])]:
             self._games.pop(gid)
 
@@ -238,19 +255,13 @@ class NHLSource:
         )
 
     def _track_goals(self, game: GameInfo) -> None:
-        keys = {g.key for g in game.goals}
-        known = self._known_goals.get(game.game_id)
-        if known is None:
-            self._known_goals[game.game_id] = keys  # first sight: silent baseline
-            return
-        fresh = [g for g in game.goals if g.key not in known]
-        if fresh:
-            self._pending_goals.setdefault(game.game_id, []).extend(fresh)
-            known |= keys
+        # First sight: whatever is already scored is the silent baseline.
+        self._known_goals.setdefault(game.game_id, {g.key for g in game.goals})
 
     async def _attach_situations(self) -> None:
+        displayed = self._displayed_union()
         for gid, game in list(self._games.items()):
-            if game.state != "live" or gid not in self._displayed:
+            if game.state != "live" or gid not in displayed:
                 self._situations.pop(gid, None)
                 continue
             try:
@@ -263,8 +274,6 @@ class NHLSource:
             )
 
     async def _refresh_next(self, fetched: dict[int, GameInfo]) -> None:
-        if self._all_games:
-            return
         playing = {t for g in self._games.values() for t in (g.away, g.home)}
         now = self._clock()
         for team in sorted(self._teams):
