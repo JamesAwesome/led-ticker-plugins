@@ -1,0 +1,200 @@
+{
+  "prevDate": "2026-10-21",
+  "currentDate": "2026-10-22",
+  "nextDate": "2026-10-23",
+  "games": [
+    {
+      "id": 2026020101,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-22T23:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "LIVE",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI",
+        "score": 2,
+        "sog": 18
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI",
+        "score": 1,
+        "sog": 22
+      },
+      "clock": {
+        "timeRemaining": "12:34",
+        "secondsRemaining": 754,
+        "running": true,
+        "inIntermission": false
+      },
+      "period": 2,
+      "periodDescriptor": {
+        "number": 2,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "goals": [
+        {
+          "period": 1,
+          "periodDescriptor": {
+            "number": 1,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "07:26",
+          "playerId": 8477404,
+          "name": {
+            "default": "T. Konecny"
+          },
+          "firstName": {
+            "default": "Travis"
+          },
+          "lastName": {
+            "default": "Konecny"
+          },
+          "teamAbbrev": {
+            "default": "PHI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8484387,
+              "name": {
+                "default": "M. Michkov"
+              },
+              "assistsToDate": 9
+            }
+          ],
+          "goalsToDate": 4,
+          "awayScore": 1,
+          "homeScore": 0,
+          "strength": "pp"
+        },
+        {
+          "period": 1,
+          "periodDescriptor": {
+            "number": 1,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "15:02",
+          "playerId": 8478445,
+          "name": {
+            "default": "M. Barzal"
+          },
+          "firstName": {
+            "default": "Mathew"
+          },
+          "lastName": {
+            "default": "Barzal"
+          },
+          "teamAbbrev": {
+            "default": "NYI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8475314,
+              "name": {
+                "default": "B. Horvat"
+              },
+              "assistsToDate": 7
+            }
+          ],
+          "goalsToDate": 4,
+          "awayScore": 1,
+          "homeScore": 1,
+          "strength": "ev"
+        },
+        {
+          "period": 2,
+          "periodDescriptor": {
+            "number": 2,
+            "periodType": "REG",
+            "maxRegulationPeriods": 3
+          },
+          "timeInPeriod": "05:10",
+          "playerId": 8477404,
+          "name": {
+            "default": "T. Konecny"
+          },
+          "firstName": {
+            "default": "Travis"
+          },
+          "lastName": {
+            "default": "Konecny"
+          },
+          "teamAbbrev": {
+            "default": "PHI"
+          },
+          "goalModifier": "none",
+          "assists": [
+            {
+              "playerId": 8484387,
+              "name": {
+                "default": "M. Michkov"
+              },
+              "assistsToDate": 9
+            }
+          ],
+          "goalsToDate": 5,
+          "awayScore": 2,
+          "homeScore": 1,
+          "strength": "ev"
+        }
+      ]
+    },
+    {
+      "id": 2026020102,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "Bell Centre"
+      },
+      "startTimeUTC": "2026-10-22T23:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FINAL",
+      "awayTeam": {
+        "id": 10,
+        "name": {
+          "default": "Maple Leafs"
+        },
+        "abbrev": "TOR",
+        "score": 3,
+        "sog": 29
+      },
+      "homeTeam": {
+        "id": 8,
+        "name": {
+          "default": "Canadiens"
+        },
+        "abbrev": "MTL",
+        "score": 1,
+        "sog": 24
+      },
+      "period": 3,
+      "periodDescriptor": {
+        "number": 3,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "gameOutcome": {
+        "lastPeriodType": "REG"
+      },
+      "goals": []
+    }
+  ],
+  "_handwritten": true
+}

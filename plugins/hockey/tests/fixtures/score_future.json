@@ -1,0 +1,60 @@
+{
+  "prevDate": "2026-10-21",
+  "currentDate": "2026-10-22",
+  "nextDate": "2026-10-23",
+  "games": [
+    {
+      "id": 2026020115,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-23T00:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI"
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI"
+      }
+    },
+    {
+      "id": 2026020116,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "Bell Centre"
+      },
+      "startTimeUTC": "2026-10-23T00:30:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "PRE",
+      "awayTeam": {
+        "id": 10,
+        "name": {
+          "default": "Maple Leafs"
+        },
+        "abbrev": "TOR"
+      },
+      "homeTeam": {
+        "id": 8,
+        "name": {
+          "default": "Canadiens"
+        },
+        "abbrev": "MTL"
+      }
+    }
+  ],
+  "_handwritten": true
+}

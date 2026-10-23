@@ -1,0 +1,19 @@
+{
+  "situation": {
+    "homeTeam": {
+      "abbrev": "NYI",
+      "situationDescriptions": [
+        "PP"
+      ],
+      "strength": 5
+    },
+    "awayTeam": {
+      "abbrev": "PHI",
+      "strength": 4
+    },
+    "situationCode": "1451",
+    "timeRemaining": "01:42",
+    "secondsRemaining": 102
+  },
+  "_handwritten": true
+}

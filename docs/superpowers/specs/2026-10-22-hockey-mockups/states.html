@@ -1,0 +1,207 @@
+<h2>The other states: goal, final, next game</h2>
+<p class="subtitle">Same palette as the live board. The goal section is animated and loops every 4 seconds. Intermission isn't drawn: it reuses the live board with the clock replaced by <b>2ND INT 14:12</b>.</p>
+
+<div class="section">
+  <h3>1 · Goal celebration (plays on the widget's next turn)</h3>
+  <p class="subtitle">Three quick flashes in the scoring team's color with <b>GOAL</b> knocked out. Then the new score, where the scoring team's number pulses, plus the scorer with their season goal count and the assists.</p>
+  <canvas id="g-small" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="g-big" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="g-long" style="max-width:100%;border-radius:6px"></canvas>
+</div>
+
+<div class="section">
+  <h3>2 · Final (overtime)</h3>
+  <p class="subtitle">Same board as live. The winner's score turns green, the loser's dims, and the status reads <b>FINAL / OT</b> (or <b>SO</b>). Stays up for <code>final_hold_hours</code>, like baseball.</p>
+  <canvas id="f-small" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="f-big" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="f-long" style="max-width:100%;border-radius:6px"></canvas>
+</div>
+
+<div class="section">
+  <h3>3 · Next game (teams mode, no game today)</h3>
+  <p class="subtitle">Matchup in team colors, day and time in amber, arena dimmed.</p>
+  <canvas id="n-small" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="n-big" style="max-width:100%;border-radius:6px"></canvas><br><br>
+  <canvas id="n-long" style="max-width:100%;border-radius:6px"></canvas>
+</div>
+
+<script>
+(function () {
+  const G = {
+    '0':['01110','10001','10011','10101','11001','10001','01110'],'1':['00100','01100','00100','00100','00100','00100','01110'],
+    '2':['01110','10001','00001','00010','00100','01000','11111'],'3':['11111','00010','00100','00010','00001','10001','01110'],
+    '4':['00010','00110','01010','10010','11111','00010','00010'],'5':['11111','10000','11110','00001','00001','10001','01110'],
+    '6':['00110','01000','10000','11110','10001','10001','01110'],'7':['11111','00001','00010','00100','01000','01000','01000'],
+    '8':['01110','10001','10001','01110','10001','10001','01110'],'9':['01110','10001','10001','01111','00001','00010','01100'],
+    'A':['01110','10001','10001','11111','10001','10001','10001'],'B':['11110','10001','10001','11110','10001','10001','11110'],
+    'C':['01110','10001','10000','10000','10000','10001','01110'],'D':['11100','10010','10001','10001','10001','10010','11100'],
+    'E':['11111','10000','10000','11110','10000','10000','11111'],'F':['11111','10000','10000','11110','10000','10000','10000'],
+    'G':['01110','10001','10000','10111','10001','10001','01111'],'H':['10001','10001','10001','11111','10001','10001','10001'],
+    'I':['01110','00100','00100','00100','00100','00100','01110'],'K':['10001','10010','10100','11000','10100','10010','10001'],
+    'L':['10000','10000','10000','10000','10000','10000','11111'],'M':['10001','11011','10101','10101','10001','10001','10001'],
+    'N':['10001','10001','11001','10101','10011','10001','10001'],'O':['01110','10001','10001','10001','10001','10001','01110'],
+    'P':['11110','10001','10001','11110','10000','10000','10000'],'R':['11110','10001','10001','11110','10100','10010','10001'],
+    'S':['01111','10000','10000','01110','00001','00001','11110'],'T':['11111','00100','00100','00100','00100','00100','00100'],
+    'U':['10001','10001','10001','10001','10001','10001','01110'],'V':['10001','10001','10001','10001','10001','01010','00100'],
+    'Y':['10001','10001','10001','01010','00100','00100','00100'],
+    '@':['01110','10001','10111','10101','10111','10000','01111'],
+    ':':['000','010','010','000','010','010','000'],'-':['000','000','000','111','000','000','000'],
+    '/':['001','001','010','010','010','100','100'],
+    '(':['01','10','10','10','10','10','01'],')':['10','01','01','01','01','01','10'],' ':['000','000','000','000','000','000','000'],
+  };
+  const FONT = (size, w) => `${w} ${size}px Inter, system-ui, Helvetica, Arial, sans-serif`;
+  function Sign(id, W, H, pitch) {
+    const cv = document.getElementById(id);
+    cv.width = W * pitch; cv.height = H * pitch;
+    let fb = new Array(W * H).fill(null);
+    const s = {
+      W, H,
+      clear() { fb = new Array(W * H).fill(null); },
+      px(x, y, c) { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < H) fb[y * W + x] = c; },
+      rect(x0, y0, x1, y1, c) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) s.px(x, y, c); },
+      bmpWidth(t) { let w = 0; for (const ch of t) w += (G[ch] || G[' '])[0].length + 1; return w - 1; },
+      bmp(t, x, y, c, align = 'left') {
+        if (align === 'right') x -= s.bmpWidth(t); else if (align === 'center') x -= Math.floor(s.bmpWidth(t) / 2);
+        for (const ch of t) { const g = G[ch] || G[' '];
+          g.forEach((row, r) => [...row].forEach((b, k) => { if (b === '1') s.px(x + k, y + r, c); }));
+          x += g[0].length + 1; }
+      },
+      hw(t, size, weight = 700) { const o = document.createElement('canvas').getContext('2d'); o.font = FONT(size, weight); return Math.ceil(o.measureText(t).width); },
+      hires(t, x, base, size, c, weight = 700, align = 'left') {
+        const w = s.hw(t, size, weight);
+        if (align === 'right') x -= w; else if (align === 'center') x -= w / 2;
+        const oc = document.createElement('canvas'); oc.width = w + 4; oc.height = size * 2;
+        const o = oc.getContext('2d'); o.font = FONT(size, weight); o.fillStyle = '#fff';
+        const by = Math.round(size * 1.5); o.fillText(t, 0, by);
+        const d = o.getImageData(0, 0, oc.width, oc.height).data;
+        for (let yy = 0; yy < oc.height; yy++) for (let xx = 0; xx < oc.width; xx++)
+          if (d[(yy * oc.width + xx) * 4 + 3] > 128) s.px(Math.round(x) + xx, base - by + yy, c);
+        return w;
+      },
+      render() {
+        const ctx = cv.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+        const r = pitch * 0.42;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const c = fb[y * W + x];
+          ctx.fillStyle = c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#141414';
+          ctx.beginPath(); ctx.arc(x * pitch + pitch / 2, y * pitch + pitch / 2, r, 0, 7); ctx.fill();
+        }
+      },
+    };
+    return s;
+  }
+  const PHI = [255, 90, 0], NYI = [40, 110, 255], NYI2 = [255, 130, 40];
+  const WHITE = [255, 255, 255], AMBER = [255, 180, 0], CYAN = [0, 200, 220], DIM = [70, 70, 70];
+  const GREEN = [0, 220, 90], LOSER = [120, 120, 120], GRAY = [110, 110, 110];
+  const sc = (c, k) => c.map(v => Math.round(v * k));
+
+  const small = (id) => Sign(id, 160, 16, 5), big = (id) => Sign(id, 256, 64, 3.5), long = (id) => Sign(id, 512, 64, 2);
+
+  // ---------- 1. goal (animated) ----------
+  const gs = small('g-small'), gb = big('g-big'), gl = long('g-long');
+  function flash(s, phase) {
+    s.clear();
+    if (phase) {
+      s.rect(0, 0, s.W - 1, s.H - 1, PHI);
+      if (s.W === 160) s.bmp('GOAL', 80, 4, null, 'center');
+      else s.hires('GOAL', s.W / 2, s.H === 64 ? 50 : 50, s.W === 512 ? 44 : 40, null, 900, 'center');
+    }
+  }
+  function goalSmall(s, k) {
+    s.clear();
+    s.rect(0, 0, 2, 6, PHI); s.bmp('GOAL', 5, 0, PHI);
+    s.bmp('PHI', 102, 0, PHI); s.bmp('2', 124, 0, sc(WHITE, k));
+    s.bmp('NYI', 134, 0, NYI); s.bmp('1', 160, 0, WHITE, 'right');
+    s.bmp('KONECNY (5)', 5, 9, WHITE); s.bmp('2ND 7:26', 160, 9, DIM, 'right');
+  }
+  function goalBig(s, k) {
+    s.clear();
+    s.rect(3, 5, 8, 26, PHI);
+    s.hires('GOAL', 14, 26, 26, PHI, 900);
+    s.hires('PHI', 160, 20, 14, PHI); s.hires('2', 192, 21, 16, sc(WHITE, k), 800);
+    s.hires('NYI', 206, 20, 14, NYI); s.hires('1', 251, 21, 16, WHITE, 800, 'right');
+    for (let x = 0; x < 256; x += 3) s.px(x, 32, DIM);
+    s.hires('KONECNY', 14, 50, 17, WHITE, 800); s.hires('(5)', 14 + s.hw('KONECNY', 17, 800) + 4, 50, 12, GRAY);
+    s.hires('MICHKOV · SANHEIM', 14, 61, 9, CYAN, 600);
+    s.hires('2ND 7:26', 251, 50, 11, DIM, 700, 'right');
+  }
+  function goalLong(s, k) {
+    s.clear();
+    s.rect(6, 8, 13, 56, PHI);
+    s.hires('GOAL', 22, 48, 40, PHI, 900);
+    const x0 = 160;
+    s.hires('KONECNY', x0, 32, 24, WHITE, 800); s.hires('(5)', x0 + s.hw('KONECNY', 24, 800) + 6, 32, 14, GRAY);
+    s.hires('MICHKOV · SANHEIM', x0, 52, 12, CYAN, 600);
+    s.hires('PHI', 400, 26, 18, PHI); s.hires('2', 450, 28, 22, sc(WHITE, k), 800);
+    s.hires('NYI', 400, 54, 18, NYI); s.hires('1', 450, 56, 22, WHITE, 800);
+    s.hires('2ND 7:26', 505, 60, 10, DIM, 700, 'right');
+  }
+  let last = 0;
+  function tick(t) {
+    if (t - last > 66) {
+      last = t;
+      const ms = t % 4000;
+      const fl = ms < 450 ? [true, false, true, false, true, false][Math.floor(ms / 75)] : null;
+      const k = 0.55 + 0.45 * (0.5 + 0.5 * Math.cos(ms / 180));
+      for (const [s, f] of [[gs, goalSmall], [gb, goalBig], [gl, goalLong]]) {
+        if (fl !== null) flash(s, fl); else f(s, k);
+        s.render();
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------- 2. final / OT ----------
+  { const s = small('f-small');
+    s.rect(0, 0, 2, 6, PHI); s.rect(0, 9, 2, 15, NYI);
+    s.bmp('PHI', 5, 0, PHI); s.bmp('NYI', 5, 9, NYI);
+    s.bmp('3', 28, 0, GREEN); s.bmp('2', 28, 9, LOSER);
+    s.bmp('SOG', 40, 0, DIM); s.bmp('31', 60, 0, CYAN); s.bmp('SOG', 40, 9, DIM); s.bmp('28', 60, 9, CYAN);
+    s.bmp('FINAL', 160, 0, WHITE, 'right'); s.bmp('OT', 160, 9, AMBER, 'right');
+    s.render(); }
+  { const s = big('f-big');
+    s.rect(3, 5, 8, 26, PHI); s.rect(3, 37, 8, 58, NYI); s.rect(3, 55, 8, 58, NYI2);
+    s.hires('PHI', 14, 25, 22, PHI); s.hires('NYI', 14, 57, 22, NYI);
+    s.hires('3', 108, 26, 26, GREEN, 800, 'right'); s.hires('2', 108, 58, 26, LOSER, 800, 'right');
+    for (let x = 0; x < 196; x += 3) s.px(x, 32, DIM);
+    s.hires('SOG 31', 144, 21, 11, CYAN); s.hires('SOG 28', 144, 53, 11, CYAN);
+    s.hires('FINAL', 251, 24, 16, WHITE, 800, 'right'); s.hires('OT', 251, 46, 16, AMBER, 800, 'right');
+    s.render(); }
+  { const s = long('f-long');
+    s.rect(6, 8, 13, 56, PHI); s.rect(498, 8, 505, 56, NYI); s.rect(498, 48, 505, 56, NYI2);
+    s.hires('PHI', 22, 32, 28, PHI); s.hires('SOG 31', 22, 54, 13, CYAN);
+    s.hires('3', 168, 52, 46, GREEN, 800, 'right');
+    s.hires('NYI', 490, 32, 28, NYI, 700, 'right'); s.hires('SOG 28', 490, 54, 13, CYAN, 700, 'right');
+    s.hires('2', 344, 52, 46, LOSER, 800);
+    s.hires('FINAL', 256, 34, 24, WHITE, 800, 'center'); s.hires('OT', 256, 56, 16, AMBER, 800, 'center');
+    s.render(); }
+
+  // ---------- 3. next game ----------
+  { const s = small('n-small');
+    s.rect(0, 0, 2, 6, PHI);
+    s.bmp('PHI', 5, 0, PHI); s.bmp('@', 26, 0, GRAY); s.bmp('NYI', 35, 0, NYI);
+    s.bmp('FRI', 160, 0, AMBER, 'right');
+    s.bmp('UBS ARENA', 5, 9, DIM); s.bmp('7:00 PM', 160, 9, WHITE, 'right');
+    s.render(); }
+  { const s = big('n-big');
+    s.hires('NEXT GAME', 251, 12, 9, GRAY, 700, 'right');
+    s.rect(3, 5, 8, 26, PHI);
+    let x = 14 + s.hires('PHI', 14, 26, 22, PHI) + 8;
+    x += s.hires('@', x, 24, 14, GRAY) + 8;
+    s.hires('NYI', x, 26, 22, NYI);
+    for (let xx = 0; xx < 256; xx += 3) s.px(xx, 32, DIM);
+    s.hires('FRI OCT 23', 14, 52, 15, AMBER, 800);
+    s.hires('7:00 PM', 251, 52, 15, WHITE, 800, 'right');
+    s.hires('UBS ARENA', 14, 62, 8, DIM, 600);
+    s.render(); }
+  { const s = long('n-long');
+    s.rect(6, 8, 13, 56, PHI); s.rect(498, 8, 505, 56, NYI); s.rect(498, 48, 505, 56, NYI2);
+    s.hires('PHI', 22, 32, 28, PHI); s.hires('FLYERS', 22, 52, 12, sc(PHI, 0.6), 700);
+    s.hires('NYI', 490, 32, 28, NYI, 700, 'right'); s.hires('ISLANDERS', 490, 52, 12, sc(NYI, 0.7), 700, 'right');
+    s.hires('FRI OCT 23', 256, 17, 14, AMBER, 800, 'center');
+    s.hires('7:00 PM', 256, 44, 26, WHITE, 800, 'center');
+    s.hires('UBS ARENA', 256, 60, 10, DIM, 600, 'center');
+    s.render(); }
+})();
+</script>

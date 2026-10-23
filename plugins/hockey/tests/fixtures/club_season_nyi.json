@@ -1,0 +1,83 @@
+{
+  "_handwritten": true,
+  "games": [
+    {
+      "id": 2026020115,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-22",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-23T00:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 4,
+        "name": {
+          "default": "Flyers"
+        },
+        "abbrev": "PHI"
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI"
+      }
+    },
+    {
+      "id": 2026020140,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-25",
+      "venue": {
+        "default": "UBS Arena"
+      },
+      "startTimeUTC": "2026-10-25T21:00:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 6,
+        "name": {
+          "default": "Bruins"
+        },
+        "abbrev": "BOS"
+      },
+      "homeTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI"
+      }
+    },
+    {
+      "id": 2026020162,
+      "season": 20262027,
+      "gameType": 2,
+      "gameDate": "2026-10-28",
+      "venue": {
+        "default": "Scotiabank Arena"
+      },
+      "startTimeUTC": "2026-10-28T23:30:00Z",
+      "venueTimezone": "America/New_York",
+      "gameState": "FUT",
+      "awayTeam": {
+        "id": 2,
+        "name": {
+          "default": "Islanders"
+        },
+        "abbrev": "NYI"
+      },
+      "homeTeam": {
+        "id": 10,
+        "name": {
+          "default": "Maple Leafs"
+        },
+        "abbrev": "TOR"
+      }
+    }
+  ]
+}
