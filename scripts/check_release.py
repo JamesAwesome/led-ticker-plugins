@@ -36,6 +36,7 @@ PUBLISHABLE_PLUGINS = {
     "storefront",
     "stocks",
     "tennis",
+    "hockey",
 }
 
 
