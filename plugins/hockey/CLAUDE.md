@@ -73,7 +73,16 @@ per poll: celebration state, frame counters and the legacy story cache live on t
 actually DRAWN on a live (unpaused, `_frame_count > 0`) frame (`_shown`), so stale frame
 counts or transition compositing never eat an unseen celebration. Goals queued mid-visit
 wait for the next turn. Non-tracked goals highlight the score instead; empty `teams` means
-no celebrations.
+no celebrations. Scroll-mode sections (`ticker`, `one_at_a_time`) never call
+`reset_frame()`, so with no snapshot (`_playing is None`) the first live draw SELF-STARTS
+a run (`_run_start` = that `_frame_count`; phase = `_frame_count - _run_start`) and the
+draw after its last frame consumes it exactly as `reset_frame` would, sets `_playing` and
+`_run_start` back to None and paints the board; the next live draw may self-start again.
+`reset_frame` always sets `_run_start = None` (visit runs start at frame 0), so the
+slideshow path never self-starts. A self-started run is a full-panel takeover
+(`canvas.width` cursor, later widgets skipped for the tick) while the scroll position keeps
+advancing beneath it, so the crawl resumes ~80 px on. `hold_time` is not read in scroll
+modes.
 
 **`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
 with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
@@ -98,7 +107,9 @@ queue several goals MUST give them distinct scores.
 
 **Demo re-arm** — demo live cards carry `demo_goals`; `reset_frame` re-queues them after
 every `DEMO_EVERY` (3) COMPLETED visits (`_frame_count > 0` at reset, so a transition's
-extra `reset_frame` before `_show_one`'s is not counted).
+extra `reset_frame` before `_show_one`'s is not counted). Scroll-mode sections have no
+visits: a self-started run's end records `_demo_rest_from`, and the demo re-queues once
+`DEMO_REST_FRAMES` (3 x 80 = 240, 12 s) live frames pass with nothing pending.
 
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the legacy ticker message joins the same list, so the two
