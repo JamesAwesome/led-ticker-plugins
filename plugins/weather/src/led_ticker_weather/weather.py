@@ -141,14 +141,24 @@ class WeatherWidget(FrameAwareBase):
         cls, *args: Any, update_interval: int = 10800, **kwargs: Any
     ) -> Self:
         widget = cls(*args, **kwargs)
+        fetched = False
         try:
             await widget.update()
+            fetched = True
         except Exception:
             logging.exception(
                 "Weather initial update failed for %s, will retry in background",
                 widget.location,
             )
-        spawn_tracked(run_monitor_loop(widget, update_interval))
+        # A FAILED eager fetch means the loop's first pass must poll
+        # immediately instead of sleeping a full update_interval (~3h
+        # default) — otherwise a boot-time network blip leaves the widget
+        # showing 0 degrees for hours. This also engages the loop's backoff
+        # if the immediate retry fails too. A successful eager fetch keeps
+        # immediate=False (no double-fetch on the happy path). A local flag,
+        # not weather == "": the API could legitimately return an empty
+        # condition.
+        spawn_tracked(run_monitor_loop(widget, update_interval, immediate=not fetched))
         return widget
 
     async def update(self) -> None:

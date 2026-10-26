@@ -130,6 +130,10 @@ palette values should be reading it, not guessing.
   blindness where a failed eager fetch would otherwise leave the widget hidden
   (`should_display() == False`) for a full `update_interval` (~3h default) before the
   background loop's first retry (the F1 fix).
+- **`WeatherWidget.start` passes `immediate=not fetched`** — same boot-race guard for
+  `weather.current` (#88): a local `fetched` flag (not `weather == ""`, since the API could
+  return an empty condition) makes a failed eager fetch retry immediately instead of
+  showing 0 degrees for a full `update_interval`.
 
 ## Commands
 
