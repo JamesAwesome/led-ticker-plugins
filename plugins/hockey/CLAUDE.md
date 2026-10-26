@@ -147,10 +147,14 @@ which the legacy stories and the scale-1 celebration read directly. Core caches
 transition's `incoming_bg_color`), so a widget's first hi-res visit is read before the memo
 is set: the hi-res board and crawl therefore clear the real panel when `_bg_color` is set,
 `cursor_pos <= 0` (leftmost: no other widget to the left) and the card is not paused
-(transition compositing is never clobbered). Residual: only the transition INTO a widget's
-first hi-res visit can still composite the configured bg (its duration, 0.5 s by default,
-once per widget instance, so again after a restart or hot reload); its paused draws set
-the memo, so the visit itself is clean. `font_color`
+(transition compositing is never clobbered). Residual, once per widget instance (boot,
+restart, hot reload) on a hi-res sign with `bg_color` set, the configured color can still
+appear (a) during the 0.5 s transition into the widget's first visit, (b) for the
+scroll-in of a title-less scroll section when hockey is first (`_scroll_and_delay` caches
+it before any draw and every scroll-in tick has `cursor_pos > 0`; ~3 s on bigsign; do not
+widen the guard, the card cannot tell this from a side-by-side neighbour), (c) for one
+tick at the start of a `one_at_a_time` section. After that `bg_color` reads None and
+nothing paints it. `font_color`
 reaches only the scale-1 ticker message.
 
 ## Known gaps

@@ -93,7 +93,10 @@ class ScaleMemo:
     sees scale > 1, so a new game's card never hands core a hi-res
     `bg_color` fill. Core caches `bg_color` per visit, so the first hi-res
     visit was read before this was set: the hi-res draw paths clear the
-    panel for it. Only the transition into that visit can still show it."""
+    panel for it when leftmost and live. Once per widget instance the
+    color can still show during the transition into that first visit, a
+    title-less scroll section's scroll-in, or a one_at_a_time section's
+    first tick (see CLAUDE.md *Palette*)."""
 
     hires: bool = False
 
