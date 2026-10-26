@@ -89,8 +89,11 @@ DEMO_REST_FRAMES = DEMO_EVERY * CELEBRATION_FRAMES
 
 @attrs.define
 class ScaleMemo:
-    """Shared by one widget's cards: set once any draw sees scale > 1, so
-    a new game's card never hands core a hi-res `bg_color` fill."""
+    """Shared by one widget's cards: set once any draw (paused or not)
+    sees scale > 1, so a new game's card never hands core a hi-res
+    `bg_color` fill. Core caches `bg_color` per visit, so the first hi-res
+    visit was read before this was set: the hi-res draw paths clear the
+    panel for it. Only the transition into that visit can still show it."""
 
     hires: bool = False
 
@@ -352,6 +355,12 @@ class HockeyGameCard(FrameAwareBase):
             return story.draw(
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
+        if self._bg_color is not None and cursor_pos <= 0 and not self._frame_paused:
+            # Core caches `bg_color` once per slideshow visit, so a widget's
+            # first hi-res visit is filled with it before the memo is set.
+            # Leftmost (nothing of another widget's to the left) and live
+            # (never clobber transition compositing): own the panel.
+            real.Clear()
         now = self.now_fn()
         if layout == "ticker":
             w = render_crawl(

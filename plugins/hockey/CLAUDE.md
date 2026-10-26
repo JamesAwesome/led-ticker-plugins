@@ -142,8 +142,15 @@ scale 1 the band board, the ticker message and the celebration fill it. Core its
 `getattr(widget, "bg_color", None)` before every draw at EVERY scale (`reset_canvas`), so
 `HockeyGameCard.bg_color` is a property: None once any draw of the widget's cards saw
 scale > 1 (the shared `ScaleMemo`, one per widget), else the configured `_bg_color`,
-which the legacy stories and the scale-1 celebration read directly. Core's very first
-reset precedes any draw, so a hi-res sign can show the fill for the process's first frame. `font_color`
+which the legacy stories and the scale-1 celebration read directly. Core caches
+`bg_color` once per slideshow visit (`_swap_and_scroll`, `_scroll_and_delay`, a
+transition's `incoming_bg_color`), so a widget's first hi-res visit is read before the memo
+is set: the hi-res board and crawl therefore clear the real panel when `_bg_color` is set,
+`cursor_pos <= 0` (leftmost: no other widget to the left) and the card is not paused
+(transition compositing is never clobbered). Residual: only the transition INTO a widget's
+first hi-res visit can still composite the configured bg (its duration, 0.5 s by default,
+once per widget instance, so again after a restart or hot reload); its paused draws set
+the memo, so the visit itself is clean. `font_color`
 reaches only the scale-1 ticker message.
 
 ## Known gaps

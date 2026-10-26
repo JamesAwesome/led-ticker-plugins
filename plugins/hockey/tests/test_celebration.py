@@ -1044,3 +1044,43 @@ def test_hidden_card_run_does_not_advance(bigsign):
         b.advance_frame()
         b.draw(bigsign)
     assert flash.call_args.args[2] is True  # phase 1: still flash_on
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+@pytest.mark.parametrize("goal", [False, True])
+def test_slideshow_visit_cached_bg_never_shows_at_scale_gt1(layout, goal, bigsign):
+    # Core reads `bg_color` ONCE per slideshow visit (`_swap_and_scroll`)
+    # and fills with that cached value every tick: a widget's first hi-res
+    # visit caches the configured color before any draw has set the memo.
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    if goal:
+        c.queue_goals([_goal()])
+    c.reset_frame()
+    cached = c.bg_color
+    assert cached is not None  # the residual this test exists for
+    real = unwrap_to_real(bigsign)
+    for _ in range(CELEBRATION_FRAMES + 20):
+        c.advance_frame()
+        bigsign.Fill(cached.red, cached.green, cached.blue)
+        c.draw(bigsign)
+        assert BG not in set(real._pixels.values())
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_hires_draw_right_of_another_widget_keeps_it(layout, bigsign):
+    # Side-by-side: at cursor_pos > 0 a preceding widget owns the left of
+    # the panel; the board/crawl must not wipe it.
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    c.advance_frame()
+    _paint_white(bigsign)
+    c.draw(bigsign, cursor_pos=40)
+    assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
+
+
+def test_paused_hires_draw_never_clears(bigsign):
+    # Transition compositing paints outgoing and incoming into one canvas.
+    c = _card(bg_color=make_color(*BG))
+    c.pause_frame()
+    _paint_white(bigsign)
+    c.draw(bigsign)
+    assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
