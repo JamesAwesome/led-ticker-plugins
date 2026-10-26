@@ -304,3 +304,20 @@ def test_pre_extra_score_strips_the_try():
     home_td = _td(team="NYG", extra="+PAT", away_score=20, home_score=24)
     assert pre_extra_score(home_td, "NYG") == (20, 23)
     assert pre_extra_score(_td(kind="FG", away_score=23), "NYG") == (23, 17)
+
+
+@pytest.mark.parametrize(
+    "zone", ["America/New_York", "America/Chicago", "America/Los_Angeles"]
+)
+def test_tbd_kickoff_day_is_espn_eastern_date(zone):
+    """ESPN's TBD sentinel is 05:00Z (midnight Eastern): the day label must
+    be the Eastern date in every user timezone, never TODAY/TONIGHT."""
+    from zoneinfo import ZoneInfo
+
+    sched = _event("schedule_phi.json")
+    g = parse_event(sched["events"][2], polled_at=T0)  # 2027-01-10T05:00Z, TBD
+    tz = ZoneInfo(zone)
+    assert status_lines(g, T0, tz) == ("SUN JAN 10", "TBD")
+    # Even on the eve of the game, a TBD kickoff is not "TONIGHT".
+    eve = datetime(2027, 1, 9, 23, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+    assert status_lines(g, eve.timestamp(), tz) == ("SUN JAN 10", "TBD")

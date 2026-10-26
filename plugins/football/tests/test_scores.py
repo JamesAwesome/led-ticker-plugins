@@ -417,3 +417,29 @@ class TestStart:
         ):
             await FootballScoreMonitor.start(None, mode="league", teams=[])
         assert src.want.call_args.kwargs["all_games"] is True
+
+
+class TestCorrections:
+    async def test_overturned_then_rescored_touchdown_celebrates(self):
+        """20-17 → 26-17 (TD) → 20-17 (overturned) → 26-17 (scored for real):
+        the second touchdown has the same key and must still celebrate."""
+        from led_ticker_football._source import ESPNSource
+
+        from .test_source import SB, FakeSession, live_event, week_with
+
+        session = FakeSession({SB[0]: (200, week_with(live_event()))})
+        t = {"now": 1000.0}
+        src = ESPNSource(session, clock=lambda: t["now"], wall=lambda: NOW_DT)
+        src.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=24)
+        w = FootballScoreMonitor(session=None, teams=["PHI"])
+        w._tz = TZ
+        w._source = src
+        await w.update()
+        card = w.feed_stories[0]
+        for away in (26, 20, 26):
+            session.routes[SB[0]] = (200, week_with(live_event(away=away)))
+            t["now"] += 1e6
+            await w.update()
+            if away == 20:
+                assert card.pending == []
+        assert [p.key for p in card.pending] == ["401873099:26:17"]

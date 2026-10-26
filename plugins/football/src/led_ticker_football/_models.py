@@ -30,6 +30,7 @@ _NO_CLOCK_STATUSES = frozenset(
     {"STATUS_HALFTIME", "STATUS_END_PERIOD", "STATUS_DELAYED", "STATUS_SUSPENDED"}
 )
 _PERIODS = 4
+_ESPN_TZ = ZoneInfo("America/New_York")  # the feed's anchor for date-only kickoffs
 
 
 @dataclass(frozen=True)
@@ -307,10 +308,13 @@ def status_lines(game: GameInfo, now: float, tz: ZoneInfo) -> tuple[str, str]:
         return ("PPD", "")
     if game.start_utc is None:
         return ("TBD", "")
+    if game.time_tbd:
+        # ESPN's TBD sentinel is 05:00Z = midnight Eastern: the game's date
+        # is the Eastern date whatever the user's zone, and never TONIGHT.
+        start = game.start_utc.astimezone(_ESPN_TZ)
+        return (f"{start:%a %b} {start.day}".upper(), "TBD")
     now_utc = datetime.fromtimestamp(now, UTC)
     day = day_label(game.start_utc, now_utc, tz)
-    if game.time_tbd:
-        return (day, "TBD")
     return (day, _clock_12h(game.start_utc.astimezone(tz)))
 
 

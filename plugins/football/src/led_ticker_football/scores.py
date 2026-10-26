@@ -162,6 +162,15 @@ def _is_number(v: Any) -> bool:
 _CardKey = str
 
 
+def _key_within(key: str, away: int, home: int) -> bool:
+    """True when a play key (`gid:away:home`) is at or below the score."""
+    try:
+        _, a, h = key.rsplit(":", 2)
+        return int(a) <= away and int(h) <= home
+    except ValueError:
+        return True
+
+
 @attrs.define
 class FootballScoreMonitor:
     """Live NFL scores, one card per game."""
@@ -419,6 +428,16 @@ class FootballScoreMonitor:
                 if s[0] <= game.away_score and s[1] <= game.home_score
             }
             self._celebrated_scores[gid] = scores
+            # A correction also forgets the KEYS above the current score: a
+            # touchdown overturned on review and scored again on the next
+            # snap re-uses its key and must still celebrate.
+            seen.difference_update(
+                {
+                    k
+                    for k in seen
+                    if not _key_within(k, game.away_score, game.home_score)
+                }
+            )
             new = [p for p in plays if p.key not in seen]
             if not new:
                 continue

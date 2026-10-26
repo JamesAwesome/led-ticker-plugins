@@ -380,3 +380,40 @@ async def test_all_games_interest(mode_all):
     )
     snap = await s.poll()
     assert (len(snap.games) == 3) is mode_all
+
+
+async def test_schedule_bye_flag_persists_across_polls():
+    """A team on bye per the schedule's `byeWeek` but missing from the
+    scoreboard's `teamsOnBye` stays flagged on every poll, not just the one
+    that fetched the schedule."""
+    sched_url = f"{HOSTS[0]}{PATH}/teams/PHI/schedule"
+    body = fx("scoreboard_week7")
+    body["week"]["number"] = 10
+    body["week"]["teamsOnBye"] = []
+    body["events"] = [e for e in body["events"] if e["id"] != "401873009"]
+    s, session, clock, _ = make(
+        {SB[0]: (200, body), sched_url: (200, fx("schedule_phi"))}, teams=("PHI",)
+    )
+    snap = await s.poll()
+    assert "PHI" in snap.bye_teams
+    clock.advance(IDLE_INTERVAL + 1)
+    snap = await s.poll()
+    assert session.urls.count(sched_url) == 1
+    assert "PHI" in snap.bye_teams
+
+
+async def test_new_score_closes_a_stale_open_touchdown():
+    """TD with a missed PAT, then a FG, then +2: the +2 is a SAFETY, not the
+    old touchdown's two-point conversion."""
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    for away in (26, 29, 31):
+        session.routes[SB[0]] = (200, week_with(live_event(away=away)))
+        clock.advance()
+        await s.poll()
+    plays = s.plays_after_baseline(LIVE_ID)
+    assert [(p.kind, p.extra) for p in plays] == [
+        ("TD", ""),
+        ("FG", ""),
+        ("SAFETY", ""),
+    ]

@@ -97,6 +97,7 @@ class ESPNSource:
         self._next: dict[str, GameInfo] = {}
         self._next_at: dict[str, float] = {}
         self._bye: set[str] = set()
+        self._bye_weeks: dict[str, int] = {}  # team -> byeWeek from its schedule
         self._week: int | None = None
         # Scoring: last seen (away, home) per game, plays since first sight,
         # and the one touchdown still waiting for its extra point.
@@ -265,7 +266,7 @@ class ESPNSource:
             str(t.get("abbreviation", "")).upper()
             for t in (byes if isinstance(byes, list) else [])
             if isinstance(t, dict) and t.get("abbreviation")
-        }
+        } | {t for t, wk in self._bye_weeks.items() if wk == self._week}
 
         self._latest_ids = {g for g, v in fetched.items() if self._wanted(v)}
         for gid, game in fetched.items():
@@ -347,12 +348,14 @@ class ESPNSource:
                 plays[:] = [follow if p.key == old.key else p for p in plays]
             else:
                 plays.append(follow)
+        if new:
+            # Any fresh score closes a touchdown still waiting for its try:
+            # a later +1/+2 can't belong to it any more.
+            self._open_td.pop(gid, None)
         for p in new:
             plays.append(p)
             if p.kind == "TD" and not p.extra:
                 self._open_td[gid] = p
-            elif p.kind == "TD":
-                self._open_td.pop(gid, None)
 
     def _playing(self) -> set[str]:
         """Teams whose card comes from `_games`: a live game, a game still to
@@ -389,8 +392,10 @@ class ESPNSource:
             if not isinstance(body, dict):
                 continue
             bye = _int_or_none(body.get("byeWeek"))
-            if bye is not None and self._week is not None and bye == self._week:
-                self._bye.add(team)
+            if bye is not None:
+                self._bye_weeks[team] = bye
+                if self._week is not None and bye == self._week:
+                    self._bye.add(team)
             rows = body.get("events")
             wall = self._wall().timestamp()
             for row in rows if isinstance(rows, list) else []:
