@@ -257,7 +257,8 @@ class ESPNSource:
             self._fail(f"unexpected error: {exc.__class__.__name__}: {exc}")
             return
 
-        week = body.get("week") if isinstance(body.get("week"), dict) else {}
+        week_raw = body.get("week")
+        week: dict[str, Any] = week_raw if isinstance(week_raw, dict) else {}
         self._week = _int_or_none(week.get("number"))
         byes = week.get("teamsOnBye")
         self._bye = {
