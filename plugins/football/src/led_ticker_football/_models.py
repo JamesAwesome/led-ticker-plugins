@@ -365,6 +365,25 @@ def _play(game: GameInfo, team: str, kind: str, extra: str) -> ScoringPlay:
     )
 
 
+_EXTRA_POINTS = {"+PAT": 1, "+2PT": 2}
+
+
+def pre_extra_score(play: ScoringPlay, home: str) -> tuple[int, int]:
+    """The play's score snapshot BEFORE its extra point / two-point try
+    (`home` is the game's home abbreviation, so the try is subtracted from
+    the right side).
+
+    A touchdown and its later `+PAT` follow-up share this snapshot, which is
+    how the widget and card recognise the follow-up as the same celebration
+    (hockey's same-score scorer-correction rule, shifted by the try)."""
+    n = _EXTRA_POINTS.get(play.extra, 0)
+    if play.kind != "TD" or not n:
+        return (play.away_score, play.home_score)
+    if play.team == home:
+        return (play.away_score, play.home_score - n)
+    return (play.away_score - n, play.home_score)
+
+
 def diff_scores(
     game: GameInfo, prev: tuple[int, int], last_td: ScoringPlay | None
 ) -> tuple[list[ScoringPlay], ScoringPlay | None]:

@@ -293,3 +293,14 @@ def test_demo_games_cover_states():
     assert games[0].situation.possession == "NYG"
     assert all({g.away, g.home} == {"PHI", "NYG"} for g in games)
     assert games[3].start_utc is not None and games[3].start_utc.timestamp() > T0
+
+
+def test_pre_extra_score_strips_the_try():
+    from led_ticker_football._models import pre_extra_score
+
+    assert pre_extra_score(_td(), "NYG") == (26, 17)
+    assert pre_extra_score(_td(extra="+PAT", away_score=27), "NYG") == (26, 17)
+    assert pre_extra_score(_td(extra="+2PT", away_score=28), "NYG") == (26, 17)
+    home_td = _td(team="NYG", extra="+PAT", away_score=20, home_score=24)
+    assert pre_extra_score(home_td, "NYG") == (20, 23)
+    assert pre_extra_score(_td(kind="FG", away_score=23), "NYG") == (23, 17)
