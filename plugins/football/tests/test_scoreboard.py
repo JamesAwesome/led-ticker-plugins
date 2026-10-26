@@ -217,3 +217,28 @@ def test_band_board_typical_live_clearance(smallsign, tz, monkeypatch):
     _assert_band_clearance(
         _spy_texts(monkeypatch, smallsign, LIVE, tz), smallsign.width
     )
+
+
+def test_band_board_future_venue_clears_kickoff(smallsign, tz, monkeypatch):
+    long_venue = dataclasses.replace(
+        NEXT, venue="EverBank Stadium at the Jacksonville Sports Complex"
+    )
+    calls = _spy_texts(monkeypatch, smallsign, long_venue, tz)
+    venue = next(c for c in calls if c[0].startswith("EVERBANK"))
+    assert venue[0].endswith("…")
+    _assert_band_clearance(_coalesce(calls), smallsign.width)
+    calls = _spy_texts(monkeypatch, smallsign, NEXT, tz)
+    _assert_band_clearance(_coalesce(calls), smallsign.width)
+
+
+def _coalesce(calls):
+    """Merge texts drawn flush against each other on one band (`NYG`, ` @ `,
+    `PHI` is one run whose spaces carry its gaps) into one extent."""
+    out = []
+    for text, x0, x1, band in calls:
+        if out and out[-1][3] == band and out[-1][2] == x0:
+            pt, px0, _, _ = out[-1]
+            out[-1] = (pt + text, px0, x1, band)
+        else:
+            out.append((text, x0, x1, band))
+    return out

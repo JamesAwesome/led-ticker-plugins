@@ -260,6 +260,7 @@ def _big_board(shim, real, game, now, tz, yo, stale, highlight):
 
     budget = g.status_x - (col_left + _MIN_GAP)
     line1, line2 = status_lines(game, now, tz)
+    lines: list[tuple[str, Color, int, tuple[int, ...]]]
     if game.state == "final":
         lines = [
             (line1, pal.WHITE, 24, (16, 14, 12, 10)),
@@ -425,6 +426,7 @@ def _long_board(shim, real, game, now, tz, yo, stale, highlight):
     )
     budget = 2 * half
     line1, line2 = status_lines(game, now, tz)
+    lines: list[tuple[str, Color, int, tuple[int, ...]]]
     if game.state == "final":
         lines = [
             (line1, pal.WHITE, 34, (24, 22, 20, 18)),

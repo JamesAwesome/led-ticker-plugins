@@ -124,6 +124,13 @@ class FootballBandBoard(FrameAwareBase):
                 draw_text(canvas, font, " BYE", x, y0, pal.GRAY)
             right(top, y0, pal.AMBER)
             venue = "STALE" if self.stale else g.venue.upper()
+            # The venue shares the bottom band with the kickoff: ellipsize
+            # it to >= _GAP short of the time's measured left edge.
+            max_w = width - w(bottom) - _GAP - X_ABBREV if bottom else width - X_ABBREV
+            if venue and w(venue) > max_w:
+                while len(venue) > 1 and w(venue.rstrip() + "…") > max_w:
+                    venue = venue[:-1]
+                venue = venue.rstrip() + "…"
             draw_text(canvas, font, venue, X_ABBREV, y1, pal.DIM)
             right(bottom, y1, pal.WHITE)
             return canvas, cursor_pos + canvas.width
