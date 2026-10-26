@@ -42,7 +42,10 @@ from a game disappearing. `polled_at` is wall-clock epoch seconds.
 **One shared source per session** — `shared_source(session)`; every widget's `want()`
 merges into it, and cadence is the source's (15 s live — or the fastest widget
 `update_interval` below that, via `want(live_interval=...)` — / 300 s pregame / 3600 s
-idle, `MIN_INTERVAL` 10 s floor; season schedule at most every 6 h). The landing "situation" call is
+idle, `MIN_INTERVAL` 10 s floor; season schedule at most every 6 h). The source only
+polls when a widget's `update()` calls it, and each widget's monitor loop runs every
+`max(MIN_INTERVAL, update_interval)` s, so an interval above 15 slows that widget (and a
+lone widget's polling). The landing "situation" call is
 gated to live games that some consumer displays (`note_displayed`, per consumer, so
 shared widgets do not multiply requests).
 
@@ -119,6 +122,9 @@ extents, bands, ordering and colors.
 **Palette is one hue per field** (`_palette.py`) — white score/clock, amber period/PP/date,
 cyan SOG, dim labels, green final winner, gray loser. Black is invisible on the panels, so
 team chips are lifted for LED brightness.
+`bg_color` never paints at scale > 1 (hi-res board, crawl or goal celebration); at
+scale 1 the band board, the ticker message and the goal detail fill it. `font_color`
+reaches only the scale-1 ticker message.
 
 ## Known gaps
 

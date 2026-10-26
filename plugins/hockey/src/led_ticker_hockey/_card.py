@@ -183,7 +183,9 @@ class HockeyGameCard(FrameAwareBase):
         if self._frame_count > 0:  # a live frame (paused returned above)
             self._shown.add(goal.key)
         if name == "detail":
-            if self.bg_color is not None:
+            # bg_color is scale-1 only (the bitmap board fills it too); the
+            # hi-res detail paints its own palette like every hi-res renderer.
+            if self.bg_color is not None and safe_scale(canvas) <= 1:
                 bg = self.bg_color
                 canvas.Fill(bg.red, bg.green, bg.blue)
             render_detail(

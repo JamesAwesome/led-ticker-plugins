@@ -5,7 +5,7 @@ import dataclasses
 import unittest.mock as mock
 
 import pytest
-from led_ticker.plugin import unwrap_to_real
+from led_ticker.plugin import make_color, unwrap_to_real
 
 import led_ticker_hockey._card as card_mod
 from led_ticker_hockey import _celebration as cel
@@ -263,6 +263,34 @@ def test_detail_long_texts_keep_clearance(sign, request):
 
 
 # --------------------------------------------------------------- card
+
+
+def test_detail_ignores_bg_color_at_scale_gt1(bigsign):
+    # #105: bg_color is a scale-1 option; the hi-res detail card paints its
+    # own palette like every other hi-res renderer.
+    c = _card(bg_color=make_color(40, 0, 0))
+    c.queue_goals([_goal()])
+    c.reset_frame()
+    for _ in range(FLASH_FRAMES):
+        c.advance_frame()
+    with mock.patch.object(
+        card_mod, "render_detail", wraps=card_mod.render_detail
+    ) as detail:
+        c.advance_frame()  # frame FLASH_FRAMES + 1: the detail phase
+        c.draw(bigsign)
+    detail.assert_called_once()
+    assert (40, 0, 0) not in set(_pixels(bigsign).values())
+
+
+def test_detail_keeps_bg_color_at_scale_1(smallsign):
+    # Scale 1 honours bg_color on the band board, so its detail card does too.
+    c = _card(bg_color=make_color(40, 0, 0))
+    c.queue_goals([_goal()])
+    c.reset_frame()
+    for _ in range(FLASH_FRAMES + 1):
+        c.advance_frame()
+    c.draw(smallsign)
+    assert (40, 0, 0) in set(_pixels(smallsign).values())
 
 
 def test_hold_time_extends_while_celebration_pending():

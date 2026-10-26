@@ -53,12 +53,12 @@ timezone = "America/New_York"   # for start times and the day boundary
 | `final_hold_hours` | int | `6` | How long a final stays in the rotation, measured from the game's start time + 2 h 30 min (the feed carries no end time). |
 | `timezone` | string | `"America/New_York"` | IANA timezone for start times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
-| `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10.** A value below 15 speeds up live polling (widgets sharing a process use the fastest ask); a value above 15 does not slow the shared source below 15 s while a game is live. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
+| `update_interval` | int | `15` | How often, in seconds, this widget refreshes its cards and asks the shared source to poll. **Floored at 10.** While a game is live the source polls at most every 15 s, or at the lowest `update_interval` below that among the widgets sharing it. A value below 15 therefore speeds up live polling. A value above 15 slows this widget: its cards refresh only every `update_interval` seconds, and if no other widget polls more often, so does the source. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per goal **plus** the larger of this and 4 s for the board afterwards. |
-| `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. A number >= 0 (a float is truncated to an int). |
+| `padding` | int | `6` | Horizontal padding (logical px) after the line in the hi-res `layout = "ticker"` crawl (bigsign / longboi); it also counts toward whether the line fits and holds instead of scrolling. The scale-1 ticker, the held scoreboards and the celebration ignore it. A number >= 0 (a float is truncated to an int). |
 | `demo` | bool | `false` | Render fixture games (a live power play, a goal celebration, an intermission, an OT final, a next game) with `PHI` and `NYI`, no network — for docs, gifs and hardware checks. The live game's goal celebrates on its first turn and again every third turn after (set `teams = ["PHI"]` or similar: untracked goals only highlight the score). |
-| `bg_color` | RGB list | none | Background fill. Scale-1 / ticker only — the physical renderers paint their own palette. |
-| `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 / ticker only. |
+| `bg_color` | RGB list | none | Background fill. Scale-1 only (smallsign board, ticker and goal detail). The hi-res renderers, including the goal celebration, paint their own palette. |
+| `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 `layout = "ticker"` only. The smallsign board, the goal celebration and the hi-res renderers paint their own palette. |
 | `font` | string | core default | Font for the scale-1 ticker line. |
 | `small_font` | string | `"5x8"` | Font for the scale-1 two-band scoreboard. |
 
@@ -77,7 +77,7 @@ timezone = "America/New_York"   # for start times and the day boundary
   - **smallsign (160×16, bitmap font):** two 8-row bands, away on top. Each band has a brand chip, the abbreviation, the score and `SOG nn` (`STALE` replaces the `SOG` label when the data is stale); `PP m:ss` or `EN` sits on that team's band during play (not in intermission); the period is right-aligned in the top band and the clock in the bottom band. Columns move right as needed so 2-digit scores and shot counts never touch.
   - **bigsign (256×64):** two rows with a dotted divider — chip, abbreviation, large score, `SOG nn` (cyan) — and an amber **PP** badge on the power-play team's row. The right column shows the period (amber), the clock (white) and `PP m:ss`.
   - **longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, `SOG`, huge score), the home team mirrors it on the right, and the centre holds the period, a large clock and the **PP** badge with `TEAM m:ss` beneath. Next-game cards add the team nicknames.
-  - **Intermission:** the clock reads `2ND INT` with the countdown. **Empty net:** `EN` marks the team that pulled its goalie. **Final:** `FINAL`, `FINAL/OT` or `FINAL/SO`, the winner's score green and the loser's dimmed. **Next game:** both chips, `@`, the day and date (amber), the time (white) and the arena (dim).
+  - **Intermission:** the clock reads `2ND INT` with the countdown. **Empty net:** `EN` marks the team that pulled its goalie. **Final:** `FINAL`, `FINAL/OT` or `FINAL/SO`, the winner's score green and the loser's dimmed. **Next game:** the day and date (amber), the time (white) and the arena (dim), with the teams drawn per sign. Smallsign shows `PHI @ NYI` in team colors and no chips. Bigsign shows the away chip, `PHI @ NYI` and a `NEXT GAME` label. Longboi shows both chips and abbreviations on their sides, with the team nicknames and no `@`.
 - **`layout = "ticker"`** — one scrolling line per game, using the same wording as the boards (`STALE` follows the period/clock when the data is stale). Scale-1 renders it as a bitmap `SegmentMessage`; scale>1 as a hi-res crawl.
 
 Team abbreviations shrink to fit on the physical boards (both rows always share one size) and are ellipsized only when even the smallest size would collide. Nothing on the physical boards is user-tunable (fixed palette).
@@ -99,7 +99,7 @@ When a team in `teams` scores, that game's card plays a ~4 second celebration **
 
 All `hockey.scores` widgets in one process share a single source, so several widgets (or signs' worth of sections) do not multiply requests to the NHL.
 
-- **Every 15 s** while any relevant game is live — faster if a widget sets a lower `update_interval` (floor 10 s).
+- **Every 15 s** while any relevant game is live — faster if a widget sets a lower `update_interval` (floor 10 s), slower if every widget sharing the source sets a higher one (each widget polls only on its own `update_interval`).
 - **Every 5 minutes** when relevant games are scheduled today but not started.
 - **About hourly** otherwise.
 - The season schedule (offseason next-game lookup) is fetched at most every 6 hours.
