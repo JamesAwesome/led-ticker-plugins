@@ -15,7 +15,7 @@ import logging
 import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -289,10 +289,23 @@ def _derive_records(
     return records
 
 
+_STATCAST_VALID_LAYOUTS: tuple[str, ...] = ("auto", "big", "long")
+
+
 @attrs.define
 class MLBStatcastMonitor:
     """Daily Statcast superlatives — league-wide, or scoped to one team's
     players via an optional ``team``."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "big" | "long"',
+            "auto = best card for the sign; "
+            "big = narrow bigsign card; "
+            "long = wide longboi card with trajectory panel",
+            '"auto"',
+        ),
+    }
 
     session: aiohttp.ClientSession
     # "" → league-wide; else scope superlatives to that team's own players.
@@ -333,7 +346,7 @@ class MLBStatcastMonitor:
         if team is not None and not isinstance(team, str):
             msgs.append(f"statcast team={team!r} must be a string abbreviation.")
         layout = cfg.get("layout", "auto")
-        if layout not in ("auto", "big", "long"):
+        if layout not in _STATCAST_VALID_LAYOUTS:
             msgs.append(
                 f"statcast layout={layout!r} is not valid. "
                 "Use 'auto', 'big', or 'long'."

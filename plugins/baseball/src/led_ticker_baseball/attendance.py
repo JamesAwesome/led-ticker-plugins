@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -257,9 +257,22 @@ def _derive_superlatives(
     return records
 
 
+_ATTENDANCE_VALID_LAYOUTS: tuple[str, ...] = ("auto", "big", "long")
+
+
 @attrs.define
 class MLBAttendanceMonitor:
     """Ballpark attendance — league superlatives, or one team's game."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "big" | "long"',
+            "auto = best card for the sign; "
+            "big = narrow bigsign card; "
+            "long = wide longboi card",
+            '"auto"',
+        ),
+    }
 
     session: aiohttp.ClientSession
     # "" → league mode; else team mode. Upper-cased at construction so the
@@ -713,7 +726,7 @@ class MLBAttendanceMonitor:
             )
 
         layout = cfg.get("layout", "auto")
-        if layout not in ("auto", "big", "long"):
+        if layout not in _ATTENDANCE_VALID_LAYOUTS:
             msgs.append(
                 f"attendance layout={layout!r} is not valid. "
                 "Use 'auto', 'big', or 'long'."

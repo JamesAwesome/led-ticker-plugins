@@ -5,7 +5,7 @@ import contextlib
 import difflib
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -130,6 +130,17 @@ _MLBStoryT = (
 @attrs.define
 class MLBScoreMonitor:
     """MLB scores for a single team's current series."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "ticker" | "scoreboard" | "two_row"',
+            "auto = best layout for the sign; "
+            "ticker = scrolling line; "
+            "scoreboard = two-column board with inning, count and bases; "
+            "two_row = held series title over a scrolling game line",
+            '"auto"',
+        ),
+    }
 
     session: aiohttp.ClientSession
     # Defaults "" (not required at the attrs/construction level) so
