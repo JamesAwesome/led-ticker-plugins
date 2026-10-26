@@ -937,3 +937,110 @@ def test_reset_frame_clears_a_self_started_run(bigsign):
     assert c._run_start == 1
     c.reset_frame()
     assert c._run_start is None and c._frame_count == 0
+
+
+# ------------------------------------------------ review fixes (#105/#106)
+
+BG = (40, 0, 0)
+
+
+def _core_tick(card, canvas, **draw_kw):
+    """One engine tick as core runs it: advance, `reset_canvas` with the
+    widget's `bg_color`, then draw."""
+    from led_ticker.widgets._image_fit import reset_canvas
+
+    card.advance_frame()
+    reset_canvas(canvas, card.bg_color)
+    return card.draw(canvas, **draw_kw)
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_core_never_fills_bg_color_at_scale_gt1(layout, bigsign):
+    # #105: core fills `widget.bg_color` before every draw at every scale;
+    # the card hands it None once a draw has seen a hi-res sign. (Core's
+    # very first reset precedes any draw: the process's first frame only.)
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    _core_tick(c, bigsign)
+    for _ in range(3):
+        _core_tick(c, bigsign)
+        assert BG not in set(_pixels(bigsign).values())
+
+
+def test_hires_seen_is_shared_so_new_cards_never_flash_bg(bigsign):
+    memo = card_mod.ScaleMemo()
+    a = _card(bg_color=make_color(*BG), scale_memo=memo)
+    _core_tick(a, bigsign)
+    b = _card(bg_color=make_color(*BG), scale_memo=memo)  # a new game's card
+    _core_tick(b, bigsign)
+    assert BG not in set(_pixels(bigsign).values())
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_core_still_fills_bg_color_at_scale_1(layout, smallsign):
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    for _ in range(2):
+        _core_tick(c, smallsign)
+    assert BG in set(_pixels(smallsign).values())
+
+
+def test_widget_cards_share_one_scale_memo():
+    w = HockeyScoreMonitor(session=None, teams=["PHI"], demo=True)
+    w._tz = TZ
+    w._load_demo()
+    memos = {id(c.scale_memo) for c in w.feed_stories}
+    assert len(memos) == 1
+
+
+def _paint_white(canvas):
+    real = unwrap_to_real(canvas)
+    for x in range(real.width):
+        for y in range(real.height):
+            real.SetPixel(x, y, 255, 255, 255)
+
+
+@pytest.mark.parametrize("sign", ["smallsign", "bigsign"])
+@pytest.mark.parametrize("frames", [3, FLASH_FRAMES + 1])  # flash_off, detail
+def test_takeover_clears_preceding_widget(sign, frames, request):
+    # Side-by-side: core resets once, a preceding widget paints, then the
+    # card's takeover must own the whole panel.
+    canvas = request.getfixturevalue(sign)
+    c = _card()
+    c.queue_goals([_goal()])
+    for _ in range(frames):
+        c.advance_frame()
+        _paint_white(canvas)
+        c.draw(canvas, cursor_pos=canvas.width - 10)
+    real = unwrap_to_real(canvas)
+    white = sum(1 for v in real._pixels.values() if v == WHITE)
+    assert white < 0.05 * real.width * real.height
+
+
+def test_takeover_clear_uses_bg_color_at_scale_1(smallsign):
+    c = _card(bg_color=make_color(*BG))
+    c.queue_goals([_goal()])
+    for _ in range(3):  # frame 3 = flash_off
+        c.advance_frame()
+        _paint_white(smallsign)
+        c.draw(smallsign)
+    px = list(_pixels(smallsign).values())
+    assert WHITE not in px and BG in px
+
+
+def test_hidden_card_run_does_not_advance(bigsign):
+    # Core advances every buffered widget each tick but stops drawing at
+    # cursor >= width: B's run must advance only on frames B is drawn.
+    a, b = _card(), _card()
+    b.queue_goals([_goal(key="b")])
+    b.advance_frame()
+    a.advance_frame()
+    b.draw(bigsign, cursor_pos=200)  # B self-starts: phase 0
+    a.queue_goals([_goal(key="a")])
+    for _ in range(CELEBRATION_FRAMES):
+        a.advance_frame()
+        b.advance_frame()  # buffered, advanced, but hidden behind A
+        a.draw(bigsign)
+    assert b._playing is not None and [g.key for g in b.pending] == ["b"]
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        b.advance_frame()
+        b.draw(bigsign)
+    assert flash.call_args.args[2] is True  # phase 1: still flash_on

@@ -75,14 +75,18 @@ counts or transition compositing never eat an unseen celebration. Goals queued m
 wait for the next turn. Non-tracked goals highlight the score instead; empty `teams` means
 no celebrations. Scroll-mode sections (`ticker`, `one_at_a_time`) never call
 `reset_frame()`, so with no snapshot (`_playing is None`) the first live draw SELF-STARTS
-a run (`_run_start` = that `_frame_count`; phase = `_frame_count - _run_start`) and the
-draw after its last frame consumes it exactly as `reset_frame` would, sets `_playing` and
+a run (`_run_start` = that `_frame_count`). Its phase is `_run_pos`, which advances once
+per frame the card is actually DRAWN (deduped by `_frame_count`), never by
+`_frame_count - _run_start`: core advances every buffered widget each tick but stops
+drawing once the cursor reaches the width, so a run hidden behind another card's takeover
+must not burn out unseen. The draw after its last frame consumes it exactly as `reset_frame` would, sets `_playing` and
 `_run_start` back to None and paints the board; the next live draw may self-start again.
 `reset_frame` always sets `_run_start = None` (visit runs start at frame 0), so the
-slideshow path never self-starts. A self-started run is a full-panel takeover
-(`canvas.width` cursor, later widgets skipped for the tick) while the scroll position keeps
-advancing beneath it, so the crawl resumes ~80 px on. `hold_time` is not read in scroll
-modes.
+slideshow path never self-starts. Every celebration frame is a full-panel takeover: it
+first clears the real panel (to `bg_color` at scale 1, black otherwise), because in a
+side-by-side scroll core resets once per tick and earlier widgets have already painted;
+it returns a `canvas.width` cursor, so later widgets are skipped for the tick. The scroll
+position keeps moving beneath it. `hold_time` is not read in scroll modes.
 
 **`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
 with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
@@ -134,7 +138,12 @@ extents, bands, ordering and colors.
 cyan SOG, dim labels, green final winner, gray loser. Black is invisible on the panels, so
 team chips are lifted for LED brightness.
 `bg_color` never paints at scale > 1 (hi-res board, crawl or goal celebration); at
-scale 1 the band board, the ticker message and the goal detail fill it. `font_color`
+scale 1 the band board, the ticker message and the celebration fill it. Core itself fills
+`getattr(widget, "bg_color", None)` before every draw at EVERY scale (`reset_canvas`), so
+`HockeyGameCard.bg_color` is a property: None once any draw of the widget's cards saw
+scale > 1 (the shared `ScaleMemo`, one per widget), else the configured `_bg_color`,
+which the legacy stories and the scale-1 celebration read directly. Core's very first
+reset precedes any draw, so a hi-res sign can show the fill for the process's first frame. `font_color`
 reaches only the scale-1 ticker message.
 
 ## Known gaps
@@ -142,6 +151,14 @@ reaches only the scale-1 ticker message.
 - The landing `situation` field shapes (power play, empty net) come from community docs and
   are unverified against a live game; capture a real payload as a fixture when one is on.
 - The scale-1 `ticker` layout's clock text updates per poll; boards and hi-res tick per second.
+- Scroll-mode takeover vs core's end-of-scroll hold: when the celebrating card is the last
+  widget left in a side-by-side scroll, its `canvas.width` cursor satisfies core's
+  `mon_0_end_pos <= canvas.width` hold check, so the 2 s `hold_at_end` runs and the section
+  ends; the celebration can be cut to about 2 s.
+- A section-entry transition `reset_frame`s the section's first story. After that the card's
+  `_playing` is a list (a visit snapshot) for good and it never self-starts again; if story
+  order changes so it is no longer first, its goals wait (capped at `MAX_QUEUED`) until it
+  is first at a section entry again.
 
 ## Tests
 

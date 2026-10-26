@@ -31,9 +31,13 @@ celebration. Two kinds of run:
 - a SELF-STARTED run (`ticker` / `one_at_a_time` sections, which never
   call `reset_frame()`): with no snapshot, the first live draw snapshots
   `pending` and records `_run_start`; the timeline plays off
-  `_frame_count - _run_start`, and the draw after it ends consumes,
-  clears the snapshot and draws the board. It takes over the full panel
-  (`draw()` returns `canvas.width`); the scroll keeps advancing beneath.
+  `_run_pos`, which advances only on frames the card is actually drawn
+  (a card hidden behind another takeover is still advanced by core), and
+  the draw after it ends consumes, clears the snapshot and draws the
+  board.
+
+Every celebration frame clears the panel first and returns `canvas.width`:
+a full-panel takeover, even mid side-by-side scroll.
 
 Either way, goals queued mid-run wait for the next run.
 
@@ -83,6 +87,14 @@ DEMO_EVERY = 3  # demo cards re-celebrate after every 3rd completed visit
 DEMO_REST_FRAMES = DEMO_EVERY * CELEBRATION_FRAMES
 
 
+@attrs.define
+class ScaleMemo:
+    """Shared by one widget's cards: set once any draw sees scale > 1, so
+    a new game's card never hands core a hi-res `bg_color` fill."""
+
+    hires: bool = False
+
+
 def _score_of(goal: Goal) -> tuple[int, int]:
     return (goal.away_score, goal.home_score)
 
@@ -97,7 +109,9 @@ class HockeyGameCard(FrameAwareBase):
     tracked: frozenset[str] = frozenset()
     stale: bool = False
     base_hold: float = 0.0
-    bg_color: Color | None = attrs.field(default=None, kw_only=True)
+    # The configured fill; core reads the `bg_color` property below.
+    _bg_color: Color | None = attrs.field(default=None, kw_only=True, alias="bg_color")
+    scale_memo: ScaleMemo = attrs.field(factory=ScaleMemo, kw_only=True)
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
@@ -115,6 +129,11 @@ class HockeyGameCard(FrameAwareBase):
     # Frame the last self-started run ended: a scroll-mode demo card has no
     # visits to count, so it re-arms after `DEMO_REST_FRAMES` from here.
     _demo_rest_from: int | None = attrs.field(init=False, default=None)
+    # A self-started run's position: it advances once per frame the card
+    # is actually DRAWN, so a run hidden behind another takeover (still
+    # advanced by core, not drawn) never burns out unseen.
+    _run_pos: int = attrs.field(init=False, default=0)
+    _run_frame: int = attrs.field(init=False, default=-1)
     _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
     _hl_frame: int = attrs.field(init=False, default=-1)
@@ -123,6 +142,13 @@ class HockeyGameCard(FrameAwareBase):
     _legacy_for: tuple[str, GameInfo, bool] | None = attrs.field(
         init=False, default=None
     )
+
+    @property
+    def bg_color(self) -> Color | None:
+        """What core fills before every draw (at every scale): the
+        configured color on scale-1 signs, None once a hi-res draw was
+        seen. `bg_color` is a scale-1 option."""
+        return None if self.scale_memo.hires else self._bg_color
 
     @property
     def hold_time(self) -> float:
@@ -210,10 +236,18 @@ class HockeyGameCard(FrameAwareBase):
             # No visit snapshot: a scroll-mode section. Start on this live frame.
             self._playing = list(self.pending)
             self._run_start = self._frame_count
+            self._run_pos, self._run_frame = 0, self._frame_count
         playing = self._playing
         if not playing or self._frame_paused:
             return False  # paused = transition compositing: the board
-        phase = phase_at(self._frame_count - (self._run_start or 0), len(playing))
+        if self._run_start is None:
+            frame = self._frame_count  # a visit run: origin 0
+        else:
+            if self._frame_count != self._run_frame:
+                self._run_pos += 1
+                self._run_frame = self._frame_count
+            frame = self._run_pos
+        phase = phase_at(frame, len(playing))
         if phase is None:
             if self._run_start is not None:
                 self._end_self_started_run()
@@ -222,12 +256,14 @@ class HockeyGameCard(FrameAwareBase):
         goal = playing[idx]
         if self._frame_count > 0:  # a live frame (paused returned above)
             self._shown.add(goal.key)
+        # A full-panel takeover: clear what earlier widgets painted this
+        # tick (side-by-side scroll). bg_color is scale-1 only.
+        bg = self._bg_color
+        if bg is not None and safe_scale(canvas) <= 1:
+            canvas.Fill(bg.red, bg.green, bg.blue)
+        else:
+            unwrap_to_real(canvas).Clear()
         if name == "detail":
-            # bg_color is scale-1 only (the bitmap board fills it too); the
-            # hi-res detail paints its own palette like every hi-res renderer.
-            if self.bg_color is not None and safe_scale(canvas) <= 1:
-                bg = self.bg_color
-                canvas.Fill(bg.red, bg.green, bg.blue)
             render_detail(
                 canvas, self.game, goal, f, y_offset=y_offset, font=self.small_font
             )
@@ -266,7 +302,7 @@ class HockeyGameCard(FrameAwareBase):
                     self.game,
                     now_fn=self.now_fn,
                     tz=self.tz,
-                    bg_color=self.bg_color,
+                    bg_color=self._bg_color,
                     font=self.small_font if self.small_font is not None else FONT_SMALL,
                 )
                 self._legacy = board
@@ -287,7 +323,7 @@ class HockeyGameCard(FrameAwareBase):
                 self.now_fn(),
                 self.tz,
                 font=self.font,
-                bg_color=self.bg_color,
+                bg_color=self._bg_color,
                 font_color=self.font_color,
                 stale=self.stale,
             )
@@ -302,6 +338,8 @@ class HockeyGameCard(FrameAwareBase):
         y_offset: int = 0,
         font_color: Any = None,
     ) -> DrawResult:
+        if safe_scale(canvas) > 1:
+            self.scale_memo.hires = True
         if self._celebrate(canvas, y_offset):
             return canvas, canvas.width
         scale = safe_scale(canvas)
