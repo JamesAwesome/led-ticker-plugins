@@ -1,0 +1,180 @@
+{
+ "id": "401873099",
+ "uid": "s:20~l:28~e:401873099",
+ "date": "2026-10-25T17:00Z",
+ "name": "Philadelphia Eagles at New York Giants",
+ "shortName": "PHI @ NYG",
+ "season": {
+  "year": 2026,
+  "type": 2,
+  "slug": "regular-season"
+ },
+ "week": {
+  "number": 7
+ },
+ "competitions": [
+  {
+   "id": "401873099",
+   "date": "2026-10-25T17:00Z",
+   "neutralSite": false,
+   "venue": {
+    "id": "3839",
+    "fullName": "MetLife Stadium",
+    "address": {
+     "city": "East Rutherford",
+     "state": "NJ"
+    }
+   },
+   "competitors": [
+    {
+     "id": "19",
+     "homeAway": "home",
+     "score": "17",
+     "linescores": [
+      {
+       "value": 7.0
+      },
+      {
+       "value": 3.0
+      },
+      {
+       "value": 7.0
+      },
+      {
+       "value": 0.0
+      }
+     ],
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Game",
+       "type": "total",
+       "summary": "4-3"
+      }
+     ],
+     "team": {
+      "id": "19",
+      "location": "New York",
+      "name": "Giants",
+      "abbreviation": "NYG",
+      "displayName": "New York Giants",
+      "shortDisplayName": "Giants",
+      "color": "003c7f"
+     }
+    },
+    {
+     "id": "21",
+     "homeAway": "away",
+     "score": "20",
+     "linescores": [
+      {
+       "value": 3.0
+      },
+      {
+       "value": 7.0
+      },
+      {
+       "value": 3.0
+      },
+      {
+       "value": 7.0
+      }
+     ],
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Game",
+       "type": "total",
+       "summary": "5-2"
+      }
+     ],
+     "team": {
+      "id": "21",
+      "location": "Philadelphia",
+      "name": "Eagles",
+      "abbreviation": "PHI",
+      "displayName": "Philadelphia Eagles",
+      "shortDisplayName": "Eagles",
+      "color": "06424d"
+     }
+    }
+   ],
+   "status": {
+    "clock": 133.0,
+    "displayClock": "2:13",
+    "period": 4,
+    "type": {
+     "id": "2",
+     "name": "STATUS_IN_PROGRESS",
+     "state": "in",
+     "completed": false,
+     "description": "In Progress",
+     "detail": "2:13 - 4th Quarter",
+     "shortDetail": "2:13 - 4th"
+    }
+   },
+   "broadcasts": [
+    {
+     "market": "national",
+     "names": [
+      "FOX"
+     ]
+    }
+   ],
+   "format": {
+    "regulation": {
+     "periods": 4
+    },
+    "overtime": {
+     "periods": 1
+    }
+   },
+   "situation": {
+    "$ref": "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401873099/competitions/401873099/situation?lang=en&region=us",
+    "lastPlay": {
+     "id": "40187309900412",
+     "type": {
+      "id": "68",
+      "text": "Rushing Touchdown",
+      "abbreviation": "TD"
+     },
+     "text": "Jalen Hurts 12 Yd Rush (Jake Elliott Kick)",
+     "scoreValue": 6,
+     "team": {
+      "id": "21"
+     },
+     "drive": {
+      "description": "8 plays, 75 yards, 4:12",
+      "result": "TD"
+     },
+     "statYardage": 12
+    },
+    "down": 2,
+    "yardLine": 76,
+    "distance": 7,
+    "downDistanceText": "2nd & 7 at PHI 24",
+    "shortDownDistanceText": "2nd & 7",
+    "possessionText": "PHI 24",
+    "isRedZone": false,
+    "homeTimeouts": 2,
+    "awayTimeouts": 1,
+    "possession": "19"
+   }
+  }
+ ],
+ "status": {
+  "clock": 133.0,
+  "displayClock": "2:13",
+  "period": 4,
+  "type": {
+   "id": "2",
+   "name": "STATUS_IN_PROGRESS",
+   "state": "in",
+   "completed": false,
+   "description": "In Progress",
+   "detail": "2:13 - 4th Quarter",
+   "shortDetail": "2:13 - 4th"
+  }
+ },
+ "_handwritten": true
+}

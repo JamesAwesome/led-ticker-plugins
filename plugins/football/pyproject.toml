@@ -1,0 +1,85 @@
+[project]
+name = "led-ticker-football"
+dynamic = ["version"]
+description = "Live NFL football scores widget for led-ticker, fed by ESPN's public scoreboard API (no key)."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+authors = [{ name = "James Awesome", email = "james@morelli.nyc" }]
+keywords = [
+    "led-ticker",
+    "led-ticker-plugin",
+    "raspberry-pi",
+    "led-matrix",
+    "rgb-led-matrix",
+    "football",
+    "nfl",
+    "live-scores",
+    "sports",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Hardware",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "led-ticker-core>=4.30",
+    "aiohttp>=3.12",
+]
+
+# The plugin is contributed to led-ticker via this entry point. The entry-point
+# NAME ("football") becomes the plugin namespace, so the widget is referenced in
+# TOML as `type = "football.scores"`.
+[project.entry-points."led_ticker.plugins"]
+football = "led_ticker_football:register"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "pre-commit>=4.0",
+    "ruff>=0.4",
+    "pyright>=1.1",
+]
+
+[project.urls]
+Homepage = "https://docs.ledticker.dev"
+Documentation = "https://docs.ledticker.dev/plugins/"
+Repository = "https://github.com/JamesAwesome/led-ticker-plugins"
+Issues = "https://github.com/JamesAwesome/led-ticker-plugins/issues"
+Changelog = "https://github.com/JamesAwesome/led-ticker-plugins/releases"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# Per-plugin tag scoping: only football-v* tags count toward football's version.
+root = "../.."
+git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "football-v*"]
+tag_regex = "^(?:.+-v)(?P<version>[0-9].*)$"
+fallback_version = "0.0.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/led_ticker_football"]
+
+[tool.ruff]
+target-version = "py314"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.coverage.report]
+fail_under = 90
