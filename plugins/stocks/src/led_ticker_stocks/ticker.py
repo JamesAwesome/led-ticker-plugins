@@ -1,7 +1,7 @@
 """StocksTicker Container (stocks.ticker) + per-symbol crawl story."""
 
 import logging
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import attrs
 from led_ticker.plugin import (
@@ -106,6 +106,23 @@ class StocksTicker:
     running. Every story reads live off the cache on each `draw()` — there
     is no widget-owned poll loop or `update()` anymore.
     """
+
+    # Per-widget `--list-fields stocks.ticker` hint override. `layout` is a
+    # plugin-owned field name, so core carries no hint for it. Plain 3-tuple
+    # (display_type, description, default_display); the enum mirrors
+    # `LAYOUTS` (drift-guarded in tests/test_list_field_hints.py). There is
+    # no "auto" value: unset means "pick by physical panel width"
+    # (`resolve_layout`). ClassVar keeps attrs from treating it as a field.
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"card" | "crawl" | "dashboard"',
+            "crawl = scrolling line (smallsign); card = held hero card "
+            "(bigsign); dashboard = held dashboard with watch column "
+            "(longboi)",
+            "unset (chosen by panel width: crawl <= 160 px, "
+            "dashboard >= 400 px, card between)",
+        ),
+    }
 
     symbols: list[str]
     layout: str | None = None
