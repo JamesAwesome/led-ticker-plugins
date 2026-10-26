@@ -418,38 +418,68 @@ def diff_scores(
 # ------------------------------------------------------------------- demo
 
 
+def _demo_game(
+    game_id: str,
+    state: str,
+    status: str,
+    *,
+    away: str = "PHI",
+    home: str = "NYG",
+    away_score: int = 0,
+    home_score: int = 0,
+    period: int = 0,
+    clock: str = "",
+    start_utc: datetime | None = None,
+    final_ot: bool = False,
+    venue: str = "MetLife Stadium",
+    away_record: str = "5-2",
+    home_record: str = "4-3",
+    week: int = 8,
+    situation: Situation | None = None,
+    now: float,
+) -> GameInfo:
+    return GameInfo(
+        game_id=game_id,
+        state=state,
+        status=status,
+        away=away,
+        home=home,
+        away_score=away_score,
+        home_score=home_score,
+        period=period,
+        clock=clock,
+        start_utc=start_utc,
+        time_tbd=False,
+        venue=venue,
+        broadcast="FOX",
+        away_record=away_record,
+        home_record=home_record,
+        final_ot=final_ot,
+        neutral_site=False,
+        week=week,
+        situation=situation,
+        polled_at=now,
+    )
+
+
 def build_demo_games(now: float) -> tuple[list[GameInfo], ScoringPlay]:
     """Five PHI/NYG cards: live Q4, halftime, OT final, next game, bye week;
     plus the live card's touchdown play for the celebration."""
     tz = ZoneInfo("America/New_York")
-    base = dict(
-        away="PHI",
-        home="NYG",
-        venue="MetLife Stadium",
-        broadcast="FOX",
-        away_record="5-2",
-        home_record="4-3",
-        neutral_site=False,
-        week=8,
-        polled_at=now,
-        time_tbd=False,
-    )
     td_play = LastPlay(
         text="Jalen Hurts 12 Yd Rush (Jake Elliott Kick)",
         score_value=6,
         team="PHI",
         type_text="Rushing Touchdown",
     )
-    live = GameInfo(
-        game_id="demo-live",
-        state="live",
-        status="STATUS_IN_PROGRESS",
+    live = _demo_game(
+        "demo-live",
+        "live",
+        "STATUS_IN_PROGRESS",
         away_score=20,
         home_score=17,
         period=4,
         clock="2:13",
-        start_utc=None,
-        final_ot=False,
         situation=Situation(
             possession="NYG",
             down_distance="2ND & 7",
@@ -459,63 +489,53 @@ def build_demo_games(now: float) -> tuple[list[GameInfo], ScoringPlay]:
             home_timeouts=2,
             last_play=td_play,
         ),
-        **base,
+        now=now,
     )
-    halftime = GameInfo(
-        game_id="demo-half",
-        state="live",
-        status="STATUS_HALFTIME",
+    halftime = _demo_game(
+        "demo-half",
+        "live",
+        "STATUS_HALFTIME",
         away_score=10,
         home_score=10,
         period=2,
         clock="0:00",
-        start_utc=None,
-        final_ot=False,
-        **base,
+        now=now,
     )
-    final = GameInfo(
-        game_id="demo-final",
-        state="final",
-        status="STATUS_FINAL",
+    final = _demo_game(
+        "demo-final",
+        "final",
+        "STATUS_FINAL",
         away_score=24,
         home_score=27,
         period=5,
         clock="0:00",
-        start_utc=None,
         final_ot=True,
-        **base,
+        now=now,
     )
     local = datetime.fromtimestamp(now, UTC).astimezone(tz)
     days = (6 - local.weekday()) % 7 or 7  # next Sunday, never today
     sunday = (local + timedelta(days=days)).replace(
         hour=13, minute=0, second=0, microsecond=0
     )
-    future_base = {**base, "venue": "Lincoln Financial Field", "away": "NYG"}
-    future_base["home"] = "PHI"
-    future_base["away_record"], future_base["home_record"] = "4-3", "5-2"
-    future = GameInfo(
-        game_id="demo-next",
-        state="future",
-        status="STATUS_SCHEDULED",
-        away_score=0,
-        home_score=0,
-        period=0,
-        clock="",
+    future = _demo_game(
+        "demo-next",
+        "future",
+        "STATUS_SCHEDULED",
+        away="NYG",
+        home="PHI",
+        away_record="4-3",
+        home_record="5-2",
+        venue="Lincoln Financial Field",
         start_utc=sunday.astimezone(UTC),
-        final_ot=False,
-        **future_base,
+        now=now,
     )
-    bye = GameInfo(
-        game_id="demo-bye",
-        state="future",
-        status="STATUS_SCHEDULED",
-        away_score=0,
-        home_score=0,
-        period=0,
-        clock="",
+    bye = _demo_game(
+        "demo-bye",
+        "future",
+        "STATUS_SCHEDULED",
         start_utc=(sunday + timedelta(days=7)).astimezone(UTC),
-        final_ot=False,
-        **{**base, "week": 10},
+        week=10,
+        now=now,
     )
     td = ScoringPlay(
         key="demo-live:20:17",
