@@ -1,6 +1,7 @@
 """OverheadWidget — planes-overhead ADS-B tracker (flight.overhead)."""
 
 import logging
+from typing import ClassVar
 
 import aiohttp
 import attrs
@@ -37,6 +38,20 @@ def resolve_layout(name: str, scale: int, phys_w: int) -> str:
 
 @attrs.define
 class OverheadWidget(FrameAwareBase):
+    # Per-widget hint for ``--list-fields flight.overhead``. `layout` is a
+    # plugin-owned field name, so core carries no hint for it (core issue
+    # #438). Plain 3-tuple (display_type, description, default_display) —
+    # importing FieldHint from core's factories would be circular.
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "ticker" | "hero" | "dashboard"',
+            "auto picks by canvas (ticker at scale 1, hero on narrow hi-res, "
+            "dashboard on wide hi-res); hero / dashboard need scale > 1 and "
+            "fall back to ticker on a scale-1 sign",
+            '"auto"',
+        ),
+    }
+
     latitude: float | None = None
     longitude: float | None = None
     # converter=int: validate_config accepts integral floats (a plausible
