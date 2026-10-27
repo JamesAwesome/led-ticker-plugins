@@ -73,7 +73,12 @@ from led_ticker_football._celebration import (
     render_detail,
     render_flash,
 )
-from led_ticker_football._models import GameInfo, ScoringPlay, pre_extra_score
+from led_ticker_football._models import (
+    GameInfo,
+    ScoringPlay,
+    pre_extra_score,
+    status_lines,
+)
 from led_ticker_football._palette import chip as _chip
 from led_ticker_football._scoreboard import FootballBandBoard, build_ticker_message
 from led_ticker_football.layouts import resolve_layout
@@ -137,8 +142,8 @@ class FootballGameCard(FrameAwareBase):
     _hl_frame: int = attrs.field(init=False, default=-1)
     _legacy: Any = attrs.field(init=False, default=None)
     # (layout, game, stale, bye) the cached legacy story was built for.
-    _legacy_for: tuple[str, GameInfo, bool, bool] | None = attrs.field(
-        init=False, default=None
+    _legacy_for: tuple[str, GameInfo, bool, bool, tuple[str, str] | None] | None = (
+        attrs.field(init=False, default=None)
     )
 
     @property
@@ -309,9 +314,14 @@ class FootballGameCard(FrameAwareBase):
             board.game = self.game
             board.stale = self.stale
             board.bye = self.bye
-            self._legacy_for = (layout, self.game, self.stale, self.bye)
+            self._legacy_for = (layout, self.game, self.stale, self.bye, None)
             return board
         built = self._legacy_for
+        now = self.now_fn()
+        # The line's wording depends on the clock too (TODAY / TONIGHT / the
+        # day): a `next:` card keeps one GameInfo for hours, so the cache
+        # key carries the current status lines.
+        lines = status_lines(self.game, now, self.tz)
         if (
             self._legacy is None
             or built is None
@@ -319,10 +329,11 @@ class FootballGameCard(FrameAwareBase):
             or built[1] is not self.game
             or built[2] != self.stale
             or built[3] != self.bye
+            or built[4] != lines
         ):
             self._legacy = build_ticker_message(
                 self.game,
-                self.now_fn(),
+                now,
                 self.tz,
                 font=self.font,
                 bg_color=self.bg_color,
@@ -330,7 +341,7 @@ class FootballGameCard(FrameAwareBase):
                 stale=self.stale,
                 bye=self.bye,
             )
-            self._legacy_for = (layout, self.game, self.stale, self.bye)
+            self._legacy_for = (layout, self.game, self.stale, self.bye, lines)
         return self._legacy
 
     def draw(

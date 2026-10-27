@@ -161,3 +161,21 @@ def test_scale4_scoreboard_scrolls_with_cursor_pos(bigsign):
     _, cursor = _card().draw(canvas, -20)
     assert cursor == -20 + canvas.width
     assert _lit_cols(real) == {x - 80 for x in cols0 if x >= 80}
+
+
+def test_scale1_ticker_relabels_the_day_when_it_changes(smallsign):
+    """`next:` cards keep one GameInfo for hours; the scale-1 ticker line
+    must not keep yesterday's day label past midnight."""
+    from led_ticker_football._models import status_lines
+
+    state = {"now": NOW}
+    card = FootballGameCard(
+        game=GAMES[3], tz=TZ, cfg_layout="ticker", now_fn=lambda: state["now"]
+    )
+    card.draw(smallsign)
+    first = card._legacy
+    assert GAMES[3].start_utc is not None
+    state["now"] = GAMES[3].start_utc.timestamp() - 3600  # game day
+    assert status_lines(GAMES[3], state["now"], TZ) != status_lines(GAMES[3], NOW, TZ)
+    card.draw(smallsign)
+    assert card._legacy is not first

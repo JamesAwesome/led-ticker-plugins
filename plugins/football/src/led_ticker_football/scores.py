@@ -405,8 +405,10 @@ class FootballScoreMonitor:
             gid = str(key)
             if key not in cards and gid in snap.games and card.pending:
                 card.game = snap.games[gid]
+                card.drop_overturned()  # a review can still take it off the board
                 card.stale = snap.stale
-                cards[key] = card
+                if card.pending:
+                    cards[key] = card
         self._cards = cards
         source.note_displayed(self, {k for k in cards if not k.startswith("next:")})
         self.feed_stories = list(cards.values())

@@ -44,6 +44,7 @@ KICKOFF_WINDOW = 30 * 60
 PREGAME_INTERVAL = 300
 IDLE_INTERVAL = 3600
 SCHEDULE_INTERVAL = 6 * 3600
+SCHEDULE_RETRY = 60  # a FAILED schedule fetch retries this soon, not in 6 h
 MIN_INTERVAL = 10
 MAX_BACKOFF = 4 * 3600
 REQUEST_TIMEOUT = 20
@@ -416,8 +417,11 @@ class ESPNSource:
                 body = await self._get(f"{PATH}/teams/{team}/schedule")
             except Exception as exc:  # noqa: BLE001 — soft: schedule is optional
                 logger.debug("football: schedule fetch failed (%s): %s", team, exc)
-                continue
+                body = None
             if not isinstance(body, dict):
+                # One failure must not blank a bye-week team's card for 6 h:
+                # allow another attempt SCHEDULE_RETRY from now.
+                self._next_at[team] = now - SCHEDULE_INTERVAL + SCHEDULE_RETRY
                 continue
             bye = _int_or_none(body.get("byeWeek"))
             if bye is not None:

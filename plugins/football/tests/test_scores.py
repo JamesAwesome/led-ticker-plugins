@@ -364,6 +364,21 @@ class TestPlays:
         await w.update()
         assert w.feed_stories == []
 
+    async def test_retained_live_card_drops_an_overturned_score(self):
+        live = game(1, "live")
+        w = _widget(_snap(live), {"1": ()}, mode="live")
+        await w.update()
+        w._source.plays["1"] = (play("1:29:17", kind="FG", away=29, home=17),)
+        w._source.snapshot = _snap(game(1, "final", away_score=29, home_score=17))
+        await w.update()
+        card = w.feed_stories[0]
+        assert [p.key for p in card.pending] == ["1:29:17"]
+        # Review takes the field goal off the board before the card's turn.
+        w._source.plays["1"] = ()
+        w._source.snapshot = _snap(game(1, "final", away_score=26, home_score=17))
+        await w.update()
+        assert card.pending == []
+
     async def test_follow_up_after_celebration_is_silent(self):
         """The TD already flashed (consumed); its extra point arrives next
         poll. It must neither queue a second celebration nor highlight."""

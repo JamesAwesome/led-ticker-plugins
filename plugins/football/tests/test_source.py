@@ -581,3 +581,23 @@ async def test_backoff_after_a_success_uses_the_cadence():
     clock.advance(IDLE_INTERVAL)
     await s.poll()
     assert s.next_delay() == 2 * IDLE_INTERVAL
+
+
+async def test_schedule_failure_retries_on_the_next_poll():
+    """One failed schedule fetch must not blank a bye-week team's card for
+    the whole SCHEDULE_INTERVAL (6 h): retry at the next poll instead."""
+    from led_ticker_football._source import SCHEDULE_RETRY
+
+    sched_url = f"{HOSTS[0]}{PATH}/teams/NYG/schedule"
+    s, session, clock, _ = make({SB[0]: (200, fx("scoreboard_week7"))}, teams=("NYG",))
+    snap = await s.poll()
+    assert "NYG" not in snap.next_games
+    assert session.urls.count(sched_url) == 1
+    clock.advance(SCHEDULE_RETRY - 1)
+    await s.poll()  # inside the retry spacing: no second attempt yet
+    assert session.urls.count(sched_url) == 1
+    session.routes[sched_url] = (200, fx("schedule_phi"))
+    clock.advance(IDLE_INTERVAL)
+    snap = await s.poll()
+    assert session.urls.count(sched_url) == 2
+    assert "NYG" in snap.next_games

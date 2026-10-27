@@ -184,6 +184,10 @@ takeover fills it explicitly — so `FootballGameCard.bg_color` is a plain field
   build. Capture a real in-progress event as a fixture when one is on.
 - `week.teamsOnBye` is read from the scoreboard; `byeWeek` from the schedule endpoint is
   the fallback. Both were confirmed on 2026-10-26 (Week 7: BUF/LAC/WSH/JAX; PHI bye 10).
+- Side-by-side takeover: only THIS card freezes (`_x_shift`); the widget to its left keeps
+  scrolling under the celebration, so when the run ends an up-to-80-logical-px gap opens
+  between them and that much of the neighbour passed unseen. Freezing neighbours needs
+  engine support; documented in the README instead.
 - Scroll-mode takeover vs core's end-of-scroll hold: a score that lands while the LAST card
   of a side-by-side scroll sits in core's `hold_at_end` is cut to the remainder of the
   section `hold_time` (default 3 s) and resumes on the next pass (frames advance only
