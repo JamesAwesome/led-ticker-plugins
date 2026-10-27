@@ -30,7 +30,7 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 # 4.9 ships the plugin_config_block seam + the overlay-plugin reconcile guard.
-dependencies = ["led-ticker-core>=4.9"]
+dependencies = ["led-ticker-core>=4.31"]
 
 [project.entry-points."led_ticker.plugins"]
 storefront = "led_ticker_storefront:register"
