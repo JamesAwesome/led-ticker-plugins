@@ -536,11 +536,16 @@ def test_widget_cards_share_one_scale_memo():
     assert len(memos) == 1
 
 
-def _paint_white(canvas):
+def _paint_panel(canvas, rgb=WHITE):
     real = unwrap_to_real(canvas)
     for x in range(real.width):
         for y in range(real.height):
-            real.SetPixel(x, y, 255, 255, 255)
+            real.SetPixel(x, y, *rgb)
+
+
+# A preceding widget's color that no football renderer paints (the
+# smallsign detail draws its play text white).
+MAGENTA = (255, 0, 255)
 
 
 @pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
@@ -569,7 +574,7 @@ def test_hires_draw_right_of_another_widget_keeps_it(layout, bigsign):
     # the panel; the board/crawl must not wipe it.
     c = _card(layout=layout, bg_color=make_color(*BG))
     c.advance_frame()
-    _paint_white(bigsign)
+    _paint_panel(bigsign)
     c.draw(bigsign, cursor_pos=40)
     assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
 
@@ -578,6 +583,245 @@ def test_paused_hires_draw_never_clears(bigsign):
     # Transition compositing paints outgoing and incoming into one canvas.
     c = _card(bg_color=make_color(*BG))
     c.pause_frame()
-    _paint_white(bigsign)
+    _paint_panel(bigsign)
     c.draw(bigsign)
     assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
+
+
+# ------------------------------- scroll-mode sections (#106): no reset_frame
+
+
+def _scroll_frames(card, canvas, n):
+    """Tick like `_scroll_side_by_side`: advance then draw, never reset_frame."""
+    out = []
+    for _ in range(n):
+        card.advance_frame()
+        out.append(card.draw(canvas))
+    return out
+
+
+def test_scroll_mode_starts_pending_celebration_on_first_live_draw(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    with (
+        mock.patch.object(card_mod, "render_flash") as flash,
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        _scroll_frames(c, bigsign, 2)
+    # 1st advance -> frame 1 -> the run self-starts at origin 1 -> phase 0
+    # (flash_on); 2nd -> phase 1 (flash_on). Two flash paints, no board.
+    assert [call.args[2] for call in flash.call_args_list] == [True, True]
+    assert [call.args[3] for call in flash.call_args_list] == ["TOUCHDOWN"] * 2
+    board.assert_not_called()
+    assert c._run_start == 1
+
+
+def test_scroll_mode_never_starts_on_frame_zero_draw(bigsign):
+    # e.g. `_scroll_and_delay`'s initial draw before any advance
+    c = _card()
+    c.queue_plays([_play()])
+    with mock.patch.object(card_mod, "render_scoreboard") as board:
+        c.draw(bigsign)
+    board.assert_called_once()
+    assert c._playing is None and c._run_start is None
+
+
+def test_scroll_mode_run_plays_whole_timeline_then_consumes(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    with (
+        mock.patch.object(card_mod, "render_flash") as flash,
+        mock.patch.object(card_mod, "render_detail") as detail,
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        _scroll_frames(c, bigsign, CELEBRATION_FRAMES + 1)
+    assert flash.call_count == FLASH_FRAMES
+    assert detail.call_count == CELEBRATION_FRAMES - FLASH_FRAMES
+    board.assert_called_once()  # the run-ending draw shows the board
+    assert c.pending == [] and c._playing is None and c._run_start is None
+
+
+def test_scroll_mode_play_queued_mid_run_waits_for_next_run(bigsign):
+    c = _card()
+    # Distinct pre-try snapshots, so the second never folds into the first.
+    p1 = _play(key="p1", extra="", away_score=26)
+    p2 = _play(key="p2", kind="FG", extra="", away_score=29)
+    c.queue_plays([p1])
+    _scroll_frames(c, bigsign, 10)  # frames 1-10: run started at 1
+    c.queue_plays([p2])
+    assert c._playing == [p1]
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES - 10)  # frames 11-80
+    assert c._playing == [p1]  # p1's timeline (phases 0-79) still playing
+    with mock.patch.object(card_mod, "render_scoreboard") as board:
+        _scroll_frames(c, bigsign, 1)  # frame 81: p1's run ends
+    board.assert_called_once()
+    assert c._playing is None and c.pending == [p2]
+    _scroll_frames(c, bigsign, 1)  # the next live draw self-starts p2
+    assert c._playing == [p2] and c._run_start == CELEBRATION_FRAMES + 2
+
+
+def test_scroll_mode_extra_point_folds_into_running_touchdown(bigsign):
+    # The +PAT follow-up swaps the running snapshot (same pre-try score),
+    # never a second run.
+    c = _card()
+    c.queue_plays([_play(key="td", extra="", away_score=26)])
+    _scroll_frames(c, bigsign, 5)
+    c.queue_plays([_play(key="pat", extra="+PAT", away_score=27)])
+    assert [p.key for p in c._playing] == ["pat"]
+    assert [p.key for p in c.pending] == ["pat"]
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES)  # frames 6-85: run ends
+    assert c.pending == [] and c._playing is None
+
+
+def test_scroll_mode_paused_draws_do_not_advance_or_consume(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    _scroll_frames(c, bigsign, 1)  # run self-started at frame 1 (shown)
+    c.pause_frame()
+    with (
+        mock.patch.object(card_mod, "render_flash") as flash,
+        mock.patch.object(card_mod, "render_detail") as detail,
+    ):
+        for _ in range(CELEBRATION_FRAMES + 5):
+            c.advance_frame()  # no-op while paused
+            c.draw(bigsign)  # transition compositing: the board
+    assert flash.call_count == 0 and detail.call_count == 0
+    c.resume_frame()
+    assert c.pending and c._playing is not None  # nothing consumed
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES)  # frames 2-81 finish it
+    assert c.pending == [] and c._playing is None
+
+
+def test_scroll_mode_paused_card_never_self_starts(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    c._frame_count = 5
+    c.pause_frame()
+    c.draw(bigsign)
+    assert c._playing is None and c._run_start is None
+
+
+def test_scroll_mode_takes_over_full_panel(bigsign):
+    c = _card(layout="ticker")
+    c.queue_plays([_play()])
+    c.advance_frame()
+    _, cursor = c.draw(bigsign, cursor_pos=-37)
+    assert cursor == bigsign.width
+    real = unwrap_to_real(bigsign)
+    assert sum(1 for v in real._pixels.values() if v == PHI) > 0.5 * (
+        real.width * real.height
+    )
+
+
+def test_scroll_mode_bye_card_without_plays_draws_board(bigsign):
+    # A bye-week next-game card never has plays: the scroll draws its board.
+    c = _card(bye=True)
+    with mock.patch.object(card_mod, "render_scoreboard") as board:
+        _scroll_frames(c, bigsign, 3)
+    assert board.call_count == 3 and board.call_args.kwargs["bye"] is True
+    assert c._playing is None and c._run_start is None
+
+
+def test_scroll_mode_demo_rearms_after_rest(bigsign):
+    # No visits to count in a scroll section: a demo card re-celebrates
+    # DEMO_REST_FRAMES live frames after its self-started run ended.
+    c = _card(demo_plays=(TD,))
+    c.queue_plays(list(c.demo_plays))
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES + 1)  # run 1, ends at 81
+    assert c.pending == [] and c._playing is None
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        _scroll_frames(c, bigsign, card_mod.DEMO_REST_FRAMES - 1)
+    flash.assert_not_called()  # resting: the board, no celebration
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        _scroll_frames(c, bigsign, 1)
+    flash.assert_called_once()  # re-armed and self-started on this frame
+    assert c._run_start == CELEBRATION_FRAMES + 1 + card_mod.DEMO_REST_FRAMES
+
+
+def test_scroll_mode_demo_rest_paused_frames_do_not_rearm(bigsign):
+    c = _card(demo_plays=(TD,))
+    c.queue_plays(list(c.demo_plays))
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES + 1)
+    c._frame_count += card_mod.DEMO_REST_FRAMES
+    c.pause_frame()
+    c.draw(bigsign)
+    assert c.pending == []  # transition compositing never re-arms
+
+
+def test_non_demo_card_never_rests(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES + 1 + card_mod.DEMO_REST_FRAMES)
+    assert c._demo_rest_from is None and c.pending == [] and c._playing is None
+
+
+def test_slideshow_path_unchanged_with_run_start(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    c.reset_frame()
+    assert c._run_start is None
+    _scroll_frames(c, bigsign, 5)
+    c.queue_plays([_play(key="p2", kind="FG", extra="", away_score=23)])
+    assert len(c._playing) == 1  # mid-visit play waits (existing contract)
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES)  # run over: board, no start
+    assert c._run_start is None and len(c._playing) == 1
+    assert len(c.pending) == 2  # nothing consumed until the next visit entry
+    c.reset_frame()
+    assert [p.key for p in c.pending] == ["p2"]
+
+
+def test_reset_frame_clears_a_self_started_run(bigsign):
+    # A scroll card entering a slideshow-style visit (e.g. a transition's
+    # reset) restarts at origin 0 from the visit snapshot.
+    c = _card()
+    c.queue_plays([_play()])
+    _scroll_frames(c, bigsign, 3)
+    assert c._run_start == 1
+    c.reset_frame()
+    assert c._run_start is None and c._frame_count == 0
+
+
+@pytest.mark.parametrize("sign", ["smallsign", "bigsign"])
+@pytest.mark.parametrize("frames", [3, FLASH_FRAMES + 1])  # flash_off, detail
+def test_takeover_clears_preceding_widget(sign, frames, request):
+    # Side-by-side: core resets once, a preceding widget paints, then the
+    # card's takeover must own the whole panel.
+    canvas = request.getfixturevalue(sign)
+    c = _card()
+    c.queue_plays([_play()])
+    for _ in range(frames):
+        c.advance_frame()
+        _paint_panel(canvas, MAGENTA)
+        c.draw(canvas, cursor_pos=canvas.width - 10)
+    assert MAGENTA not in set(_pixels(canvas).values())
+
+
+def test_takeover_clear_uses_bg_color_at_scale_1(smallsign):
+    c = _card(bg_color=make_color(*BG))
+    c.queue_plays([_play()])
+    for _ in range(3):  # frame 3 = flash_off
+        c.advance_frame()
+        _paint_panel(smallsign, MAGENTA)
+        c.draw(smallsign)
+    px = list(_pixels(smallsign).values())
+    assert MAGENTA not in px and BG in px
+
+
+def test_hidden_card_run_does_not_advance(bigsign):
+    # Core advances every buffered widget each tick but stops drawing at
+    # cursor >= width: B's run must advance only on frames B is drawn.
+    a, b = _card(), _card()
+    b.queue_plays([_play(key="b")])
+    b.advance_frame()
+    a.advance_frame()
+    b.draw(bigsign, cursor_pos=200)  # B self-starts: phase 0
+    a.queue_plays([_play(key="a")])
+    for _ in range(CELEBRATION_FRAMES):
+        a.advance_frame()
+        b.advance_frame()  # buffered, advanced, but hidden behind A
+        a.draw(bigsign)
+    assert b._playing is not None and [p.key for p in b.pending] == ["b"]
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        b.advance_frame()
+        b.draw(bigsign)
+    assert flash.call_args.args[2] is True  # phase 1: still flash_on

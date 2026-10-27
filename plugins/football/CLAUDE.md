@@ -97,7 +97,22 @@ on them. `bye` is set only on `next:` cards whose team is in `snap.bye_teams`.
 (`_playing`) taken at visit-entry `reset_frame()`. A play is consumed only once it was
 actually DRAWN on a live (unpaused, `_frame_count > 0`) frame (`_shown`). Plays queued
 mid-visit wait for the next turn. Non-tracked scores highlight instead; empty `teams`
-means no celebrations.
+means no celebrations. Scroll-mode sections (`ticker`, `one_at_a_time`) never call
+`reset_frame()`, so with no snapshot (`_playing is None`) the first live draw SELF-STARTS
+a run (`_run_start` = that `_frame_count`). Its phase is `_run_pos`, which advances once
+per frame the card is actually DRAWN (deduped by `_frame_count`), never by
+`_frame_count - _run_start`: core advances every buffered widget each tick but stops
+drawing once the cursor reaches the width, so a run hidden behind another card's takeover
+must not burn out unseen. The draw after its last frame consumes it exactly as
+`reset_frame` would, sets `_playing` and `_run_start` back to None and paints the board;
+the next live draw may self-start again. An extra point arriving mid-run still folds into
+the running touchdown (`_swap` walks `_playing` too). `reset_frame` always sets
+`_run_start = None` (visit runs start at frame 0), so the slideshow path never
+self-starts. Every celebration frame is a full-panel takeover: it first clears the real
+panel (to `bg_color` at scale 1, black otherwise), because in a side-by-side scroll core
+resets once per tick and earlier widgets have already painted; it returns a
+`canvas.width` cursor, so later widgets are skipped for the tick. The scroll position
+keeps moving beneath it. `hold_time` is not read in scroll modes.
 
 **`hold_time` property** — `base_hold` with nothing due; with `n` celebrations due it is
 `n * CELEBRATION_SECONDS` (4 s) + `max(base_hold, BOARD_FLOOR)` (4 s). Core reads it as
@@ -107,7 +122,10 @@ means no celebrations.
 while `_frame_paused` (transition compositing).
 
 **Demo re-arm** — demo live cards carry `demo_plays`; `reset_frame` re-queues them after
-every `DEMO_EVERY` (3) COMPLETED visits.
+every `DEMO_EVERY` (3) COMPLETED visits (`_frame_count > 0` at reset, so a transition's
+extra `reset_frame` before `_show_one`'s is not counted). Scroll-mode sections have no
+visits: a self-started run's end records `_demo_rest_from`, and the demo re-queues once
+`DEMO_REST_FRAMES` (3 x 80 = 240, 12 s) live frames pass with nothing pending.
 
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the scale-1 `SegmentMessage` joins the same list.
@@ -161,6 +179,14 @@ scale-1 ticker message.
   build. Capture a real in-progress event as a fixture when one is on.
 - `week.teamsOnBye` is read from the scoreboard; `byeWeek` from the schedule endpoint is
   the fallback. Both were confirmed on 2026-10-26 (Week 7: BUF/LAC/WSH/JAX; PHI bye 10).
+- Scroll-mode takeover vs core's end-of-scroll hold: when the celebrating card is the last
+  widget left in a side-by-side scroll, its `canvas.width` cursor satisfies core's
+  `mon_0_end_pos <= canvas.width` hold check, so the 2 s `hold_at_end` runs and the section
+  ends; the celebration can be cut to about 2 s.
+- A section-entry transition `reset_frame`s the section's first story. After that the card's
+  `_playing` is a list (a visit snapshot) for good and it never self-starts again; if story
+  order changes so it is no longer first, its plays wait (capped at `MAX_QUEUED`) until it
+  is first at a section entry again.
 
 ## Tests
 

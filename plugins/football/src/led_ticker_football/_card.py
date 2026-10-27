@@ -21,13 +21,30 @@ REPLACES it; `replace_plays` does the same for plays the widget knows were
 already celebrated, and never queues. While `pending`, `draw()` plays the
 celebration timeline off `_frame_count` (held, on every layout; the board
 while the frame counter is paused, i.e. transition compositing) and
-`hold_time` covers it plus the board's own hold. A play is CONSUMED at the
-next visit-entry `reset_frame()` only once it was actually shown on a live
-(unpaused, ticking) frame, so a stale frame count from an earlier visit or
-transition compositing never eats an unseen celebration.
+`hold_time` covers it plus the board's own hold. A play is CONSUMED only
+once it was actually shown on a live (unpaused, ticking) frame, so a stale
+frame count from an earlier visit or transition compositing never eats an
+unseen celebration. Two kinds of run:
 
-Demo cards carry `demo_plays`: re-queued after every third completed visit
-so a looping demo keeps showing the celebration.
+- a VISIT run (slideshow): `reset_frame()` snapshots `pending` into
+  `_playing` at frame 0; consumption happens at the next visit entry.
+- a SELF-STARTED run (`ticker` / `one_at_a_time` sections, which never
+  call `reset_frame()`): with no snapshot, the first live draw snapshots
+  `pending` and records `_run_start`; the timeline plays off
+  `_run_pos`, which advances only on frames the card is actually drawn
+  (a card hidden behind another takeover is still advanced by core), and
+  the draw after it ends consumes, clears the snapshot and draws the
+  board.
+
+Every celebration frame clears the panel first and returns `canvas.width`:
+a full-panel takeover, even mid side-by-side scroll.
+
+Either way, plays queued mid-run wait for the next run; an extra point
+still folds into its running touchdown (`_swap` covers `_playing`).
+
+Demo cards carry `demo_plays`: re-queued after every third completed
+visit so a looping demo keeps showing the celebration; in a scroll-mode
+section (no visits) `DEMO_REST_FRAMES` live frames after a run ends.
 """
 
 import time
@@ -47,6 +64,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_football._celebration import (
+    CELEBRATION_FRAMES,
     CELEBRATION_SECONDS,
     HIGHLIGHT_FRAMES,
     MAX_QUEUED,
@@ -66,6 +84,9 @@ from led_ticker_football.layouts.scoreboard import render_scoreboard
 # for at least this long, so the celebration never eats the board's hold.
 BOARD_FLOOR = 4.0
 DEMO_EVERY = 3  # demo cards re-celebrate after every 3rd completed visit
+# Scroll-mode sections have no visits: a demo card re-celebrates this many
+# live frames (12 s) after its last self-started run ended.
+DEMO_REST_FRAMES = DEMO_EVERY * CELEBRATION_FRAMES
 
 
 @attrs.define
@@ -106,6 +127,18 @@ class FootballGameCard(FrameAwareBase):
     # The visit's celebration snapshot, taken at visit entry. None = no
     # visit yet. Plays queued mid-visit wait for the next turn.
     _playing: list[ScoringPlay] | None = attrs.field(init=False, default=None)
+    # None = the run's frame origin is 0 (a visit `reset_frame` started).
+    # An int = a SELF-STARTED run: no visit snapshot existed (ticker /
+    # one_at_a_time sections never reset), so it began at that frame.
+    _run_start: int | None = attrs.field(init=False, default=None)
+    # Frame the last self-started run ended: a scroll-mode demo card has no
+    # visits to count, so it re-arms after `DEMO_REST_FRAMES` from here.
+    _demo_rest_from: int | None = attrs.field(init=False, default=None)
+    # A self-started run's position: it advances once per frame the card
+    # is actually DRAWN, so a run hidden behind another takeover (still
+    # advanced by core, not drawn) never burns out unseen.
+    _run_pos: int = attrs.field(init=False, default=0)
+    _run_frame: int = attrs.field(init=False, default=-1)
     _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
     _hl_frame: int = attrs.field(init=False, default=-1)
@@ -194,11 +227,36 @@ class FootballGameCard(FrameAwareBase):
 
     def _celebrate(self, canvas: Any, y_offset: int) -> bool:
         """Paint the celebration frame if one is due; True when painted."""
+        live = not self._frame_paused and self._frame_count > 0
+        rest = self._demo_rest_from
+        if (
+            live
+            and self._playing is None
+            and rest is not None
+            and not self.pending
+            and self._frame_count - rest >= DEMO_REST_FRAMES
+        ):
+            self._demo_rest_from = None
+            self.queue_plays(list(self.demo_plays))
+        if self._playing is None and self.pending and live:
+            # No visit snapshot: a scroll-mode section. Start on this live frame.
+            self._playing = list(self.pending)
+            self._run_start = self._frame_count
+            self._run_pos, self._run_frame = 0, self._frame_count
         playing = self._playing
         if not playing or self._frame_paused:
             return False  # paused = transition compositing: the board
-        phase = phase_at(self._frame_count, len(playing))
+        if self._run_start is None:
+            frame = self._frame_count  # a visit run: origin 0
+        else:
+            if self._frame_count != self._run_frame:
+                self._run_pos += 1
+                self._run_frame = self._frame_count
+            frame = self._run_pos
+        phase = phase_at(frame, len(playing))
         if phase is None:
+            if self._run_start is not None:
+                self._end_self_started_run()
             return False
         idx, name, f = phase
         play = playing[idx]
@@ -224,6 +282,27 @@ class FootballGameCard(FrameAwareBase):
                 y_offset=y_offset,
             )
         return True
+
+    def _end_self_started_run(self) -> None:
+        """Consume what the run showed, as `reset_frame` does at visit
+        entry, and start a demo card's rest. The next live draw may
+        self-start again from whatever is still pending."""
+        self._consume_shown()
+        self._playing = None
+        self._run_start = None
+        if self.demo_plays:
+            self._demo_rest_from = self._frame_count
+
+    def _consume_shown(self) -> None:
+        if self._shown:
+            self.pending = [p for p in self.pending if p.key not in self._shown]
+            self._shown.clear()
+
+    def _count_demo_visit(self) -> None:
+        if self.demo_plays:
+            self._demo_visits += 1
+            if self._demo_visits % DEMO_EVERY == 0 and not self.pending:
+                self.queue_plays(list(self.demo_plays))
 
     def _legacy_story(self, layout: str) -> Any:
         if layout == "scoreboard":
@@ -334,20 +413,18 @@ class FootballGameCard(FrameAwareBase):
             self._legacy.resume_frame()
 
     def reset_frame(self) -> None:
-        if self._shown:
-            self.pending = [p for p in self.pending if p.key not in self._shown]
-            self._shown.clear()
+        self._consume_shown()
         if self._hl_shown:
             self.highlight = None  # it was on screen: consumed
         self._hl_shown = False
         self._hl_frame = -1
         # A completed visit ticked frames; a transition's extra reset
         # right before `_show_one`'s does not, so it isn't counted twice.
-        if self.demo_plays and self._frame_count > 0:
-            self._demo_visits += 1
-            if self._demo_visits % DEMO_EVERY == 0 and not self.pending:
-                self.queue_plays(list(self.demo_plays))
+        if self._frame_count > 0:
+            self._count_demo_visit()
         self._playing = list(self.pending)
+        self._run_start = None  # a visit's run starts at frame 0
+        self._demo_rest_from = None  # visits re-arm by count instead
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()
