@@ -49,8 +49,8 @@ This package split out of `led-ticker-feeds` (was `feeds.weather`); history is p
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
 - **Draw return is absolute** — `ForecastWidget.draw()` returns `cursor_pos + canvas.width`
   (every layout, strip included), never a bare `canvas.width`, and paints at `cursor_pos`
-  through `paint.shift_canvas` (`ShiftedReal`, clipped at both edges; cursor 0 returns the
-  canvas untouched); core pops a `ticker` / `one_at_a_time` widget only when that end goes
+  through `paint.shift_canvas` (`ShiftedReal`, clipped at both edges and to the card's own
+  unshifted box `[0, width)`; cursor 0 returns the canvas untouched); core pops a `ticker` / `one_at_a_time` widget only when that end goes
   below 0 (`tests/test_scroll_mode_returns.py` drives core's real `_scroll_one_by_one`).
 
 ## Forecast invariants

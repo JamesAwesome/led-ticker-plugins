@@ -82,3 +82,28 @@ def test_shifted_real_subfill_shifts_and_clips():
     assert _cols(real) == {0, 1}
     c, _ = _fresh(256)
     assert shift_canvas(c, 0) is c
+
+
+@pytest.mark.parametrize("cursor", [-64, -40, 20])
+def test_shifted_strip_never_reveals_overflow_cursor_0_hid(cursor):
+    """An explicit `layout = "strip"` at scale 4 lays its cells partly at
+    negative x; cursor 0 clips that. Shifted, it must stay clipped to the
+    card's own box: the lit set is exactly cursor 0's, translated."""
+    c0, r0 = _fresh(256)
+    w = ForecastWidget(location="", demo=True, layout="strip")
+    w.draw(c0)
+    cols0 = _cols(r0)
+    dx = cursor * 4
+    c, r = _fresh(256)
+    ForecastWidget(location="", demo=True, layout="strip").draw(c, cursor)
+    assert _cols(r) == {x + dx for x in cols0 if 0 <= x + dx < 256}
+
+
+def test_shifted_real_drops_pixels_outside_the_cards_own_box():
+    from led_ticker_weather.paint import ShiftedReal
+
+    real = HeadlessBackend(16, 4).create_canvas()
+    s = ShiftedReal(real, 4)
+    s.SetPixel(-1, 0, 255, 0, 0)  # outside the card's own box: dropped
+    s.SubFill(-3, 0, 5, 1, 255, 0, 0)  # clamped to pre-shift [0, 2)
+    assert _cols(real) == {4, 5}
