@@ -45,6 +45,11 @@ PREGAME_INTERVAL = 300
 IDLE_INTERVAL = 3600
 SCHEDULE_INTERVAL = 6 * 3600
 SCHEDULE_RETRY = 60  # a FAILED schedule fetch retries this soon, not in 6 h
+SCHEDULE_RETRY_LIVE = (
+    600  # ... but only this often while a game is live (it stalls the poll)
+)
+SCHEDULE_TIMEOUT = 5  # the schedule is optional: never hold a live snapshot 20 s for it
+LIVE_GRACE = 30 * 60  # a live game missing from one payload stays live this long
 MIN_INTERVAL = 10
 MAX_BACKOFF = 4 * 3600
 REQUEST_TIMEOUT = 20
@@ -150,8 +155,23 @@ class ESPNSource:
 
     # ------------------------------------------------------------- cadence
 
+    def _active(self) -> list[GameInfo]:
+        """Games that drive cadence and selection: this payload's, plus a
+        LIVE game a partial payload left out, for `LIVE_GRACE` after it was
+        last seen (the card still shows it live, so polling must stay live)."""
+        now_utc = self._wall()
+        out: list[GameInfo] = []
+        for gid, g in self._games.items():
+            if gid in self._latest_ids:
+                out.append(g)
+            elif g.state == "live":
+                seen = self._last_seen.get(gid)
+                if seen is not None and (now_utc - seen).total_seconds() <= LIVE_GRACE:
+                    out.append(g)
+        return out
+
     def _cadence(self) -> float:
-        games = [g for i, g in self._games.items() if i in self._latest_ids]
+        games = self._active()
         if any(g.state == "live" for g in games):
             return max(MIN_INTERVAL, self._live_interval)
         now_utc = self._wall()
@@ -208,8 +228,8 @@ class ESPNSource:
         )
         logger.warning("football: %s; next request in %ds", message, self._backoff)
 
-    async def _get_host(self, url: str) -> Any:
-        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+    async def _get_host(self, url: str, timeout_s: float) -> Any:
+        timeout = aiohttp.ClientTimeout(total=timeout_s)
         headers = {"Accept": "application/json", "User-Agent": _USER_AGENT}
         async with self.session.get(url, headers=headers, timeout=timeout) as resp:
             status = int(getattr(resp, "status", 200))
@@ -217,14 +237,14 @@ class ESPNSource:
                 raise _FetchError(f"HTTP {status} from {url}")
             return await resp.json()
 
-    async def _get(self, path: str) -> Any:
+    async def _get(self, path: str, *, timeout_s: float = REQUEST_TIMEOUT) -> Any:
         """GET `path` from the first host that answers; the last host's
         failure propagates (`_FetchError`, `TimeoutError`, `ClientError`,
         `OSError`)."""
         last: BaseException | None = None
         for i, host in enumerate(HOSTS):
             try:
-                return await self._get_host(f"{host}{path}")
+                return await self._get_host(f"{host}{path}", timeout_s)
             except (_FetchError, TimeoutError, aiohttp.ClientError, OSError) as exc:
                 last = exc
                 if i + 1 < len(HOSTS):
@@ -397,8 +417,8 @@ class ESPNSource:
         the next game ready at that moment, not an hour later."""
         return {
             t
-            for gid, g in self._games.items()
-            if gid in self._latest_ids and g.state in ("live", "future")
+            for g in self._active()
+            if g.state in ("live", "future")
             for t in (g.away, g.home)
         }
 
@@ -414,14 +434,19 @@ class ESPNSource:
                 continue
             self._next_at[team] = now
             try:
-                body = await self._get(f"{PATH}/teams/{team}/schedule")
+                body = await self._get(
+                    f"{PATH}/teams/{team}/schedule", timeout_s=SCHEDULE_TIMEOUT
+                )
             except Exception as exc:  # noqa: BLE001 — soft: schedule is optional
                 logger.debug("football: schedule fetch failed (%s): %s", team, exc)
                 body = None
             if not isinstance(body, dict):
                 # One failure must not blank a bye-week team's card for 6 h:
-                # allow another attempt SCHEDULE_RETRY from now.
-                self._next_at[team] = now - SCHEDULE_INTERVAL + SCHEDULE_RETRY
+                # retry soon — but sparingly while a game is live, since this
+                # fetch runs inside the poll and delays the live snapshot.
+                live = any(g.state == "live" for g in self._active())
+                retry = SCHEDULE_RETRY_LIVE if live else SCHEDULE_RETRY
+                self._next_at[team] = now - SCHEDULE_INTERVAL + retry
                 continue
             bye = _int_or_none(body.get("byeWeek"))
             if bye is not None:

@@ -601,3 +601,44 @@ async def test_schedule_failure_retries_on_the_next_poll():
     snap = await s.poll()
     assert session.urls.count(sched_url) == 2
     assert "NYG" in snap.next_games
+
+
+async def test_partial_payload_keeps_the_live_cadence():
+    """ESPN occasionally answers with a week payload missing a live game (or
+    `events: []`). The card keeps showing the live score, so polling must
+    stay at the live cadence — not drop to the hourly idle rate unflagged."""
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    assert s.next_delay() == LIVE_INTERVAL
+    session.routes[SB[0]] = (200, week_with())  # the game vanished for one poll
+    clock.advance()
+    snap = await s.poll()
+    assert snap.stale is False and LIVE_ID in snap.games
+    assert s.next_delay() == LIVE_INTERVAL
+    assert "PHI" in s._playing()  # and no needless schedule fetch
+
+
+async def test_schedule_retry_waits_longer_while_a_game_is_live():
+    """A failing schedule fetch for a bye team must not stall every live
+    poll: with a game live it retries every SCHEDULE_RETRY_LIVE, not 60 s,
+    and with a short timeout."""
+    from led_ticker_football._source import (
+        SCHEDULE_RETRY,
+        SCHEDULE_RETRY_LIVE,
+        SCHEDULE_TIMEOUT,
+    )
+
+    sched_url = f"{HOSTS[0]}{PATH}/teams/DAL/schedule"
+    s, session, clock, _ = make(
+        {SB[0]: (200, week_with(live_event()))}, teams=("PHI", "DAL")
+    )
+    await s.poll()
+    assert session.urls.count(sched_url) == 1
+    sched_calls = [kw for url, kw in session.calls if url == sched_url]
+    assert sched_calls[0]["timeout"].total == SCHEDULE_TIMEOUT
+    clock.advance(SCHEDULE_RETRY + LIVE_INTERVAL)
+    await s.poll()
+    assert session.urls.count(sched_url) == 1  # not every minute under a live game
+    clock.advance(SCHEDULE_RETRY_LIVE)
+    await s.poll()
+    assert session.urls.count(sched_url) == 2
