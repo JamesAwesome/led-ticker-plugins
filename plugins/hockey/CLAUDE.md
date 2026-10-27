@@ -82,7 +82,12 @@ drawing once the cursor reaches the width, so a run hidden behind another card's
 must not burn out unseen. The draw after its last frame consumes it exactly as `reset_frame` would, sets `_playing` and
 `_run_start` back to None and paints the board; the next live draw may self-start again.
 `reset_frame` always sets `_run_start = None` (visit runs start at frame 0), so the
-slideshow path never self-starts. Every celebration frame is a full-panel takeover: it
+slideshow path never self-starts. A PAUSED `reset_frame` is a transition's
+(`run_transition` / `_scroll_transition` call `pause_frame()` then `reset_frame()` on the
+incoming widget; `FrameAwareBase.reset_frame` keeps the pause flag): it consumes as usual
+but sets `_playing = None`, because a scroll section never resets again and a leftover
+snapshot would stop the card self-starting for good; a slideshow's `_show_one` resets
+again live and snapshots (`test_transition_reset_keeps_self_started_runs`). Every celebration frame is a full-panel takeover: it
 first clears the real panel (to `bg_color` when set, else black, at every scale), because in a
 side-by-side scroll core resets once per tick and earlier widgets have already painted;
 it returns a `canvas.width` cursor, so later widgets are skipped for the tick. Core keeps
@@ -167,10 +172,6 @@ reaches only the scale-1 ticker message.
   widget left in a side-by-side scroll, its `canvas.width` cursor satisfies core's
   `mon_0_end_pos <= canvas.width` hold check, so the 2 s `hold_at_end` runs and the section
   ends; the celebration can be cut to about 2 s.
-- A section-entry transition `reset_frame`s the section's first story. After that the card's
-  `_playing` is a list (a visit snapshot) for good and it never self-starts again; if story
-  order changes so it is no longer first, its goals wait (capped at `MAX_QUEUED`) until it
-  is first at a section entry again.
 
 ## Tests
 

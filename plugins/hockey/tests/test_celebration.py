@@ -1093,3 +1093,39 @@ def test_run_cut_by_a_section_end_resumes_at_the_new_pass(bigsign):
         _, cursor = c.draw(bigsign, pos)
     assert board.call_args.kwargs["x_offset"] == bigsign.width
     assert cursor == 2 * bigsign.width
+
+
+def test_transition_reset_keeps_self_started_runs(bigsign):
+    """`run_transition` / `_scroll_transition` call `pause_frame()` then
+    `reset_frame()` on the incoming widget; a scroll section never resets
+    it again. That reset must not leave a (possibly empty) visit snapshot
+    behind, or the card never self-starts a celebration again."""
+    c = _card()
+    c.pause_frame()
+    c.reset_frame()
+    c.resume_frame()
+    _scroll_frames(c, bigsign, 200)
+    c.queue_goals([_goal(key="g2", away_score=3)])
+    with mock.patch.object(card_mod, "render_flash") as flash:
+        _scroll_frames(c, bigsign, 1)
+    flash.assert_called_once()
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES)
+    assert c.pending == [] and c._playing is None
+
+
+def test_transition_reset_consumes_what_was_shown(bigsign):
+    c = _card()
+    c.queue_goals([_goal()])
+    _scroll_frames(c, bigsign, 3)  # self-started and on screen
+    c.pause_frame()
+    c.reset_frame()
+    assert c.pending == [] and c._playing is None
+
+
+def test_live_reset_still_snapshots_the_visit(bigsign):
+    c = _card()
+    c.queue_goals([_goal()])
+    c.reset_frame()
+    assert [g.key for g in c._playing] == ["k"] and c._run_start is None
+    c.queue_goals([_goal(key="g2", away_score=3)])
+    assert len(c._playing) == 1  # mid-visit goal waits for the next visit

@@ -29,8 +29,10 @@ actually shown on a live (unpaused, ticking) frame, so a stale frame count
 from an earlier visit or transition compositing never eats an unseen
 celebration. Two kinds of run:
 
-- a VISIT run (slideshow): `reset_frame()` snapshots `pending` into
-  `_playing` at frame 0; consumption happens at the next visit entry.
+- a VISIT run (slideshow): a live `reset_frame()` snapshots `pending`
+  into `_playing` at frame 0; consumption happens at the next visit
+  entry. A PAUSED `reset_frame()` (a transition's) consumes but leaves no
+  snapshot.
 - a SELF-STARTED run (`ticker` / `one_at_a_time` sections, which never
   call `reset_frame()`): with no snapshot, the first live draw snapshots
   `pending` and records `_run_start`; the timeline plays off
@@ -407,7 +409,12 @@ class HockeyGameCard(FrameAwareBase):
         # right before `_show_one`'s does not, so it isn't counted twice.
         if self._frame_count > 0:
             self._count_demo_visit()
-        self._playing = list(self.pending)
+        # A paused reset is a transition's (`run_transition` /
+        # `_scroll_transition` pause, then reset, the incoming widget). In a
+        # slideshow `_show_one` resets again live and snapshots; a scroll
+        # section never does, so leave no snapshot and let the next live
+        # draw self-start.
+        self._playing = None if self._frame_paused else list(self.pending)
         self._run_start = None  # a visit's run starts at frame 0
         self._demo_rest_from = None  # visits re-arm by count instead
         self._x_shift, self._last_cursor = 0, None
