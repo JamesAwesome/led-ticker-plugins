@@ -204,3 +204,47 @@ def test_shifted_real_subfill_shifts_and_clips():
     assert _cols(real) == {0, 1}
     canvas, _ = _fresh(256)
     assert shift_canvas(canvas, 0) is canvas
+
+
+def _short_promo_crawl():
+    p = PromoInfo(
+        name="Cap Day",
+        offer_type="",
+        presented_by="",
+        opponent_abbr="BOS",
+        date_label="TODAY",
+        time_label="7:05",
+        am_pm="PM",
+        game_date="2026-07-18",
+    )
+    return MLBPromoCard(
+        promo=p, story_index=0, story_total=1, legacy=_legacy(), cfg_layout="ticker"
+    )
+
+
+FITTING = {"game_crawl": lambda: _game("ticker"), "promo_crawl": _short_promo_crawl}
+
+
+@pytest.mark.parametrize("make", FITTING.values(), ids=FITTING)
+def test_fitting_crawl_end_covers_its_centred_paint(make):
+    """A crawl that fits is painted CENTRED across the panel, so its end
+    must be the panel's right edge, not `cursor + run + padding` (which
+    let core pop it / butt the next widget into it with its tail lit)."""
+    width = 128  # longboi logical
+    for cursor in (0, -40, -(width - 1)):
+        c, real = _fresh(512)
+        _, end = make().draw(c, cursor)
+        assert end == cursor + width
+        cols = _cols(real)
+        assert cursor != 0 or cols
+        assert not cols or max(cols) < end * 4
+
+
+def test_shifted_real_drops_pixels_outside_the_cards_own_box():
+    from led_ticker_baseball._paint import ShiftedReal
+
+    real = HeadlessBackend(16, 4).create_canvas()
+    s = ShiftedReal(real, 4)
+    s.SetPixel(-1, 0, 255, 0, 0)  # outside the card's own box: dropped
+    s.SubFill(-3, 0, 5, 1, 255, 0, 0)  # clamped to pre-shift [0, 2)
+    assert _cols(real) == {4, 5}

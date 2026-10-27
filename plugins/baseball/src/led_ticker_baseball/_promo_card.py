@@ -7,14 +7,16 @@ width) via `layouts.resolve_promo_layout`: scale <= 1 forwards verbatim to
 `self.legacy` (the pre-built SegmentMessage for this promo — unlike
 `MLBGameCard`, there is only ONE legacy shape here, so it's built eagerly by
 `MLBPromotionsMonitor.update()` and passed in, not lazily constructed).
-scale > 1 dispatches to the held card (`layouts.promo_card.render_promo_card`)
-or the hires crawl (`layouts.promo_crawl.render_promo_crawl`). Held layouts
-return cursor = `canvas.width` — the WRAPPER's LOGICAL width — same
-hold-vs-scroll lesson as `MLBGameCard`'s module docstring (core's
-`cursor_pos > canvas.width` check compares against that, not `real.width`).
-The crawl works in logical units too: `cursor_pos` in is logical, the segment
-run paints at physical `x = cursor_pos * scale`, and the returned advance is
-ceil-divided back to logical (core's `get_text_width` hires convention).
+scale > 1 dispatches to the held card
+(`layouts.promo_card.render_promo_card`) or the hires crawl
+(`layouts.promo_crawl.render_promo_crawl`). Held layouts paint at
+`cursor_pos` and return `cursor_pos + canvas.width` — the WRAPPER's LOGICAL
+width, an ABSOLUTE end — same hold-vs-scroll lesson as `MLBGameCard`'s
+module docstring (core's `cursor_pos > canvas.width` check compares against
+that, not `real.width`). The crawl works in logical units too: `cursor_pos`
+in is logical, the segment run paints at physical `x = cursor_pos * scale`,
+and the returned advance is ceil-divided back to logical (core's
+`get_text_width` hires convention).
 
 Per-card clock (`_clock_ticks`): advanced in `advance_frame` gated on
 `not self._frame_paused`, and deliberately NEVER reset — `reset_frame` fires
@@ -89,7 +91,10 @@ class MLBPromoCard(FrameAwareBase):
                 y_offset=y_offset,
                 hold_padding=self.padding,
             )
-            return canvas, cursor_pos + w + self.padding
+            # A run that fits is painted CENTRED across the panel (the
+            # renderer's own `held` test), so its extent is the full width.
+            end = w + self.padding
+            return canvas, cursor_pos + (canvas.width if end <= canvas.width else end)
         render_promo_card(
             shift_canvas(canvas, cursor_pos),
             self.promo,

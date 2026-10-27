@@ -3,15 +3,18 @@
 One card per game. At draw time it resolves (cfg_layout, scale, phys width)
 via layouts.resolve_layout: scale 1 delegates to the LEGACY text-glyph
 renderers (unchanged smallsign behavior); scale > 1 dispatches to the new
-physical renderers. Held layouts return cursor = `canvas.width` — the
-WRAPPER's LOGICAL width, matching the units the engine's hold-vs-scroll
-decision (`cursor_pos > canvas.width`, core ticker.py) actually compares
-against — so the engine holds instead of phantom-scrolling. The crawl
-also works in logical units: it treats `cursor_pos` as logical (same as
-every other engine-scrolled widget), paints at physical `x = cursor_pos *
-scale`, and returns its advance width ceil-divided back to logical (core's
-`get_text_width` hires convention) so the engine's stop-position math
-lands flush-right instead of ~192 physical px past it.
+physical renderers. Held layouts paint at `cursor_pos` and return the
+ABSOLUTE end `cursor_pos + canvas.width` — the WRAPPER's LOGICAL width,
+matching the units the engine's hold-vs-scroll decision (`cursor_pos >
+canvas.width`, core ticker.py) actually compares against — so the engine
+holds instead of phantom-scrolling. The crawl also works in logical units:
+it treats `cursor_pos` as logical (same as every other engine-scrolled
+widget), paints at physical `x = cursor_pos * scale`, and returns its
+advance width ceil-divided back to logical (core's `get_text_width` hires
+convention) so the engine's stop-position math lands flush-right instead of
+~192 physical px past it; the card returns `cursor_pos + advance + padding`,
+or `cursor_pos + canvas.width` when the run fits and the renderer centres it
+across the panel.
 """
 
 from typing import Any
@@ -133,7 +136,10 @@ class MLBGameCard(FrameAwareBase):
                 y_offset=y_offset,
                 hold_padding=self.padding,
             )
-            return canvas, cursor_pos + w + self.padding
+            # A run that fits is painted CENTRED across the panel (the
+            # renderer's own `held` test), so its extent is the full width.
+            end = w + self.padding
+            return canvas, cursor_pos + (canvas.width if end <= canvas.width else end)
         at = shift_canvas(canvas, cursor_pos)
         if layout == "scoreboard":
             render_scoreboard(

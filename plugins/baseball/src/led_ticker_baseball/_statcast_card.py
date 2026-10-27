@@ -9,7 +9,8 @@ At draw time it resolves (cfg_layout, scale, phys width) via
 `MLBPromoCard`). scale > 1 dispatches to the held big card (256,
 `layouts.statcast_big.render_statcast_big`) or the held long card (512,
 `layouts.statcast_long.render_statcast_long`); both are held layouts, so
-`draw` returns `canvas.width` — the WRAPPER's LOGICAL width, not
+`draw` paints at `cursor_pos` and returns `cursor_pos + canvas.width` — the
+WRAPPER's LOGICAL width (an ABSOLUTE end), not
 `real.width` — same hold-vs-scroll lesson as every other card in this
 plugin (core's `cursor_pos > canvas.width` check compares against that).
 
