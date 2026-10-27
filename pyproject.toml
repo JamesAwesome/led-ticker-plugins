@@ -4,10 +4,13 @@
 members = ["plugins/*"]
 
 [tool.uv]
-# TEMPORARY: Pillow 13 + raqm raises `raqm_layout() failed` on bidi separators;
-# core fixed it in led-ticker#478, which is not in the 4.30.0 PyPI release this
-# workspace resolves. Drop this (and bump weather's `led-ticker-core` floor)
-# once core >= 4.31 is published.
+# TEMPORARY: Pillow 13 + raqm raises `raqm_layout() failed` inside core's hi-res
+# font rasterizer (`hires_loader._rasterize_glyph`); core fixed it in
+# led-ticker#478, which is not in the 4.30.0 PyPI release this workspace
+# resolves. Every member that loads a hi-res font trips it (measured under
+# Pillow 13: weather fails at import; baseball, stocks, hockey, flair, flight,
+# tennis fail at render). Once core >= 4.31 is published: bump the
+# `led-ticker-core` floor to >= 4.31 on each of those members, then drop this.
 constraint-dependencies = ["pillow<13"]
 
 # The engine (`led-ticker-core`) resolves from PyPI like any other dependency;
