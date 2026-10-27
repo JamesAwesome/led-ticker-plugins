@@ -105,9 +105,56 @@ def test_band_board_future_layout(smallsign, tz):
     assert _px(smallsign, BOT, range(5, 60), pal.DIM)
 
 
-def test_band_board_bg_color(smallsign, tz):
+def test_band_board_does_not_fill_bg_color(smallsign, tz):
+    """Core fills `bg_color` before every draw; the board must not clear a
+    scroll section's earlier widgets."""
+    smallsign.SetPixel(100, 0, 9, 9, 9)
     _board(build_demo_games(NOW)[0], tz, bg_color=make_color(1, 2, 3)).draw(smallsign)
-    assert smallsign._pixels[(100, 0)] == (1, 2, 3)
+    assert smallsign._pixels[(100, 0)] == (9, 9, 9)
+
+
+def _fresh(smallsign):
+    return type(smallsign)(smallsign.width, smallsign.height)
+
+
+@pytest.mark.parametrize("idx", [0, 3], ids=["live", "future"])
+def test_band_board_honours_cursor_pos(smallsign, tz, idx):
+    """A scroll section hands the board a moving cursor: it must paint
+    there and report its right edge."""
+    game = build_demo_games(NOW)[idx]
+    _board(game, tz).draw(smallsign)
+    lit0 = _lit(smallsign, range(16), range(160))
+    assert lit0
+    moved = _fresh(smallsign)
+    _, cursor = _board(game, tz).draw(moved, 20)
+    assert cursor == 20 + 160
+    assert _lit(moved, range(16), range(160)) == {
+        (x + 20, y) for x, y in lit0 if x + 20 < 160
+    }
+    left = _fresh(smallsign)
+    _, cursor = _board(game, tz).draw(left, -30)
+    assert cursor == -30 + 160
+    assert _lit(left, range(16), range(160)) == {
+        (x - 30, y) for x, y in lit0 if x >= 30
+    }
+
+
+def test_band_board_shapes_follow_y_offset(smallsign, tz):
+    """PushUp/PushDown hand every draw a y_offset: the chips must move with
+    the text, not sit at rest."""
+    game = build_demo_games(NOW)[0]
+    _board(game, tz).draw(smallsign)
+    chips0 = _lit(smallsign, range(16), range(3))
+    assert chips0
+    moved = _fresh(smallsign)
+    _board(game, tz).draw(moved, y_offset=4)
+    assert _lit(moved, range(16), range(3)) == {
+        (x, y + 4) for x, y in chips0 if y + 4 < 16
+    }
+    whole = _lit(smallsign, range(16), range(160))
+    assert _lit(moved, range(16), range(160)) == {
+        (x, y + 4) for x, y in whole if y + 4 < 16
+    }
 
 
 def test_ticker_message_uses_segments(tz):

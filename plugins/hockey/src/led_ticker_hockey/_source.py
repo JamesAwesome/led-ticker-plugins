@@ -140,9 +140,10 @@ class NHLSource:
     # ------------------------------------------------------------- cadence
 
     def _active(self) -> list[GameInfo]:
-        """Games that drive cadence and selection: this payload's, plus a
-        LIVE game a partial payload left out, for `LIVE_GRACE` after it was
-        last seen (the card still shows it live, so polling must stay live)."""
+        """Games that drive cadence only (`_playing` keeps iterating `_games`):
+        this payload's, plus a LIVE game a partial payload left out, for
+        `LIVE_GRACE` after it was last seen (the card still shows it live, so
+        polling must stay live)."""
         now_utc = self._wall()
         out: list[GameInfo] = []
         for gid, g in self._games.items():

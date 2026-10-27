@@ -60,9 +60,10 @@ football). The shared source rate-limits itself, so the widget loop must not add
 skips the next-game lookup (and its `next_games` entry is dropped) only while it has a
 LIVE game or a final inside the hold at the SHORTEST widget hold (`_next_hold_hours`). A
 future game never counts — a post-midnight game is not "later today" and must come from
-the lookup. A live game absent from one payload keeps the live cadence for `LIVE_GRACE` (30 min)
-(`_cadence` only); `_playing` reads `_games` unchanged, matching `select_stories`. Diverge the two and a team's card vanishes after its final's hold
-(`test_next_game_returns_after_final_hold`).
+the lookup. A live game absent from one payload keeps the live cadence for `LIVE_GRACE`
+(30 min) (`_cadence` only); `_playing` reads `_games` unchanged, matching
+`select_stories`. Diverge `select_stories` and `_playing` and a team's card vanishes
+after its final's hold (`test_next_game_returns_after_final_hold`).
 
 **First-sight goal baseline lives in the source; celebrated state lives on the widget/card**
 — `NHLSource.goals_after_baseline(game_id)` is NON-consuming: the first sight of a game
