@@ -174,10 +174,13 @@ def render_scoreboard(
     y_offset: int = 0,
     story_index: int = 0,
     story_total: int = 1,
+    x_offset: int = 0,
 ) -> None:
     """`story_index`/`story_total` are accepted for the uniform renderer
-    contract; there are no paging dots (they would collide with row 2)."""
-    shim, real = phys_wrap(canvas)
+    contract; there are no paging dots (they would collide with row 2).
+    The board's left edge sits at LOGICAL `x_offset` (0 = held; a scroll
+    section's cursor otherwise)."""
+    shim, real = phys_wrap(canvas, x_offset * safe_scale(canvas))
     yo = y_offset * safe_scale(canvas)
     g = geometry_for(real.width)
     size = g.row_size

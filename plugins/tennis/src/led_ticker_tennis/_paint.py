@@ -39,8 +39,34 @@ def cap_top(y_target: int, size: int) -> int:
     return y_target - size + js_round(size * 0.72)
 
 
-def phys_wrap(canvas):
+class ShiftedReal:
+    """A real canvas translated by `dx` physical px (negative = left).
+    Pixels that land outside the panel are dropped, so a held board
+    scrolling through a `ticker` / `one_at_a_time` section clips at both
+    edges."""
+
+    __slots__ = ("_dx", "_real", "height", "width")
+
+    def __init__(self, real, dx: int) -> None:
+        self._real = real
+        self._dx = dx
+        self.width: int = real.width
+        self.height: int = real.height
+
+    def SetPixel(self, x: int, y: int, r: int, g: int, b: int) -> None:  # noqa: N802
+        x += self._dx
+        if 0 <= x < self.width and 0 <= y < self.height:
+            self._real.SetPixel(x, y, r, g, b)
+
+
+def phys_wrap(canvas, x_offset_real: int = 0):
+    """(scale-1 shim for hi-res text, real canvas) for physical painting.
+    `x_offset_real` translates everything painted through either by that
+    many physical px (a held card's scroll position in a scroll section);
+    0 paints on the real canvas directly."""
     real = unwrap_to_real(canvas)
+    if x_offset_real:
+        real = ShiftedReal(real, x_offset_real)
     return ScaledCanvas(real, scale=1, content_height=real.height), real
 
 

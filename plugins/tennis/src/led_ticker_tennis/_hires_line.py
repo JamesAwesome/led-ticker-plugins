@@ -46,7 +46,7 @@ class HiresLine(FrameAwareBase):
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
         scale = safe_scale(canvas)
-        shim, real = phys_wrap(canvas)
+        shim, real = phys_wrap(canvas, cursor_pos * scale)
         yo = y_offset * scale
         max_w = real.width - 2 * _MARGIN
         text = " ".join(t for t, _ in self.segments)
@@ -58,7 +58,7 @@ class HiresLine(FrameAwareBase):
         glyph_h = js_round(size * 0.72)
         y = cap_top(js_round((real.height - glyph_h) / 2) + yo, size)
         hires(shim, text, x, y, color, size)
-        return canvas, canvas.width
+        return canvas, cursor_pos + canvas.width
 
     def advance_frame(self, *, visit_id: int | None = None) -> None:
         super().advance_frame(visit_id=visit_id)
