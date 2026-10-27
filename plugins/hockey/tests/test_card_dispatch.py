@@ -282,8 +282,8 @@ class _HoldSpy(HockeyGameCard):
     at_draw: int | None = attrs.field(default=None, kw_only=True)
     draws: int = attrs.field(default=0, kw_only=True)
 
-    def _celebrate(self, canvas, y_offset, cursor_pos, frozen):
-        painted = super()._celebrate(canvas, y_offset, cursor_pos, frozen)
+    def _celebrate(self, canvas, y_offset, cursor_pos, first):
+        painted = super()._celebrate(canvas, y_offset, cursor_pos, first)
         self.shown += painted
         return painted
 
@@ -396,3 +396,66 @@ async def test_narrow_last_card_celebration_is_cut_then_resumes(monkeypatch):
     assert 0 < b.shown < CELEBRATION_FRAMES
     await _ticker_pass([a, b], 3.0, monkeypatch, width=512)
     assert b.shown == CELEBRATION_FRAMES and b.pending == []
+
+
+@attrs.define
+class _PlannedGoals(HockeyGameCard):
+    """Queues `plan[frame]` right after that frame's advance: between
+    ticks, as the widget's poll would."""
+
+    plan: dict[int, Any] = attrs.field(factory=dict, kw_only=True)
+
+    def advance_frame(self, *, visit_id: int | None = None) -> None:
+        super().advance_frame(visit_id=visit_id)
+        goal = self.plan.pop(self._frame_count, None)
+        if goal is not None:
+            self.queue_goals([goal])
+
+
+@pytest.mark.parametrize(
+    ("layout", "first_goal_frame"),
+    [("scoreboard", 78), ("scoreboard", 162), ("ticker", 183), ("ticker", 225)],
+)
+async def test_back_to_back_runs_on_a_repeated_card_never_jump(
+    layout, first_goal_frame, monkeypatch
+):
+    """One-game `ticker` section: run 1 can end on the LEFT copy's draw
+    while the right copy is visible. A goal queued mid-run must not start
+    run 2 on the right copy's (non-first) draw in that same tick, or the
+    left copy resumes at the right copy's position after run 2."""
+    game = build_demo_games(NOW)[0]
+    g1 = game.goals[0]
+    g2 = dataclasses.replace(g1, key="g2", away_score=3)
+    a = _PlannedGoals(
+        game=game,
+        tz=TZ,
+        cfg_layout=layout,
+        now_fn=lambda: NOW,
+        tracked=frozenset({"PHI"}),
+        plan={first_goal_frame: g1, first_goal_frame + 40: g2},
+    )
+    painted: dict[int, list[int]] = {}
+    real_board, real_crawl = card_mod.render_scoreboard, card_mod.render_crawl
+
+    def board(*args, **kw):
+        painted.setdefault(a._frame_count, []).append(kw["x_offset"])
+        return real_board(*args, **kw)
+
+    def crawl(*args, **kw):
+        painted.setdefault(a._frame_count, []).append(args[4])
+        return real_crawl(*args, **kw)
+
+    monkeypatch.setattr(card_mod, "render_scoreboard", board)
+    monkeypatch.setattr(card_mod, "render_crawl", crawl)
+    await _ticker_pass([a, a, a], 0.0, monkeypatch)
+    assert a.pending == [] and not a.plan  # both goals were celebrated
+    ticks = sorted(painted)
+    for prev, cur in zip(ticks, ticks[1:], strict=False):
+        for x in painted[cur]:
+            entering = x >= 64 - 2
+            assert entering or any(abs(x - p) <= 1 for p in painted[prev]), (
+                prev,
+                painted[prev],
+                cur,
+                painted[cur],
+            )

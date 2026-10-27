@@ -224,15 +224,21 @@ class HockeyGameCard(FrameAwareBase):
         return fade
 
     def _celebrate(
-        self, canvas: Any, y_offset: int, cursor_pos: int, frozen: bool
+        self, canvas: Any, y_offset: int, cursor_pos: int, first: bool
     ) -> bool:
         """Paint the celebration frame if one is due; True when painted.
-        `cursor_pos` is the RAW engine cursor of this draw; `frozen` says
-        whether this draw paints with `_x_shift`."""
+        `cursor_pos` is the RAW engine cursor of this draw; `first` says
+        it is the frame's first live draw (`_freeze_applies`)."""
         live = not self._frame_paused and self._frame_count > 0
+        # A run (and the demo re-arm that feeds one) starts only on the
+        # frame's FIRST live draw: a later copy of this card in the same
+        # tick (a one-game `ticker` section's pass junction) would record
+        # its own cursor as `_run_cursor`, and the left copy would resume
+        # there after the run. The left copy starts it one tick later.
+        start = live and first
         rest = self._demo_rest_from
         if (
-            live
+            start
             and self._playing is None
             and rest is not None
             and not self.pending
@@ -240,12 +246,12 @@ class HockeyGameCard(FrameAwareBase):
         ):
             self._demo_rest_from = None
             self.queue_goals(list(self.demo_goals))
-        if self._playing is None and self.pending and live:
+        if self._playing is None and self.pending and start:
             # No visit snapshot: a scroll-mode section. Start on this live frame.
             self._playing = list(self.pending)
             self._run_start = self._frame_count
             self._run_pos, self._run_frame = 0, self._frame_count
-            self._run_cursor = cursor_pos + (self._x_shift if frozen else 0)
+            self._run_cursor = cursor_pos + self._x_shift
         playing = self._playing
         if not playing or self._frame_paused:
             return False  # paused = transition compositing: the board
@@ -349,8 +355,8 @@ class HockeyGameCard(FrameAwareBase):
         y_offset: int = 0,
         font_color: Any = None,
     ) -> DrawResult:
-        frozen = self._freeze_applies(cursor_pos)
-        if self._celebrate(canvas, y_offset, cursor_pos, frozen):
+        first, frozen = self._freeze_applies(cursor_pos)
+        if self._celebrate(canvas, y_offset, cursor_pos, first):
             return canvas, canvas.width
         if frozen:  # read after `_celebrate`: a run's end sets the shift
             cursor_pos += self._x_shift
@@ -389,8 +395,9 @@ class HockeyGameCard(FrameAwareBase):
         )
         return canvas, cursor_pos + canvas.width
 
-    def _freeze_applies(self, cursor_pos: int) -> bool:
-        """Whether this draw paints with `_x_shift`. Only the FIRST live draw of a
+    def _freeze_applies(self, cursor_pos: int) -> tuple[bool, bool]:
+        """(is this the frame's first live draw, does it paint with
+        `_x_shift`). Only the FIRST live draw of a
         frame updates the freeze: a raw cursor above the last one is a fresh
         pass (draw honestly again; a run spanning passes resumes there).
         Any other draw (a second copy of this card in the same tick, or a
@@ -403,8 +410,9 @@ class HockeyGameCard(FrameAwareBase):
                 self._x_shift = 0
                 self._run_cursor = cursor_pos
             self._last_cursor = cursor_pos
-            return True
-        return self._last_cursor is not None and cursor_pos <= self._last_cursor
+            return True, True
+        last = self._last_cursor
+        return False, last is not None and cursor_pos <= last
 
     def advance_frame(self, *, visit_id: int | None = None) -> None:
         super().advance_frame(visit_id=visit_id)

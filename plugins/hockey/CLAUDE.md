@@ -108,7 +108,11 @@ shift and teleported the left copy ~80 columns; `test_same_card_twice_per_tick_n
 A non-first draw (a later copy, or a paused transition redraw, since core pauses the
 outgoing widget too) paints with the shift when its cursor is at or left of the last raw
 cursor and raw otherwise (a later copy's cursor already chains off the shifted first copy)
-(`test_non_first_draws_never_touch_the_freeze`).
+(`test_non_first_draws_never_touch_the_freeze`). A self-started run (and the demo re-arm that feeds one) also BEGINS
+only on a frame's first live draw: started on a later copy it would record that copy's
+cursor as `_run_cursor`, and the left copy would resume there after the run
+(`test_back_to_back_runs_on_a_repeated_card_never_jump`). Slideshow and `one_at_a_time`
+draw each card once per tick, so every draw there is a first draw.
 `hold_time` is not read in scroll modes.
 
 **Draw return is absolute** — `draw()` returns `cursor_pos + content width` (core's
