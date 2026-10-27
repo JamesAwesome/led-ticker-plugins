@@ -29,6 +29,8 @@ Not sure whether something fits? Open an [issue](https://github.com/JamesAwesome
 
 This is a `uv` workspace; each plugin lives under `plugins/<name>/` with its own `pyproject.toml`, `CLAUDE.md`, and `README.md` (versions derive from per-plugin git tags — `<plugin>-vX.Y.Z` — via hatch-vcs; no manual version bump is needed to release). A sibling `../led-ticker` checkout is required (the workspace resolves `led-ticker-core` from it).
 
+Local envs are pinned to Python 3.14 (`.python-version`) to match CI's FreeType, which the glyph-rasterizer tests depend on.
+
 ```bash
 make dev    # uv sync the whole workspace
 make test   # pytest every member

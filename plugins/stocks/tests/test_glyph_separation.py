@@ -24,6 +24,7 @@ import re
 from pathlib import Path
 
 import attrs
+import PIL.features
 import pytest
 from led_ticker.plugin import draw_text, resolve_font
 
@@ -147,6 +148,14 @@ def test_painted_bold_sizes_are_covered():
     )
 
 
+_FREETYPE_PREMISE = pytest.mark.skipif(
+    PIL.features.version("freetype2") != "2.14.3",
+    reason="premise measured on FreeType 2.14.3 (CI, Python 3.14); a newer "
+    "rasterizer renders the thin-font threshold differently, so re-measure",
+)
+
+
+@_FREETYPE_PREMISE
 def test_the_thin_font_threshold_fuses_bold_symbols():
     """Pins the premise: 80 — the value this pack used to hard-code — fuses
     a 4-letter bold symbol at the hero floor size. If this stops failing,
