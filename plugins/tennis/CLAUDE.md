@@ -112,7 +112,10 @@ clipped at both edges) and return `cursor_pos + canvas.width` (the WRAPPER's log
 width) so the slideshow's `cursor_pos > canvas.width` check at cursor 0 takes the hold
 branch; the crawl treats `cursor_pos` as logical, paints at `cursor * scale`,
 ceil-divides its physical run back to logical and the card returns `cursor_pos +
-advance + self.padding`. Scale<=1 delegates to the cached legacy story; frame hooks forward
+advance + self.padding` — or `cursor_pos + canvas.width` when the run fits, because
+the renderer then centres it across the whole panel. `ShiftedReal` also drops pixels
+whose UNSHIFTED x is outside `[0, width)`, so a shifted card never reveals overflow
+that cursor 0 hid. Scale<=1 delegates to the cached legacy story; frame hooks forward
 to it. Same shape as baseball's `MLBGameCard` — read that CLAUDE.md before changing this.
 
 **Hires text is never exact-pinned in tests** (freetype differs macOS vs Linux) — assert
