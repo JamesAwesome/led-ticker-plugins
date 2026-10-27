@@ -83,7 +83,7 @@ must not burn out unseen. The draw after its last frame consumes it exactly as `
 `_run_start` back to None and paints the board; the next live draw may self-start again.
 `reset_frame` always sets `_run_start = None` (visit runs start at frame 0), so the
 slideshow path never self-starts. Every celebration frame is a full-panel takeover: it
-first clears the real panel (to `bg_color` at scale 1, black otherwise), because in a
+first clears the real panel (to `bg_color` when set, else black, at every scale), because in a
 side-by-side scroll core resets once per tick and earlier widgets have already painted;
 it returns a `canvas.width` cursor, so later widgets are skipped for the tick. The scroll
 position keeps moving beneath it. `hold_time` is not read in scroll modes.
@@ -137,24 +137,8 @@ extents, bands, ordering and colors.
 **Palette is one hue per field** (`_palette.py`) — white score/clock, amber period/PP/date,
 cyan SOG, dim labels, green final winner, gray loser. Black is invisible on the panels, so
 team chips are lifted for LED brightness.
-`bg_color` never paints at scale > 1 (hi-res board, crawl or goal celebration); at
-scale 1 the band board, the ticker message and the celebration fill it. Core itself fills
-`getattr(widget, "bg_color", None)` before every draw at EVERY scale (`reset_canvas`), so
-`HockeyGameCard.bg_color` is a property: None once any draw of the widget's cards saw
-scale > 1 (the shared `ScaleMemo`, one per widget), else the configured `_bg_color`,
-which the legacy stories and the scale-1 celebration read directly. Core caches
-`bg_color` once per slideshow visit (`_swap_and_scroll`, `_scroll_and_delay`, a
-transition's `incoming_bg_color`), so a widget's first hi-res visit is read before the memo
-is set: the hi-res board and crawl therefore clear the real panel when `_bg_color` is set,
-`cursor_pos <= 0` (leftmost: no other widget to the left) and the card is not paused
-(transition compositing is never clobbered). Residual, once per widget instance (boot,
-restart, hot reload) on a hi-res sign with `bg_color` set, the configured color can still
-appear (a) during the 0.5 s transition into the widget's first visit, (b) for the
-scroll-in of a title-less scroll section when hockey is first (`_scroll_and_delay` caches
-it before any draw and every scroll-in tick has `cursor_pos > 0`; ~3 s on bigsign; do not
-widen the guard, the card cannot tell this from a side-by-side neighbour), (c) for one
-tick at the start of a `one_at_a_time` section. After that `bg_color` reads None and
-nothing paints it. `font_color`
+`bg_color` applies at every scale: core fills it before every draw (`reset_canvas`)
+and the renderers paint over it, never clearing it (the takeover refills it). `font_color`
 reaches only the scale-1 ticker message.
 
 ## Known gaps

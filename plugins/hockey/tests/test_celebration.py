@@ -265,32 +265,17 @@ def test_detail_long_texts_keep_clearance(sign, request):
 # --------------------------------------------------------------- card
 
 
-def test_detail_ignores_bg_color_at_scale_gt1(bigsign):
-    # #105: bg_color is a scale-1 option; the hi-res detail card paints its
-    # own palette like every other hi-res renderer.
-    c = _card(bg_color=make_color(40, 0, 0))
-    c.queue_goals([_goal()])
-    c.reset_frame()
-    for _ in range(FLASH_FRAMES):
-        c.advance_frame()
-    with mock.patch.object(
-        card_mod, "render_detail", wraps=card_mod.render_detail
-    ) as detail:
-        c.advance_frame()  # frame FLASH_FRAMES + 1: the detail phase
-        c.draw(bigsign)
-    detail.assert_called_once()
-    assert (40, 0, 0) not in set(_pixels(bigsign).values())
-
-
-def test_detail_keeps_bg_color_at_scale_1(smallsign):
-    # Scale 1 honours bg_color on the band board, so its detail card does too.
+@pytest.mark.parametrize("sign", ["smallsign", "bigsign"])
+def test_detail_keeps_bg_color_at_every_scale(sign, request):
+    # bg_color applies at every scale: the detail card paints on it.
+    canvas = request.getfixturevalue(sign)
     c = _card(bg_color=make_color(40, 0, 0))
     c.queue_goals([_goal()])
     c.reset_frame()
     for _ in range(FLASH_FRAMES + 1):
         c.advance_frame()
-    c.draw(smallsign)
-    assert (40, 0, 0) in set(_pixels(smallsign).values())
+    c.draw(canvas)
+    assert (40, 0, 0) in set(_pixels(canvas).values())
 
 
 def test_hold_time_extends_while_celebration_pending():
@@ -954,41 +939,17 @@ def _core_tick(card, canvas, **draw_kw):
     return card.draw(canvas, **draw_kw)
 
 
+@pytest.mark.parametrize("sign", ["smallsign", "bigsign", "longboi"])
 @pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
-def test_core_never_fills_bg_color_at_scale_gt1(layout, bigsign):
-    # #105: core fills `widget.bg_color` before every draw at every scale;
-    # the card hands it None once a draw has seen a hi-res sign. (Core's
-    # very first reset precedes any draw: the process's first frame only.)
+def test_core_fill_of_bg_color_shows_at_every_scale(layout, sign, request):
+    # Core fills `widget.bg_color` before every draw at every scale
+    # (`reset_canvas`); the renderers paint over it and never clear it.
+    canvas = request.getfixturevalue(sign)
     c = _card(layout=layout, bg_color=make_color(*BG))
-    _core_tick(c, bigsign)
     for _ in range(3):
-        _core_tick(c, bigsign)
-        assert BG not in set(_pixels(bigsign).values())
-
-
-def test_hires_seen_is_shared_so_new_cards_never_flash_bg(bigsign):
-    memo = card_mod.ScaleMemo()
-    a = _card(bg_color=make_color(*BG), scale_memo=memo)
-    _core_tick(a, bigsign)
-    b = _card(bg_color=make_color(*BG), scale_memo=memo)  # a new game's card
-    _core_tick(b, bigsign)
-    assert BG not in set(_pixels(bigsign).values())
-
-
-@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
-def test_core_still_fills_bg_color_at_scale_1(layout, smallsign):
-    c = _card(layout=layout, bg_color=make_color(*BG))
-    for _ in range(2):
-        _core_tick(c, smallsign)
-    assert BG in set(_pixels(smallsign).values())
-
-
-def test_widget_cards_share_one_scale_memo():
-    w = HockeyScoreMonitor(session=None, teams=["PHI"], demo=True)
-    w._tz = TZ
-    w._load_demo()
-    memos = {id(c.scale_memo) for c in w.feed_stories}
-    assert len(memos) == 1
+        _core_tick(c, canvas)
+        assert c.bg_color == make_color(*BG)
+        assert BG in set(_pixels(canvas).values())
 
 
 def _paint_white(canvas):
@@ -1015,14 +976,16 @@ def test_takeover_clears_preceding_widget(sign, frames, request):
     assert white < 0.05 * real.width * real.height
 
 
-def test_takeover_clear_uses_bg_color_at_scale_1(smallsign):
+@pytest.mark.parametrize("sign", ["smallsign", "bigsign"])
+def test_takeover_clear_uses_bg_color_at_every_scale(sign, request):
+    canvas = request.getfixturevalue(sign)
     c = _card(bg_color=make_color(*BG))
     c.queue_goals([_goal()])
     for _ in range(3):  # frame 3 = flash_off
         c.advance_frame()
-        _paint_white(smallsign)
-        c.draw(smallsign)
-    px = list(_pixels(smallsign).values())
+        _paint_white(canvas)
+        c.draw(canvas)
+    px = list(_pixels(canvas).values())
     assert WHITE not in px and BG in px
 
 
@@ -1044,26 +1007,6 @@ def test_hidden_card_run_does_not_advance(bigsign):
         b.advance_frame()
         b.draw(bigsign)
     assert flash.call_args.args[2] is True  # phase 1: still flash_on
-
-
-@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
-@pytest.mark.parametrize("goal", [False, True])
-def test_slideshow_visit_cached_bg_never_shows_at_scale_gt1(layout, goal, bigsign):
-    # Core reads `bg_color` ONCE per slideshow visit (`_swap_and_scroll`)
-    # and fills with that cached value every tick: a widget's first hi-res
-    # visit caches the configured color before any draw has set the memo.
-    c = _card(layout=layout, bg_color=make_color(*BG))
-    if goal:
-        c.queue_goals([_goal()])
-    c.reset_frame()
-    cached = c.bg_color
-    assert cached is not None  # the residual this test exists for
-    real = unwrap_to_real(bigsign)
-    for _ in range(CELEBRATION_FRAMES + 20):
-        c.advance_frame()
-        bigsign.Fill(cached.red, cached.green, cached.blue)
-        c.draw(bigsign)
-        assert BG not in set(real._pixels.values())
 
 
 @pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
