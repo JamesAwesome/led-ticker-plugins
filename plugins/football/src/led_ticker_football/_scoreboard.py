@@ -59,7 +59,6 @@ class FootballBandBoard(FrameAwareBase):
     game: GameInfo
     now_fn: Callable[[], float] = attrs.field(default=time.time, kw_only=True)
     tz: ZoneInfo | None = None
-    bg_color: Color | None = None
     # (team, 0-1 fade toward white); 0.0 = full AMBER. Score highlight.
     highlight: tuple[str, float] | None = attrs.field(default=None, kw_only=True)
     stale: bool = attrs.field(default=False, kw_only=True)
@@ -72,12 +71,17 @@ class FootballBandBoard(FrameAwareBase):
 
     def _score_color(self, abbrev: str) -> Color:
         g = self.game
-        if self.highlight is not None and self.highlight[0] == abbrev:
-            return pal.lerp(pal.AMBER, pal.WHITE, self.highlight[1])
+        rest = pal.WHITE
         if g.state == "final":
             win = winner(g)
             if win is not None:
-                return pal.GREEN if win == abbrev else pal.LOSER
+                rest = pal.GREEN if win == abbrev else pal.LOSER
+        if self.highlight is not None and self.highlight[0] == abbrev:
+            # Fade to the color the score will REST at (green/gray on a
+            # final), so the fade never ends with a snap.
+            return pal.lerp(pal.AMBER, rest, self.highlight[1])
+        if g.state == "final":
+            return rest
         return pal.WHITE
 
     def draw(
@@ -91,8 +95,9 @@ class FootballBandBoard(FrameAwareBase):
         g = self.game
         font = self.font
         self.shape_extents = []
-        if self.bg_color is not None:
-            canvas.Fill(self.bg_color.red, self.bg_color.green, self.bg_color.blue)
+        # Core fills `bg_color` before every draw; never clear here (a scroll
+        # section's earlier widgets are already on the canvas this tick).
+        ox = cursor_pos  # a scroll section's cursor; 0 when held
         scale = safe_scale(canvas)
         half_h = canvas.height // 2
         baseline = compute_baseline_for_band(font, half_h, scale, valign="center")
@@ -108,11 +113,11 @@ class FootballBandBoard(FrameAwareBase):
 
         def right(text: str, y: int, color: Color) -> None:
             if text:
-                draw_text(canvas, font, text, width - w(text), y, color)
+                draw_text(canvas, font, text, ox + width - w(text), y, color)
 
         if g.state == "future":
             y0, y1 = ys
-            x = X_ABBREV
+            x = ox + X_ABBREV
             at = " VS " if g.neutral_site else " @ "
             for text, color in (
                 (g.away, pal.chip(g.away)[0]),
@@ -131,7 +136,7 @@ class FootballBandBoard(FrameAwareBase):
                 while len(venue) > 1 and w(venue.rstrip() + "…") > max_w:
                     venue = venue[:-1]
                 venue = venue.rstrip() + "…"
-            draw_text(canvas, font, venue, X_ABBREV, y1, pal.DIM)
+            draw_text(canvas, font, venue, ox + X_ABBREV, y1, pal.DIM)
             right(bottom, y1, pal.WHITE)
             return canvas, cursor_pos + canvas.width
 
@@ -161,21 +166,25 @@ class FootballBandBoard(FrameAwareBase):
             stale_band = 1 if poss_band == 0 else 0
         for band, (abbrev, _) in enumerate(rows):
             y = ys[band]
-            r0 = band * half_h
+            r0 = band * half_h + y_offset  # shapes ride PushUp/PushDown with the text
             primary, _ = pal.chip(abbrev)
-            rect(real, 0, r0, 2, r0 + half_h - 2 + band, primary)
-            draw_text(canvas, font, abbrev, X_ABBREV, y, primary)
-            draw_text(canvas, font, scores[band], X_SCORE, y, self._score_color(abbrev))
+            rect(real, ox, r0, ox + 2, r0 + half_h - 2 + band, primary)
+            draw_text(canvas, font, abbrev, ox + X_ABBREV, y, primary)
+            draw_text(
+                canvas, font, scores[band], ox + X_SCORE, y, self._score_color(abbrev)
+            )
             if sit is not None:
                 if sit.possession == abbrev:
                     cy = r0 + half_h // 2
                     dot_c = pal.RED if sit.red_zone else pal.WHITE
-                    rect(real, dot_x, cy - 1, dot_x + _DOT - 1, cy + 1, dot_c)
-                    self.shape_extents.append(("DOT", dot_x, dot_x + _DOT, band))
+                    rect(real, ox + dot_x, cy - 1, ox + dot_x + _DOT - 1, cy + 1, dot_c)
+                    self.shape_extents.append(
+                        ("DOT", ox + dot_x, ox + dot_x + _DOT, band)
+                    )
                 tol = sit.away_timeouts if band == 0 else sit.home_timeouts
                 pw = pips(
                     real,
-                    pips_x,
+                    ox + pips_x,
                     r0 + half_h // 2 - _PIP // 2,
                     tol,
                     size=_PIP,
@@ -184,11 +193,13 @@ class FootballBandBoard(FrameAwareBase):
                     spent=pal.DIM,
                 )
                 if pw:
-                    self.shape_extents.append(("PIPS", pips_x, pips_x + pw, band))
+                    self.shape_extents.append(
+                        ("PIPS", ox + pips_x, ox + pips_x + pw, band)
+                    )
                 if sit.possession == abbrev and sit.down_distance:
-                    draw_text(canvas, font, sit.down_distance, sit_x, y, hue)
+                    draw_text(canvas, font, sit.down_distance, ox + sit_x, y, hue)
             if stale_band == band:
-                draw_text(canvas, font, "STALE", sit_x, y, pal.DIM)
+                draw_text(canvas, font, "STALE", ox + sit_x, y, pal.DIM)
 
         if g.state == "final":
             right(top, ys[0], pal.WHITE)

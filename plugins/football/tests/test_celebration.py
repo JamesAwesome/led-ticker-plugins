@@ -834,3 +834,80 @@ def test_scroll_mode_run_freezes_cursor_until_next_pass(bigsign):
         _, cursor = c.draw(bigsign, 30)
     assert cursor == 30 + bigsign.width
     assert board.call_args.kwargs["x_offset"] == 30
+
+
+# ------------------------------------------------ guards cycle 3 found unverified
+
+
+def test_swap_carries_shown_to_the_follow_up(bigsign):
+    """A touchdown shown in one visit whose extra point lands between visits:
+    the re-keyed play is already shown, so the next visit has nothing to
+    celebrate (it would otherwise flash the TD a second time)."""
+    td = _play(key="1:26:17", extra="", away_score=26, home_score=17)
+    pat = _play(key="1:27:17", extra="+PAT", away_score=27, home_score=17)
+    c = _card()
+    c.queue_plays([td])
+    c.reset_frame()
+    c.advance_frame()
+    c.draw(bigsign)  # the TD is on the panel
+    assert c.replace_plays([pat]) is True or pat.key in c._shown or c.pending
+    c.reset_frame()
+    assert c.pending == []
+
+
+def test_highlight_ticks_once_per_frame(bigsign):
+    c = _card(tracked=())
+    c.highlight = ("NYG", 10)
+    c.advance_frame()
+    c.draw(bigsign)
+    c.draw(bigsign)  # the same frame drawn twice (compositing re-draws)
+    assert c.highlight == ("NYG", 9)
+
+
+def test_frame_zero_draw_does_not_consume_a_play(bigsign):
+    c = _card()
+    c.queue_plays([_play()])
+    c.reset_frame()
+    c.draw(bigsign)  # frame 0: `_scroll_and_delay`'s pre-advance draw
+    assert c._shown == set()
+    c.advance_frame()
+    c.draw(bigsign)
+    assert c._shown == {"k"}
+
+
+def test_demo_rearm_waits_while_a_real_play_is_pending(bigsign):
+    c = _card(demo_plays=(TD,))
+    c.queue_plays(list(c.demo_plays))
+    _scroll_frames(c, bigsign, CELEBRATION_FRAMES + 1)  # run 1 ends
+    _scroll_frames(c, bigsign, card_mod.DEMO_REST_FRAMES - 1)
+    p2 = _play(key="real", away_score=TD.away_score + 3)
+    c.queue_plays([p2])
+    _scroll_frames(c, bigsign, 1)  # rest elapsed on this frame
+    assert c.pending == [p2]  # the demo play did not pile on
+
+
+def test_scroll_mode_run_rebases_when_a_new_pass_starts_mid_run(bigsign):
+    """Side-by-side: when the widget to the left exits mid-takeover the
+    engine hands this card a HIGHER raw cursor (a new pass). The run's
+    origin must move to that frame, or the board resumes at a stale shift."""
+    c = _card()
+    c.queue_plays([_play()])
+    pos = bigsign.width
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        for _ in range(20):
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        pos = 100  # the new pass
+        for _ in range(CELEBRATION_FRAMES - 20):
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        c.advance_frame()
+        _, cursor = c.draw(bigsign, pos)  # run ends
+    assert cursor == 100 + bigsign.width
+    assert board.call_args.kwargs["x_offset"] == 100

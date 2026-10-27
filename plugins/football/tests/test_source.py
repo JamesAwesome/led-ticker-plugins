@@ -502,3 +502,82 @@ async def test_first_poll_failure_backs_off_from_live_interval():
     clock.advance(s.next_delay())
     await s.poll()
     assert s.next_delay() == 4 * LIVE_INTERVAL
+
+
+def _with_period(event, period, status_name="STATUS_IN_PROGRESS"):
+    for st in (event["status"], event["competitions"][0]["status"]):
+        st["period"] = period
+        st["type"]["name"] = status_name
+    return event
+
+
+async def test_possession_not_held_across_a_period_change():
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    dead = fx("event_live_deadball")["competitions"][0]["situation"]
+    session.routes[SB[0]] = (
+        200,
+        week_with(_with_period(live_event(situation=dead), 5)),
+    )
+    clock.advance()
+    snap = await s.poll()
+    assert snap.games[LIVE_ID].situation.possession is None
+
+
+async def test_possession_not_held_at_end_of_period():
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    dead = fx("event_live_deadball")["competitions"][0]["situation"]
+    ev = _with_period(live_event(situation=dead), 4, "STATUS_END_PERIOD")
+    session.routes[SB[0]] = (200, week_with(ev))
+    clock.advance()
+    snap = await s.poll()
+    assert snap.games[LIVE_ID].situation.possession is None
+
+
+async def test_open_touchdown_closes_on_a_period_change():
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    polls = (
+        (26, 4, _situation(PHI_ID)),
+        (26, 5, _situation(PHI_ID)),
+        (28, 5, _situation(PHI_ID)),
+    )
+    for away, period, sit in polls:
+        ev = _with_period(live_event(away=away, situation=sit), period)
+        session.routes[SB[0]] = (200, week_with(ev))
+        clock.advance()
+        await s.poll()
+    assert [(p.kind, p.extra) for p in s.plays_after_baseline(LIVE_ID)] == [
+        ("TD", ""),
+        ("SAFETY", ""),
+    ]
+
+
+async def test_own_live_down_keeps_the_touchdown_open():
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    polls = (
+        (26, _situation(PHI_ID)),
+        (26, _situation(PHI_ID, dd="1st & 10")),
+        (27, _situation(PHI_ID)),
+    )
+    for away, sit in polls:
+        session.routes[SB[0]] = (200, week_with(live_event(away=away, situation=sit)))
+        clock.advance()
+        await s.poll()
+    assert [(p.kind, p.extra) for p in s.plays_after_baseline(LIVE_ID)] == [
+        ("TD", "+PAT")
+    ]
+
+
+async def test_backoff_after_a_success_uses_the_cadence():
+    s, session, clock, _ = make(
+        {SB[0]: (200, week_with(_sched(NOW + timedelta(days=3))))}
+    )
+    await s.poll()
+    assert s.next_delay() == IDLE_INTERVAL
+    session.routes = {}
+    clock.advance(IDLE_INTERVAL)
+    await s.poll()
+    assert s.next_delay() == 2 * IDLE_INTERVAL

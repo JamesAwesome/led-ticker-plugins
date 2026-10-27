@@ -161,14 +161,16 @@ def _fit_uniform(
 
 
 def _score_color(game: GameInfo, abbrev: str, highlight) -> Color:
-    """Matches `FootballBandBoard._score_color`."""
-    if highlight is not None and highlight[0] == abbrev:
-        return pal.lerp(pal.AMBER, pal.WHITE, highlight[1])
+    """Matches `FootballBandBoard._score_color`: a highlight fades amber
+    toward the color the score will rest at (green/gray on a final)."""
+    rest = pal.WHITE
     if game.state == "final":
         win = winner(game)
         if win is not None:
-            return pal.GREEN if win == abbrev else pal.LOSER
-    return pal.WHITE
+            rest = pal.GREEN if win == abbrev else pal.LOSER
+    if highlight is not None and highlight[0] == abbrev:
+        return pal.lerp(pal.AMBER, rest, highlight[1])
+    return rest
 
 
 def _chip(real, abbrev: str, x: tuple[int, int], y0: int, y1: int, sec_rows: int):

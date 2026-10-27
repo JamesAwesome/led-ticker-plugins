@@ -4,7 +4,6 @@ red zone, finals, bye, STALE, and the smallsign clearance tripwire."""
 import dataclasses
 
 import pytest
-from led_ticker.plugin import make_color
 
 import led_ticker_football._scoreboard as sb
 from led_ticker_football import _palette as pal
@@ -129,9 +128,69 @@ def test_band_board_stale_label(smallsign, tz):
     assert not _px(smallsign, BOT, range(sb.X_SITUATION, 100), pal.DIM)
 
 
-def test_band_board_bg_color(smallsign, tz):
-    _board(LIVE, tz, bg_color=make_color(1, 2, 3)).draw(smallsign)
+def test_band_board_keeps_core_bg_fill(smallsign, tz):
+    # Core fills `bg_color` before every draw; the board paints over it and
+    # never clears it (a Fill here would wipe earlier side-by-side widgets).
+    smallsign.Fill(1, 2, 3)
+    _board(LIVE, tz).draw(smallsign)
     assert smallsign._pixels[(100, 0)] == (1, 2, 3)
+
+
+def _fresh():
+    from led_ticker.plugin import HeadlessBackend
+
+    return HeadlessBackend(160, 16).create_canvas()
+
+
+def test_band_board_honours_cursor_pos(smallsign, tz):
+    """A `ticker` / `one_at_a_time` section hands the board a moving cursor:
+    it must paint there and report its right edge, or two cards in a
+    side-by-side scroll paint on top of each other."""
+    _board(LIVE, tz).draw(smallsign)
+    lit0 = _lit(smallsign, range(16), range(160))
+    assert lit0
+    moved = _fresh()
+    _, cursor = _board(LIVE, tz).draw(moved, 20)
+    assert cursor == 20 + 160
+    assert _lit(moved, range(16), range(160)) == {
+        (x + 20, y) for x, y in lit0 if x + 20 < 160
+    }
+    left = _fresh()
+    _, cursor = _board(LIVE, tz).draw(left, -30)
+    assert cursor == -30 + 160
+    assert _lit(left, range(16), range(160)) == {
+        (x - 30, y) for x, y in lit0 if x >= 30
+    }
+
+
+def test_band_board_shapes_follow_y_offset(smallsign, tz):
+    """PushUp/PushDown hand every draw a y_offset: chips, the possession
+    dot and the pips must move with the text, not sit at rest."""
+    _board(LIVE, tz).draw(smallsign)
+    lit0 = _lit(smallsign, range(16), range(0, sb.X_SITUATION))
+    moved = _fresh()
+    _board(LIVE, tz).draw(moved, y_offset=4)
+    assert _lit(moved, range(16), range(0, sb.X_SITUATION)) == {
+        (x, y + 4) for x, y in lit0 if y + 4 < 16
+    }
+
+
+def test_band_board_stale_sits_opposite_the_ball_when_away_has_it(smallsign, tz):
+    sit = dataclasses.replace(LIVE.situation, possession="PHI")
+    game = dataclasses.replace(LIVE, situation=sit)
+    _board(game, tz, stale=True).draw(smallsign)
+    assert _px(smallsign, BOT, range(sb.X_SITUATION, 130), pal.DIM)
+    assert not _px(smallsign, TOP, range(sb.X_SITUATION, 100), pal.DIM)
+
+
+def test_band_board_wide_scores_push_shapes_right(smallsign, tz, monkeypatch):
+    game = dataclasses.replace(LIVE, away_score=100, home_score=100)
+    calls = _spy_texts(monkeypatch, smallsign, game, tz)
+    score_end = max(x1 for t, _x0, x1, _b in calls if t == "100")
+    dot = next(c for c in calls if c[0] == "DOT")
+    assert dot[1] >= score_end + sb._GAP
+    dd = next(c for c in calls if c[0] == LIVE.situation.down_distance)
+    assert dd[1] > sb.X_SITUATION
 
 
 def test_ticker_message_uses_segments(tz):

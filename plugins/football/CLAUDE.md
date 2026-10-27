@@ -139,9 +139,11 @@ loop must not add jitter (`test_start_registers_interest_updates_and_spawns`).
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the scale-1 `SegmentMessage` joins the same list.
 
-**Hi-res `draw()` honours `cursor_pos`** — the scale>1 scoreboard paints at
-`cursor_pos` (`render_scoreboard(..., x_offset=)`, via `_paint.ShiftedReal`) and returns
-`cursor_pos + canvas.width`; a constant `canvas.width` return never goes negative, so a
+**Every `draw()` honours `cursor_pos` and `y_offset`** — the scale>1 scoreboard paints at
+`cursor_pos` (`render_scoreboard(..., x_offset=)`, via `_paint.ShiftedReal`), the crawl at
+`cursor_pos + w + padding`, and the smallsign band board offsets every x by `cursor_pos`
+and every shape row by `y_offset` (`test_band_board_honours_cursor_pos`,
+`test_band_board_shapes_follow_y_offset`); each returns `cursor_pos + <its width>`; a constant `canvas.width` return never goes negative, so a
 `ticker` / `one_at_a_time` section wedges on the first card forever
 (`test_scale4_scoreboard_scrolls_with_cursor_pos`). A self-started celebration run freezes
 the card's EFFECTIVE cursor (`_x_shift`, cleared when the raw cursor next increases = a
@@ -184,7 +186,8 @@ takeover fills it explicitly — so `FootballGameCard.bg_color` is a plain field
   the fallback. Both were confirmed on 2026-10-26 (Week 7: BUF/LAC/WSH/JAX; PHI bye 10).
 - Scroll-mode takeover vs core's end-of-scroll hold: a score that lands while the LAST card
   of a side-by-side scroll sits in core's `hold_at_end` is cut to the remainder of the
-  section `hold_time` (default 3 s); `hold_time >= 7` covers a full takeover.
+  section `hold_time` (default 3 s) and resumes on the next pass (frames advance only
+  when the card is drawn). No `hold_time` value avoids it.
 
 ## Tests
 

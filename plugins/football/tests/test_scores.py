@@ -89,6 +89,10 @@ class TestValidate:
         assert FootballScoreMonitor.validate_config(cfg) == []
 
     def test_validate_unknown_team_suggests(self):
+        bools = FootballScoreMonitor.validate_config(
+            {"teams": ["PHI"], "hold_time": True}
+        )
+        assert any("hold_time" in m for m in bools)
         msgs = FootballScoreMonitor.validate_config({"teams": ["PHL"]})
         assert len(msgs) == 1
         assert "Did you mean 'PHI'?" in msgs[0]
@@ -359,6 +363,25 @@ class TestPlays:
         w.feed_stories[0].pending.clear()
         await w.update()
         assert w.feed_stories == []
+
+    async def test_follow_up_after_celebration_is_silent(self):
+        """The TD already flashed (consumed); its extra point arrives next
+        poll. It must neither queue a second celebration nor highlight."""
+        live = game(1, "live", away_score=20, home_score=17)
+        w = _widget(_snap(live))
+        await w.update()
+        card = w.feed_stories[0]
+        w._source.plays["1"] = (play("1:26:17"),)
+        w._source.snapshot = _snap(dataclasses.replace(live, away_score=26))
+        await w.update()
+        assert [p.key for p in card.pending] == ["1:26:17"]
+        card._shown.add("1:26:17")
+        card.reset_frame()  # consumed
+        assert card.pending == []
+        w._source.plays["1"] = (play("1:27:17", extra="+PAT", away=27),)
+        w._source.snapshot = _snap(dataclasses.replace(live, away_score=27))
+        await w.update()
+        assert card.pending == [] and card.highlight is None
 
     async def test_follow_up_replaces_pending_play(self):
         live = game(1, "live", away_score=20, home_score=17)

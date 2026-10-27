@@ -350,3 +350,17 @@ def test_play_text_requires_the_kind_score_value():
     plays, _ = diff_scores(bumped, (20, 17), None)
     assert plays[0].kind == "TD" and plays[0].extra == "+PAT"
     assert plays[0].text == ""
+
+
+def test_final_in_hold_counts_from_the_estimated_end():
+    from datetime import timedelta
+
+    from led_ticker_football._models import GAME_LENGTH, final_in_hold
+
+    start = datetime(2026, 10, 25, 17, 0, tzinfo=UTC)
+    g = _game(state="final", status="STATUS_FINAL", start_utc=start)
+    assert final_in_hold(g, start + timedelta(hours=24, minutes=30), 24) is True
+    assert (
+        final_in_hold(g, start + GAME_LENGTH + timedelta(hours=24, minutes=1), 24)
+        is False
+    )

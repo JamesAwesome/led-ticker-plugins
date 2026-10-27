@@ -69,3 +69,14 @@ def test_render_crawl_held_when_fits(longboi, tz):
 def test_render_crawl_scrolls_when_long(bigsign, tz):
     w = render_crawl(bigsign, LIVE, NOW, tz, 0)
     assert w > bigsign.width
+
+
+def test_render_crawl_honours_cursor_pos(bigsign, tz):
+    from led_ticker.plugin import HeadlessBackend, ScaledCanvas, unwrap_to_real
+
+    render_crawl(bigsign, LIVE, NOW, tz, 0)
+    lit0 = _lit(unwrap_to_real(bigsign))
+    assert lit0
+    real = HeadlessBackend(256, 64).create_canvas()
+    render_crawl(ScaledCanvas(real, scale=4, content_height=16), LIVE, NOW, tz, 10)
+    assert _lit(real) == {(x + 40, y) for x, y in lit0 if x + 40 < 256}

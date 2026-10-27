@@ -321,7 +321,7 @@ def test_highlight_fades_score_toward_white(sign, request, monkeypatch):
     unwrap_to_real(canvas).Clear()
     calls = _spy(monkeypatch, canvas, FINAL_OT, highlight=("NYG", 0.5))
     by = {c[0]: c for c in calls}
-    assert by["27"][5] == pal.lerp(pal.AMBER, pal.WHITE, 0.5)
+    assert by["27"][5] == pal.lerp(pal.AMBER, pal.GREEN, 0.5)  # toward its rest color
     assert by["24"][5] == pal.LOSER
 
 
@@ -403,3 +403,34 @@ def test_divider_clears_a_wide_status_line(bigsign, monkeypatch):
     div = next(s for s in shapes if s[0] == "divider")
     assert line2[1] - div[2] >= _MIN_GAP
     _assert_shapes_clear(calls, shapes, unwrap_to_real(bigsign))
+
+
+def test_situation_text_drops_the_spot_before_shrinking():
+    sit = Situation(
+        possession="LAC",
+        down_distance="4TH & 23",
+        spot="LAC 50",
+        red_zone=False,
+        away_timeouts=3,
+        home_timeouts=3,
+        last_play=None,
+    )
+    full = "4TH & 23 · LAC 50"
+    budget = board.text_width(board._SIT_SIZES[-1], full) - 1
+    text, size = board._situation_text(sit, budget)
+    assert text == "4TH & 23" and size == board._SIT_SIZES[0]
+
+
+def test_highlight_fades_toward_the_final_color(bigsign, monkeypatch):
+    calls = _spy(monkeypatch, bigsign, FINAL_OT, highlight=("NYG", 0.5))
+    by = {c[0]: c for c in calls}
+    assert by["27"][5] == pal.lerp(pal.AMBER, pal.GREEN, 0.5)  # the winner's rest color
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_live_situation_hidden_at_end_of_period(sign, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    game = dataclasses.replace(LIVE, status="STATUS_END_PERIOD")
+    assert game.situation is not None
+    calls = _spy(monkeypatch, canvas, game)
+    assert not any(c[0].startswith(game.situation.down_distance) for c in calls)

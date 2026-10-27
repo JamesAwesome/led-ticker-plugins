@@ -303,7 +303,6 @@ class FootballGameCard(FrameAwareBase):
                     self.game,
                     now_fn=self.now_fn,
                     tz=self.tz,
-                    bg_color=self.bg_color,
                     font=self.small_font if self.small_font is not None else FONT_SMALL,
                 )
                 self._legacy = board
@@ -344,6 +343,10 @@ class FootballGameCard(FrameAwareBase):
     ) -> DrawResult:
         if self._last_cursor is None or cursor_pos > self._last_cursor:
             self._x_shift = 0  # a fresh pass: draw honestly again
+            if self._run_start is not None:
+                # Mid-run pass change (the widget to the left exited): the
+                # takeover now "began" here, in the new pass's coordinates.
+                self._run_cursor = cursor_pos
         self._last_cursor = cursor_pos
         if self._celebrate(canvas, y_offset, cursor_pos):
             return canvas, canvas.width

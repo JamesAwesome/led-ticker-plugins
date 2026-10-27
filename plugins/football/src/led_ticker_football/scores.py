@@ -207,6 +207,8 @@ class FootballScoreMonitor:
             "[]",
         ),
         "layout": ('"auto" | "scoreboard" | "ticker"', "game render shape", '"auto"'),
+        "timezone": ("IANA zone", "kickoff times and day labels", '"America/New_York"'),
+        "padding": ("int px", "gap after the hi-res ticker line (scale > 1 only)", "6"),
         "update_interval": (
             "int seconds",
             f"live poll cadence; floored at {MIN_INTERVAL}s",
