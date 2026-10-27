@@ -56,6 +56,10 @@ imports are fine.
 
 **Python 3.14 / PEP 649** — no `from __future__ import annotations`.
 
+**`run_monitor_loop(..., splay=False)`** — core's default splay adds a fixed random
+0-60 s to the poll interval at startup. The shared source paces itself, so the widget
+loop must not add jitter (`test_env_key_clamps_interval_updates_and_spawns_loop`).
+
 **Request pacing** (`_source.py`): all widgets with the same API key share
 one source in the process. Its lock and 900-second floor cover listings and
 result lookups. One poll makes at most one request, including startup.

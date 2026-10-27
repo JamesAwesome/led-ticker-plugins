@@ -122,7 +122,7 @@ class TestStart:
             )
         assert w.api_key == "ltapi_env" and w.tours == ["atp"]
         assert w._source is not None and w._source.interval == MIN_UPDATE_INTERVAL
-        loop.assert_called_once_with(w, MIN_UPDATE_INTERVAL)
+        loop.assert_called_once_with(w, MIN_UPDATE_INTERVAL, splay=False)
         spawn.assert_called_once_with("LOOP")
         assert len(w.feed_stories) == 1 and isinstance(
             w.feed_stories[0], TennisMatchCard
