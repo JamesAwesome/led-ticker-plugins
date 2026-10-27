@@ -69,6 +69,20 @@ DEMO_EVERY = 3  # demo cards re-celebrate after every 3rd completed visit
 
 
 @attrs.define
+class ScaleMemo:
+    """Shared by one widget's cards: set once any draw (paused or not)
+    sees scale > 1, so a new game's card never hands core a hi-res
+    `bg_color` fill. Core caches `bg_color` per visit, so the first hi-res
+    visit was read before this was set: the hi-res draw paths clear the
+    panel for it when leftmost and live. Once per widget instance the
+    color can still show during the transition into that first visit, a
+    title-less scroll section's scroll-in, or a one_at_a_time section's
+    first tick (see CLAUDE.md *Palette*)."""
+
+    hires: bool = False
+
+
+@attrs.define
 class FootballGameCard(FrameAwareBase):
     game: GameInfo
     tz: Any
@@ -79,7 +93,9 @@ class FootballGameCard(FrameAwareBase):
     stale: bool = False
     bye: bool = False
     base_hold: float = 0.0
-    bg_color: Color | None = attrs.field(default=None, kw_only=True)
+    # The configured fill; core reads the `bg_color` property below.
+    _bg_color: Color | None = attrs.field(default=None, kw_only=True, alias="bg_color")
+    scale_memo: ScaleMemo = attrs.field(factory=ScaleMemo, kw_only=True)
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
@@ -98,6 +114,13 @@ class FootballGameCard(FrameAwareBase):
     _legacy_for: tuple[str, GameInfo, bool, bool] | None = attrs.field(
         init=False, default=None
     )
+
+    @property
+    def bg_color(self) -> Color | None:
+        """What core fills before every draw (at every scale): the
+        configured color on scale-1 signs, None once a hi-res draw was
+        seen. `bg_color` is a scale-1 option."""
+        return None if self.scale_memo.hires else self._bg_color
 
     @property
     def hold_time(self) -> float:
@@ -181,10 +204,14 @@ class FootballGameCard(FrameAwareBase):
         play = playing[idx]
         if self._frame_count > 0:  # a live frame (paused returned above)
             self._shown.add(play.key)
+        # A full-panel takeover: clear what earlier widgets painted this
+        # tick (side-by-side scroll). bg_color is scale-1 only.
+        bg = self._bg_color
+        if bg is not None and safe_scale(canvas) <= 1:
+            canvas.Fill(bg.red, bg.green, bg.blue)
+        else:
+            unwrap_to_real(canvas).Clear()
         if name == "detail":
-            if self.bg_color is not None:
-                bg = self.bg_color
-                canvas.Fill(bg.red, bg.green, bg.blue)
             render_detail(
                 canvas, self.game, play, f, y_offset=y_offset, font=self.small_font
             )
@@ -206,7 +233,7 @@ class FootballGameCard(FrameAwareBase):
                     self.game,
                     now_fn=self.now_fn,
                     tz=self.tz,
-                    bg_color=self.bg_color,
+                    bg_color=self._bg_color,
                     font=self.small_font if self.small_font is not None else FONT_SMALL,
                 )
                 self._legacy = board
@@ -229,7 +256,7 @@ class FootballGameCard(FrameAwareBase):
                 self.now_fn(),
                 self.tz,
                 font=self.font,
-                bg_color=self.bg_color,
+                bg_color=self._bg_color,
                 font_color=self.font_color,
                 stale=self.stale,
                 bye=self.bye,
@@ -245,6 +272,8 @@ class FootballGameCard(FrameAwareBase):
         y_offset: int = 0,
         font_color: Any = None,
     ) -> DrawResult:
+        if safe_scale(canvas) > 1:
+            self.scale_memo.hires = True
         if self._celebrate(canvas, y_offset):
             return canvas, canvas.width
         scale = safe_scale(canvas)
@@ -257,6 +286,12 @@ class FootballGameCard(FrameAwareBase):
             return story.draw(
                 canvas, cursor_pos, y_offset=y_offset, font_color=font_color
             )
+        if self._bg_color is not None and cursor_pos <= 0 and not self._frame_paused:
+            # Core caches `bg_color` once per slideshow visit, so a widget's
+            # first hi-res visit is filled with it before the memo is set.
+            # Leftmost (nothing of another widget's to the left) and live
+            # (never clobber transition compositing): own the panel.
+            real.Clear()
         now = self.now_fn()
         if layout == "ticker":
             w = render_crawl(

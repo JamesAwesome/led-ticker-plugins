@@ -5,7 +5,7 @@ import dataclasses
 import unittest.mock as mock
 
 import pytest
-from led_ticker.plugin import measure_width, resolve_font, unwrap_to_real
+from led_ticker.plugin import make_color, measure_width, resolve_font, unwrap_to_real
 
 import led_ticker_football._card as card_mod
 from led_ticker_football import _celebration as cel
@@ -23,6 +23,7 @@ from led_ticker_football._celebration import (
     render_flash,
 )
 from led_ticker_football._models import build_demo_games
+from led_ticker_football.scores import FootballScoreMonitor
 
 from .conftest import TZ
 
@@ -250,6 +251,34 @@ def test_detail_typical_keeps_clearance(sign, request):
 # --------------------------------------------------------------- card
 
 
+def test_detail_ignores_bg_color_at_scale_gt1(bigsign):
+    # #105: bg_color is a scale-1 option; the hi-res detail card paints its
+    # own palette like every other hi-res renderer.
+    c = _card(bg_color=make_color(40, 0, 0))
+    c.queue_plays([_play()])
+    c.reset_frame()
+    for _ in range(FLASH_FRAMES):
+        c.advance_frame()
+    with mock.patch.object(
+        card_mod, "render_detail", wraps=card_mod.render_detail
+    ) as detail:
+        c.advance_frame()  # frame FLASH_FRAMES + 1: the detail phase
+        c.draw(bigsign)
+    detail.assert_called_once()
+    assert (40, 0, 0) not in set(_pixels(bigsign).values())
+
+
+def test_detail_keeps_bg_color_at_scale_1(smallsign):
+    # Scale 1 honours bg_color on the band board, so its detail card does too.
+    c = _card(bg_color=make_color(40, 0, 0))
+    c.queue_plays([_play()])
+    c.reset_frame()
+    for _ in range(FLASH_FRAMES + 1):
+        c.advance_frame()
+    c.draw(smallsign)
+    assert (40, 0, 0) in set(_pixels(smallsign).values())
+
+
 def test_hold_time_extends_while_celebration_pending():
     c = _card(base_hold=3.0)
     assert c.hold_time == 3.0
@@ -453,3 +482,102 @@ def test_demo_rearms_every_third_visit(bigsign):
         # Visit 1 celebrates; 2, 3 do not; 4 does again; then 7.
         assert had is (visit in (1, 4, 7)), visit
     assert card_mod.DEMO_EVERY == 3
+
+
+# ------------------------------------------- bg_color is scale-1 only (#105)
+
+BG = (40, 0, 0)
+
+
+def _core_tick(card, canvas, **draw_kw):
+    """One engine tick as core runs it: advance, `reset_canvas` with the
+    widget's `bg_color`, then draw."""
+    from led_ticker.widgets._image_fit import reset_canvas
+
+    card.advance_frame()
+    reset_canvas(canvas, card.bg_color)
+    return card.draw(canvas, **draw_kw)
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_core_never_fills_bg_color_at_scale_gt1(layout, bigsign):
+    # #105: core fills `widget.bg_color` before every draw at every scale;
+    # the card hands it None once a draw has seen a hi-res sign. (Core's
+    # very first reset precedes any draw: the process's first frame only.)
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    _core_tick(c, bigsign)
+    for _ in range(3):
+        _core_tick(c, bigsign)
+        assert BG not in set(_pixels(bigsign).values())
+
+
+def test_hires_seen_is_shared_so_new_cards_never_flash_bg(bigsign):
+    memo = card_mod.ScaleMemo()
+    a = _card(bg_color=make_color(*BG), scale_memo=memo)
+    _core_tick(a, bigsign)
+    b = _card(bg_color=make_color(*BG), scale_memo=memo)  # a new game's card
+    _core_tick(b, bigsign)
+    assert BG not in set(_pixels(bigsign).values())
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_core_still_fills_bg_color_at_scale_1(layout, smallsign):
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    for _ in range(2):
+        _core_tick(c, smallsign)
+    assert BG in set(_pixels(smallsign).values())
+
+
+def test_widget_cards_share_one_scale_memo():
+    w = FootballScoreMonitor(session=None, teams=["PHI"], demo=True)
+    w._tz = TZ
+    w._load_demo()
+    memos = {id(c.scale_memo) for c in w.feed_stories}
+    assert len(memos) == 1
+
+
+def _paint_white(canvas):
+    real = unwrap_to_real(canvas)
+    for x in range(real.width):
+        for y in range(real.height):
+            real.SetPixel(x, y, 255, 255, 255)
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+@pytest.mark.parametrize("scoring", [False, True])
+def test_slideshow_visit_cached_bg_never_shows_at_scale_gt1(layout, scoring, bigsign):
+    # Core reads `bg_color` ONCE per slideshow visit (`_swap_and_scroll`)
+    # and fills with that cached value every tick: a widget's first hi-res
+    # visit caches the configured color before any draw has set the memo.
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    if scoring:
+        c.queue_plays([_play()])
+    c.reset_frame()
+    cached = c.bg_color
+    assert cached is not None  # the residual this test exists for
+    real = unwrap_to_real(bigsign)
+    for _ in range(CELEBRATION_FRAMES + 20):
+        c.advance_frame()
+        bigsign.Fill(cached.red, cached.green, cached.blue)
+        c.draw(bigsign)
+        assert BG not in set(real._pixels.values())
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+def test_hires_draw_right_of_another_widget_keeps_it(layout, bigsign):
+    # Side-by-side: at cursor_pos > 0 a preceding widget owns the left of
+    # the panel; the board/crawl must not wipe it.
+    c = _card(layout=layout, bg_color=make_color(*BG))
+    c.advance_frame()
+    _paint_white(bigsign)
+    c.draw(bigsign, cursor_pos=40)
+    assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
+
+
+def test_paused_hires_draw_never_clears(bigsign):
+    # Transition compositing paints outgoing and incoming into one canvas.
+    c = _card(bg_color=make_color(*BG))
+    c.pause_frame()
+    _paint_white(bigsign)
+    c.draw(bigsign)
+    assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE

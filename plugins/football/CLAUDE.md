@@ -66,6 +66,13 @@ on the same pre-try snapshot. All three must use `pre_extra_score`; hockey's sam
 rule would celebrate the extra point as a second touchdown
 (`test_pat_follow_up_merges_into_touchdown`, `test_follow_up_replaces_pending_play`).
 
+**Polling is widget-driven** — `shared_source(session)`; every widget's `want()` merges
+into it, and cadence is the source's (15 s live — or the fastest widget `update_interval`
+below that, via `want(live_interval=...)` — / 60 s around a kickoff / 300 s pregame /
+3600 s idle, `MIN_INTERVAL` 10 s floor). The source only polls when a widget's `update()`
+calls it, and each widget's monitor loop runs every `max(MIN_INTERVAL, update_interval)` s,
+so an interval above 15 slows that widget (and a lone widget's polling).
+
 **Possession is held across dead balls, nothing else is** — `_hold_possession` carries
 the previous poll's `possession` only while `status == STATUS_IN_PROGRESS` in the SAME
 period; halftime / end of period / a period change / a final clear it. Down & distance and
@@ -126,6 +133,26 @@ quarter/date/kickoff/`+PAT`, cyan down & distance and spot, RED reserved for the
 (situation text and the possession marker), dim labels/spent pips, green final winner,
 gray loser/records. Black is invisible on the panels, so team chips are lifted; near-black
 NFL primaries (`LV`, `PIT`, `HOU`, `CHI`, `DEN`) use the lifted secondary as primary.
+`bg_color` never paints at scale > 1 (hi-res board, crawl or scoring celebration); at
+scale 1 the band board, the ticker message and the celebration fill it. Core itself fills
+`getattr(widget, "bg_color", None)` before every draw at EVERY scale (`reset_canvas`), so
+`FootballGameCard.bg_color` is a property: None once any draw of the widget's cards saw
+scale > 1 (the shared `ScaleMemo`, one per widget), else the configured `_bg_color`,
+which the legacy stories and the scale-1 celebration read directly. Core caches
+`bg_color` once per slideshow visit (`_swap_and_scroll`, `_scroll_and_delay`, a
+transition's `incoming_bg_color`), so a widget's first hi-res visit is read before the memo
+is set: the hi-res board and crawl therefore clear the real panel when `_bg_color` is set,
+`cursor_pos <= 0` (leftmost: no other widget to the left) and the card is not paused
+(transition compositing is never clobbered). Every celebration frame also clears the real
+panel first (to `bg_color` at scale 1, black otherwise). Residual, once per widget
+instance (boot, restart, hot reload) on a hi-res sign with `bg_color` set, the configured
+color can still appear (a) during the 0.5 s transition into the widget's first visit, (b)
+for the scroll-in of a title-less scroll section when football is first
+(`_scroll_and_delay` caches it before any draw and every scroll-in tick has
+`cursor_pos > 0`; ~3 s on bigsign; do not widen the guard, the card cannot tell this from
+a side-by-side neighbour), (c) for one tick at the start of a `one_at_a_time` section.
+After that `bg_color` reads None and nothing paints it. `font_color` reaches only the
+scale-1 ticker message.
 
 ## Known gaps
 

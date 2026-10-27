@@ -38,7 +38,7 @@ from led_ticker.plugin import (
     spawn_tracked,
 )
 
-from led_ticker_football._card import FootballGameCard
+from led_ticker_football._card import FootballGameCard, ScaleMemo
 from led_ticker_football._models import (
     GameInfo,
     ScoringPlay,
@@ -198,6 +198,8 @@ class FootballScoreMonitor:
         init=False, factory=dict
     )
     feed_stories: list[FootballGameCard] = attrs.field(init=False, factory=list)
+    # One per widget: once any card draws hi-res, none hands core a fill.
+    _scale_memo: ScaleMemo = attrs.field(init=False, factory=ScaleMemo)
 
     _LIST_FIELD_HINTS = {
         "mode": ('"teams" | "league" | "live"', "which games to show", '"teams"'),
@@ -337,6 +339,7 @@ class FootballScoreMonitor:
             tracked=frozenset(self.teams),
             base_hold=self.hold_time,
             bg_color=self.bg_color,
+            scale_memo=self._scale_memo,
             font=self.font if self.font is not None else FONT_DEFAULT,
             small_font=self.small_font,
             font_color=self.font_color,

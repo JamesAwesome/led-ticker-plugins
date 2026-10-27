@@ -62,12 +62,12 @@ timezone = "America/New_York"   # for kickoff times and the day boundary
 | `final_hold_hours` | int | `24` | How long a final stays in the rotation, measured from kickoff + 3 h 30 min (the feed carries no end time). A team plays once a week, so Sunday's result stays up through Monday by default; lower it to see the next game sooner. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for kickoff times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
-| `update_interval` | int | `15` | Live poll cadence in seconds. **Floored at 10** (ESPN caches for 10 s). Widgets sharing a process share one source, and the source only refreshes when a widget asks, so the fastest widget sets the live pace: a value below 15 speeds live polling up, a value above 15 slows it down unless another widget asks faster. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
+| `update_interval` | int | `15` | How often, in seconds, this widget refreshes its cards and asks the shared source to poll. **Floored at 10** (ESPN caches for 10 s). While a game is live the source polls at most every 15 s, or at the lowest `update_interval` below that among the widgets sharing it. A value below 15 therefore speeds up live polling. A value above 15 slows this widget: its cards refresh only every `update_interval` seconds, and if no other widget polls more often, so does the source. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per score **plus** the larger of this and 4 s for the board afterwards. |
-| `padding` | int | `6` | Horizontal padding (logical px) after each story when scrolling. A number >= 0 (a float is truncated to an int). |
+| `padding` | int | `6` | Horizontal padding (logical px) after the line in the hi-res `layout = "ticker"` crawl (bigsign / longboi); it also counts toward whether the line fits and holds instead of scrolling. The scale-1 ticker, the held scoreboards and the celebration ignore it. A number >= 0 (a float is truncated to an int). |
 | `demo` | bool | `false` | Render fixture games (a live 4th quarter with a touchdown celebration, halftime, an OT final, a next game, a bye week) with `PHI` and `NYG`, no network — for docs, gifs and hardware checks. The live game's touchdown celebrates on its first turn and again every third turn after (set `teams = ["PHI"]` or similar: untracked scores only highlight the score). |
-| `bg_color` | RGB list | none | Background fill. Scale-1 / ticker only — the physical renderers paint their own palette. |
-| `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 / ticker only. |
+| `bg_color` | RGB list | none | Background fill on scale-1 signs (smallsign board, ticker and scoring celebration); bigsign and longboi ignore it and paint their own palette. |
+| `font_color` | RGB list / string / table | unset | Override all text color. Scale-1 `layout = "ticker"` only. The smallsign board, the scoring celebration and the hi-res renderers paint their own palette. |
 | `font` | string | core default | Font for the scale-1 ticker line. |
 | `small_font` | string | `"5x8"` | Font for the scale-1 two-band scoreboard. |
 
@@ -90,7 +90,7 @@ Football's unit is the **week**: every team plays once between Thursday and Mond
 - **Longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, pips beneath, huge score), the home team mirrors it on the right, and the centre holds the quarter, a large clock and the down & distance line. The possession triangle sits between the possessing team's score and the centre.
 - **`ticker`:** one scrolling line per game using the same wording as the boards: `PHI 20 · NYG 17 · Q4 2:13 · NYG BALL 2ND & 7 · PHI 24 · TOL 1-2`.
 
-Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows both teams with their records, `@` (or `VS` at a neutral site), the day (`TONIGHT`, `SUN NOV 1`), the kickoff (`TBD` when the league hasn't set it), the venue, and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Nothing on the physical boards is user-tunable (fixed palette).
+Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows the day (`TONIGHT`, `SUN NOV 1`, amber), the kickoff (`TBD` when the league hasn't set it) and the venue (dim), with the teams drawn per sign. Smallsign shows `PHI @ NYG` (or `VS` at a neutral site) in team colors, no chips and no records, with ` BYE` after it in a bye week. Bigsign shows the away chip, `PHI 5-2 @ NYG 4-3` (the records drop first when the line is too wide) and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Longboi shows both chips and abbreviations on their sides with the records, the team nicknames and that label, and no `@`. Nothing on the physical boards is user-tunable (fixed palette).
 
 ### Scoring celebration
 
@@ -110,7 +110,7 @@ Scores are detected from the change in each team's total between polls; the scor
 
 All `football.scores` widgets in one process share a single source, so several widgets (or signs' worth of sections) do not multiply requests to ESPN.
 
-- **Every 15 s** while any relevant game is live — faster if a widget sets a lower `update_interval` (floor 10 s).
+- **Every 15 s** while any relevant game is live — faster if a widget sets a lower `update_interval` (floor 10 s), slower if every widget sharing the source sets a higher one (each widget polls only on its own `update_interval`).
 - **Every minute** in the half hour around a relevant kickoff.
 - **Every 5 minutes** when a relevant game is scheduled later today.
 - **About hourly** otherwise (the rest of the week, the offseason).
