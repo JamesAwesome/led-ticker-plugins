@@ -110,8 +110,10 @@ must not burn out unseen. The draw after its last frame consumes it exactly as
 the next live draw may self-start again. An extra point arriving mid-run still folds into
 the running touchdown (`_swap` walks `_playing` too). `reset_frame` always sets
 `_run_start = None` (visit runs start at frame 0), so the slideshow path never
-self-starts. Every celebration frame is a full-panel takeover: it first clears the real
-panel (to `bg_color` at scale 1, black otherwise), because in a side-by-side scroll core
+self-starts; a PAUSED reset (a transition's — they pause first) takes no `_playing`
+snapshot, so a scroll section's first card after a section transition still self-starts
+(`test_paused_reset_leaves_no_visit_snapshot`). Every celebration frame is a full-panel
+takeover: it first fills the real panel (`bg_color`, else black), because in a side-by-side scroll core
 resets once per tick and earlier widgets have already painted; it returns a
 `canvas.width` cursor, so later widgets are skipped for the tick. The scroll position
 keeps moving beneath it. `hold_time` is not read in scroll modes.
@@ -167,26 +169,11 @@ quarter/date/kickoff/`+PAT`, cyan down & distance and spot, RED reserved for the
 (situation text and the possession marker), dim labels/spent pips, green final winner,
 gray loser/records. Black is invisible on the panels, so team chips are lifted; near-black
 NFL primaries (`LV`, `PIT`, `HOU`, `CHI`, `DEN`) use the lifted secondary as primary.
-`bg_color` never paints at scale > 1 (hi-res board, crawl or scoring celebration); at
-scale 1 the band board, the ticker message and the celebration fill it. Core itself fills
-`getattr(widget, "bg_color", None)` before every draw at EVERY scale (`reset_canvas`), so
-`FootballGameCard.bg_color` is a property: None once any draw of the widget's cards saw
-scale > 1 (the shared `ScaleMemo`, one per widget), else the configured `_bg_color`,
-which the legacy stories and the scale-1 celebration read directly. Core caches
-`bg_color` once per slideshow visit (`_swap_and_scroll`, `_scroll_and_delay`, a
-transition's `incoming_bg_color`), so a widget's first hi-res visit is read before the memo
-is set: the hi-res board and crawl therefore clear the real panel when `_bg_color` is set,
-`cursor_pos <= 0` (leftmost: no other widget to the left) and the card is not paused
-(transition compositing is never clobbered). Every celebration frame also clears the real
-panel first (to `bg_color` at scale 1, black otherwise). Residual, once per widget
-instance (boot, restart, hot reload) on a hi-res sign with `bg_color` set, the configured
-color can still appear (a) during the 0.5 s transition into the widget's first visit, (b)
-for the scroll-in of a title-less scroll section when football is first
-(`_scroll_and_delay` caches it before any draw and every scroll-in tick has
-`cursor_pos > 0`; ~3 s on bigsign; do not widen the guard, the card cannot tell this from
-a side-by-side neighbour), (c) for one tick at the start of a `one_at_a_time` section.
-After that `bg_color` reads None and nothing paints it. `font_color` reaches only the
-scale-1 ticker message.
+`bg_color` fills at EVERY scale: core fills `getattr(widget, "bg_color", None)` before
+every draw (`reset_canvas`), no football renderer clears the panel, and the celebration's
+takeover fills it explicitly — so `FootballGameCard.bg_color` is a plain field (the
+#105 ScaleMemo / scale-1-only machinery was removed; `test_core_fill_of_bg_color_survives_every_scale`).
+`font_color` reaches only the scale-1 ticker message.
 
 ## Known gaps
 
@@ -195,14 +182,9 @@ scale-1 ticker message.
   build. Capture a real in-progress event as a fixture when one is on.
 - `week.teamsOnBye` is read from the scoreboard; `byeWeek` from the schedule endpoint is
   the fallback. Both were confirmed on 2026-10-26 (Week 7: BUF/LAC/WSH/JAX; PHI bye 10).
-- Scroll-mode takeover vs core's end-of-scroll hold: when the celebrating card is the last
-  widget left in a side-by-side scroll, its `canvas.width` cursor satisfies core's
-  `mon_0_end_pos <= canvas.width` hold check, so the 2 s `hold_at_end` runs and the section
-  ends; the celebration can be cut to about 2 s.
-- A section-entry transition `reset_frame`s the section's first story. After that the card's
-  `_playing` is a list (a visit snapshot) for good and it never self-starts again; if story
-  order changes so it is no longer first, its plays wait (capped at `MAX_QUEUED`) until it
-  is first at a section entry again.
+- Scroll-mode takeover vs core's end-of-scroll hold: a score that lands while the LAST card
+  of a side-by-side scroll sits in core's `hold_at_end` is cut to the remainder of the
+  section `hold_time` (default 3 s); `hold_time >= 7` covers a full takeover.
 
 ## Tests
 

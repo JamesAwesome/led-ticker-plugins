@@ -74,8 +74,8 @@ def test_placeholder_scoreboard_never_raises(bigsign, longboi):
 def test_ticker_layout_adds_padding(bigsign):
     c = _card(layout="ticker", padding=9)
     with mock.patch.object(card_mod, "render_crawl", return_value=100) as spy:
-        _, cursor = c.draw(bigsign)
-    assert cursor == 109
+        _, cursor = c.draw(bigsign, 5)
+    assert cursor == 5 + 100 + 9  # a scroll section's cursor advances the run
     assert spy.call_args.kwargs["hold_padding"] == 9
 
 
