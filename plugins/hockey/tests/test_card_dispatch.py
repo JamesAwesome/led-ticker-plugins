@@ -194,7 +194,7 @@ def test_scale4_crawl_returns_absolute_end(bigsign):
     assert at30 == at0 + 30 and at_neg == at0 - 50
 
 
-def _bigsign_ticker(queue, monkeypatch):
+def _bigsign_ticker(queue, monkeypatch, width=256):
     from led_ticker.frame import LedFrame
     from led_ticker.ticker import Ticker
 
@@ -204,7 +204,7 @@ def _bigsign_ticker(queue, monkeypatch):
         await real_sleep(0)
 
     monkeypatch.setattr(asyncio, "sleep", _yield)
-    frame = LedFrame(backend=HeadlessBackend(256, 64))
+    frame = LedFrame(backend=HeadlessBackend(width, 64))
     frame.setup()
     canvas = ScaledCanvas(frame.get_clean_canvas(), scale=4, content_height=16)
     ticker = Ticker(monitors=[], frame=frame, notif_queue=queue, scroll_speed=0.0)
@@ -271,13 +271,16 @@ def test_shifted_real_clips_both_edges_and_forwards_fills():
 @attrs.define
 class _HoldSpy(HockeyGameCard):
     """Counts celebration frames drawn; queues `goal` once the engine has
-    redrawn it at the same cursor `after` times (inside the end hold)."""
+    redrawn it at the same cursor `after` times (inside the end hold), or
+    on its `at_draw`-th draw."""
 
     goal: Any = attrs.field(default=None, kw_only=True)
     after: int | None = attrs.field(default=None, kw_only=True)
     shown: int = attrs.field(default=0, kw_only=True)
     _prev: int | None = attrs.field(default=None, kw_only=True)
     _same: int = attrs.field(default=0, kw_only=True)
+    at_draw: int | None = attrs.field(default=None, kw_only=True)
+    draws: int = attrs.field(default=0, kw_only=True)
 
     def _celebrate(self, canvas, y_offset, cursor_pos, frozen):
         painted = super()._celebrate(canvas, y_offset, cursor_pos, frozen)
@@ -287,37 +290,44 @@ class _HoldSpy(HockeyGameCard):
     def draw(self, canvas, cursor_pos=0, **kw):
         self._same = self._same + 1 if cursor_pos == self._prev else 0
         self._prev = cursor_pos
+        self.draws += 1
         if self.after is not None and self._same > self.after:
             self.after = None
+            self.queue_goals([self.goal])
+        if self.at_draw is not None and self.draws >= self.at_draw:
+            self.at_draw = None
             self.queue_goals([self.goal])
         return super().draw(canvas, cursor_pos, **kw)
 
 
-async def _ticker_pass(cards, hold, monkeypatch):
+async def _ticker_pass(cards, hold, monkeypatch, width=256):
     queue: asyncio.Queue = asyncio.Queue()
     for item in (*cards, None):
         await queue.put(item)
-    ticker, canvas = _bigsign_ticker(queue, monkeypatch)
+    ticker, canvas = _bigsign_ticker(queue, monkeypatch, width)
     run = ticker._scroll_side_by_side(canvas, cursor_pos=canvas.width, hold_at_end=hold)
     await asyncio.wait_for(run, 1.5)
 
 
-def _hold_spy(**kw):
-    game = build_demo_games(NOW)[0]
+def _hold_spy(idx=0, **kw):
+    games = build_demo_games(NOW)
     return _HoldSpy(
-        game=game,
+        game=games[idx],
         tz=TZ,
         now_fn=lambda: NOW,
         tracked=frozenset({"PHI"}),
-        goal=game.goals[0],
+        goal=games[0].goals[0],
         **kw,
     )
 
 
-async def test_last_card_celebration_before_the_end_hold_plays_in_full(monkeypatch):
-    """The takeover's `canvas.width` end keeps core from fetching the
-    section's end sentinel, so the end-of-scroll hold cannot start (and cut
-    the run) until the run is over, even with a short `hold_time`."""
+async def test_wide_last_card_celebration_before_the_end_hold_plays_in_full(
+    monkeypatch,
+):
+    """A last card at least as wide as the panel: the takeover's
+    `canvas.width` end keeps core from fetching the section's end sentinel,
+    so the end-of-scroll hold cannot start (and cut the run) until the run
+    is over, even with a short `hold_time`."""
     b = _hold_spy()
     b.queue_goals([b.goal])
     await _ticker_pass([_card("auto", 1), b], 1.0, monkeypatch)
@@ -368,3 +378,21 @@ async def test_same_card_twice_per_tick_never_jumps(layout, monkeypatch):
                 cur,
                 painted[cur],
             )
+
+
+async def test_narrow_last_card_celebration_is_cut_then_resumes(monkeypatch):
+    """README *Known limit*: a last card narrower than the panel (longboi,
+    the OT-final crawl is under 128 logical px) is fully visible while the
+    card before it is still on screen, so core has already fetched the end
+    sentinel; once that card pops, the takeover's `canvas.width` end starts
+    the hold at once and the run is cut to it, even though it started
+    before the hold. The rest plays on the next pass."""
+    # The goal lands on b's 120th draw: b is fully visible, a still on
+    # screen and about 10 ticks from popping (a run started there needs 80
+    # frames, the 3 s hold gives 60).
+    b = _hold_spy(2, cfg_layout="ticker", at_draw=120)
+    a = _card("ticker", 0)
+    await _ticker_pass([a, b], 3.0, monkeypatch, width=512)
+    assert 0 < b.shown < CELEBRATION_FRAMES
+    await _ticker_pass([a, b], 3.0, monkeypatch, width=512)
+    assert b.shown == CELEBRATION_FRAMES and b.pending == []

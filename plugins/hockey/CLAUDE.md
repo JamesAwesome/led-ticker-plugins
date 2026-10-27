@@ -112,12 +112,14 @@ cursor and raw otherwise (a later copy's cursor already chains off the shifted f
 `hold_time` is not read in scroll modes.
 
 **Draw return is absolute** — `draw()` returns `cursor_pos + content width` (core's
-contract, like `widgets/message.py`): held layouts paint at `cursor_pos`
+contract, like `widgets/message.py`): the hi-res held board paints at `cursor_pos`
 (`render_scoreboard(..., x_offset=)`, through `_paint.ShiftedReal`, clipped at both edges)
-and return `cursor_pos + canvas.width`; the hi-res crawl returns
+and returns `cursor_pos + canvas.width`; the hi-res crawl returns
 `cursor_pos + run + padding`. Only the celebration takeover returns a bare `canvas.width`.
 Core ends a widget in a `ticker` / `one_at_a_time` section only once that end goes
-negative, so a constant return wedges the section on the first card forever (#113).
+negative, so a constant return wedges the section on the first card forever (#113). The
+scale-1 band board returns `cursor_pos + width` too but still PAINTS at x = 0 (see Known
+gaps).
 Tripwires: `test_scroll_two_hires_cards_completes` and
 `test_scroll_with_celebration_completes` drive core's REAL `_scroll_one_by_one` /
 `_scroll_side_by_side` (`test_card_dispatch.py`, core-internal imports are fine in
@@ -182,14 +184,27 @@ reaches only the scale-1 ticker message.
   are unverified against a live game; capture a real payload as a fixture when one is on.
 - The scale-1 `ticker` layout's clock text updates per poll; boards and hi-res tick per second.
 - Scroll-mode takeover vs core's end-of-scroll hold (`ticker` sections only; `hold_at_end`
-  is the section `hold_time`, default 3 s): a run that starts before the hold always plays
-  in full, because the takeover's `canvas.width` end keeps core from fetching the section's
-  end sentinel, so the hold cannot begin until the run is over. Only a goal landing while
-  the LAST card is already in the hold is cut, to what is left of the hold; the rest plays
-  on the card's next pass, unless a section transition resets the card first (it is the
-  section's first card), which consumes the shown goal. No `hold_time` rules it out; a longer
-  one only makes it rarer (`test_goal_inside_the_end_hold_is_cut_then_resumes`,
-  `test_last_card_celebration_before_the_end_hold_plays_in_full`).
+  is the section `hold_time`, default 3 s): any celebration on the section's LAST card can be
+  cut once that card's end is inside the panel. Core starts the hold when the last buffered
+  widget's end is `<= canvas.width` and it has fetched the end sentinel. The takeover's
+  `canvas.width` end satisfies the first condition, and the sentinel is fetched as soon as
+  the last card's end is inside the panel while it is not first. So a last card narrower than
+  the panel (fully visible behind the previous card) has the hold start the moment the
+  previous card pops, mid-run. A card at least as wide as the panel only reaches it through
+  the hold itself. The run is cut to what is left of the hold and the rest plays on the
+  card's next pass, unless a section transition resets the card first (it is the section's
+  first card), which consumes the shown goal. No `hold_time` rules it out
+  (`test_narrow_last_card_celebration_is_cut_then_resumes`,
+  `test_goal_inside_the_end_hold_is_cut_then_resumes`,
+  `test_wide_last_card_celebration_before_the_end_hold_plays_in_full`).
+- A card celebrating at buffer index > 0 while the card to its left is still visible: the left
+  card keeps scrolling under the takeover and the frozen card resumes where its run began,
+  so a gap of up to 80 columns opens after the left card. By design (the celebrating card's
+  own board is never skipped).
+- The scale-1 band board (`_scoreboard.HockeyBandBoard.draw`) paints at x = 0 whatever the
+  cursor and `Fill`s the whole canvas with `bg_color`. It returns `cursor_pos + width`, so
+  scroll sections do not wedge, but a smallsign scoreboard does not visually scroll, and in
+  a side-by-side section it wipes the widget to its left. Pre-existing; not fixed here.
 - Celebration and demo timing in scroll modes count scroll ticks: 80 frames (and the demo's
   240-frame rest) are 4 s (12 s) only at the default `scroll_step_ms` of 50 ms; the
   end-of-scroll hold always ticks at 50 ms.
