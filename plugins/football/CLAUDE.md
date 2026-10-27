@@ -127,6 +127,11 @@ extra `reset_frame` before `_show_one`'s is not counted). Scroll-mode sections h
 visits: a self-started run's end records `_demo_rest_from`, and the demo re-queues once
 `DEMO_REST_FRAMES` (3 x 80 = 240, 12 s) live frames pass with nothing pending.
 
+**`run_monitor_loop(..., splay=False)`** — core's default splay adds a fixed random
+0–60 s to the poll interval at startup, which turned the 15 s live cadence into 29 s
+on hardware. The shared source rate-limits itself (`_next_allowed`), so the widget
+loop must not add jitter (`test_start_registers_interest_updates_and_spawns`).
+
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the scale-1 `SegmentMessage` joins the same list.
 

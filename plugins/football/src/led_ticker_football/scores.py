@@ -324,7 +324,10 @@ class FootballScoreMonitor:
             widget.mode,
             interval,
         )
-        spawn_tracked(run_monitor_loop(widget, interval))
+        # splay=False: core's default adds a fixed random 0-60 s to the
+        # interval at startup (a 15 s live poll became 29 s on longboi,
+        # 2026-10-26). The shared source already rate-limits itself.
+        spawn_tracked(run_monitor_loop(widget, interval, splay=False))
         return widget
 
     # --- stories -----------------------------------------------------
