@@ -19,6 +19,7 @@ caps. Raising them is a layout decision, not a threshold one.
 """
 
 import math
+import os
 
 import attrs
 import PIL.features
@@ -99,9 +100,10 @@ def test_bold_glyphs_do_not_fuse_at_any_painted_size(text, size):
 
 
 _FREETYPE_PREMISE = pytest.mark.skipif(
-    PIL.features.version("freetype2") != "2.14.3",
-    reason="premise measured on FreeType 2.14.3 (CI, Python 3.14); a newer "
-    "rasterizer renders the thin-font threshold differently, so re-measure",
+    PIL.features.version("freetype2") != "2.14.3" and not os.environ.get("CI"),
+    reason="premise measured on FreeType 2.14.3; local FreeType differs so this "
+    "is skipped - CI is authoritative; if CI fails here after a Pillow bump, "
+    "re-measure the threshold and update the pinned version",
 )
 
 

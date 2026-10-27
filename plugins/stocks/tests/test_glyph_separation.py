@@ -20,6 +20,7 @@ moved to the Spleen pixel font — `test_dashboard.py` covers those.
 """
 
 import math
+import os
 import re
 from pathlib import Path
 
@@ -149,9 +150,10 @@ def test_painted_bold_sizes_are_covered():
 
 
 _FREETYPE_PREMISE = pytest.mark.skipif(
-    PIL.features.version("freetype2") != "2.14.3",
-    reason="premise measured on FreeType 2.14.3 (CI, Python 3.14); a newer "
-    "rasterizer renders the thin-font threshold differently, so re-measure",
+    PIL.features.version("freetype2") != "2.14.3" and not os.environ.get("CI"),
+    reason="premise measured on FreeType 2.14.3; local FreeType differs so this "
+    "is skipped - CI is authoritative; if CI fails here after a Pillow bump, "
+    "re-measure the threshold and update the pinned version",
 )
 
 
