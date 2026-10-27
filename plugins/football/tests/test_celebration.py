@@ -911,3 +911,32 @@ def test_scroll_mode_run_rebases_when_a_new_pass_starts_mid_run(bigsign):
         _, cursor = c.draw(bigsign, pos)  # run ends
     assert cursor == 100 + bigsign.width
     assert board.call_args.kwargs["x_offset"] == 100
+
+
+def test_second_draw_in_the_same_tick_keeps_the_freeze(bigsign):
+    """A one-team `ticker` section buffers the SAME card twice, so core
+    draws it at p and again at p + w + gap in one tick. The second draw
+    is not a fresh pass: it must neither zero `_x_shift` nor move
+    `_last_cursor`, or the first copy jumps ~80 columns on the next tick."""
+    c = _card()
+    c.queue_plays([_play()])
+    pos = bigsign.width
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        for _ in range(CELEBRATION_FRAMES + 1):
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        shift = c._x_shift
+        assert shift == CELEBRATION_FRAMES
+        c.advance_frame()
+        c.draw(bigsign, pos)
+        assert board.call_args.kwargs["x_offset"] == pos + shift
+        c.draw(bigsign, pos + 200)  # the second copy, same tick
+        assert board.call_args.kwargs["x_offset"] == pos + 200  # raw: no freeze
+        c.advance_frame()
+        c.draw(bigsign, pos - 1)
+        assert board.call_args.kwargs["x_offset"] == pos - 1 + shift  # intact

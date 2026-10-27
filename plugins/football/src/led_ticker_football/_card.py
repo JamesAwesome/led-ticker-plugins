@@ -136,6 +136,7 @@ class FootballGameCard(FrameAwareBase):
     _run_cursor: int = attrs.field(init=False, default=0)
     _x_shift: int = attrs.field(init=False, default=0)
     _last_cursor: int | None = attrs.field(init=False, default=None)
+    _shift_frame: int = attrs.field(init=False, default=-1)  # frame whose 1st draw ran
     _run_frame: int = attrs.field(init=False, default=-1)
     _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
@@ -352,16 +353,23 @@ class FootballGameCard(FrameAwareBase):
         y_offset: int = 0,
         font_color: Any = None,
     ) -> DrawResult:
-        if self._last_cursor is None or cursor_pos > self._last_cursor:
-            self._x_shift = 0  # a fresh pass: draw honestly again
-            if self._run_start is not None:
-                # Mid-run pass change (the widget to the left exited): the
-                # takeover now "began" here, in the new pass's coordinates.
-                self._run_cursor = cursor_pos
-        self._last_cursor = cursor_pos
+        # Only the FIRST draw of a tick touches the freeze state: a one-team
+        # ticker section buffers the same card twice and draws the second
+        # copy further right in the same tick, which is not a fresh pass.
+        first_of_tick = self._frame_count != self._shift_frame
+        if first_of_tick and not self._frame_paused:
+            self._shift_frame = self._frame_count
+            if self._last_cursor is None or cursor_pos > self._last_cursor:
+                self._x_shift = 0  # a fresh pass: draw honestly again
+                if self._run_start is not None:
+                    # Mid-run pass change (the widget to the left exited):
+                    # the takeover now "began" here, in the new coordinates.
+                    self._run_cursor = cursor_pos
+            self._last_cursor = cursor_pos
         if self._celebrate(canvas, y_offset, cursor_pos):
             return canvas, canvas.width
-        cursor_pos += self._x_shift
+        if first_of_tick or self._frame_paused:
+            cursor_pos += self._x_shift  # later same-tick copies paint raw
         scale = safe_scale(canvas)
         real = unwrap_to_real(canvas)
         layout = resolve_layout(self.cfg_layout, scale, real.width)
@@ -432,7 +440,7 @@ class FootballGameCard(FrameAwareBase):
             self._playing = list(self.pending)
         self._run_start = None  # a visit's run starts at frame 0
         self._demo_rest_from = None  # visits re-arm by count instead
-        self._x_shift, self._last_cursor = 0, None
+        self._x_shift, self._last_cursor, self._shift_frame = 0, None, -1
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()
