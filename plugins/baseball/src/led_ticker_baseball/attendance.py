@@ -727,9 +727,9 @@ class MLBAttendanceMonitor:
 
         layout = cfg.get("layout", "auto")
         if layout not in _ATTENDANCE_VALID_LAYOUTS:
+            valid = ", ".join(repr(v) for v in _ATTENDANCE_VALID_LAYOUTS)
             msgs.append(
-                f"attendance layout={layout!r} is not valid. "
-                "Use 'auto', 'big', or 'long'."
+                f"attendance layout={layout!r} is not valid. Use one of {valid}."
             )
 
         no_data = cfg.get("no_data", "show")

@@ -36,17 +36,17 @@ def test_layout_hint_matches_validated_enum(widget_cls, valid_layouts):
     assert default == '"auto"'
 
 
-def test_list_fields_shows_standings_layout_enum():
+@pytest.mark.parametrize(
+    ("widget_cls", "valid_layouts"), _CASES, ids=lambda v: getattr(v, "__name__", None)
+)
+def test_list_fields_shows_layout_enum(widget_cls, valid_layouts):
     from led_ticker.app.factories import _list_widget_fields
     from led_ticker.widgets import _WIDGET_REGISTRY
 
-    prior = _WIDGET_REGISTRY.get("baseball.standings")
-    _WIDGET_REGISTRY["baseball.standings"] = MLBStandingsMonitor
+    name = f"baseball.{widget_cls.__name__}"
+    _WIDGET_REGISTRY[name] = widget_cls
     try:
-        out = _list_widget_fields("baseball.standings")
+        out = _list_widget_fields(name)
     finally:
-        if prior is None:
-            _WIDGET_REGISTRY.pop("baseball.standings", None)
-        else:
-            _WIDGET_REGISTRY["baseball.standings"] = prior
-    assert '"auto" | "ticker" | "board"' in out
+        _WIDGET_REGISTRY.pop(name, None)
+    assert " | ".join(f'"{v}"' for v in valid_layouts) in out

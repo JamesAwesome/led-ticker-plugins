@@ -347,10 +347,8 @@ class MLBStatcastMonitor:
             msgs.append(f"statcast team={team!r} must be a string abbreviation.")
         layout = cfg.get("layout", "auto")
         if layout not in _STATCAST_VALID_LAYOUTS:
-            msgs.append(
-                f"statcast layout={layout!r} is not valid. "
-                "Use 'auto', 'big', or 'long'."
-            )
+            valid = ", ".join(repr(v) for v in _STATCAST_VALID_LAYOUTS)
+            msgs.append(f"statcast layout={layout!r} is not valid. Use one of {valid}.")
         # `team` is optional (league-wide is a fully supported mode already),
         # so unlike scores/standings/promotions there is no "required unless
         # demo" rule here — `demo` just needs to be a bool.
