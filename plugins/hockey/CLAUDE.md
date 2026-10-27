@@ -35,7 +35,8 @@ Python **3.14+** only (no `from __future__ import annotations`). `led-ticker-cor
 `tests/test_import_purity.py`.
 
 **The source never raises** (`_source.py`) — every network and parse error becomes
-`stale` + backoff (2x interval, doubling, capped at 4 h); a bad payload keeps the last
+`stale` + backoff (2x interval, doubling, capped at 4 h; until the first successful poll
+it starts from `LIVE_INTERVAL`, since an empty source reads idle); a bad payload keeps the last
 good games. A game that drops out of the feed keeps its last state: NEVER infer a final
 from a game disappearing. `polled_at` is wall-clock epoch seconds.
 
@@ -59,7 +60,8 @@ football). The shared source rate-limits itself, so the widget loop must not add
 skips the next-game lookup (and its `next_games` entry is dropped) only while it has a
 LIVE game or a final inside the hold at the SHORTEST widget hold (`_next_hold_hours`). A
 future game never counts — a post-midnight game is not "later today" and must come from
-the lookup. Diverge the two and a team's card vanishes after its final's hold
+the lookup. A live game absent from one payload keeps the live cadence for `LIVE_GRACE` (30 min)
+(`_cadence` only); `_playing` reads `_games` unchanged, matching `select_stories`. Diverge the two and a team's card vanishes after its final's hold
 (`test_next_game_returns_after_final_hold`).
 
 **First-sight goal baseline lives in the source; celebrated state lives on the widget/card**

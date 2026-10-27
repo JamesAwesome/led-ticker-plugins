@@ -36,6 +36,7 @@ IDLE_INTERVAL = 3600
 SEASON_INTERVAL = 6 * 3600
 MIN_INTERVAL = 10
 MAX_BACKOFF = 4 * 3600
+LIVE_GRACE = 30 * 60  # a live game missing from one payload stays live this long
 REQUEST_TIMEOUT = 20
 _MAX_SHARED_SOURCES = 8
 _USER_AGENT = "led-ticker-hockey (+https://github.com/JamesAwesome/led-ticker-plugins)"
@@ -85,6 +86,7 @@ class NHLSource:
         self._known_goals: dict[int, set[str]] = {}
         self._situations: dict[int, Any] = {}
         self._backoff = 0
+        self._ever_ok = False
         self._next_allowed = float("-inf")
         self.snapshot = Snapshot()
 
@@ -137,8 +139,23 @@ class NHLSource:
 
     # ------------------------------------------------------------- cadence
 
+    def _active(self) -> list[GameInfo]:
+        """Games that drive cadence and selection: this payload's, plus a
+        LIVE game a partial payload left out, for `LIVE_GRACE` after it was
+        last seen (the card still shows it live, so polling must stay live)."""
+        now_utc = self._wall()
+        out: list[GameInfo] = []
+        for gid, g in self._games.items():
+            if gid in self._latest_ids:
+                out.append(g)
+            elif g.state == "live":
+                seen = self._last_seen.get(gid)
+                if seen is not None and (now_utc - seen).total_seconds() <= LIVE_GRACE:
+                    out.append(g)
+        return out
+
     def _cadence(self) -> float:
-        games = [g for i, g in self._games.items() if i in self._latest_ids]
+        games = self._active()
         if any(g.state == "live" for g in games):
             return max(MIN_INTERVAL, self._live_interval)
         if any(g.state == "future" for g in games):
@@ -176,7 +193,9 @@ class NHLSource:
             return self.snapshot
 
     def _fail(self, message: str) -> None:
-        base = max(MIN_INTERVAL, self._cadence())
+        # Before anything ever loaded the cadence reads IDLE (no games): a
+        # sign that boots before its network must retry in seconds, not hours.
+        base = max(MIN_INTERVAL, self._cadence()) if self._ever_ok else LIVE_INTERVAL
         self._backoff = (
             min(MAX_BACKOFF, self._backoff * 2) if self._backoff else 2 * base
         )
@@ -269,6 +288,7 @@ class NHLSource:
         await self._refresh_next(fetched)
 
         self._backoff = 0
+        self._ever_ok = True
         self.snapshot = Snapshot(
             games=dict(self._games), next_games=dict(self._next), stale=False
         )

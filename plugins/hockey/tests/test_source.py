@@ -3,7 +3,7 @@ No network: a fake aiohttp-shaped session and injected clocks."""
 
 import copy
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -12,6 +12,7 @@ import pytest
 from led_ticker_hockey import _source as src
 from led_ticker_hockey._source import (
     IDLE_INTERVAL,
+    LIVE_GRACE,
     LIVE_INTERVAL,
     MAX_BACKOFF,
     PREGAME_INTERVAL,
@@ -309,14 +310,63 @@ async def test_note_displayed_union_across_consumers():
     assert l1 in session.urls and l2 in session.urls
 
 
-async def test_cadence_ignores_vanished_games():
+async def test_first_poll_failure_backs_off_from_live_interval():
+    """Nothing has ever loaded, so the cadence says IDLE (1 h): a Pi that
+    boots before the network is up on game day must not wait 2 h to retry."""
+    s, _, clock = make({TODAY: (500, {})})
+    snap = await s.poll()
+    assert snap.stale is True
+    assert s.next_delay() == 2 * LIVE_INTERVAL
+    clock.advance(s.next_delay())
+    await s.poll()
+    assert s.next_delay() == 4 * LIVE_INTERVAL
+
+
+async def test_failure_after_first_success_backs_off_from_cadence():
+    s, session, clock = make({TODAY: (200, {"games": []})})
+    await s.poll()
+    session.routes[TODAY] = (500, {})
+    clock.advance()
+    await s.poll()
+    assert s.next_delay() == 2 * IDLE_INTERVAL
+
+
+async def test_partial_payload_keeps_the_live_cadence():
+    """The feed occasionally answers without a live game. The card keeps
+    showing it live, so polling must stay live, not drop to hourly."""
     s, session, clock = make({TODAY: (200, fx("score_live"))})
     await s.poll()
     assert s.next_delay() == LIVE_INTERVAL
+    session.routes[TODAY] = (200, {"games": []})  # the game vanished for one poll
+    clock.advance(20)
+    snap = await s.poll()
+    assert snap.stale is False and LIVE_ID in snap.games
+    assert s.next_delay() == LIVE_INTERVAL
+    assert "PHI" in s._playing()
+
+
+async def test_partial_payload_keeps_team_out_of_next_game_lookup():
+    s, session, clock = make({TODAY: (200, fx("score_live"))})
+    await s.poll()
     session.routes[TODAY] = (200, {"games": []})
+    clock.advance(20)
+    n = len(session.calls)
+    await s.poll()
+    assert not [u for u in session.urls[n:] if "/club-schedule" in u]
+
+
+async def test_grace_expires_for_a_live_game_missing_too_long():
+    now = [NOON]
+    session = FakeSession({TODAY: (200, fx("score_live"))})
+    clock = Clock()
+    s = NHLSource(session, clock=clock, wall=lambda: now[0])
+    s.want(teams={"PHI"}, all_games=False, tz=TZ, final_hold_hours=6)
+    await s.poll()
+    session.routes[TODAY] = (200, {"games": []})
+    now[0] = NOON + timedelta(seconds=LIVE_GRACE + 1)
     clock.advance()
     snap = await s.poll()
-    assert LIVE_ID in snap.games
+    assert LIVE_ID in snap.games  # still inside the final hold
     assert s.next_delay() == IDLE_INTERVAL
 
 
