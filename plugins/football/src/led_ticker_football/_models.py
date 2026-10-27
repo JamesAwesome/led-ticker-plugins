@@ -144,7 +144,7 @@ def period_label(period: int, status: str) -> str:
     if short is not None:
         return short
     if status == "STATUS_END_PERIOD":
-        return f"END Q{period}"
+        return f"END {period_label(period, '')}"
     if period > _PERIODS:
         n = period - _PERIODS
         return "OT" if n <= 1 else f"{n}OT"
@@ -190,7 +190,9 @@ def _parse_situation(
         possession=possession,
         down_distance=dd,
         spot=_str(sit.get("possessionText")),
-        red_zone=sit.get("isRedZone") is True,
+        # ESPN leaves `isRedZone` true through the kickoff dead ball after a
+        # score; the text fields exist exactly during a live down.
+        red_zone=sit.get("isRedZone") is True and bool(dd),
         away_timeouts=_int(sit.get("awayTimeouts"), None),
         home_timeouts=_int(sit.get("homeTimeouts"), None),
         last_play=_parse_last_play(sit.get("lastPlay")),
@@ -342,12 +344,17 @@ def winner(game: GameInfo) -> str | None:
 # ----------------------------------------------------------------- scoring
 
 
-def _play_text(game: GameInfo, team: str) -> str:
+_KIND_POINTS = {"TD": 6, "FG": 3, "SAFETY": 2}
+
+
+def _play_text(game: GameInfo, team: str, kind: str) -> str:
     """Upper-cased `lastPlay.text` with the kick/conversion parenthetical
-    stripped, when the last play was this team's score; else ""."""
+    stripped, when the last play was THIS score (same team, the kind's
+    point value); else "". A collapsed +7 poll's last play is the extra
+    point, which must not caption the touchdown."""
     sit = game.situation
     lp = sit.last_play if sit is not None else None
-    if lp is None or lp.score_value <= 0 or lp.team != team:
+    if lp is None or lp.team != team or lp.score_value != _KIND_POINTS.get(kind):
         return ""
     text = lp.text
     if "(" in text:
@@ -361,7 +368,7 @@ def _play(game: GameInfo, team: str, kind: str, extra: str) -> ScoringPlay:
         team=team,
         kind=kind,
         extra=extra,
-        text=_play_text(game, team),
+        text=_play_text(game, team, kind),
         period_label=period_label(game.period, game.status),
         clock=game.clock,
         away_score=game.away_score,
@@ -433,8 +440,11 @@ def diff_scores(
             new.append(_play(game, team, "TD", "+2PT"))
         elif delta >= 6:
             new.append(_play(game, team, "TD", ""))  # two scores in one poll
-        else:  # +1, +4, +5 with nothing to attach to: a correction-shaped bump
-            new.append(_play(game, team, "FG" if delta >= 3 else "SAFETY", ""))
+        elif delta >= 4:
+            new.append(_play(game, team, "FG", ""))  # FG + an earlier try, collapsed
+        # +1 alone is an extra point whose touchdown this source never saw
+        # (the baseline landed between the two, or a glitch restored it):
+        # silent, never a SAFETY.
     return new, follow
 
 

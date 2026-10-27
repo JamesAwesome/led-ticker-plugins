@@ -49,7 +49,9 @@ to one host: the mirror is what survived the August 2026 403s.
 **One scoreboard request per poll; never fetch `summary`** — the week payload carries
 every live `situation`, so `note_displayed` gates nothing. The per-team `schedule`
 endpoint is fetched at most every `SCHEDULE_INTERVAL` (6 h) and ONLY for a tracked team
-with no live/upcoming/held game in the week payload (`_playing`). The ~560 KB
+with no live/upcoming game in the week payload (`_playing`; a HELD final still fetches, so the
+next-game card is ready the moment the hold expires between idle polls —
+`test_schedule_fetched_while_a_final_is_held`). The ~560 KB
 `summary?event=` endpoint is deliberately unused.
 
 **Scoring is DERIVED from score deltas; `lastPlay` only decorates** — the scoreboard has

@@ -113,7 +113,7 @@ def test_parse_situation_dead_ball():
     assert s.possession is None
     assert s.down_distance == ""
     assert s.spot == ""
-    assert s.red_zone is True
+    assert s.red_zone is False  # isRedZone is true at the kickoff dead ball
     assert (s.away_timeouts, s.home_timeouts) == (1, 2)
 
 
@@ -181,6 +181,8 @@ def test_tbd_kickoff(tz):
         (4, "STATUS_IN_PROGRESS", "Q4"),
         (2, "STATUS_HALFTIME", "HALF"),
         (3, "STATUS_END_PERIOD", "END Q3"),
+        (5, "STATUS_END_PERIOD", "END OT"),
+        (6, "STATUS_END_PERIOD", "END 2OT"),
         (5, "STATUS_IN_PROGRESS", "OT"),
         (6, "STATUS_IN_PROGRESS", "2OT"),
         (1, "STATUS_DELAYED", "DELAY"),
@@ -242,6 +244,9 @@ def _td(**kw) -> ScoringPlay:
         ((26, 17), (27, 17), _td(), [], None, "+PAT"),
         ((26, 17), (28, 17), _td(), [], None, "+2PT"),
         ((27, 17), (20, 17), None, [], None, None),
+        # +1 is only ever an extra point: with no touchdown to attach it to
+        # (baseline landed between the TD and its PAT) it is silent, never a SAFETY.
+        ((26, 17), (27, 17), None, [], None, None),
         ((20, 17), (29, 17), None, ["TD"], "", None),
         ((20, 17), (20, 24), None, ["TD"], "+PAT", None),
     ],
@@ -321,3 +326,27 @@ def test_tbd_kickoff_day_is_espn_eastern_date(zone):
     # Even on the eve of the game, a TBD kickoff is not "TONIGHT".
     eve = datetime(2027, 1, 9, 23, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
     assert status_lines(g, eve.timestamp(), tz) == ("SUN JAN 10", "TBD")
+
+
+def test_dead_ball_red_zone_is_not_red():
+    """ESPN reports `isRedZone: true` at a kickoff dead ball (observed live
+    2026-10-26); the red marker belongs to a live down only."""
+    g = parse_event(_event("event_live_deadball.json"), polled_at=T0)
+    assert g.situation is not None
+    assert g.situation.down_distance == ""
+    assert g.situation.red_zone is False
+
+
+def test_play_text_requires_the_kind_score_value():
+    """A collapsed +7 poll's `lastPlay` is the extra point (scoreValue 1):
+    it must not caption the TOUCHDOWN as the kick."""
+    e = _event("event_live.json")
+    lp = e["competitions"][0]["situation"]["lastPlay"]
+    lp["scoreValue"] = 1
+    lp["text"] = "Jake Elliott Made Extra Point"
+    lp["type"] = {"id": "61", "text": "Extra Point Good", "abbreviation": "XP"}
+    live = parse_event(e, polled_at=T0)
+    bumped = GameInfo(**{**live.__dict__, "away_score": 27})
+    plays, _ = diff_scores(bumped, (20, 17), None)
+    assert plays[0].kind == "TD" and plays[0].extra == "+PAT"
+    assert plays[0].text == ""

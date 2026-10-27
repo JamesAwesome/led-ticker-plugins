@@ -155,7 +155,7 @@ async def test_both_hosts_fail_is_stale():
     assert snap.error is not None
     assert "HTTP 403" in snap.error or "network" in snap.error
     assert session.urls == [SB[0], SB[1]]
-    assert s.next_delay() == 2 * IDLE_INTERVAL
+    assert s.next_delay() == 2 * LIVE_INTERVAL  # nothing ever loaded: retry soon
     # Gated: the next poll inside the backoff window makes no request.
     await s.poll()
     assert len(session.urls) == 2
@@ -229,13 +229,37 @@ async def test_touchdown_detected_from_delta():
     assert plays[0].text == "JALEN HURTS 12 YD RUSH"
 
 
+def _situation(possession, dd="", red=False):
+    """A real-shaped `situation`: the text fields exist only on a live down."""
+    sit = {
+        "possession": possession,
+        "down": 1 if dd else -1,
+        "distance": 10 if dd else 0,
+        "yardLine": 50,
+        "isRedZone": red,
+        "homeTimeouts": 3,
+        "awayTimeouts": 3,
+    }
+    if dd:
+        sit["shortDownDistanceText"] = dd
+        sit["possessionText"] = "NYG 45"
+    return sit
+
+
+PHI_ID, NYG_ID = "21", "19"
+
+
 async def test_pat_follow_up_merges_into_touchdown():
     s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
     await s.poll()
     session.routes[SB[0]] = (200, week_with(live_event(away=26)))
     clock.advance()
     await s.poll()
-    session.routes[SB[0]] = (200, week_with(live_event(away=27)))
+    # The try: the scoring team still has the ball, no live down yet.
+    session.routes[SB[0]] = (
+        200,
+        week_with(live_event(away=27, situation=_situation(PHI_ID))),
+    )
     clock.advance()
     await s.poll()
     plays = s.plays_after_baseline(LIVE_ID)
@@ -292,7 +316,7 @@ async def test_possession_held_across_dead_ball():
     sit = snap.games[LIVE_ID].situation
     assert sit.possession == "NYG"
     assert sit.down_distance == ""
-    assert sit.red_zone is True
+    assert sit.red_zone is False  # red is for a live down only
     session.routes[SB[0]] = (
         200,
         week_with(live_event(status=HALFTIME, situation=None)),
@@ -417,3 +441,64 @@ async def test_new_score_closes_a_stale_open_touchdown():
         ("FG", ""),
         ("SAFETY", ""),
     ]
+
+
+async def test_schedule_fetched_while_a_final_is_held():
+    """The next-game card must be ready the moment the hold expires, which
+    happens between polls at the idle cadence: fetch the schedule while the
+    final is still held, not an hour after it leaves."""
+    sched_url = f"{HOSTS[0]}{PATH}/teams/NYG/schedule"
+    s, session, _, _ = make(
+        {SB[0]: (200, fx("scoreboard_week7")), sched_url: (200, fx("schedule_phi"))},
+        teams=("NYG",),
+    )
+    snap = await s.poll()
+    assert snap.games["401873016"].state == "final"  # NYG's held final
+    assert session.urls.count(sched_url) == 1
+
+
+async def test_other_side_correction_keeps_open_touchdown():
+    """A correction to the OTHER team's score must not close this team's
+    touchdown: its extra point would then arrive with nothing to attach to."""
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    phi = _situation(PHI_ID)
+    for away, home, sit in ((26, 17, phi), (26, 14, phi), (27, 14, phi)):
+        session.routes[SB[0]] = (
+            200,
+            week_with(live_event(away=away, home=home, situation=sit)),
+        )
+        clock.advance()
+        await s.poll()
+    plays = s.plays_after_baseline(LIVE_ID)
+    assert [(p.kind, p.extra) for p in plays] == [("TD", "+PAT")]
+
+
+async def test_open_touchdown_closes_when_opponent_has_a_live_down():
+    """A TD whose try failed stays open only until the try is over: once the
+    other team runs a live down, a later +2 by this team is a SAFETY."""
+    s, session, clock, _ = make({SB[0]: (200, week_with(live_event()))})
+    await s.poll()
+    polls = (
+        (26, "keep"),
+        (26, _situation(NYG_ID, dd="1st & 10")),
+        (28, _situation(PHI_ID)),
+    )
+    for away, sit in polls:
+        session.routes[SB[0]] = (200, week_with(live_event(away=away, situation=sit)))
+        clock.advance()
+        await s.poll()
+    plays = s.plays_after_baseline(LIVE_ID)
+    assert [(p.kind, p.extra) for p in plays] == [("TD", ""), ("SAFETY", "")]
+
+
+async def test_first_poll_failure_backs_off_from_live_interval():
+    """Nothing has ever loaded, so the cadence says IDLE (1 h): a Pi that
+    boots before the network is up on game day must not wait 2 h to retry."""
+    s, _, clock, _ = make({})
+    snap = await s.poll()
+    assert snap.stale is True
+    assert s.next_delay() == 2 * LIVE_INTERVAL
+    clock.advance(s.next_delay())
+    await s.poll()
+    assert s.next_delay() == 4 * LIVE_INTERVAL

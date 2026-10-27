@@ -31,7 +31,6 @@ from led_ticker_football._models import (
     GameInfo,
     ScoringPlay,
     diff_scores,
-    final_in_hold,
     parse_event,
 )
 
@@ -104,6 +103,9 @@ class ESPNSource:
         self._prev: dict[str, tuple[int, int]] = {}
         self._plays: dict[str, list[ScoringPlay]] = {}
         self._open_td: dict[str, ScoringPlay] = {}
+        self._open_td_period: dict[str, int] = {}
+        # First-ever success; failures before it back off from LIVE_INTERVAL.
+        self._ever_ok = False
         self._backoff = 0
         self._next_allowed = float("-inf")
         self.snapshot = Snapshot()
@@ -188,7 +190,9 @@ class ESPNSource:
             return self.snapshot
 
     def _fail(self, message: str) -> None:
-        base = max(MIN_INTERVAL, self._cadence())
+        # Before anything ever loaded the cadence reads IDLE (no games): a
+        # sign that boots before its network must retry in seconds, not hours.
+        base = max(MIN_INTERVAL, self._cadence()) if self._ever_ok else LIVE_INTERVAL
         self._backoff = (
             min(MAX_BACKOFF, self._backoff * 2) if self._backoff else 2 * base
         )
@@ -283,6 +287,7 @@ class ESPNSource:
                 self._prev,
                 self._plays,
                 self._open_td,
+                self._open_td_period,
             ):
                 store.pop(gid, None)
         for gid in [g for g in self._games if not self._wanted(self._games[g])]:
@@ -291,6 +296,7 @@ class ESPNSource:
         await self._refresh_next()
 
         self._backoff = 0
+        self._ever_ok = True
         self.snapshot = Snapshot(
             games=dict(self._games),
             next_games=dict(self._next),
@@ -330,14 +336,21 @@ class ESPNSource:
         plays = self._plays.setdefault(gid, [])
         if prev is None:
             return  # first sight: whatever is already scored is the baseline
+        td = self._open_td.get(gid)
+        if td is not None and self._try_over(game, td):
+            self._close_td(gid)
         if cur[0] < prev[0] or cur[1] < prev[1]:
             # Correction: forget plays the new score no longer supports.
             plays[:] = [
                 p for p in plays if p.away_score <= cur[0] and p.home_score <= cur[1]
             ]
             td = self._open_td.get(gid)
-            if td is not None and (td.away_score > cur[0] or td.home_score > cur[1]):
-                self._open_td.pop(gid, None)
+            if td is not None:
+                # Only the TD team's OWN side going down overturns it; a
+                # correction to the other side leaves its try to come.
+                side = 0 if td.team == game.away else 1
+                if cur[side] < prev[side]:
+                    self._close_td(gid)
             return
         if cur == prev:
             return
@@ -351,25 +364,40 @@ class ESPNSource:
         if new:
             # Any fresh score closes a touchdown still waiting for its try:
             # a later +1/+2 can't belong to it any more.
-            self._open_td.pop(gid, None)
+            self._close_td(gid)
         for p in new:
             plays.append(p)
             if p.kind == "TD" and not p.extra:
                 self._open_td[gid] = p
+                self._open_td_period[gid] = game.period
+
+    def _close_td(self, gid: str) -> None:
+        self._open_td.pop(gid, None)
+        self._open_td_period.pop(gid, None)
+
+    def _try_over(self, game: GameInfo, td: ScoringPlay) -> bool:
+        """A touchdown waits for its try only until the try is over: a
+        period change, or the OTHER team running a live down (a try is
+        never the opponent's down). A later +2 is then a SAFETY."""
+        if game.period != self._open_td_period.get(game.game_id, game.period):
+            return True
+        sit = game.situation
+        return (
+            sit is not None
+            and sit.possession is not None
+            and sit.possession != td.team
+            and bool(sit.down_distance)
+        )
 
     def _playing(self) -> set[str]:
-        """Teams whose card comes from `_games`: a live game, a game still to
-        come this week, or a final inside the hold (shortest widget hold)."""
-        now_dt = self._wall()
-        hold = self._next_hold_hours or 0
+        """Teams whose card comes from `_games`: a live game or a game still
+        to come this week. A held final does NOT count: its hold expires
+        between polls (idle cadence), and the widget's selection must find
+        the next game ready at that moment, not an hour later."""
         return {
             t
             for gid, g in self._games.items()
-            if gid in self._latest_ids
-            and (
-                g.state in ("live", "future")
-                or (g.state == "final" and final_in_hold(g, now_dt, hold))
-            )
+            if gid in self._latest_ids and g.state in ("live", "future")
             for t in (g.away, g.home)
         }
 
