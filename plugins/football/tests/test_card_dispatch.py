@@ -6,7 +6,12 @@ import dataclasses
 import inspect
 import unittest.mock as mock
 
-from led_ticker.plugin import SegmentMessage, unwrap_to_real
+from led_ticker.plugin import (
+    HeadlessBackend,
+    ScaledCanvas,
+    SegmentMessage,
+    unwrap_to_real,
+)
 
 import led_ticker_football._card as card_mod
 from led_ticker_football._card import FootballGameCard
@@ -128,3 +133,31 @@ def test_hires_ticker_passes_stale_and_bye(bigsign):
         c.draw(bigsign)
     assert spy.call_args.kwargs["stale"] is True
     assert spy.call_args.kwargs["bye"] is True
+
+
+def _lit_cols(real):
+    return {x for (x, _y), v in real._pixels.items() if v != (0, 0, 0)}
+
+
+def _fresh_bigsign():
+    real = HeadlessBackend(256, 64).create_canvas()
+    return ScaledCanvas(real, scale=4, content_height=16), real
+
+
+def test_scale4_scoreboard_scrolls_with_cursor_pos(bigsign):
+    """A `ticker` / `one_at_a_time` section hands the card a moving
+    cursor; the board must paint there and report its right edge, or the
+    engine never sees it leave and the section wedges forever."""
+    _card().draw(bigsign)
+    cols0 = _lit_cols(unwrap_to_real(bigsign))
+    assert cols0
+
+    canvas, real = _fresh_bigsign()
+    _, cursor = _card().draw(canvas, 10)
+    assert cursor == 10 + canvas.width
+    assert _lit_cols(real) == {x + 40 for x in cols0 if x + 40 < 256}
+
+    canvas, real = _fresh_bigsign()
+    _, cursor = _card().draw(canvas, -20)
+    assert cursor == -20 + canvas.width
+    assert _lit_cols(real) == {x - 80 for x in cols0 if x >= 80}

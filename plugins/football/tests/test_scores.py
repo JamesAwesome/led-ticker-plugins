@@ -343,6 +343,23 @@ class TestPlays:
         await w.update()
         assert [p.key for p in card.pending] == ["1:33:24"]
 
+    async def test_live_mode_keeps_finished_card_until_its_score_shows(self):
+        live = game(1, "live")
+        w = _widget(_snap(live), {"1": ()}, mode="live")
+        await w.update()  # baseline
+        assert [c.game.game_id for c in w.feed_stories] == ["1"]
+        # The winning field goal and the final arrive in the same poll.
+        w._source.plays["1"] = (play("1:29:17", kind="FG", away=29, home=17),)
+        w._source.snapshot = _snap(game(1, "final", away_score=29, home_score=17))
+        await w.update()
+        assert len(w.feed_stories) == 1
+        assert [p.key for p in w.feed_stories[0].pending] == ["1:29:17"]
+        assert w.feed_stories[0].game.state == "final"
+        # Once shown, the card leaves the live rotation.
+        w.feed_stories[0].pending.clear()
+        await w.update()
+        assert w.feed_stories == []
+
     async def test_follow_up_replaces_pending_play(self):
         live = game(1, "live", away_score=20, home_score=17)
         w = _widget(_snap(live))

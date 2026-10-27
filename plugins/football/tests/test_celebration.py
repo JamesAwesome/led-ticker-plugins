@@ -825,3 +825,32 @@ def test_hidden_card_run_does_not_advance(bigsign):
         b.advance_frame()
         b.draw(bigsign)
     assert flash.call_args.args[2] is True  # phase 1: still flash_on
+
+
+def test_scroll_mode_run_freezes_cursor_until_next_pass(bigsign):
+    """The engine keeps decrementing `pos` during the 4 s takeover. The
+    board must resume where the takeover began, not 80 px further left
+    (three queued scores would skip the game's own score line)."""
+    c = _card()
+    c.queue_plays([_play()])
+    pos = bigsign.width
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        for _ in range(CELEBRATION_FRAMES):  # self-starts on the first draw
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        c.advance_frame()
+        _, cursor = c.draw(bigsign, pos)  # run ends: the board draws
+    assert pos == bigsign.width - CELEBRATION_FRAMES
+    assert cursor == bigsign.width + bigsign.width  # frozen at the takeover
+    assert board.call_args.kwargs["x_offset"] == bigsign.width
+    # A fresh pass (the cursor jumps back up) draws honestly again.
+    c.advance_frame()
+    with mock.patch.object(card_mod, "render_scoreboard") as board:
+        _, cursor = c.draw(bigsign, 30)
+    assert cursor == 30 + bigsign.width
+    assert board.call_args.kwargs["x_offset"] == 30

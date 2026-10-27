@@ -398,8 +398,17 @@ class FootballScoreMonitor:
             card.stale = snap.stale
             card.bye = team is not None and team in snap.bye_teams
             cards[key] = card
+        self._queue_plays(source, snap, cards)
+        # A game that left the selection (live mode: it just went final)
+        # on the very poll that scored keeps its card until the score has
+        # actually flashed; `pending` empties once it was shown.
+        for key, card in self._cards.items():
+            gid = str(key)
+            if key not in cards and gid in snap.games and card.pending:
+                card.game = snap.games[gid]
+                card.stale = snap.stale
+                cards[key] = card
         self._cards = cards
-        self._queue_plays(source, snap)
         source.note_displayed(self, {k for k in cards if not k.startswith("next:")})
         self.feed_stories = list(cards.values())
         logger.info(
@@ -408,7 +417,12 @@ class FootballScoreMonitor:
             " (stale)" if snap.stale else "",
         )
 
-    def _queue_plays(self, source: ESPNSource, snap: Snapshot) -> None:
+    def _queue_plays(
+        self,
+        source: ESPNSource,
+        snap: Snapshot,
+        cards: dict[_CardKey, FootballGameCard],
+    ) -> None:
         """Queue scoring plays this widget hasn't celebrated onto their cards.
 
         A game's first sight by THIS widget is a silent baseline, so a hot
@@ -454,7 +468,7 @@ class FootballScoreMonitor:
                 snap_key = pre_extra_score(p, game.home)
                 (changed if snap_key in scores else fresh).append(p)
                 scores.add(snap_key)
-            card = self._cards.get(gid)
+            card = cards.get(gid) or self._cards.get(gid)
             if card is not None:
                 card.queue_plays(fresh)
                 card.replace_plays(changed)

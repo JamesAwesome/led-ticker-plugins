@@ -138,6 +138,13 @@ class FootballGameCard(FrameAwareBase):
     # is actually DRAWN, so a run hidden behind another takeover (still
     # advanced by core, not drawn) never burns out unseen.
     _run_pos: int = attrs.field(init=False, default=0)
+    # Scroll sections: the engine keeps decrementing `pos` under a takeover.
+    # `_run_cursor` is the EFFECTIVE cursor where a self-started run began;
+    # `_x_shift` (effective = raw + shift) freezes the card there until the
+    # raw cursor next increases (a fresh pass), tracked in `_last_cursor`.
+    _run_cursor: int = attrs.field(init=False, default=0)
+    _x_shift: int = attrs.field(init=False, default=0)
+    _last_cursor: int | None = attrs.field(init=False, default=None)
     _run_frame: int = attrs.field(init=False, default=-1)
     _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
@@ -225,8 +232,9 @@ class FootballGameCard(FrameAwareBase):
             self.highlight = (team, left - 1) if left > 1 else None
         return fade
 
-    def _celebrate(self, canvas: Any, y_offset: int) -> bool:
-        """Paint the celebration frame if one is due; True when painted."""
+    def _celebrate(self, canvas: Any, y_offset: int, cursor_pos: int) -> bool:
+        """Paint the celebration frame if one is due; True when painted.
+        `cursor_pos` is the RAW engine cursor of this draw."""
         live = not self._frame_paused and self._frame_count > 0
         rest = self._demo_rest_from
         if (
@@ -243,6 +251,7 @@ class FootballGameCard(FrameAwareBase):
             self._playing = list(self.pending)
             self._run_start = self._frame_count
             self._run_pos, self._run_frame = 0, self._frame_count
+            self._run_cursor = cursor_pos + self._x_shift
         playing = self._playing
         if not playing or self._frame_paused:
             return False  # paused = transition compositing: the board
@@ -256,7 +265,7 @@ class FootballGameCard(FrameAwareBase):
         phase = phase_at(frame, len(playing))
         if phase is None:
             if self._run_start is not None:
-                self._end_self_started_run()
+                self._end_self_started_run(cursor_pos)
             return False
         idx, name, f = phase
         play = playing[idx]
@@ -283,10 +292,12 @@ class FootballGameCard(FrameAwareBase):
             )
         return True
 
-    def _end_self_started_run(self) -> None:
+    def _end_self_started_run(self, cursor_pos: int) -> None:
         """Consume what the run showed, as `reset_frame` does at visit
         entry, and start a demo card's rest. The next live draw may
-        self-start again from whatever is still pending."""
+        self-start again from whatever is still pending. The board resumes
+        where the takeover began: effective = raw + `_x_shift`."""
+        self._x_shift = self._run_cursor - cursor_pos
         self._consume_shown()
         self._playing = None
         self._run_start = None
@@ -353,8 +364,12 @@ class FootballGameCard(FrameAwareBase):
     ) -> DrawResult:
         if safe_scale(canvas) > 1:
             self.scale_memo.hires = True
-        if self._celebrate(canvas, y_offset):
+        if self._last_cursor is None or cursor_pos > self._last_cursor:
+            self._x_shift = 0  # a fresh pass: draw honestly again
+        self._last_cursor = cursor_pos
+        if self._celebrate(canvas, y_offset, cursor_pos):
             return canvas, canvas.width
+        cursor_pos += self._x_shift
         scale = safe_scale(canvas)
         real = unwrap_to_real(canvas)
         layout = resolve_layout(self.cfg_layout, scale, real.width)
@@ -394,8 +409,9 @@ class FootballGameCard(FrameAwareBase):
             stale=self.stale,
             highlight=self._board_highlight(),
             bye=self.bye,
+            x_offset=cursor_pos,
         )
-        return canvas, canvas.width
+        return canvas, cursor_pos + canvas.width
 
     def advance_frame(self, *, visit_id: int | None = None) -> None:
         super().advance_frame(visit_id=visit_id)
@@ -425,6 +441,7 @@ class FootballGameCard(FrameAwareBase):
         self._playing = list(self.pending)
         self._run_start = None  # a visit's run starts at frame 0
         self._demo_rest_from = None  # visits re-arm by count instead
+        self._x_shift, self._last_cursor = 0, None
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()

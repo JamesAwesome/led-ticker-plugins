@@ -135,6 +135,15 @@ loop must not add jitter (`test_start_registers_interest_updates_and_spawns`).
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the scale-1 `SegmentMessage` joins the same list.
 
+**Hi-res `draw()` honours `cursor_pos`** — the scale>1 scoreboard paints at
+`cursor_pos` (`render_scoreboard(..., x_offset=)`, via `_paint.ShiftedReal`) and returns
+`cursor_pos + canvas.width`; a constant `canvas.width` return never goes negative, so a
+`ticker` / `one_at_a_time` section wedges on the first card forever
+(`test_scale4_scoreboard_scrolls_with_cursor_pos`). A self-started celebration run freezes
+the card's EFFECTIVE cursor (`_x_shift`, cleared when the raw cursor next increases = a
+fresh pass) because the engine keeps decrementing `pos` under the takeover
+(`test_scroll_mode_run_freezes_cursor_until_next_pass`).
+
 **Layout invariant (CONTRIBUTING.md)** — measured widths (`_paint.text_width`), >= 6 px
 (`_MIN_GAP`) between texts/shapes sharing a vertical band, row-uniform name sizes,
 ellipsis at the floor. The situation line drops ` · spot` BEFORE ellipsizing so the down &
