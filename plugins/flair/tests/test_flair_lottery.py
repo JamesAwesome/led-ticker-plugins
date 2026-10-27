@@ -2,8 +2,10 @@
 the ball-face painter (Task 2), and widget config validation +
 registration (Task 4)."""
 
+import asyncio
 import logging
 import math
+import unittest.mock as mock
 
 import pytest
 from led_ticker.plugin import (
@@ -14,6 +16,8 @@ from led_ticker.plugin import (
     make_rotation_surface,
     unwrap_to_real,
 )
+from led_ticker.ticker import Ticker
+from led_ticker.transitions.push import PushLeft
 
 from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair.lottery import (
@@ -538,11 +542,11 @@ class TestLotteryWidget:
         assert border.calls == [0], "border must see the canvas before ball pixels"
         assert canvas.real.count_nonzero() > 0
 
-    def test_returns_canvas_and_zero_cursor(self) -> None:
+    def test_returns_canvas_and_absolute_end(self) -> None:
         canvas = _make_wrapper()
         widget = self._widget()
-        assert widget.draw(canvas) == (canvas, 0)
-        assert widget.draw(canvas, y_offset=3) == (canvas, 0)
+        assert widget.draw(canvas) == (canvas, canvas.width)
+        assert widget.draw(canvas, y_offset=3) == (canvas, canvas.width)
 
     def test_y_offset_all_settled_shows_settled_row_shifted(self) -> None:
         """Once every ball has settled, a y_offset draw still shows that
@@ -1257,3 +1261,166 @@ class TestAutoFontSizePixelGrid:
 
         size = auto_font_size("RICE", 48, "Inter-Bold", 4)
         assert size > 0  # unchanged continuous behavior
+
+
+# --- scroll-mode contract: draw() returns an ABSOLUTE end ------------------
+# Core's `ticker` / `one_at_a_time` loops pop a widget only when the returned
+# end is < 0; the old `canvas, 0` return wedged a section on its first widget.
+
+
+def _lit(real) -> dict:
+    out = {}
+    for x in range(real.width):
+        for y in range(real.height):
+            v = real.get_pixel(x, y)
+            if v != (0, 0, 0):
+                out[(x, y)] = v
+    return out
+
+
+def _settled_widget(**kwargs) -> Lottery:
+    widget = Lottery(words=["cat", "dog", "fox"], **kwargs)
+    canvas = _make_wrapper()
+    widget.draw(canvas)  # build surfaces
+    for _ in range(ticks_per_ball(widget.roll_ms) * 3 + 5):
+        widget.advance_frame()
+    return widget
+
+
+async def _drive(loop_name, monkeypatch) -> None:
+    real_sleep = asyncio.sleep
+
+    async def _zero_sleep(_s):
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", _zero_sleep)
+    canvas = _make_wrapper()
+    frame = mock.Mock()
+    frame.swap.side_effect = lambda r: r
+    queue: asyncio.Queue = asyncio.Queue()
+    for w in [Lottery(words=["a", "b"]), Lottery(words=["c", "d"]), None]:
+        queue.put_nowait(w)
+    ticker = Ticker(monitors=[], frame=frame, notif_queue=queue, scroll_speed=0)
+    await asyncio.wait_for(getattr(ticker, loop_name)(canvas), 1.5)
+    assert queue.empty()
+
+
+async def test_one_at_a_time_advances_past_two_lotteries(monkeypatch) -> None:
+    await _drive("_scroll_one_by_one", monkeypatch)
+
+
+async def test_ticker_advances_past_two_lotteries(monkeypatch) -> None:
+    await _drive("_scroll_side_by_side", monkeypatch)
+
+
+def test_unscaled_skip_returns_cursor() -> None:
+    real = HeadlessCanvas(width=160, height=16)
+    _, end = Lottery(words=["cat"]).draw(real, cursor_pos=-7)
+    assert end == -7
+    assert real.count_nonzero() == 0
+
+
+def test_scaled_end_is_absolute_and_balls_shift() -> None:
+    c0 = _make_wrapper()
+    w0 = _settled_widget()
+    _, end0 = w0.draw(c0)
+    assert end0 == c0.width
+    base = _lit(c0.real)
+    assert base
+
+    for cursor in (-40, 17):
+        c = _make_wrapper()
+        _, end = _settled_widget().draw(c, cursor)
+        assert end == cursor + c.width
+        dx = cursor * _SCALE
+        expect = {
+            (x + dx, y): v for (x, y), v in base.items() if 0 <= x + dx < _PANEL_W
+        }
+        assert _lit(c.real) == expect
+
+
+def test_border_paints_at_every_cursor() -> None:
+    border = _RecordingBorder()
+    widget = Lottery(words=["cat"], border=border)
+    for n, cursor in enumerate((0, 17, -40), start=1):
+        widget.draw(_make_wrapper(), cursor)
+        assert len(border.calls) == n
+
+
+def _assert_shifted(make_draw, cursor=17) -> None:
+    """`make_draw(cursor)` -> real canvas of a fresh widget drawn at cursor."""
+    base = _lit(make_draw(0))
+    assert base
+    dx = cursor * _SCALE
+    expect = {(x + dx, y): v for (x, y), v in base.items() if 0 <= x + dx < _PANEL_W}
+    assert expect
+    assert _lit(make_draw(cursor)) == expect
+
+
+def test_mid_roll_balls_shift_with_cursor() -> None:
+    def draw(cursor):
+        widget = Lottery(words=["cat", "dog", "fox"])
+        widget.draw(_make_wrapper())
+        for _ in range(8):
+            widget.advance_frame()
+        assert not all(widget._settled)  # at least one ball still rolling
+        canvas = _make_wrapper()  # fresh: no stale frame-0 pixels
+        widget.draw(canvas, cursor)
+        return canvas.real
+
+    _assert_shifted(draw, -40)
+    # A rolling ball enters from off-panel left, so the cursor-0 render clips
+    # content a positive cursor reveals: check cursor 0 == cursor 17 shifted
+    # left, over the strip cursor 17 did not clip off the right edge.
+    dx = -17 * _SCALE
+    expect = {
+        (x + dx, y): v for (x, y), v in _lit(draw(17)).items() if 0 <= x + dx < _PANEL_W
+    }
+    assert expect
+    hi = _PANEL_W - 17 * _SCALE
+    got = {xy: v for xy, v in _lit(draw(0)).items() if xy[0] < hi}
+    assert got == {xy: v for xy, v in expect.items() if xy[0] < hi}
+
+
+def test_rest_surface_balls_shift_with_cursor() -> None:
+    def draw(cursor):
+        widget = _settled_widget()
+        widget.draw(_make_wrapper())  # settles everything into the rest surface
+        assert all(widget._settled)
+        canvas = _make_wrapper()
+        widget.draw(canvas, cursor)  # balls now come from the rest blit
+        return canvas.real
+
+    for cursor in (17, -40):
+        _assert_shifted(draw, cursor)
+
+
+def test_border_receives_the_unshifted_canvas() -> None:
+    seen = []
+
+    class _Border:
+        def paint(self, canvas, frame) -> None:
+            seen.append(canvas)
+
+    widget = Lottery(words=["cat"], border=_Border())
+    canvas = _make_wrapper()
+    widget.draw(canvas, 0)
+    assert seen == [canvas]  # the panel canvas itself, never a shifted wrapper
+
+
+def test_push_left_mid_transition_shifts_lottery_and_keeps_border() -> None:
+    border = _RecordingBorder()
+    lottery = _settled_widget(border=border)
+    before = len(border.calls)  # _settled_widget already drew once
+    canvas = _make_wrapper()
+    PushLeft().frame_at(0.5, canvas, _Blank(), lottery, outgoing_scroll_pos=0)
+    assert len(border.calls) == before + 1  # the border survives the transition
+    lit_x = {x for x, _ in _lit(canvas.real)}
+    assert lit_x
+    # Incoming lottery has slid in from the right: nothing in its left half.
+    assert min(lit_x) >= _PANEL_W // 2 - 8
+
+
+class _Blank:
+    def draw(self, canvas, cursor_pos=0, *, y_offset=0, font_color=None):
+        return canvas, cursor_pos
