@@ -149,9 +149,8 @@ class HockeyBandBoard(FrameAwareBase):
         sit_x = col(_X_SITUATION, [t for t in values if t], value_end)
         for band, (abbrev, _, _) in enumerate(rows):
             y = ys[band]
-            r0 = (
-                band * half_h + y_offset
-            )  # the chip rides PushUp/PushDown with the text
+            # the chip rides PushUp/PushDown with the text
+            r0 = band * half_h + y_offset
             primary, _ = pal.chip(abbrev)
             rect(real, ox, r0, ox + 2, r0 + half_h - 2 + band, primary)
             draw_text(canvas, font, abbrev, ox + _X_ABBREV, y, primary)

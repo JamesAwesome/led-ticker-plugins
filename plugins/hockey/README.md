@@ -108,7 +108,7 @@ All `hockey.scores` widgets in one process share a single source, so several wid
 
 Clocks (game clock, power-play time, intermission countdown) tick locally between polls: the board interpolates from the last poll's timestamp while the clock is running, and clamps at `0:00`.
 
-A failed request keeps the last good games and marks every card `STALE` beside the state, never in place of it. Backoff starts at twice the interval and doubles, capped at four hours. A game that disappears from the feed keeps its last state — a final is never inferred from a game vanishing.
+A failed request keeps the last good games and marks every card `STALE` beside the state, never in place of it. Backoff starts at twice the interval (30 s before the first successful poll) and doubles, capped at four hours. A game that disappears from the feed keeps its last state — a final is never inferred from a game vanishing.
 
 ### Sign checks
 

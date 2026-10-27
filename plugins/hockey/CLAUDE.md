@@ -61,7 +61,9 @@ skips the next-game lookup (and its `next_games` entry is dropped) only while it
 LIVE game or a final inside the hold at the SHORTEST widget hold (`_next_hold_hours`). A
 future game never counts — a post-midnight game is not "later today" and must come from
 the lookup. A live game absent from one payload keeps the live cadence for `LIVE_GRACE`
-(30 min) (`_cadence` only); `_playing` reads `_games` unchanged, matching
+(30 min) (`_cadence` only) at every hold, including 0: the hold prune keeps a live game
+at least that long, and yesterday's feed is also fetched when a cached live game is missing from today's;
+`_playing` reads `_games` unchanged, matching
 `select_stories`. Diverge `select_stories` and `_playing` and a team's card vanishes
 after its final's hold (`test_next_game_returns_after_final_hold`).
 

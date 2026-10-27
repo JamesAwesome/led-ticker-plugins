@@ -251,11 +251,28 @@ class NHLSource:
         )
         try:
             fetched.update(await self._fetch_scores(today, polled_at))
+            yday_date = today - timedelta(days=1)
             if want_yday:
-                yday = await self._fetch_scores(today - timedelta(days=1), polled_at)
+                yday = await self._fetch_scores(yday_date, polled_at)
                 yday_ids = set(yday) - set(fetched)
                 for gid, game in yday.items():
                     fetched.setdefault(gid, game)
+            elif any(
+                g.state == "live" and gid not in fetched
+                for gid, g in self._games.items()
+            ):
+                # A cached live game today's feed omits may have started
+                # before midnight; yesterday's feed is where it lives. Soft:
+                # a failure here keeps today's good payload and lets the game
+                # ride the hold/grace window.
+                try:
+                    yday = await self._fetch_scores(yday_date, polled_at)
+                except Exception as exc:  # noqa: BLE001 — soft
+                    logger.debug("hockey: yesterday feed failed: %s", exc)
+                else:
+                    yday_ids = set(yday) - set(fetched)
+                    for gid, game in yday.items():
+                        fetched.setdefault(gid, game)
         except _FetchError as exc:
             self._fail(str(exc))
             return
@@ -277,7 +294,15 @@ class NHLSource:
                 self._games[gid] = game
                 self._last_seen[gid] = now_utc
                 self._track_goals(game)
-        for gid in [g for g, t in self._last_seen.items() if now_utc - t > hold]:
+        grace = timedelta(seconds=LIVE_GRACE)
+
+        def keep_for(gid: int) -> timedelta:
+            # A live game a partial payload omitted must outlive the hold (0
+            # is valid) long enough for `_active()`'s grace to see it.
+            g = self._games.get(gid)
+            return max(hold, grace) if g is not None and g.state == "live" else hold
+
+        for gid in [g for g, t in self._last_seen.items() if now_utc - t > keep_for(g)]:
             self._games.pop(gid, None)
             self._last_seen.pop(gid, None)
             self._situations.pop(gid, None)
