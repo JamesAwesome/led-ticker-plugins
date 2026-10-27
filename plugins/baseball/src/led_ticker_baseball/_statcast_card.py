@@ -36,6 +36,7 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts import resolve_statcast_layout
 from led_ticker_baseball.layouts.statcast_big import render_statcast_big
 from led_ticker_baseball.layouts.statcast_long import render_statcast_long
@@ -74,7 +75,7 @@ class MLBStatcastCard(FrameAwareBase):
         progress = min(1.0, self._flight_ticks * ENGINE_TICK_MS / FLIGHT_MS)
         if layout == "big":
             render_statcast_big(
-                canvas,
+                shift_canvas(canvas, cursor_pos),
                 self.record,
                 self.player_name,
                 progress,
@@ -84,7 +85,7 @@ class MLBStatcastCard(FrameAwareBase):
             )
         else:
             render_statcast_long(
-                canvas,
+                shift_canvas(canvas, cursor_pos),
                 self.record,
                 self.player_name,
                 progress,
@@ -95,8 +96,9 @@ class MLBStatcastCard(FrameAwareBase):
         # Held layout: return the WRAPPER's logical width (not real.width)
         # so the engine's `cursor_pos > canvas.width` hold-vs-scroll check
         # (core ticker.py) takes the hold branch — same phase-1/2/3 lesson
-        # as MLBGameCard / MLBStandingsBoard / MLBPromoCard.
-        return canvas, canvas.width
+        # as MLBGameCard / MLBStandingsBoard / MLBPromoCard. ABSOLUTE end,
+        # painted at `cursor_pos`, so scroll sections pop it.
+        return canvas, cursor_pos + canvas.width
 
     # Forward frame hooks to the (always-present) legacy story so its
     # frame-aware effects (rainbow / color_cycle font_color) behave at

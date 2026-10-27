@@ -39,6 +39,7 @@ from led_ticker.plugin import (
     safe_scale,
 )
 
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts.standings_board import render_standings_board
 
 if TYPE_CHECKING:
@@ -75,7 +76,7 @@ class MLBStandingsBoard(FrameAwareBase):
         scale = safe_scale(canvas)
         if scale > 1:
             render_standings_board(
-                canvas,
+                shift_canvas(canvas, cursor_pos),
                 self.division_name,
                 self.rows,
                 y_offset=y_offset,
@@ -84,10 +85,11 @@ class MLBStandingsBoard(FrameAwareBase):
             # Held layout: return the WRAPPER's logical width (not the real
             # canvas width) so the engine's `cursor_pos > canvas.width`
             # hold-vs-scroll check (core ticker.py) compares like units and
-            # takes the hold branch — phase-1 lesson (MLBGameCard).
-            return canvas, canvas.width
+            # takes the hold branch — phase-1 lesson (MLBGameCard). ABSOLUTE
+            # end, painted at `cursor_pos`, so scroll sections pop it.
+            return canvas, cursor_pos + canvas.width
         if not self.legacy_rows:
-            return canvas, 0
+            return canvas, cursor_pos
         # Consume the visit's pending advance on the first UNPAUSED draw
         # only — paused draws are transition compositing (see module
         # docstring) and must neither advance nor burn the advance.

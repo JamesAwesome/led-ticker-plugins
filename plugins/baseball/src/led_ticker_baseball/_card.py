@@ -27,6 +27,7 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts import resolve_layout
 from led_ticker_baseball.layouts.crawl import render_crawl
 from led_ticker_baseball.layouts.scoreboard import render_scoreboard
@@ -132,10 +133,11 @@ class MLBGameCard(FrameAwareBase):
                 y_offset=y_offset,
                 hold_padding=self.padding,
             )
-            return canvas, w + self.padding
+            return canvas, cursor_pos + w + self.padding
+        at = shift_canvas(canvas, cursor_pos)
         if layout == "scoreboard":
             render_scoreboard(
-                canvas,
+                at,
                 self.game,
                 self.tz,
                 y_offset=y_offset,
@@ -144,19 +146,20 @@ class MLBGameCard(FrameAwareBase):
             )
         else:
             render_two_row(
-                canvas,
+                at,
                 self.game,
                 self.tz,
                 y_offset=y_offset,
                 story_index=self.story_index,
                 story_total=self.story_total,
             )
-        # Held layout: return the WRAPPER's logical width (not real.width)
-        # so the engine's `cursor_pos > canvas.width` hold-vs-scroll check
-        # (core ticker.py) compares like units and takes the hold branch —
-        # stocks precedent (`getattr(canvas, "width", 0)` in
-        # led_ticker_stocks.ticker._StockStory.draw).
-        return canvas, canvas.width
+        # Held layout: painted at `cursor_pos` (`shift_canvas`) and returns
+        # the ABSOLUTE end `cursor_pos + canvas.width` — the WRAPPER's
+        # logical width (not real.width), so the slideshow's cursor-0
+        # `cursor_pos > canvas.width` hold-vs-scroll check (core ticker.py)
+        # compares like units and holds, and a `ticker` / `one_at_a_time`
+        # section sees the end go below 0 and pops the card.
+        return canvas, cursor_pos + canvas.width
 
     # Forward frame hooks to the cached legacy story so its frame-aware
     # effects behave; keep our own base counters advancing too. Signatures

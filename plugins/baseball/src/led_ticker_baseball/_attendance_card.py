@@ -26,6 +26,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_baseball._hires_line import HiresLine
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts import resolve_attendance_layout
 from led_ticker_baseball.layouts.attend_big import render_attend_big
 from led_ticker_baseball.layouts.attend_long import render_attend_long
@@ -107,7 +108,7 @@ class MLBAttendanceCard(FrameAwareBase):
         progress = min(1.0, self._fill_ticks * ENGINE_TICK_MS / FILL_MS)
         if layout == "big":
             render_attend_big(
-                canvas,
+                shift_canvas(canvas, cursor_pos),
                 self.record,
                 progress,
                 label=self.label,
@@ -117,7 +118,7 @@ class MLBAttendanceCard(FrameAwareBase):
             )
         else:
             render_attend_long(
-                canvas,
+                shift_canvas(canvas, cursor_pos),
                 self.record,
                 progress,
                 label=self.label,
@@ -129,7 +130,8 @@ class MLBAttendanceCard(FrameAwareBase):
         # so the engine's `cursor_pos > canvas.width` hold-vs-scroll check
         # (core ticker.py) takes the hold branch — same phase-1/2/3 lesson
         # as MLBGameCard / MLBStandingsBoard / MLBPromoCard / MLBStatcastCard.
-        return canvas, canvas.width
+        # ABSOLUTE end, painted at `cursor_pos`, so scroll sections pop it.
+        return canvas, cursor_pos + canvas.width
 
     # Forward frame hooks to `_fallback_line` rather than `legacy` directly —
     # `_fallback_line.legacy IS self.legacy`, and HiresLine's own hooks

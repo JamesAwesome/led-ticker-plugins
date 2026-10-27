@@ -39,6 +39,7 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts import resolve_promo_layout
 from led_ticker_baseball.layouts.promo_card import render_promo_card
 from led_ticker_baseball.layouts.promo_crawl import render_promo_crawl
@@ -88,9 +89,9 @@ class MLBPromoCard(FrameAwareBase):
                 y_offset=y_offset,
                 hold_padding=self.padding,
             )
-            return canvas, w + self.padding
+            return canvas, cursor_pos + w + self.padding
         render_promo_card(
-            canvas,
+            shift_canvas(canvas, cursor_pos),
             self.promo,
             self._clock_ticks * ENGINE_TICK_MS,
             y_offset=y_offset,
@@ -100,8 +101,9 @@ class MLBPromoCard(FrameAwareBase):
         # Held layout: return the WRAPPER's logical width (not real.width)
         # so the engine's `cursor_pos > canvas.width` hold-vs-scroll check
         # (core ticker.py) takes the hold branch — same phase-1/2 lesson as
-        # MLBGameCard / MLBStandingsBoard.
-        return canvas, canvas.width
+        # MLBGameCard / MLBStandingsBoard — as an ABSOLUTE end, painted at
+        # `cursor_pos`, so scroll sections pop it (see MLBGameCard.draw).
+        return canvas, cursor_pos + canvas.width
 
     # Forward frame hooks to the (always-present) legacy story so its
     # frame-aware effects (rainbow / color_cycle font_color) behave at
