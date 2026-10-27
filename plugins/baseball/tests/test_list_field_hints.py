@@ -50,3 +50,27 @@ def test_list_fields_shows_layout_enum(widget_cls, valid_layouts):
     finally:
         _WIDGET_REGISTRY.pop(name, None)
     assert " | ".join(f'"{v}"' for v in valid_layouts) in out
+
+
+_TYPO_CASES = [
+    (MLBScoreMonitor, _MLB_VALID_LAYOUTS, "tickr", "ticker"),
+    (MLBStandingsMonitor, _STANDINGS_VALID_LAYOUTS, "bord", "board"),
+    (MLBPromotionsMonitor, _PROMO_VALID_LAYOUTS, "crad", "card"),
+    (MLBStatcastMonitor, _STATCAST_VALID_LAYOUTS, "bgi", "big"),
+    (MLBAttendanceMonitor, _ATTENDANCE_VALID_LAYOUTS, "bgi", "big"),
+]
+
+
+@pytest.mark.parametrize(
+    ("widget_cls", "valid_layouts", "typo", "expected"),
+    _TYPO_CASES,
+    ids=lambda v: getattr(v, "__name__", None),
+)
+def test_bad_layout_message_lists_enum_and_suggests(
+    widget_cls, valid_layouts, typo, expected
+):
+    msgs = widget_cls.validate_config({"layout": typo})
+    msg = next(m for m in msgs if "layout=" in m)
+    valid = ", ".join(repr(v) for v in valid_layouts)
+    assert f"Choose one of: {valid}." in msg
+    assert f"Did you mean {expected!r}?" in msg

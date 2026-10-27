@@ -10,6 +10,7 @@ re-derives, schedule-gated so off-hours ticks are cheap.
 """
 
 import asyncio
+import difflib
 import logging
 import re
 from dataclasses import dataclass, replace
@@ -727,9 +728,14 @@ class MLBAttendanceMonitor:
 
         layout = cfg.get("layout", "auto")
         if layout not in _ATTENDANCE_VALID_LAYOUTS:
+            close = difflib.get_close_matches(
+                str(layout), _ATTENDANCE_VALID_LAYOUTS, n=1, cutoff=0.5
+            )
+            suggestion = f" Did you mean {close[0]!r}?" if close else ""
             valid = ", ".join(repr(v) for v in _ATTENDANCE_VALID_LAYOUTS)
             msgs.append(
-                f"attendance layout={layout!r} is not valid. Use one of {valid}."
+                f"attendance layout={layout!r} is not valid. "
+                f"Choose one of: {valid}.{suggestion}"
             )
 
         no_data = cfg.get("no_data", "show")

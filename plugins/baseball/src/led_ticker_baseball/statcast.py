@@ -10,6 +10,7 @@ from the full day so far.
 """
 
 import csv
+import difflib
 import io
 import logging
 import math
@@ -347,8 +348,15 @@ class MLBStatcastMonitor:
             msgs.append(f"statcast team={team!r} must be a string abbreviation.")
         layout = cfg.get("layout", "auto")
         if layout not in _STATCAST_VALID_LAYOUTS:
+            close = difflib.get_close_matches(
+                str(layout), _STATCAST_VALID_LAYOUTS, n=1, cutoff=0.5
+            )
+            suggestion = f" Did you mean {close[0]!r}?" if close else ""
             valid = ", ".join(repr(v) for v in _STATCAST_VALID_LAYOUTS)
-            msgs.append(f"statcast layout={layout!r} is not valid. Use one of {valid}.")
+            msgs.append(
+                f"statcast layout={layout!r} is not valid. "
+                f"Choose one of: {valid}.{suggestion}"
+            )
         # `team` is optional (league-wide is a fully supported mode already),
         # so unlike scores/standings/promotions there is no "required unless
         # demo" rule here — `demo` just needs to be a bool.
