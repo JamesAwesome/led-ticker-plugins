@@ -141,6 +141,10 @@ class HockeyGameCard(FrameAwareBase):
     _run_cursor: int = attrs.field(init=False, default=0)
     _x_shift: int = attrs.field(init=False, default=0)
     _last_cursor: int | None = attrs.field(init=False, default=None)
+    # The frame whose first live draw last updated the freeze. Core can draw
+    # the SAME card twice in one tick (a one-game `ticker` section cycles one
+    # object, so the pass junction shows two copies); only the first counts.
+    _last_frame: int | None = attrs.field(init=False, default=None)
     _demo_visits: int = attrs.field(init=False, default=0)
     _hl_shown: bool = attrs.field(init=False, default=False)
     _hl_frame: int = attrs.field(init=False, default=-1)
@@ -219,9 +223,12 @@ class HockeyGameCard(FrameAwareBase):
             self.highlight = (team, left - 1) if left > 1 else None
         return fade
 
-    def _celebrate(self, canvas: Any, y_offset: int, cursor_pos: int) -> bool:
+    def _celebrate(
+        self, canvas: Any, y_offset: int, cursor_pos: int, frozen: bool
+    ) -> bool:
         """Paint the celebration frame if one is due; True when painted.
-        `cursor_pos` is the RAW engine cursor of this draw."""
+        `cursor_pos` is the RAW engine cursor of this draw; `frozen` says
+        whether this draw paints with `_x_shift`."""
         live = not self._frame_paused and self._frame_count > 0
         rest = self._demo_rest_from
         if (
@@ -238,7 +245,7 @@ class HockeyGameCard(FrameAwareBase):
             self._playing = list(self.pending)
             self._run_start = self._frame_count
             self._run_pos, self._run_frame = 0, self._frame_count
-            self._run_cursor = cursor_pos + self._x_shift
+            self._run_cursor = cursor_pos + (self._x_shift if frozen else 0)
         playing = self._playing
         if not playing or self._frame_paused:
             return False  # paused = transition compositing: the board
@@ -342,13 +349,11 @@ class HockeyGameCard(FrameAwareBase):
         y_offset: int = 0,
         font_color: Any = None,
     ) -> DrawResult:
-        if self._last_cursor is None or cursor_pos > self._last_cursor:
-            self._x_shift = 0  # a fresh pass: draw honestly again
-            self._run_cursor = cursor_pos  # a run spanning passes resumes here
-        self._last_cursor = cursor_pos
-        if self._celebrate(canvas, y_offset, cursor_pos):
+        frozen = self._freeze_applies(cursor_pos)
+        if self._celebrate(canvas, y_offset, cursor_pos, frozen):
             return canvas, canvas.width
-        cursor_pos += self._x_shift
+        if frozen:  # read after `_celebrate`: a run's end sets the shift
+            cursor_pos += self._x_shift
         scale = safe_scale(canvas)
         real = unwrap_to_real(canvas)
         layout = resolve_layout(self.cfg_layout, scale, real.width)
@@ -384,6 +389,23 @@ class HockeyGameCard(FrameAwareBase):
         )
         return canvas, cursor_pos + canvas.width
 
+    def _freeze_applies(self, cursor_pos: int) -> bool:
+        """Whether this draw paints with `_x_shift`. Only the FIRST live draw of a
+        frame updates the freeze: a raw cursor above the last one is a fresh
+        pass (draw honestly again; a run spanning passes resumes there).
+        Any other draw (a second copy of this card in the same tick, or a
+        paused transition redraw) leaves the state alone; it keeps the
+        freeze unless it sits right of the last raw cursor (the copy after
+        the pass junction, whose cursor already chains off the first)."""
+        if not self._frame_paused and self._frame_count != self._last_frame:
+            self._last_frame = self._frame_count
+            if self._last_cursor is None or cursor_pos > self._last_cursor:
+                self._x_shift = 0
+                self._run_cursor = cursor_pos
+            self._last_cursor = cursor_pos
+            return True
+        return self._last_cursor is not None and cursor_pos <= self._last_cursor
+
     def advance_frame(self, *, visit_id: int | None = None) -> None:
         super().advance_frame(visit_id=visit_id)
         if self._legacy is not None:
@@ -417,7 +439,7 @@ class HockeyGameCard(FrameAwareBase):
         self._playing = None if self._frame_paused else list(self.pending)
         self._run_start = None  # a visit's run starts at frame 0
         self._demo_rest_from = None  # visits re-arm by count instead
-        self._x_shift, self._last_cursor = 0, None
+        self._x_shift, self._last_cursor, self._last_frame = 0, None, None
         super().reset_frame()
         if self._legacy is not None:
             self._legacy.reset_frame()

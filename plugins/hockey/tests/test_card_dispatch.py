@@ -279,8 +279,8 @@ class _HoldSpy(HockeyGameCard):
     _prev: int | None = attrs.field(default=None, kw_only=True)
     _same: int = attrs.field(default=0, kw_only=True)
 
-    def _celebrate(self, canvas, y_offset, cursor_pos):
-        painted = super()._celebrate(canvas, y_offset, cursor_pos)
+    def _celebrate(self, canvas, y_offset, cursor_pos, frozen):
+        painted = super()._celebrate(canvas, y_offset, cursor_pos, frozen)
         self.shown += painted
         return painted
 
@@ -333,3 +333,38 @@ async def test_goal_inside_the_end_hold_is_cut_then_resumes(monkeypatch):
     assert b.shown == 3 * 20 - 10
     await _ticker_pass([a, b], 3.0, monkeypatch)
     assert b.shown == CELEBRATION_FRAMES and b.pending == []
+
+
+@pytest.mark.parametrize("layout", ["scoreboard", "ticker"])
+async def test_same_card_twice_per_tick_never_jumps(layout, monkeypatch):
+    """A one-game `ticker` section cycles the SAME card object, so at the
+    pass junction core draws it twice in one tick. Only the first draw may
+    touch the scroll freeze, or the left copy teleports by the freeze."""
+    a = _card(layout, 0)
+    a.queue_goals([build_demo_games(NOW)[0].goals[0]])
+    painted: dict[int, list[int]] = {}
+    real_board, real_crawl = card_mod.render_scoreboard, card_mod.render_crawl
+
+    def board(*args, **kw):
+        painted.setdefault(a._frame_count, []).append(kw["x_offset"])
+        return real_board(*args, **kw)
+
+    def crawl(*args, **kw):
+        painted.setdefault(a._frame_count, []).append(args[4])
+        return real_crawl(*args, **kw)
+
+    monkeypatch.setattr(card_mod, "render_scoreboard", board)
+    monkeypatch.setattr(card_mod, "render_crawl", crawl)
+    await _ticker_pass([a, a, a], 0.0, monkeypatch)
+    assert a.pending == []
+    ticks = sorted(painted)
+    assert any(len(painted[t]) == 2 for t in ticks)  # the junction was drawn
+    for prev, cur in zip(ticks, ticks[1:], strict=False):
+        for x in painted[cur]:
+            entering = x >= 64 - 2
+            assert entering or any(abs(x - p) <= 1 for p in painted[prev]), (
+                prev,
+                painted[prev],
+                cur,
+                painted[cur],
+            )

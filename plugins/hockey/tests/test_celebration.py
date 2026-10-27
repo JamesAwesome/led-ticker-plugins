@@ -1129,3 +1129,32 @@ def test_live_reset_still_snapshots_the_visit(bigsign):
     assert [g.key for g in c._playing] == ["k"] and c._run_start is None
     c.queue_goals([_goal(key="g2", away_score=3)])
     assert len(c._playing) == 1  # mid-visit goal waits for the next visit
+
+
+def test_non_first_draws_never_touch_the_freeze(bigsign):
+    """After a run the card is frozen (`_x_shift` > 0). A second copy of
+    it in the same tick (right of the first) paints at its raw cursor; a
+    paused redraw at the last cursor (core pauses the OUTGOING widget for a
+    transition) keeps the freeze, so the board does not jump as it leaves.
+    Neither changes the freeze state."""
+    c = _card()
+    c.queue_goals([_goal()])
+    pos = 40
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        for _ in range(CELEBRATION_FRAMES + 1):  # the run, then the board
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        shift, last = c._x_shift, c._last_cursor
+        assert shift == CELEBRATION_FRAMES and board.call_args.kwargs["x_offset"] == 40
+        c.draw(bigsign, last + 70)  # a second copy, same tick
+        assert board.call_args.kwargs["x_offset"] == last + 70
+        c.pause_frame()
+        c.advance_frame()  # paused: no tick
+        c.draw(bigsign, last)
+        assert board.call_args.kwargs["x_offset"] == last + shift
+    assert (c._x_shift, c._last_cursor) == (shift, last)

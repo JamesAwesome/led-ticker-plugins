@@ -100,7 +100,15 @@ decrementing the cursor beneath it, so a self-started run freezes the card's EFF
 cursor: `_x_shift` (effective = raw + shift) puts the board back where the run began, and
 is cleared when the raw cursor next increases (a fresh pass), which also re-bases a run
 that spans passes (`test_scroll_mode_run_freezes_cursor_until_next_pass`,
-`test_run_cut_by_a_section_end_resumes_at_the_new_pass`). `reset_frame` clears it.
+`test_run_cut_by_a_section_end_resumes_at_the_new_pass`). `reset_frame` clears it. Only
+the FIRST live draw of a frame (`_last_frame`) updates the freeze: a one-game `ticker`
+section cycles ONE card object, so at the pass junction core draws it two or three times in
+one tick, and a later copy's higher cursor must not read as a fresh pass (it zeroed the
+shift and teleported the left copy ~80 columns; `test_same_card_twice_per_tick_never_jumps`).
+A non-first draw (a later copy, or a paused transition redraw, since core pauses the
+outgoing widget too) paints with the shift when its cursor is at or left of the last raw
+cursor and raw otherwise (a later copy's cursor already chains off the shifted first copy)
+(`test_non_first_draws_never_touch_the_freeze`).
 `hold_time` is not read in scroll modes.
 
 **Draw return is absolute** — `draw()` returns `cursor_pos + content width` (core's
