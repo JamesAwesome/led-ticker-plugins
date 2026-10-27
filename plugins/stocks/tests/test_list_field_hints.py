@@ -36,3 +36,13 @@ def test_list_fields_shows_layout_enum_and_default():
     out = _list_fields()
     assert '"card" | "crawl" | "dashboard"' in out
     assert "chosen by panel width" in out
+
+
+def test_list_fields_shows_width_thresholds():
+    from led_ticker_stocks.layouts import CRAWL_MAX_WIDTH, DASHBOARD_MIN_WIDTH
+
+    assert (CRAWL_MAX_WIDTH, DASHBOARD_MIN_WIDTH) == (160, 400)
+    out = _list_fields()
+    assert f"crawl <= {CRAWL_MAX_WIDTH} px" in out
+    assert f"dashboard >= {DASHBOARD_MIN_WIDTH} px" in out
+    assert "160" in out and "400" in out

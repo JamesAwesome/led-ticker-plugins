@@ -11,7 +11,12 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_stocks._cache import QuoteCache, get_cache
-from led_ticker_stocks.layouts import LAYOUTS, resolve_layout
+from led_ticker_stocks.layouts import (
+    CRAWL_MAX_WIDTH,
+    DASHBOARD_MIN_WIDTH,
+    LAYOUTS,
+    resolve_layout,
+)
 from led_ticker_stocks.model import SymbolQuote
 from led_ticker_stocks.source import _PROVIDERS
 
@@ -119,8 +124,8 @@ class StocksTicker:
             "crawl = scrolling line (smallsign); card = held hero card "
             "(bigsign); dashboard = held dashboard with watch column "
             "(longboi)",
-            "unset (chosen by panel width: crawl <= 160 px, "
-            "dashboard >= 400 px, card between)",
+            f"unset (chosen by panel width: crawl <= {CRAWL_MAX_WIDTH} px, "
+            f"dashboard >= {DASHBOARD_MIN_WIDTH} px, card between)",
         ),
     }
 
