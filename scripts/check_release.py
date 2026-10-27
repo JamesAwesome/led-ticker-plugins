@@ -22,7 +22,7 @@ from pathlib import Path
 
 # Plugins published to PyPI on a `<plugin>-vX.Y.Z` release: the 6 data plugins,
 # `flair` (the consolidated homage sprite-trail pack), `telnet`, `storefront`,
-# `flight`, `stocks`, and `tennis`.
+# `flight`, `stocks`, `tennis`, `hockey`, and `football`.
 PUBLISHABLE_PLUGINS = {
     "pool",
     "baseball",
@@ -37,6 +37,7 @@ PUBLISHABLE_PLUGINS = {
     "stocks",
     "tennis",
     "hockey",
+    "football",
 }
 
 

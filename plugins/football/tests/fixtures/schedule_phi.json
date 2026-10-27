@@ -1,0 +1,260 @@
+{
+ "_handtrimmed": true,
+ "timestamp": "2026-10-26T15:30Z",
+ "status": "success",
+ "season": {
+  "year": 2026,
+  "type": 2,
+  "name": "Regular Season",
+  "displayName": "2026",
+  "half": 1
+ },
+ "team": {
+  "id": "21",
+  "abbreviation": "PHI",
+  "displayName": "Philadelphia Eagles",
+  "recordSummary": "2-4",
+  "standingSummary": "4th in NFC East"
+ },
+ "events": [
+  {
+   "id": "401872929",
+   "date": "2026-09-13T20:25Z",
+   "name": "Washington Commanders at Philadelphia Eagles",
+   "shortName": "WSH @ PHI",
+   "week": {
+    "number": 1,
+    "text": "Week 1"
+   },
+   "seasonType": {
+    "id": "2",
+    "type": 2,
+    "name": "Regular Season",
+    "abbreviation": "reg"
+   },
+   "competitions": [
+    {
+     "id": "401872929",
+     "date": "2026-09-13T20:25Z",
+     "attendance": 0,
+     "neutralSite": false,
+     "boxscoreAvailable": true,
+     "venue": {
+      "fullName": "Lincoln Financial Field",
+      "address": {
+       "city": "Philadelphia",
+       "state": "PA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "21",
+       "homeAway": "home",
+       "team": {
+        "id": "21",
+        "abbreviation": "PHI",
+        "displayName": "PHI"
+       },
+       "score": {
+        "value": 24.0,
+        "displayValue": "24"
+       },
+       "winner": true
+      },
+      {
+       "id": "28",
+       "homeAway": "away",
+       "team": {
+        "id": "28",
+        "abbreviation": "WSH",
+        "displayName": "WSH"
+       },
+       "score": {
+        "value": 22.0,
+        "displayValue": "22"
+       },
+       "winner": false
+      }
+     ],
+     "notes": [],
+     "broadcasts": [
+      {
+       "media": {
+        "shortName": "FOX"
+       }
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 4,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "401873170",
+   "date": "2027-01-04T01:20Z",
+   "name": "Philadelphia Eagles at San Francisco 49ers",
+   "shortName": "PHI @ SF",
+   "week": {
+    "number": 17,
+    "text": "Week 17"
+   },
+   "seasonType": {
+    "id": "2",
+    "type": 2,
+    "name": "Regular Season",
+    "abbreviation": "reg"
+   },
+   "competitions": [
+    {
+     "id": "401873170",
+     "date": "2027-01-04T01:20Z",
+     "attendance": 0,
+     "neutralSite": false,
+     "boxscoreAvailable": false,
+     "venue": {
+      "fullName": "Lincoln Financial Field",
+      "address": {
+       "city": "Philadelphia",
+       "state": "PA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "SF"
+       }
+      },
+      {
+       "id": "21",
+       "homeAway": "away",
+       "team": {
+        "id": "21",
+        "abbreviation": "PHI",
+        "displayName": "PHI"
+       }
+      }
+     ],
+     "notes": [],
+     "broadcasts": [
+      {
+       "media": {
+        "shortName": "FOX"
+       }
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sun, January 3rd at 8:20 PM EST",
+       "shortDetail": "1/3 - 8:20 PM EST"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "401873182",
+   "date": "2027-01-10T05:00Z",
+   "name": "Philadelphia Eagles at New York Giants",
+   "shortName": "PHI @ NYG",
+   "week": {
+    "number": 18,
+    "text": "Week 18"
+   },
+   "seasonType": {
+    "id": "2",
+    "type": 2,
+    "name": "Regular Season",
+    "abbreviation": "reg"
+   },
+   "competitions": [
+    {
+     "id": "401873182",
+     "date": "2027-01-10T05:00Z",
+     "attendance": 0,
+     "neutralSite": false,
+     "boxscoreAvailable": false,
+     "venue": {
+      "fullName": "Lincoln Financial Field",
+      "address": {
+       "city": "Philadelphia",
+       "state": "PA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "19",
+       "homeAway": "home",
+       "team": {
+        "id": "19",
+        "abbreviation": "NYG",
+        "displayName": "NYG"
+       }
+      },
+      {
+       "id": "21",
+       "homeAway": "away",
+       "team": {
+        "id": "21",
+        "abbreviation": "PHI",
+        "displayName": "PHI"
+       }
+      }
+     ],
+     "notes": [],
+     "broadcasts": [
+      {
+       "media": {
+        "shortName": "FOX"
+       }
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "1/10 - TBD",
+       "shortDetail": "TBD"
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "requestedSeason": {
+  "year": 2026,
+  "type": 2,
+  "name": "Regular Season",
+  "displayName": "2026"
+ },
+ "byeWeek": 10
+}

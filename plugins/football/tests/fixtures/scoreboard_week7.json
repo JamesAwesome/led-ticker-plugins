@@ -1,0 +1,1084 @@
+{
+ "leagues": [
+  {
+   "id": "28",
+   "abbreviation": "NFL",
+   "season": {
+    "year": 2026,
+    "startDate": "2026-08-06T07:00Z",
+    "endDate": "2027-02-16T07:59Z",
+    "displayName": "2026",
+    "type": {
+     "id": "2",
+     "type": 2,
+     "name": "Regular Season",
+     "abbreviation": "reg"
+    }
+   },
+   "calendar": [
+    {
+     "label": "Preseason",
+     "value": "1",
+     "startDate": "2026-08-06T07:00Z",
+     "endDate": "2026-09-06T06:59Z",
+     "entries": [
+      {
+       "label": "Hall of Fame Weekend",
+       "alternateLabel": "HOF",
+       "detail": "Aug 6-12",
+       "value": "1",
+       "startDate": "2026-08-06T07:00Z",
+       "endDate": "2026-08-13T06:59Z"
+      },
+      {
+       "label": "Preseason Week 1",
+       "alternateLabel": "Pre Wk 1",
+       "detail": "Aug 13-19",
+       "value": "2",
+       "startDate": "2026-08-13T07:00Z",
+       "endDate": "2026-08-20T06:59Z"
+      },
+      {
+       "label": "Preseason Week 2",
+       "alternateLabel": "Pre Wk 2",
+       "detail": "Aug 20-26",
+       "value": "3",
+       "startDate": "2026-08-20T07:00Z",
+       "endDate": "2026-08-27T06:59Z"
+      },
+      {
+       "label": "Preseason Week 3",
+       "alternateLabel": "Pre Wk 3",
+       "detail": "Aug 27-Sep 5",
+       "value": "4",
+       "startDate": "2026-08-27T07:00Z",
+       "endDate": "2026-09-06T06:59Z"
+      }
+     ]
+    },
+    {
+     "label": "Regular Season",
+     "value": "2",
+     "startDate": "2026-09-06T07:00Z",
+     "endDate": "2027-01-13T07:59Z",
+     "entries": [
+      {
+       "label": "Week 1",
+       "alternateLabel": "Week 1",
+       "detail": "Sep 6-15",
+       "value": "1",
+       "startDate": "2026-09-06T07:00Z",
+       "endDate": "2026-09-16T06:59Z"
+      },
+      {
+       "label": "Week 2",
+       "alternateLabel": "Week 2",
+       "detail": "Sep 16-22",
+       "value": "2",
+       "startDate": "2026-09-16T07:00Z",
+       "endDate": "2026-09-23T06:59Z"
+      },
+      {
+       "label": "Week 3",
+       "alternateLabel": "Week 3",
+       "detail": "Sep 23-29",
+       "value": "3",
+       "startDate": "2026-09-23T07:00Z",
+       "endDate": "2026-09-30T06:59Z"
+      },
+      {
+       "label": "Week 4",
+       "alternateLabel": "Week 4",
+       "detail": "Sep 30-Oct 6",
+       "value": "4",
+       "startDate": "2026-09-30T07:00Z",
+       "endDate": "2026-10-07T06:59Z"
+      },
+      {
+       "label": "Week 5",
+       "alternateLabel": "Week 5",
+       "detail": "Oct 7-13",
+       "value": "5",
+       "startDate": "2026-10-07T07:00Z",
+       "endDate": "2026-10-14T06:59Z"
+      },
+      {
+       "label": "Week 6",
+       "alternateLabel": "Week 6",
+       "detail": "Oct 14-20",
+       "value": "6",
+       "startDate": "2026-10-14T07:00Z",
+       "endDate": "2026-10-21T06:59Z"
+      },
+      {
+       "label": "Week 7",
+       "alternateLabel": "Week 7",
+       "detail": "Oct 21-27",
+       "value": "7",
+       "startDate": "2026-10-21T07:00Z",
+       "endDate": "2026-10-28T06:59Z"
+      },
+      {
+       "label": "Week 8",
+       "alternateLabel": "Week 8",
+       "detail": "Oct 28-Nov 3",
+       "value": "8",
+       "startDate": "2026-10-28T07:00Z",
+       "endDate": "2026-11-04T07:59Z"
+      },
+      {
+       "label": "Week 9",
+       "alternateLabel": "Week 9",
+       "detail": "Nov 4-10",
+       "value": "9",
+       "startDate": "2026-11-04T08:00Z",
+       "endDate": "2026-11-11T07:59Z"
+      },
+      {
+       "label": "Week 10",
+       "alternateLabel": "Week 10",
+       "detail": "Nov 11-17",
+       "value": "10",
+       "startDate": "2026-11-11T08:00Z",
+       "endDate": "2026-11-18T07:59Z"
+      },
+      {
+       "label": "Week 11",
+       "alternateLabel": "Week 11",
+       "detail": "Nov 18-24",
+       "value": "11",
+       "startDate": "2026-11-18T08:00Z",
+       "endDate": "2026-11-25T07:59Z"
+      },
+      {
+       "label": "Week 12",
+       "alternateLabel": "Week 12",
+       "detail": "Nov 25-Dec 1",
+       "value": "12",
+       "startDate": "2026-11-25T08:00Z",
+       "endDate": "2026-12-02T07:59Z"
+      },
+      {
+       "label": "Week 13",
+       "alternateLabel": "Week 13",
+       "detail": "Dec 2-8",
+       "value": "13",
+       "startDate": "2026-12-02T08:00Z",
+       "endDate": "2026-12-09T07:59Z"
+      },
+      {
+       "label": "Week 14",
+       "alternateLabel": "Week 14",
+       "detail": "Dec 9-15",
+       "value": "14",
+       "startDate": "2026-12-09T08:00Z",
+       "endDate": "2026-12-16T07:59Z"
+      },
+      {
+       "label": "Week 15",
+       "alternateLabel": "Week 15",
+       "detail": "Dec 16-22",
+       "value": "15",
+       "startDate": "2026-12-16T08:00Z",
+       "endDate": "2026-12-23T07:59Z"
+      },
+      {
+       "label": "Week 16",
+       "alternateLabel": "Week 16",
+       "detail": "Dec 23-29",
+       "value": "16",
+       "startDate": "2026-12-23T08:00Z",
+       "endDate": "2026-12-30T07:59Z"
+      },
+      {
+       "label": "Week 17",
+       "alternateLabel": "Week 17",
+       "detail": "Dec 30-Jan 5",
+       "value": "17",
+       "startDate": "2026-12-30T08:00Z",
+       "endDate": "2027-01-06T07:59Z"
+      },
+      {
+       "label": "Week 18",
+       "alternateLabel": "Week 18",
+       "detail": "Jan 6-12",
+       "value": "18",
+       "startDate": "2027-01-06T08:00Z",
+       "endDate": "2027-01-13T07:59Z"
+      }
+     ]
+    },
+    {
+     "label": "Postseason",
+     "value": "3",
+     "startDate": "2027-01-13T08:00Z",
+     "endDate": "2027-02-16T07:59Z",
+     "entries": [
+      {
+       "label": "Wild Card",
+       "alternateLabel": "Wild Card",
+       "detail": "Jan 13-19",
+       "value": "1",
+       "startDate": "2027-01-13T08:00Z",
+       "endDate": "2027-01-20T07:59Z"
+      },
+      {
+       "label": "Divisional Round",
+       "alternateLabel": "Div Rd",
+       "detail": "Jan 20-26",
+       "value": "2",
+       "startDate": "2027-01-20T08:00Z",
+       "endDate": "2027-01-27T07:59Z"
+      },
+      {
+       "label": "Conference Championship",
+       "alternateLabel": "Conf Champ",
+       "detail": "Jan 27-Feb 2",
+       "value": "3",
+       "startDate": "2027-01-27T08:00Z",
+       "endDate": "2027-02-03T07:59Z"
+      },
+      {
+       "label": "Super Bowl",
+       "alternateLabel": "Super Bowl",
+       "detail": "Feb 3-15",
+       "value": "4",
+       "startDate": "2027-02-03T08:00Z",
+       "endDate": "2027-02-16T07:59Z"
+      }
+     ]
+    },
+    {
+     "label": "Off Season",
+     "value": "4",
+     "startDate": "2027-02-16T08:00Z",
+     "endDate": "2027-08-01T06:59Z"
+    }
+   ]
+  }
+ ],
+ "season": {
+  "type": 2,
+  "year": 2026
+ },
+ "week": {
+  "number": 7,
+  "teamsOnBye": [
+   {
+    "id": "2",
+    "abbreviation": "BUF",
+    "displayName": "Buffalo Bills"
+   },
+   {
+    "id": "24",
+    "abbreviation": "LAC",
+    "displayName": "Los Angeles Chargers"
+   },
+   {
+    "id": "28",
+    "abbreviation": "WSH",
+    "displayName": "Washington Commanders"
+   },
+   {
+    "id": "30",
+    "abbreviation": "JAX",
+    "displayName": "Jacksonville Jaguars"
+   }
+  ]
+ },
+ "events": [
+  {
+   "id": "401873009",
+   "uid": "s:20~l:28~e:401873009",
+   "date": "2026-10-27T00:15Z",
+   "name": "Dallas Cowboys at Philadelphia Eagles",
+   "shortName": "DAL @ PHI",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 7
+   },
+   "competitions": [
+    {
+     "id": "401873009",
+     "date": "2026-10-27T00:15Z",
+     "neutralSite": false,
+     "venue": {
+      "id": "3806",
+      "fullName": "Lincoln Financial Field",
+      "address": {
+       "city": "Philadelphia",
+       "state": "PA",
+       "country": "USA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "21",
+       "homeAway": "home",
+       "team": {
+        "id": "21",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia Eagles",
+        "shortDisplayName": "Eagles",
+        "color": "06424d"
+       },
+       "score": "0",
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "type": "total",
+         "summary": "2-4"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "1-2"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "1-2"
+        }
+       ],
+       "leaders": [
+        {
+         "name": "passingLeader",
+         "displayName": "Passing Leader",
+         "shortDisplayName": "PASS",
+         "abbreviation": "PYDS",
+         "leaders": [
+          {
+           "displayValue": "26/45, 215 YDS, 1 TD",
+           "value": 215.0,
+           "athlete": {
+            "id": "4685201",
+            "fullName": "Tanner McKee",
+            "displayName": "Tanner McKee",
+            "shortName": "T. McKee",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/4685201/tanner-mckee"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/4685201.png",
+            "jersey": "16",
+            "position": {
+             "abbreviation": "QB"
+            },
+            "team": {
+             "id": "21"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "21"
+           }
+          }
+         ]
+        },
+        {
+         "name": "rushingLeader",
+         "displayName": "Rushing Leader",
+         "shortDisplayName": "RUSH",
+         "abbreviation": "RYDS",
+         "leaders": [
+          {
+           "displayValue": "36 CAR, 182 YDS",
+           "value": 182.0,
+           "athlete": {
+            "id": "3929630",
+            "fullName": "Saquon Barkley",
+            "displayName": "Saquon Barkley",
+            "shortName": "S. Barkley",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/3929630/saquon-barkley"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/3929630.png",
+            "jersey": "26",
+            "position": {
+             "abbreviation": "RB"
+            },
+            "team": {
+             "id": "21"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "21"
+           }
+          }
+         ]
+        },
+        {
+         "name": "receivingLeader",
+         "displayName": "Receiving Leader",
+         "shortDisplayName": "REC",
+         "abbreviation": "RECYDS",
+         "leaders": [
+          {
+           "displayValue": "17 REC, 180 YDS, 2 TD",
+           "value": 180.0,
+           "athlete": {
+            "id": "3121023",
+            "fullName": "Dallas Goedert",
+            "displayName": "Dallas Goedert",
+            "shortName": "D. Goedert",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/3121023/dallas-goedert"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/3121023.png",
+            "jersey": "88",
+            "position": {
+             "abbreviation": "TE"
+            },
+            "team": {
+             "id": "21"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "21"
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "6",
+       "homeAway": "away",
+       "team": {
+        "id": "6",
+        "location": "Dallas",
+        "name": "Cowboys",
+        "abbreviation": "DAL",
+        "displayName": "Dallas Cowboys",
+        "shortDisplayName": "Cowboys",
+        "color": "002a5c"
+       },
+       "score": "0",
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "type": "total",
+         "summary": "2-4"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "1-2"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "1-2"
+        }
+       ],
+       "leaders": [
+        {
+         "name": "passingLeader",
+         "displayName": "Passing Leader",
+         "shortDisplayName": "PASS",
+         "abbreviation": "PYDS",
+         "leaders": [
+          {
+           "displayValue": "163/246, 1639 YDS, 10 TD, 5 INT",
+           "value": 1639.0,
+           "athlete": {
+            "id": "2577417",
+            "fullName": "Dak Prescott",
+            "displayName": "Dak Prescott",
+            "shortName": "D. Prescott",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/2577417/dak-prescott"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/2577417.png",
+            "jersey": "4",
+            "position": {
+             "abbreviation": "QB"
+            },
+            "team": {
+             "id": "6"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "6"
+           }
+          }
+         ]
+        },
+        {
+         "name": "rushingLeader",
+         "displayName": "Rushing Leader",
+         "shortDisplayName": "RUSH",
+         "abbreviation": "RYDS",
+         "leaders": [
+          {
+           "displayValue": "85 CAR, 317 YDS, 7 TD",
+           "value": 317.0,
+           "athlete": {
+            "id": "4361579",
+            "fullName": "Javonte Williams",
+            "displayName": "Javonte Williams",
+            "shortName": "J. Williams",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/4361579/javonte-williams"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/4361579.png",
+            "jersey": "33",
+            "position": {
+             "abbreviation": "RB"
+            },
+            "team": {
+             "id": "6"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "6"
+           }
+          }
+         ]
+        },
+        {
+         "name": "receivingLeader",
+         "displayName": "Receiving Leader",
+         "shortDisplayName": "REC",
+         "abbreviation": "RECYDS",
+         "leaders": [
+          {
+           "displayValue": "48 REC, 577 YDS, 4 TD",
+           "value": 577.0,
+           "athlete": {
+            "id": "4241389",
+            "fullName": "CeeDee Lamb",
+            "displayName": "CeeDee Lamb",
+            "shortName": "C. Lamb",
+            "links": [
+             {
+              "rel": [
+               "playercard",
+               "desktop",
+               "athlete"
+              ],
+              "href": "https://www.espn.com/nfl/player/_/id/4241389/ceedee-lamb"
+             }
+            ],
+            "headshot": "https://a.espncdn.com/i/headshots/nfl/players/full/4241389.png",
+            "jersey": "88",
+            "position": {
+             "abbreviation": "WR"
+            },
+            "team": {
+             "id": "6"
+            },
+            "active": true
+           },
+           "team": {
+            "id": "6"
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Mon, October 26th at 8:15 PM EDT",
+       "shortDetail": "10/26 - 8:15 PM EDT"
+      },
+      "isTBDFlex": false
+     },
+     "broadcasts": [
+      {
+       "market": "national",
+       "names": [
+        "ESPN",
+        "ABC",
+        "Disney+"
+       ]
+      }
+     ],
+     "format": {
+      "regulation": {
+       "periods": 4
+      },
+      "overtime": {
+       "periods": 1
+      }
+     }
+    }
+   ],
+   "weather": {
+    "displayValue": "Clear",
+    "temperature": 60,
+    "highTemperature": 60,
+    "conditionId": "33",
+    "link": {
+     "language": "en-US",
+     "rel": [
+      "19103"
+     ],
+     "href": "http://www.accuweather.com/en/us/lincoln-financial-field-pa/19107/hourly-weather-forecast/43025_poi?day=1&hbhhour=20&lang=en-us",
+     "text": "Weather",
+     "shortText": "Weather",
+     "isExternal": true,
+     "isPremium": false
+    }
+   },
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 0,
+    "type": {
+     "id": "1",
+     "name": "STATUS_SCHEDULED",
+     "state": "pre",
+     "completed": false,
+     "description": "Scheduled",
+     "detail": "Mon, October 26th at 8:15 PM EDT",
+     "shortDetail": "10/26 - 8:15 PM EDT"
+    }
+   }
+  },
+  {
+   "id": "401873010",
+   "uid": "s:20~l:28~e:401873010",
+   "date": "2026-10-23T00:15Z",
+   "name": "New England Patriots at Chicago Bears",
+   "shortName": "NE @ CHI",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 7
+   },
+   "competitions": [
+    {
+     "id": "401873010",
+     "date": "2026-10-23T00:15Z",
+     "neutralSite": false,
+     "venue": {
+      "id": "3933",
+      "fullName": "Soldier Field",
+      "address": {
+       "city": "Chicago",
+       "state": "IL",
+       "country": "USA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "3",
+       "homeAway": "home",
+       "winner": true,
+       "team": {
+        "id": "3",
+        "location": "Chicago",
+        "name": "Bears",
+        "abbreviation": "CHI",
+        "displayName": "Chicago Bears",
+        "shortDisplayName": "Bears",
+        "color": "0b1c3a"
+       },
+       "score": "30",
+       "linescores": [
+        {
+         "value": 10.0,
+         "displayValue": "10",
+         "period": 1
+        },
+        {
+         "value": 10.0,
+         "displayValue": "10",
+         "period": 2
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 3
+        },
+        {
+         "value": 3.0,
+         "displayValue": "3",
+         "period": 4
+        }
+       ],
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Game",
+         "type": "total",
+         "summary": "5-2"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "3-1"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "2-1"
+        }
+       ]
+      },
+      {
+       "id": "17",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "17",
+        "location": "New England",
+        "name": "Patriots",
+        "abbreviation": "NE",
+        "displayName": "New England Patriots",
+        "shortDisplayName": "Patriots",
+        "color": "002a5c"
+       },
+       "score": "24",
+       "linescores": [
+        {
+         "value": 0.0,
+         "displayValue": "0",
+         "period": 1
+        },
+        {
+         "value": 14.0,
+         "displayValue": "14",
+         "period": 2
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 3
+        },
+        {
+         "value": 3.0,
+         "displayValue": "3",
+         "period": 4
+        }
+       ],
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Game",
+         "type": "total",
+         "summary": "4-3"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "3-0"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "1-3"
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 4,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "isTBDFlex": false
+     },
+     "broadcasts": [
+      {
+       "market": "national",
+       "names": [
+        "Prime Video"
+       ]
+      }
+     ],
+     "format": {
+      "regulation": {
+       "periods": 4
+      },
+      "overtime": {
+       "periods": 1
+      }
+     }
+    }
+   ],
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 4,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  },
+  {
+   "id": "401873016",
+   "uid": "s:20~l:28~e:401873016",
+   "date": "2026-10-25T17:00Z",
+   "name": "New York Giants at Houston Texans",
+   "shortName": "NYG @ HOU",
+   "season": {
+    "year": 2026,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "week": {
+    "number": 7
+   },
+   "competitions": [
+    {
+     "id": "401873016",
+     "date": "2026-10-25T17:00Z",
+     "neutralSite": false,
+     "venue": {
+      "id": "3891",
+      "fullName": "Reliant Stadium",
+      "address": {
+       "city": "Houston",
+       "state": "TX",
+       "country": "USA"
+      }
+     },
+     "competitors": [
+      {
+       "id": "34",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "34",
+        "location": "Houston",
+        "name": "Texans",
+        "abbreviation": "HOU",
+        "displayName": "Houston Texans",
+        "shortDisplayName": "Texans",
+        "color": "021018"
+       },
+       "score": "21",
+       "linescores": [
+        {
+         "value": 3.0,
+         "displayValue": "3",
+         "period": 1
+        },
+        {
+         "value": 11.0,
+         "displayValue": "11",
+         "period": 2
+        },
+        {
+         "value": 0.0,
+         "displayValue": "0",
+         "period": 3
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 4
+        },
+        {
+         "value": 0.0,
+         "displayValue": "0",
+         "period": 5
+        }
+       ],
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Game",
+         "type": "total",
+         "summary": "2-5"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "0-4"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "2-1"
+        }
+       ]
+      },
+      {
+       "id": "19",
+       "homeAway": "away",
+       "winner": true,
+       "team": {
+        "id": "19",
+        "location": "New York",
+        "name": "Giants",
+        "abbreviation": "NYG",
+        "displayName": "New York Giants",
+        "shortDisplayName": "Giants",
+        "color": "003c7f"
+       },
+       "score": "27",
+       "linescores": [
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 1
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 2
+        },
+        {
+         "value": 0.0,
+         "displayValue": "0",
+         "period": 3
+        },
+        {
+         "value": 7.0,
+         "displayValue": "7",
+         "period": 4
+        },
+        {
+         "value": 6.0,
+         "displayValue": "6",
+         "period": 5
+        }
+       ],
+       "records": [
+        {
+         "name": "overall",
+         "abbreviation": "Game",
+         "type": "total",
+         "summary": "4-2-1"
+        },
+        {
+         "name": "Home",
+         "type": "home",
+         "summary": "3-1"
+        },
+        {
+         "name": "Road",
+         "type": "road",
+         "summary": "1-1-1"
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0:00",
+      "period": 5,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final/OT",
+       "shortDetail": "Final/OT",
+       "altDetail": "OT"
+      },
+      "isTBDFlex": false
+     },
+     "broadcasts": [
+      {
+       "market": "national",
+       "names": [
+        "Fox"
+       ]
+      }
+     ],
+     "format": {
+      "regulation": {
+       "periods": 4
+      },
+      "overtime": {
+       "periods": 1
+      }
+     }
+    }
+   ],
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0:00",
+    "period": 5,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final/OT",
+     "shortDetail": "Final/OT",
+     "altDetail": "OT"
+    }
+   }
+  }
+ ]
+}

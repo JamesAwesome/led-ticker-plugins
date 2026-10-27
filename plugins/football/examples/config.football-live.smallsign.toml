@@ -1,0 +1,32 @@
+# Demo and live both need no key (the ESPN feed is public and unofficial).
+# Use these settings for the named sign. Check the score, clock, possession marker and timeout pips.
+
+[display]
+rows = 16
+cols = 32
+chain_length = 5
+parallel = 1
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 2
+
+# The webui sidecar (COMPOSE_PROFILES=webui) exits and restart-loops without a
+# [web] block, for as long as this config is in place. Harmless on signs that
+# don't run the sidecar.
+[web]
+http_host = "0.0.0.0"
+http_port = 8080
+allow_restart = true
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 8.0
+
+[[playlist.section.widget]]
+type = "football.scores"
+mode = "teams"
+teams = ["PHI", "NYG"]
+layout = "auto"
+timezone = "America/New_York"
+update_interval = 15
+demo = false
