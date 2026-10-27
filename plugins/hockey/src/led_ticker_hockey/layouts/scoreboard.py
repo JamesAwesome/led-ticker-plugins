@@ -462,10 +462,12 @@ def render_scoreboard(
     y_offset: int = 0,
     stale: bool = False,
     highlight: tuple[str, float] | None = None,
+    x_offset: int = 0,
 ) -> None:
-    """Paint the held scoreboard for `game` on a scale>1 canvas.
+    """Paint the scoreboard for `game` on a scale>1 canvas, its left edge at
+    LOGICAL `x_offset` (0 = held; a scroll section's cursor otherwise).
     `highlight` = (team, f): that team's score fades amber -> white."""
-    shim, real = phys_wrap(canvas)
+    shim, real = phys_wrap(canvas, x_offset * safe_scale(canvas))
     yo = y_offset * safe_scale(canvas)
     g = geometry_for(real.width)
     if game.state == "future":

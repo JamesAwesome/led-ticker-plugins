@@ -2,10 +2,17 @@
 the physical renderers at scale>1; held cursor = the wrapper's LOGICAL
 width; legacy story follows `game`; frame hooks forward."""
 
+import asyncio
 import dataclasses
 import unittest.mock as mock
 
-from led_ticker.plugin import SegmentMessage, unwrap_to_real
+import pytest
+from led_ticker.plugin import (
+    HeadlessBackend,
+    ScaledCanvas,
+    SegmentMessage,
+    unwrap_to_real,
+)
 
 import led_ticker_hockey._card as card_mod
 from led_ticker_hockey._card import HockeyGameCard
@@ -141,3 +148,118 @@ def test_hires_ticker_passes_stale(bigsign):
     with mock.patch.object(card_mod, "render_crawl", return_value=10) as spy:
         c.draw(bigsign)
     assert spy.call_args.kwargs["stale"] is True
+
+
+# ------------------------------------- scroll sections (#113: hi-res wedge)
+
+
+def _lit_cols(real):
+    return {x for (x, _y), v in real._pixels.items() if v != (0, 0, 0)}
+
+
+def _fresh_bigsign():
+    real = HeadlessBackend(256, 64).create_canvas()
+    return ScaledCanvas(real, scale=4, content_height=16), real
+
+
+def test_scale4_scoreboard_scrolls_with_cursor_pos(bigsign):
+    """A `ticker` / `one_at_a_time` section hands the card a moving
+    cursor; the board must paint there and report its right edge, or the
+    engine never sees it leave and the section wedges forever."""
+    _card().draw(bigsign)
+    cols0 = _lit_cols(unwrap_to_real(bigsign))
+    assert cols0
+
+    canvas, real = _fresh_bigsign()
+    _, cursor = _card().draw(canvas, 10)
+    assert cursor == 10 + canvas.width
+    assert _lit_cols(real) == {x + 40 for x in cols0 if x + 40 < 256}
+
+    canvas, real = _fresh_bigsign()
+    _, cursor = _card().draw(canvas, -20)
+    assert cursor == -20 + canvas.width
+    assert _lit_cols(real) == {x - 80 for x in cols0 if x >= 80}
+
+
+def test_scale4_crawl_returns_absolute_end(bigsign):
+    """The crawl's end is `cursor_pos + run + padding` (core's absolute
+    draw contract), not the run width alone."""
+    c = _card(layout="ticker")
+    _, at0 = c.draw(bigsign, 0)
+    _, at30 = c.draw(bigsign, 30)
+    _, at_neg = c.draw(bigsign, -50)
+    assert at30 == at0 + 30 and at_neg == at0 - 50
+
+
+def _bigsign_ticker(queue, monkeypatch):
+    from led_ticker.frame import LedFrame
+    from led_ticker.ticker import Ticker
+
+    real_sleep = asyncio.sleep
+
+    async def _yield(_delay=0, *a, **k):
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", _yield)
+    frame = LedFrame(backend=HeadlessBackend(256, 64))
+    frame.setup()
+    canvas = ScaledCanvas(frame.get_clean_canvas(), scale=4, content_height=16)
+    ticker = Ticker(monitors=[], frame=frame, notif_queue=queue, scroll_speed=0.0)
+    return ticker, canvas
+
+
+@pytest.mark.parametrize("layout", ["auto", "ticker"])
+@pytest.mark.parametrize("mode", ["one_by_one", "side_by_side"])
+async def test_scroll_two_hires_cards_completes(mode, layout, monkeypatch):
+    """Drive core's REAL scroll loops with two cards on a bigsign. A card
+    whose end never goes negative (or never drops below the width) wedges
+    the section on the first card forever (#113)."""
+    queue: asyncio.Queue = asyncio.Queue()
+    a, b = _card(layout, 0), _card(layout, 1)
+    for item in (a, b, None):
+        await queue.put(item)
+    ticker, canvas = _bigsign_ticker(queue, monkeypatch)
+    if mode == "one_by_one":
+        run = ticker._scroll_one_by_one(canvas, cursor_pos=canvas.width)
+    else:
+        run = ticker._scroll_side_by_side(
+            canvas, cursor_pos=canvas.width, hold_at_end=0
+        )
+    await asyncio.wait_for(run, 1.5)
+    assert b._frame_count > 0  # the second card was reached
+
+
+@pytest.mark.parametrize("mode", ["one_by_one", "side_by_side"])
+async def test_scroll_with_celebration_completes(mode, monkeypatch):
+    """A self-started takeover inside the real scroll loop still ends and
+    hands over to the next card."""
+    queue: asyncio.Queue = asyncio.Queue()
+    a, b = _card("auto", 0), _card("auto", 1)
+    a.queue_goals([build_demo_games(NOW)[0].goals[0]])
+    for item in (a, b, None):
+        await queue.put(item)
+    ticker, canvas = _bigsign_ticker(queue, monkeypatch)
+    if mode == "one_by_one":
+        run = ticker._scroll_one_by_one(canvas, cursor_pos=canvas.width)
+    else:
+        run = ticker._scroll_side_by_side(
+            canvas, cursor_pos=canvas.width, hold_at_end=0
+        )
+    await asyncio.wait_for(run, 1.5)
+    assert a.pending == [] and b._frame_count > 0
+
+
+def test_shifted_real_clips_both_edges_and_forwards_fills():
+    from led_ticker_hockey._paint import ShiftedReal
+
+    real = HeadlessBackend(8, 2).create_canvas()
+    left, right = ShiftedReal(real, -3), ShiftedReal(real, 3)
+    for x in range(8):
+        left.SetPixel(x, 0, 255, 0, 0)
+        right.SetPixel(x, 1, 0, 255, 0)
+    assert {x for (x, y) in real._pixels if y == 0} == set(range(5))
+    assert {x for (x, y) in real._pixels if y == 1} == set(range(3, 8))
+    left.Fill(1, 2, 3)
+    assert set(real._pixels.values()) == {(1, 2, 3)}
+    right.Clear()
+    assert not any(v != (0, 0, 0) for v in real._pixels.values())

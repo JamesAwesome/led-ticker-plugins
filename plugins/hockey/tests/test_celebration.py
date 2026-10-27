@@ -1027,3 +1027,69 @@ def test_paused_hires_draw_never_clears(bigsign):
     _paint_white(bigsign)
     c.draw(bigsign)
     assert unwrap_to_real(bigsign)._pixels.get((0, 0)) == WHITE
+
+
+def test_scroll_mode_run_freezes_cursor_until_next_pass(bigsign):
+    """The engine keeps decrementing `pos` during the 4 s takeover. The
+    board must resume where the takeover began, not 80 px further left."""
+    c = _card()
+    c.queue_goals([_goal()])
+    pos = bigsign.width
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        for _ in range(CELEBRATION_FRAMES):  # self-starts on the first draw
+            c.advance_frame()
+            _, cursor = c.draw(bigsign, pos)
+            assert cursor == bigsign.width  # the takeover
+            pos -= 1
+        c.advance_frame()
+        _, cursor = c.draw(bigsign, pos)  # run ends: the board draws
+        c.advance_frame()
+        _, after = c.draw(bigsign, pos - 1)  # and scrolls on from there
+    assert pos == bigsign.width - CELEBRATION_FRAMES
+    assert cursor == bigsign.width + bigsign.width  # frozen at the takeover
+    assert board.call_args_list[0].kwargs["x_offset"] == bigsign.width
+    assert after == cursor - 1
+    # A fresh pass (the cursor jumps back up) draws honestly again.
+    c.advance_frame()
+    with mock.patch.object(card_mod, "render_scoreboard") as board:
+        _, cursor = c.draw(bigsign, 30)
+    assert cursor == 30 + bigsign.width
+    assert board.call_args.kwargs["x_offset"] == 30
+
+
+def test_reset_frame_drops_the_scroll_freeze(bigsign):
+    c = _card()
+    c._x_shift, c._last_cursor = 40, 10
+    c.reset_frame()
+    assert (c._x_shift, c._last_cursor) == (0, None)
+
+
+def test_run_cut_by_a_section_end_resumes_at_the_new_pass(bigsign):
+    """A run cut short (the section ended mid-takeover) finishes on the
+    card's next pass; the board then resumes at THAT pass's cursor, not at
+    the stale cursor where the run began a section ago."""
+    c = _card()
+    c.queue_goals([_goal()])
+    with (
+        mock.patch.object(card_mod, "render_flash"),
+        mock.patch.object(card_mod, "render_detail"),
+        mock.patch.object(card_mod, "render_scoreboard") as board,
+    ):
+        pos = 10
+        for _ in range(20):  # the run starts at 10, then the section ends
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        pos = bigsign.width  # the next pass enters from the right
+        for _ in range(CELEBRATION_FRAMES - 20):
+            c.advance_frame()
+            c.draw(bigsign, pos)
+            pos -= 1
+        c.advance_frame()
+        _, cursor = c.draw(bigsign, pos)
+    assert board.call_args.kwargs["x_offset"] == bigsign.width
+    assert cursor == 2 * bigsign.width

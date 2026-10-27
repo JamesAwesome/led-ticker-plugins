@@ -85,8 +85,25 @@ must not burn out unseen. The draw after its last frame consumes it exactly as `
 slideshow path never self-starts. Every celebration frame is a full-panel takeover: it
 first clears the real panel (to `bg_color` when set, else black, at every scale), because in a
 side-by-side scroll core resets once per tick and earlier widgets have already painted;
-it returns a `canvas.width` cursor, so later widgets are skipped for the tick. The scroll
-position keeps moving beneath it. `hold_time` is not read in scroll modes.
+it returns a `canvas.width` cursor, so later widgets are skipped for the tick. Core keeps
+decrementing the cursor beneath it, so a self-started run freezes the card's EFFECTIVE
+cursor: `_x_shift` (effective = raw + shift) puts the board back where the run began, and
+is cleared when the raw cursor next increases (a fresh pass), which also re-bases a run
+that spans passes (`test_scroll_mode_run_freezes_cursor_until_next_pass`,
+`test_run_cut_by_a_section_end_resumes_at_the_new_pass`). `reset_frame` clears it.
+`hold_time` is not read in scroll modes.
+
+**Draw return is absolute** — `draw()` returns `cursor_pos + content width` (core's
+contract, like `widgets/message.py`): held layouts paint at `cursor_pos`
+(`render_scoreboard(..., x_offset=)`, through `_paint.ShiftedReal`, clipped at both edges)
+and return `cursor_pos + canvas.width`; the hi-res crawl returns
+`cursor_pos + run + padding`. Only the celebration takeover returns a bare `canvas.width`.
+Core ends a widget in a `ticker` / `one_at_a_time` section only once that end goes
+negative, so a constant return wedges the section on the first card forever (#113).
+Tripwires: `test_scroll_two_hires_cards_completes` and
+`test_scroll_with_celebration_completes` drive core's REAL `_scroll_one_by_one` /
+`_scroll_side_by_side` (`test_card_dispatch.py`, core-internal imports are fine in
+tests only), plus `test_scale4_scoreboard_scrolls_with_cursor_pos`.
 
 **`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
 with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
