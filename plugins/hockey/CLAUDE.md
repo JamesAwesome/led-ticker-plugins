@@ -49,6 +49,11 @@ lone widget's polling). The landing "situation" call is
 gated to live games that some consumer displays (`note_displayed`, per consumer, so
 shared widgets do not multiply requests).
 
+**`run_monitor_loop(..., splay=False)`** — core's default splay adds a fixed random
+0–60 s to the poll interval at startup (a 15 s live cadence ran at 29 s on hardware, in
+football). The shared source rate-limits itself, so the widget loop must not add jitter
+(`test_start_registers_interest_updates_and_spawns`).
+
 **Next game vs `_games` share ONE hold predicate** — `_models.final_in_hold` (with
 `GAME_LENGTH`) is used by both `scores.select_stories` and `NHLSource._playing`. A team
 skips the next-game lookup (and its `next_games` entry is dropped) only while it has a

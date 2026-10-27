@@ -418,7 +418,7 @@ class TestStart:
         assert src.polls == 1 and len(w.feed_stories) == 1
         assert w.feed_stories[0].hold_time == 7.5
         assert w.feed_stories[0].tracked == frozenset({"PHI", "NYI"})
-        loop.assert_called_once_with(w, MIN_INTERVAL)
+        loop.assert_called_once_with(w, MIN_INTERVAL, splay=False)
         spawn.assert_called_once_with("LOOP")
 
     async def test_league_mode_wants_all_games(self):
@@ -434,4 +434,4 @@ class TestStart:
                 "SESSION", mode="league", update_interval=30
             )
         assert src.want.call_args.kwargs["all_games"] is True
-        loop.assert_called_once_with(w, 30)
+        loop.assert_called_once_with(w, 30, splay=False)

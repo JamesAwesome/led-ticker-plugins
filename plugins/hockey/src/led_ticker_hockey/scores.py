@@ -313,7 +313,10 @@ class HockeyScoreMonitor:
             widget.mode,
             interval,
         )
-        spawn_tracked(run_monitor_loop(widget, interval))
+        # splay=False: core's default adds a fixed random 0-60 s to the
+        # interval at startup (football saw a 15 s live poll become 29 s on
+        # longboi). The shared source already rate-limits itself.
+        spawn_tracked(run_monitor_loop(widget, interval, splay=False))
         return widget
 
     # --- stories -----------------------------------------------------
