@@ -3,6 +3,13 @@
 [tool.uv.workspace]
 members = ["plugins/*"]
 
+[tool.uv]
+# TEMPORARY: Pillow 13 + raqm raises `raqm_layout() failed` on bidi separators;
+# core fixed it in led-ticker#478, which is not in the 4.30.0 PyPI release this
+# workspace resolves. Drop this (and bump weather's `led-ticker-core` floor)
+# once core >= 4.31 is published.
+constraint-dependencies = ["pillow<13"]
+
 # The engine (`led-ticker-core`) resolves from PyPI like any other dependency;
 # members declare `led-ticker-core>=2.1` (the release shipping HeadlessBackend, the
 # software backend tests use via `led_ticker.plugin`). No sibling checkout / uv
