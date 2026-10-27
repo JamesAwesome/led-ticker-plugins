@@ -5,7 +5,9 @@ width; legacy story follows `game`; frame hooks forward."""
 import asyncio
 import dataclasses
 import unittest.mock as mock
+from typing import Any
 
+import attrs
 import pytest
 from led_ticker.plugin import (
     HeadlessBackend,
@@ -16,6 +18,7 @@ from led_ticker.plugin import (
 
 import led_ticker_hockey._card as card_mod
 from led_ticker_hockey._card import HockeyGameCard
+from led_ticker_hockey._celebration import CELEBRATION_FRAMES
 from led_ticker_hockey._models import build_demo_games
 from led_ticker_hockey._scoreboard import HockeyBandBoard
 from led_ticker_hockey.layouts.scoreboard import render_scoreboard
@@ -263,3 +266,70 @@ def test_shifted_real_clips_both_edges_and_forwards_fills():
     assert set(real._pixels.values()) == {(1, 2, 3)}
     right.Clear()
     assert not any(v != (0, 0, 0) for v in real._pixels.values())
+
+
+@attrs.define
+class _HoldSpy(HockeyGameCard):
+    """Counts celebration frames drawn; queues `goal` once the engine has
+    redrawn it at the same cursor `after` times (inside the end hold)."""
+
+    goal: Any = attrs.field(default=None, kw_only=True)
+    after: int | None = attrs.field(default=None, kw_only=True)
+    shown: int = attrs.field(default=0, kw_only=True)
+    _prev: int | None = attrs.field(default=None, kw_only=True)
+    _same: int = attrs.field(default=0, kw_only=True)
+
+    def _celebrate(self, canvas, y_offset, cursor_pos):
+        painted = super()._celebrate(canvas, y_offset, cursor_pos)
+        self.shown += painted
+        return painted
+
+    def draw(self, canvas, cursor_pos=0, **kw):
+        self._same = self._same + 1 if cursor_pos == self._prev else 0
+        self._prev = cursor_pos
+        if self.after is not None and self._same > self.after:
+            self.after = None
+            self.queue_goals([self.goal])
+        return super().draw(canvas, cursor_pos, **kw)
+
+
+async def _ticker_pass(cards, hold, monkeypatch):
+    queue: asyncio.Queue = asyncio.Queue()
+    for item in (*cards, None):
+        await queue.put(item)
+    ticker, canvas = _bigsign_ticker(queue, monkeypatch)
+    run = ticker._scroll_side_by_side(canvas, cursor_pos=canvas.width, hold_at_end=hold)
+    await asyncio.wait_for(run, 1.5)
+
+
+def _hold_spy(**kw):
+    game = build_demo_games(NOW)[0]
+    return _HoldSpy(
+        game=game,
+        tz=TZ,
+        now_fn=lambda: NOW,
+        tracked=frozenset({"PHI"}),
+        goal=game.goals[0],
+        **kw,
+    )
+
+
+async def test_last_card_celebration_before_the_end_hold_plays_in_full(monkeypatch):
+    """The takeover's `canvas.width` end keeps core from fetching the
+    section's end sentinel, so the end-of-scroll hold cannot start (and cut
+    the run) until the run is over, even with a short `hold_time`."""
+    b = _hold_spy()
+    b.queue_goals([b.goal])
+    await _ticker_pass([_card("auto", 1), b], 1.0, monkeypatch)
+    assert b.shown == CELEBRATION_FRAMES and b.pending == []
+
+
+async def test_goal_inside_the_end_hold_is_cut_then_resumes(monkeypatch):
+    """README *Known limit*: a goal landing 10 ticks into a 3 s end hold
+    gets the hold's remaining 50 frames; the rest plays on the next pass."""
+    b = _hold_spy(after=10)
+    a = _card("auto", 1)
+    await _ticker_pass([a, b], 3.0, monkeypatch)
+    assert b.shown == 3 * 20 - 10
+    await _ticker_pass([a, b], 3.0, monkeypatch)
+    assert b.shown == CELEBRATION_FRAMES and b.pending == []

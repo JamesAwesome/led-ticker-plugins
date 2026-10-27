@@ -168,10 +168,18 @@ reaches only the scale-1 ticker message.
 - The landing `situation` field shapes (power play, empty net) come from community docs and
   are unverified against a live game; capture a real payload as a fixture when one is on.
 - The scale-1 `ticker` layout's clock text updates per poll; boards and hi-res tick per second.
-- Scroll-mode takeover vs core's end-of-scroll hold: when the celebrating card is the last
-  widget left in a side-by-side scroll, its `canvas.width` cursor satisfies core's
-  `mon_0_end_pos <= canvas.width` hold check, so the 2 s `hold_at_end` runs and the section
-  ends; the celebration can be cut to about 2 s.
+- Scroll-mode takeover vs core's end-of-scroll hold (`ticker` sections only; `hold_at_end`
+  is the section `hold_time`, default 3 s): a run that starts before the hold always plays
+  in full, because the takeover's `canvas.width` end keeps core from fetching the section's
+  end sentinel, so the hold cannot begin until the run is over. Only a goal landing while
+  the LAST card is already in the hold is cut, to what is left of the hold; the rest plays
+  on the card's next pass, unless a section transition resets the card first (it is the
+  section's first card), which consumes the shown goal. No `hold_time` rules it out; a longer
+  one only makes it rarer (`test_goal_inside_the_end_hold_is_cut_then_resumes`,
+  `test_last_card_celebration_before_the_end_hold_plays_in_full`).
+- Celebration and demo timing in scroll modes count scroll ticks: 80 frames (and the demo's
+  240-frame rest) are 4 s (12 s) only at the default `scroll_step_ms` of 50 ms; the
+  end-of-scroll hold always ticks at 50 ms.
 
 ## Tests
 
