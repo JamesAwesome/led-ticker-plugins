@@ -47,6 +47,11 @@ This package split out of `led-ticker-feeds` (was `feeds.weather`); history is p
   fixture — never hardcode a real key. `test_weather_icons.py` calls the pure resolver and
   needs no key.
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
+- **Draw return is absolute** — `ForecastWidget.draw()` returns `cursor_pos + canvas.width`
+  (every layout, strip included), never a bare `canvas.width`, and paints at `cursor_pos`
+  through `paint.shift_canvas` (`ShiftedReal`, clipped at both edges; cursor 0 returns the
+  canvas untouched); core pops a `ticker` / `one_at_a_time` widget only when that end goes
+  below 0 (`tests/test_scroll_mode_returns.py` drives core's real `_scroll_one_by_one`).
 
 ## Forecast invariants
 
@@ -115,7 +120,7 @@ palette values should be reading it, not guessing.
   `L._BIG_GEO.temp_y + L._BIG_GEO.line_h * 2 <= 64`) against the geometry constants
   themselves. Changing `_LONG_GEO`/`_BIG_GEO` must keep these true.
 - **Held-cursor returns the wrapper's LOGICAL width** — `ForecastWidget.draw` returns
-  `canvas.width` (never `unwrap_to_real(canvas).width`); the engine compares the cursor
+  `cursor_pos + canvas.width` (never `unwrap_to_real(canvas).width`); the engine compares the cursor
   against the wrapper's width, and the real width would wrongly route through the scroll
   branch.
 - **`KIND_SLUGS`'s lowres column must stay curated-both-registries** — every lowres slug

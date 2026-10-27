@@ -30,6 +30,7 @@ from led_ticker_weather.forecast_layouts import (
     render_hero_long,
     render_strip_small,
 )
+from led_ticker_weather.paint import shift_canvas
 
 VALID_LAYOUTS: tuple[str, ...] = ("auto", "strip", "big", "long")
 
@@ -131,19 +132,22 @@ class ForecastWidget(FrameAwareBase):
         if data is None:
             # Belt only — _expand_sources already drops us via
             # should_display(); a transition compositor may still call.
-            return canvas, canvas.width
+            return canvas, cursor_pos + canvas.width
         layout = resolve_forecast_layout(
             self.layout, safe_scale(canvas), unwrap_to_real(canvas).width
         )
+        at = shift_canvas(canvas, cursor_pos)
         if layout == "strip":
-            render_strip_small(canvas, data, self.units, y_offset=y_offset)
+            render_strip_small(at, data, self.units, y_offset=y_offset)
         elif layout == "big":
-            render_hero_big(canvas, data, self.units, y_offset=y_offset)
+            render_hero_big(at, data, self.units, y_offset=y_offset)
         else:
-            render_hero_long(canvas, data, self.units, y_offset=y_offset)
-        # Held card: LOGICAL width (never real.width — the engine compares
-        # against the wrapper's width; real.width takes the scroll branch).
-        return canvas, canvas.width
+            render_hero_long(at, data, self.units, y_offset=y_offset)
+        # Held card: painted at `cursor_pos`, ABSOLUTE end in LOGICAL width
+        # (never real.width — the engine compares against the wrapper's
+        # width; real.width takes the scroll branch). A bare `canvas.width`
+        # never goes below 0, so a scroll section would never pop the card.
+        return canvas, cursor_pos + canvas.width
 
     @classmethod
     def validate_config(cls, cfg) -> list[str]:

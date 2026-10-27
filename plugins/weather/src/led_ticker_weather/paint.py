@@ -19,9 +19,11 @@ from led_ticker.plugin import (
     ScaledCanvas,
     draw_emoji_at,
     draw_text,
+    is_scaled,
     make_color,
     measure_width,
     resolve_font,
+    safe_scale,
     unwrap_to_real,
 )
 
@@ -81,6 +83,54 @@ def spread_cells_x(
             start = (x0 + x1) / 2 - total / 2 + half
             centers = [start + cap * i for i in range(n)]
     return [js_round(c - half) for c in centers]
+
+
+class ShiftedReal:
+    """A real canvas translated by `dx` physical px (negative = left).
+    Pixels that land outside the panel are dropped, so the held forecast
+    scrolling through a `ticker` / `one_at_a_time` section clips at both
+    edges (the football `_paint.ShiftedReal` pattern)."""
+
+    __slots__ = ("_dx", "_real", "height", "width")
+
+    def __init__(self, real, dx: int) -> None:
+        self._real = real
+        self._dx = dx
+        self.width: int = real.width
+        self.height: int = real.height
+
+    def SetPixel(self, x: int, y: int, r: int, g: int, b: int) -> None:  # noqa: N802
+        x += self._dx
+        if 0 <= x < self.width and 0 <= y < self.height:
+            self._real.SetPixel(x, y, r, g, b)
+
+    def SubFill(  # noqa: N802
+        self, x: int, y: int, w: int, h: int, r: int, g: int, b: int
+    ) -> None:
+        x0, x1 = max(0, x + self._dx), min(self.width, x + self._dx + w)
+        y0, y1 = max(0, y), min(self.height, y + h)
+        if x0 < x1 and y0 < y1:
+            self._real.SubFill(x0, y0, x1 - x0, y1 - y0, r, g, b)
+
+
+def shift_canvas(canvas, cursor_pos: int):
+    """`canvas` with its left edge moved to LOGICAL `cursor_pos`, so the
+    held card lands where a `ticker` / `one_at_a_time` section's cursor puts
+    it, clipped at both edges. A wrapper stays a wrapper of the same scale
+    (the `is_scaled` hires gate is unchanged); a bare scale-1 canvas becomes
+    a bare `ShiftedReal`. Cursor 0 (every slideshow draw) returns `canvas`
+    itself, untouched."""
+    if not cursor_pos:
+        return canvas
+    if not is_scaled(canvas):
+        return ShiftedReal(canvas, cursor_pos)
+    scale = safe_scale(canvas)
+    real = unwrap_to_real(canvas)
+    return ScaledCanvas(
+        ShiftedReal(real, cursor_pos * scale),
+        scale=scale,
+        content_height=canvas.content_height,
+    )
 
 
 def phys_wrap(canvas):
