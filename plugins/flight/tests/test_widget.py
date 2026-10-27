@@ -38,10 +38,10 @@ def test_missing_coords_raises_without_demo():
         OverheadWidget()
 
 
-def test_draw_returns_canvas_and_zero(smallsign):
+def test_draw_returns_canvas_and_absolute_end(smallsign):
     w = OverheadWidget(demo=True)
     out, cursor = w.draw(smallsign)
-    assert out is smallsign and cursor == 0
+    assert out is smallsign and cursor == smallsign.width
     assert lit(smallsign)
 
 
@@ -49,7 +49,7 @@ def test_draw_dispatches_hero_on_bigsign(bigsign):
     w = OverheadWidget(demo=True)
     w.advance_frame()
     out, cursor = w.draw(bigsign)
-    assert cursor == 0 and lit(bigsign)
+    assert cursor == bigsign.width and lit(bigsign)
 
 
 def test_frame_clock_moves_the_render(smallsign):
@@ -212,7 +212,7 @@ def test_bg_color_accepted_and_engine_contract_paints_it(smallsign):
     assert w.bg_color is not None  # what the engine reads via getattr
     smallsign.Fill(0, 0, 40)  # reset_canvas's bg branch, pre-draw
     out, cursor = w.draw(smallsign)
-    assert out is smallsign and cursor == 0
+    assert out is smallsign and cursor == smallsign.width
     # Corner pixel away from content (the row band is y 2..13) keeps the bg.
     assert lit(smallsign)[(0, 15)] == (0, 0, 40)
 
