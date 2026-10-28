@@ -19,7 +19,13 @@ _ROWS = [
     "..FSFF..",
 ]
 BALL: PixelData = [
-    (x, y, *(_S if c == "S" else _F))
+    (
+        x,
+        y,
+        (_S if c == "S" else _F)[0],
+        (_S if c == "S" else _F)[1],
+        (_S if c == "S" else _F)[2],
+    )
     for y, row in enumerate(_ROWS)
     for x, c in enumerate(row)
     if c != "."

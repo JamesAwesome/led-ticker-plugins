@@ -40,7 +40,7 @@ def _decode(data: bytes, size: int) -> LogoSprite:
     out = []
     for y in range(size):
         for x in range(size):
-            r, g, b, a = img.getpixel((x, y))
+            r, g, b, a = img.getpixel((x, y))  # type: ignore[misc]
             if a < ALPHA_MIN:
                 continue
             r, g, b = (r * a) // 255, (g * a) // 255, (b * a) // 255
