@@ -437,3 +437,82 @@ class TestBeams:
         p = Laser(beams=3)
         p.frame_at(0.0, c, _make_widget(draw_pixel=False), _text_widget(content))
         assert p._tracks is not None and len(p._tracks) == 2
+
+
+class TestRealCoreWidgets:
+    """Tripwires against the one failure mode that hurts most: a core widget
+    reaching for a canvas method the snapshot `_Raster` lacks raises inside
+    the breaker-guarded draw and DISABLES the widget for the session. Mock
+    widgets can't catch that; these drive core's real widgets through the
+    snapshot at scale 1 and through a ScaledCanvas (bigsign), then assert
+    the write phase reproduces what the real snap frame draws."""
+
+    @staticmethod
+    def _written_vs_snap(p: Laser, canvas: Any, real: Any, incoming: Any) -> None:
+        blank = _make_widget(draw_pixel=False)
+        p.frame_at(0.0, canvas, blank, incoming)
+        assert p._tracks is not None
+        n_in = sum(len(i) for _o, i in p._tracks)
+        assert n_in > 0, "snapshot captured nothing from a real widget"
+        real.Clear()
+        p.frame_at(0.949, canvas, blank, incoming)  # every track fully written
+        written = dict(real._pixels)
+        real.Clear()
+        p.frame_at(0.96, canvas, blank, incoming)  # live snap draw
+        snap = dict(real._pixels)
+        lit_snap = {k: v for k, v in snap.items() if v != (0, 0, 0)}
+        assert lit_snap  # the snap really drew something
+        # At t=0.949 each track has visited floor(n*0.949/0.95) = n-1 pixels,
+        # so at most one snap pixel per beam is still unwritten. Beams cross
+        # other content rows in the head's colour, so compare colours as a
+        # palette (every written colour is a colour the snap drew), not
+        # per position.
+        missing = set(lit_snap) - set(written)
+        assert len(missing) <= len(p._tracks), sorted(missing)
+        assert set(written.values()) <= set(lit_snap.values())
+
+    def test_ticker_message_scale_1(self):
+        from led_ticker.plugin import TickerMessage
+
+        c = _StubCanvas(160, 16)
+        self._written_vs_snap(Laser(), c, c, TickerMessage(text="LASER"))
+
+    def test_ticker_message_scaled(self):
+        from led_ticker.plugin import TickerMessage
+
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        self._written_vs_snap(Laser(), sc, real, TickerMessage(text="LASER"))
+
+    def test_gif_widget_through_setimage(self, tmp_path):
+        from led_ticker.widgets.gif import GifPlayer
+
+        frame = Image.new("RGB", (32, 16), (0, 0, 0))
+        for x in range(8, 24):
+            frame.putpixel((x, 8), (200, 40, 40))
+        path = tmp_path / "bar.gif"
+        frame.save(path, save_all=True, append_images=[frame], duration=100)
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        self._written_vs_snap(
+            Laser(), sc, real, GifPlayer(path=str(path), fit="stretch")
+        )
+
+    def test_gif_tripwire_fires_without_setimage(self, tmp_path, monkeypatch):
+        """Mutation check: drop _Raster.SetImage and the gif snapshot is empty
+        — proves the test above guards the SetImage contract, not just text."""
+        from led_ticker.widgets.gif import GifPlayer
+
+        from led_ticker_flair.flair import laser as laser_mod
+
+        frame = Image.new("RGB", (32, 16), (0, 0, 0))
+        frame.putpixel((10, 8), (200, 40, 40))
+        path = tmp_path / "dot.gif"
+        frame.save(path, save_all=True, append_images=[frame], duration=100)
+        monkeypatch.delattr(laser_mod._Raster, "SetImage")
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        p = Laser()
+        widget = GifPlayer(path=str(path), fit="stretch")
+        with pytest.raises(AttributeError):
+            p.frame_at(0.0, sc, _make_widget(draw_pixel=False), widget)
