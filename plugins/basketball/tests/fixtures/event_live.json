@@ -1,0 +1,823 @@
+{
+ "id": "401909089",
+ "date": "2026-10-20T23:00Z",
+ "name": "Philadelphia 76ers at New York Knicks",
+ "shortName": "PHI @ NY",
+ "season": {
+  "year": 2027,
+  "displayName": "2026-27"
+ },
+ "seasonType": {
+  "id": "2",
+  "type": 2,
+  "name": "Regular Season",
+  "abbreviation": "reg"
+ },
+ "timeValid": true,
+ "competitions": [
+  {
+   "id": "401909089",
+   "date": "2026-10-20T23:00Z",
+   "attendance": 19812,
+   "type": {
+    "id": "1",
+    "text": "Standard",
+    "abbreviation": "STD",
+    "slug": "standard",
+    "type": "standard"
+   },
+   "timeValid": true,
+   "neutralSite": false,
+   "boxscoreAvailable": true,
+   "ticketsAvailable": false,
+   "venue": {
+    "fullName": "Madison Square Garden",
+    "address": {
+     "city": "New York",
+     "state": "NY"
+    }
+   },
+   "competitors": [
+    {
+     "id": "18",
+     "type": "team",
+     "order": 0,
+     "homeAway": "home",
+     "team": {
+      "id": "18",
+      "location": "New York",
+      "abbreviation": "NY",
+      "displayName": "New York Knicks",
+      "shortDisplayName": "Knicks",
+      "logos": [
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500/ny.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "default"
+        ],
+        "lastUpdated": "2024-06-25T21:17Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500-dark/ny.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "dark"
+        ],
+        "lastUpdated": "2024-06-25T21:13Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/ny.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "scoreboard"
+        ],
+        "lastUpdated": "2024-06-25T21:18Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500-dark/scoreboard/ny.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "scoreboard",
+         "dark"
+        ],
+        "lastUpdated": "2024-06-25T21:14Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_on_white_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_white_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_on_black_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_black_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_on_primary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_primary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_on_secondary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_secondary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_black.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_black"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/primary_logo_white.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_white"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_on_white_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_white_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_on_black_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_black_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_on_primary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_primary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_on_secondary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_secondary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_black.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_black"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/61719eb2-11c3-4e3d-90c3-0a1319fd850b/logos/secondary_logo_white.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_white"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       }
+      ],
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nba/team/_/name/ny/new-york-knicks",
+        "text": "Clubhouse"
+       }
+      ]
+     },
+     "score": "101",
+     "leaders": [
+      {
+       "name": "pointsPerGame",
+       "abbreviation": "PPG",
+       "leaders": [
+        {
+         "displayValue": "25.1",
+         "value": 25.1,
+         "athlete": {
+          "id": "1",
+          "shortName": "X. Other",
+          "displayName": "X. Other"
+         }
+        }
+       ]
+      },
+      {
+       "name": "points",
+       "abbreviation": "Pts",
+       "leaders": [
+        {
+         "displayValue": "28",
+         "value": 28.0,
+         "athlete": {
+          "id": "1",
+          "shortName": "J. Brunson",
+          "displayName": "J. Brunson"
+         }
+        }
+       ]
+      },
+      {
+       "name": "assists",
+       "abbreviation": "Ast",
+       "leaders": [
+        {
+         "displayValue": "9",
+         "value": 9.0,
+         "athlete": {
+          "id": "1",
+          "shortName": "A. Passer",
+          "displayName": "A. Passer"
+         }
+        }
+       ]
+      }
+     ],
+     "records": [
+      {
+       "type": "total",
+       "summary": "4-3"
+      }
+     ],
+     "linescores": [
+      {
+       "value": 28.0
+      },
+      {
+       "value": 24.0
+      },
+      {
+       "value": 27.0
+      },
+      {
+       "value": 22.0
+      }
+     ]
+    },
+    {
+     "id": "20",
+     "type": "team",
+     "order": 1,
+     "homeAway": "away",
+     "team": {
+      "id": "20",
+      "location": "Philadelphia",
+      "abbreviation": "PHI",
+      "displayName": "Philadelphia 76ers",
+      "shortDisplayName": "76ers",
+      "logos": [
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500/phi.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "default"
+        ],
+        "lastUpdated": "2024-06-25T21:17Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500-dark/phi.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "dark"
+        ],
+        "lastUpdated": "2024-06-25T21:13Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/phi.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "scoreboard"
+        ],
+        "lastUpdated": "2024-06-25T21:18Z"
+       },
+       {
+        "href": "https://a.espncdn.com/i/teamlogos/nba/500-dark/scoreboard/phi.png",
+        "width": 500,
+        "height": 500,
+        "alt": "",
+        "rel": [
+         "full",
+         "scoreboard",
+         "dark"
+        ],
+        "lastUpdated": "2024-06-25T21:14Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_on_white_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_white_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_on_black_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_black_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_on_primary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_primary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_on_secondary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_on_secondary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_black.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_black"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/primary_logo_white.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "primary_logo_white"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_on_white_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_white_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_on_black_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_black_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_on_primary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_primary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_on_secondary_color.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_on_secondary_color"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_black.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_black"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       },
+       {
+        "href": "https://a.espncdn.com/guid/ca1685ed-b799-53e4-7924-e58ea6eb8f3a/logos/secondary_logo_white.png",
+        "width": 4096,
+        "height": 4096,
+        "alt": "",
+        "rel": [
+         "full",
+         "secondary_logo_white"
+        ],
+        "lastUpdated": "2026-07-22T20:23Z"
+       }
+      ],
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nba/team/_/name/phi/philadelphia-76ers",
+        "text": "Clubhouse"
+       }
+      ]
+     },
+     "score": "98",
+     "leaders": [
+      {
+       "name": "pointsPerGame",
+       "abbreviation": "PPG",
+       "leaders": [
+        {
+         "displayValue": "25.1",
+         "value": 25.1,
+         "athlete": {
+          "id": "1",
+          "shortName": "X. Other",
+          "displayName": "X. Other"
+         }
+        }
+       ]
+      },
+      {
+       "name": "points",
+       "abbreviation": "Pts",
+       "leaders": [
+        {
+         "displayValue": "31",
+         "value": 31.0,
+         "athlete": {
+          "id": "1",
+          "shortName": "J. Embiid",
+          "displayName": "J. Embiid"
+         }
+        }
+       ]
+      },
+      {
+       "name": "assists",
+       "abbreviation": "Ast",
+       "leaders": [
+        {
+         "displayValue": "9",
+         "value": 9.0,
+         "athlete": {
+          "id": "1",
+          "shortName": "A. Passer",
+          "displayName": "A. Passer"
+         }
+        }
+       ]
+      }
+     ],
+     "records": [
+      {
+       "type": "total",
+       "summary": "5-2"
+      }
+     ],
+     "linescores": [
+      {
+       "value": 24.0
+      },
+      {
+       "value": 26.0
+      },
+      {
+       "value": 25.0
+      },
+      {
+       "value": 23.0
+      }
+     ]
+    }
+   ],
+   "notes": [],
+   "broadcasts": [
+    {
+     "type": {
+      "id": "1",
+      "shortName": "TV"
+     },
+     "market": {
+      "id": "1",
+      "type": "National"
+     },
+     "media": {
+      "shortName": "NBC"
+     },
+     "lang": "en",
+     "region": "us",
+     "partnered": false
+    },
+    {
+     "type": {
+      "id": "5",
+      "shortName": "Radio"
+     },
+     "market": {
+      "id": "1",
+      "type": "National"
+     },
+     "media": {
+      "shortName": "ERADM"
+     },
+     "lang": "en",
+     "region": "us",
+     "partnered": false
+    }
+   ],
+   "status": {
+    "clock": 133.0,
+    "displayClock": "2:13",
+    "period": 4,
+    "type": {
+     "id": "2",
+     "name": "STATUS_IN_PROGRESS",
+     "state": "in",
+     "completed": false,
+     "description": "In Progress",
+     "detail": "2:13 - 4th Quarter",
+     "shortDetail": "2:13 - 4th"
+    }
+   }
+  }
+ ],
+ "links": [
+  {
+   "language": "en-US",
+   "rel": [
+    "summary",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/game/_/gameId/401909089/76ers-knicks",
+   "text": "Gamecast",
+   "shortText": "Summary",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "summary",
+    "sportscenter",
+    "app",
+    "event"
+   ],
+   "href": "sportscenter://x-callback-url/showGame?sportName=basketball&leagueAbbrev=nba&gameId=401909089",
+   "text": "Gamecast",
+   "shortText": "Summary",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "now",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/game/_/gameId/401909089",
+   "text": "Now",
+   "shortText": "Now",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "teamstats",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/matchup?gameId=401909089",
+   "text": "Team Stats",
+   "shortText": "Team Stats",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "boxscore",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/boxscore/_/gameId/401909089",
+   "text": "Box Score",
+   "shortText": "Box Score",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "boxscore",
+    "sportscenter",
+    "app",
+    "event"
+   ],
+   "href": "sportscenter://x-callback-url/showGame?sportName=basketball&leagueAbbrev=nba&gameId=401909089",
+   "text": "Box Score",
+   "shortText": "Box Score",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "gamecast",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/game/_/gameId/401909089",
+   "text": "Gamecast",
+   "shortText": "Gamecast",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "gamecast",
+    "mobile",
+    "event"
+   ],
+   "href": "http://m.espn.com/nba/gamecast?gameId=401909089&action=summary",
+   "text": "Gamecast",
+   "shortText": "Gamecast",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "gamecast",
+    "sportscenter",
+    "app",
+    "event"
+   ],
+   "href": "sportscenter://x-callback-url/showGame?sportName=basketball&leagueAbbrev=nba&gameId=401909089",
+   "text": "Gamecast",
+   "shortText": "Gamecast",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "recap",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/recap?gameId=401909089",
+   "text": "Recap",
+   "shortText": "Recap",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "pbp",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/playbyplay/_/gameId/401909089",
+   "text": "Play-by-Play",
+   "shortText": "Play-by-Play",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "videos",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/video?gameId=401909089",
+   "text": "Videos",
+   "shortText": "Videos",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "odds",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nba/odds/_/gameId/401909089",
+   "text": "Odds",
+   "shortText": "Odds",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "odds",
+    "mobile",
+    "event"
+   ],
+   "href": "https://m.espn.com/nba/odds/_/gameId/401909089",
+   "text": "Odds",
+   "shortText": "Odds",
+   "isExternal": false,
+   "isPremium": false
+  }
+ ],
+ "_handwritten": true
+}

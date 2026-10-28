@@ -31,6 +31,7 @@ pip install led-ticker-<name>   # e.g. pip install led-ticker-weather
 | Tennis | `led-ticker-tennis` | `tennis.scores` | [Live Tennis API](https://livetennisapi.com) free tier (maintained by the API's vendor) |
 | Hockey | `led-ticker-hockey` | `hockey.scores` | NHL public web API (no key) |
 | Football / NFL | `led-ticker-football` | `football.scores` | ESPN public scoreboard API (no key) |
+| Basketball / NBA | `led-ticker-basketball` | `basketball.scores` (+ `:basketball.ball:` emoji) | ESPN public scoreboard API (no key); bundled logos |
 | Flair | `led-ticker-flair` | sprite-trail transitions `nyancat.*`, `pokeball.*`, `pacman.*`, `sailor_moon.*` (+ `:pokeball.ball:` emoji) | bundled sprite artwork |
 
 ## Develop
@@ -55,7 +56,7 @@ The `led-ticker-flair` pack (`nyancat`, `pokeball`, `pacman`, `sailor_moon`)
 contains **unofficial fan homages** — the character names/designs and any bundled
 sprite artwork belong to their respective owners and are **not** covered by this
 project's license. See [NOTICE.md](NOTICE.md) for details. The data plugins
-(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `tennis`, `hockey`, `football`) are original
+(`pool`, `baseball`, `crypto`, `calendar`, `rss`, `weather`, `tennis`, `hockey`, `football`, `basketball`) are original
 works.
 
 ## License
