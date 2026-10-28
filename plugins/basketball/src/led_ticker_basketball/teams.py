@@ -5,8 +5,9 @@ is invisible on a black panel: every primary and secondary has a channel >= 90.
 Where ESPN's primary is black or near-black (`BKN`, `SA`) the lifted secondary
 is the chip's main colour.
 
-The ESPN ids below are verified against the 2026-10-28 payload: pending (the
-human capture step confirms each `team.id`; fix any that differ).
+The ESPN ids and (for the clubs on that day's slate) colours below were verified
+against the 2026-10-28 payload; BOS, BKN, MEM, POR, SAC and PHX keep approximated
+colours until they appear in a capture.
 """
 
 from dataclasses import dataclass
@@ -30,38 +31,38 @@ class TeamInfo:
 NBA_TEAMS: dict[str, TeamInfo] = {
     t.abbrev: t
     for t in (
-        TeamInfo("ATL", "1", "Atlanta", "Hawks", (225, 68, 52), (196, 214, 0)),
+        TeamInfo("ATL", "1", "Atlanta", "Hawks", (200, 16, 46), (253, 185, 39)),
         TeamInfo("BOS", "2", "Boston", "Celtics", (0, 150, 80), _WHITE),
         TeamInfo("BKN", "17", "Brooklyn", "Nets", _SILVER, _WHITE),
-        TeamInfo("CHA", "30", "Charlotte", "Hornets", (29, 140, 160), (110, 70, 190)),
-        TeamInfo("CHI", "4", "Chicago", "Bulls", (206, 17, 65), _WHITE),
-        TeamInfo("CLE", "5", "Cleveland", "Cavaliers", (134, 0, 56), (253, 187, 48)),
-        TeamInfo("DAL", "6", "Dallas", "Mavericks", (0, 100, 220), (0, 43, 92)),
-        TeamInfo("DEN", "7", "Denver", "Nuggets", (60, 110, 190), (255, 198, 39)),
-        TeamInfo("DET", "8", "Detroit", "Pistons", (200, 16, 46), (29, 66, 138)),
-        TeamInfo("GS", "9", "Golden State", "Warriors", (29, 66, 138), (255, 199, 44)),
-        TeamInfo("HOU", "10", "Houston", "Rockets", (206, 17, 65), _SILVER),
-        TeamInfo("IND", "11", "Indiana", "Pacers", (253, 187, 48), (0, 45, 98)),
-        TeamInfo("LAC", "12", "Los Angeles", "Clippers", (200, 16, 46), (29, 66, 138)),
-        TeamInfo("LAL", "13", "Los Angeles", "Lakers", (85, 37, 130), (253, 185, 39)),
+        TeamInfo("CHA", "30", "Charlotte", "Hornets", (0, 140, 168), (110, 70, 190)),
+        TeamInfo("CHI", "4", "Chicago", "Bulls", (206, 17, 65), (190, 190, 190)),
+        TeamInfo("CLE", "5", "Cleveland", "Cavaliers", (134, 0, 56), (188, 148, 92)),
+        TeamInfo("DAL", "6", "Dallas", "Mavericks", (0, 100, 177), (187, 196, 202)),
+        TeamInfo("DEN", "7", "Denver", "Nuggets", (30, 70, 160), (254, 197, 36)),
+        TeamInfo("DET", "8", "Detroit", "Pistons", (30, 80, 170), (200, 16, 46)),
+        TeamInfo("GS", "9", "Golden State", "Warriors", (253, 185, 39), (30, 80, 170)),
+        TeamInfo("HOU", "10", "Houston", "Rockets", (206, 14, 45), (190, 190, 190)),
+        TeamInfo("IND", "11", "Indiana", "Pacers", (30, 70, 160), (255, 213, 32)),
+        TeamInfo("LAC", "12", "Los Angeles", "Clippers", (30, 70, 160), (200, 16, 46)),
+        TeamInfo("LAL", "13", "Los Angeles", "Lakers", (85, 37, 131), (253, 185, 39)),
         TeamInfo("MEM", "29", "Memphis", "Grizzlies", (93, 118, 169), (70, 90, 190)),
         TeamInfo("MIA", "14", "Miami", "Heat", (152, 0, 46), (249, 160, 27)),
-        TeamInfo("MIL", "15", "Milwaukee", "Bucks", (0, 130, 60), (240, 235, 210)),
+        TeamInfo("MIL", "15", "Milwaukee", "Bucks", (0, 130, 60), (238, 225, 198)),
         TeamInfo(
-            "MIN", "16", "Minnesota", "Timberwolves", (60, 110, 190), (120, 190, 32)
+            "MIN", "16", "Minnesota", "Timberwolves", (38, 96, 146), (121, 188, 67)
         ),
-        TeamInfo("NO", "3", "New Orleans", "Pelicans", (30, 80, 190), (225, 58, 62)),
+        TeamInfo("NO", "3", "New Orleans", "Pelicans", (30, 70, 160), (180, 151, 90)),
         TeamInfo("NY", "18", "New York", "Knicks", (245, 132, 38), (0, 107, 182)),
-        TeamInfo("OKC", "25", "Oklahoma City", "Thunder", (0, 125, 195), (239, 59, 36)),
-        TeamInfo("ORL", "19", "Orlando", "Magic", (0, 125, 197), _SILVER),
+        TeamInfo("OKC", "25", "Oklahoma City", "Thunder", (0, 122, 193), (239, 59, 36)),
+        TeamInfo("ORL", "19", "Orlando", "Magic", (1, 80, 181), (156, 160, 163)),
         TeamInfo("PHI", "20", "Philadelphia", "76ers", (0, 107, 182), (237, 23, 76)),
         TeamInfo("PHX", "21", "Phoenix", "Suns", (229, 95, 32), (29, 17, 96)),
         TeamInfo("POR", "22", "Portland", "Trail Blazers", (224, 58, 62), _SILVER),
-        TeamInfo("SA", "24", "San Antonio", "Spurs", _SILVER, (130, 130, 130)),
+        TeamInfo("SA", "24", "San Antonio", "Spurs", (196, 206, 212), (130, 130, 130)),
         TeamInfo("SAC", "23", "Sacramento", "Kings", (115, 64, 160), _SILVER),
-        TeamInfo("TOR", "28", "Toronto", "Raptors", (206, 17, 65), _SILVER),
-        TeamInfo("UTAH", "26", "Utah", "Jazz", (0, 130, 60), (249, 160, 27)),
-        TeamInfo("WSH", "27", "Washington", "Wizards", (0, 43, 92), (227, 24, 55)),
+        TeamInfo("TOR", "28", "Toronto", "Raptors", (217, 18, 68), (190, 190, 190)),
+        TeamInfo("UTAH", "26", "Utah", "Jazz", (78, 0, 142), (121, 163, 220)),
+        TeamInfo("WSH", "27", "Washington", "Wizards", (227, 24, 55), (30, 90, 170)),
     )
 }
 
