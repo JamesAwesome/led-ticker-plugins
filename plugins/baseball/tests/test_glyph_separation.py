@@ -19,8 +19,10 @@ caps. Raising them is a layout decision, not a threshold one.
 """
 
 import math
+import os
 
 import attrs
+import PIL.features
 import pytest
 from led_ticker.plugin import draw_text, resolve_font
 
@@ -97,6 +99,15 @@ def test_bold_glyphs_do_not_fuse_at_any_painted_size(text, size):
     )
 
 
+_FREETYPE_PREMISE = pytest.mark.skipif(
+    PIL.features.version("freetype2") != "2.14.3" and not os.environ.get("CI"),
+    reason="premise measured on FreeType 2.14.3; local FreeType differs so this "
+    "is skipped - CI is authoritative; if CI fails here after a Pillow bump, "
+    "re-measure the threshold and update the pinned version",
+)
+
+
+@_FREETYPE_PREMISE
 def test_the_thin_font_threshold_fuses_bold_text():
     """Pins the premise: 80 — the value this pack used to hard-code — fuses
     a bold venue word at the promo size. If this stops failing, core's

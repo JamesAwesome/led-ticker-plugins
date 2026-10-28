@@ -29,6 +29,8 @@ Not sure whether something fits? Open an [issue](https://github.com/JamesAwesome
 
 This is a `uv` workspace; each plugin lives under `plugins/<name>/` with its own `pyproject.toml`, `CLAUDE.md`, and `README.md` (versions derive from per-plugin git tags — `<plugin>-vX.Y.Z` — via hatch-vcs; no manual version bump is needed to release). A sibling `../led-ticker` checkout is required (the workspace resolves `led-ticker-core` from it).
 
+Local envs are pinned to Python 3.14 (`.python-version`) so uv does not pick 3.15 or a system Python whose Pillow wheel bundles a different FreeType than the one in `uv.lock` (Pillow 12.2.0) and CI; the glyph-rasterizer premise tests depend on that FreeType.
+
 ```bash
 make dev    # uv sync the whole workspace
 make test   # pytest every member
