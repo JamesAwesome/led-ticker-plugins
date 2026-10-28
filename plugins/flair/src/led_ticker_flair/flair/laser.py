@@ -101,7 +101,10 @@ def _is_lit(px: tuple[int, int, int] | None) -> bool:
 
 
 def raster_order(
-    raster: _Raster, origin: str, forward_first: bool = True
+    raster: _Raster,
+    origin: str,
+    forward_first: bool = True,
+    across: range | None = None,
 ) -> tuple[list[Pixel], bool]:
     """Lit pixels of ``raster`` in beam-visit order, plus the parity the
     NEXT phase should start with.
@@ -124,7 +127,8 @@ def raster_order(
         lines = range(w)
     else:
         lines = range(w - 1, -1, -1)
-    across = range(w) if by_rows else range(h)
+    if across is None:
+        across = range(w) if by_rows else range(h)
 
     out: list[Pixel] = []
     forward = forward_first
@@ -145,6 +149,45 @@ def raster_order(
     return out, forward
 
 
+_DEFAULT_BEAMS = 3
+
+
+def _coerce_beams(beams: Any) -> int:
+    if isinstance(beams, bool) or not isinstance(beams, int) or beams < 1:
+        raise ValueError(f"beams must be a positive int; got {beams!r}")
+    return beams
+
+
+def _lit_extent(raster: _Raster, vertical: bool) -> tuple[int, int] | None:
+    """[lo, hi) of lit pixels along the across axis (x for vertical beams,
+    y for horizontal), or None when nothing is lit."""
+    lo, hi = None, None
+    get = raster.get
+    for y in range(raster.height):
+        for x in range(raster.width):
+            if _is_lit(get(x, y)):
+                k = x if vertical else y
+                lo = k if lo is None or k < lo else lo
+                hi = k if hi is None or k > hi else hi
+    return None if lo is None or hi is None else (lo, hi + 1)
+
+
+def _spans(out_r: _Raster, in_r: _Raster, origin: str, n: int) -> list[range]:
+    """Split the lit CONTENT extent along the across axis (width for
+    top/bottom, height for left/right) into ``n`` near-equal contiguous
+    spans, one per beam — so a centred headline gets all ``n`` beams, not
+    just the one whose panel-width slice it happens to sit in."""
+    vertical = origin in ("top", "bottom")
+    ext = [e for e in (_lit_extent(out_r, vertical), _lit_extent(in_r, vertical)) if e]
+    if not ext:
+        return [range(0)]
+    lo = min(e[0] for e in ext)
+    hi = max(e[1] for e in ext)
+    n = max(1, min(n, hi - lo))
+    edges = [lo + round(k * (hi - lo) / n) for k in range(n + 1)]
+    return [range(edges[k], edges[k + 1]) for k in range(n)]
+
+
 class Laser:
     """Beam from the ``_origin`` edge erases the outgoing content pixel by
     pixel, then writes the incoming content the same way.
@@ -155,7 +198,10 @@ class Laser:
     (remaining ``n_in`` visits): ``snap_reset`` to the incoming bg, paint
     every visited incoming pixel in its snapshot colour. Both phases draw
     a one-real-pixel beam from the origin edge to the head pixel, in the
-    head's colour. Snapshots are taken ONCE per firing (refire detected
+    head's colour. ``beams`` (default 3) splits the lit content extent into
+    that many equal slices, each with its own independent beam; the bg
+    cuts over to the incoming section the moment the first beam starts
+    writing. Snapshots are taken ONCE per firing (refire detected
     by ``t < _last_t``); the outgoing is never drawn live after that —
     a live draw can drift from the snapshot over a ≥2.4 s transition.
     """
@@ -164,16 +210,19 @@ class Laser:
     scale_switch_at = 1.0  # hard-edged family convention
     _origin = "top"
 
-    def __init__(self) -> None:
-        self._out: list[Pixel] | None = None
-        self._in: list[Pixel] | None = None
+    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
+        self.beams: int = _coerce_beams(beams)
+        # tracks: parallel (out_pixels, in_pixels) pairs, one per beam
+        self._tracks: list[tuple[list[Pixel], list[Pixel]]] | None = None
         self._last_t = 1.0
-        self._raster: _Raster | None = None
+        self._rasters: list[_Raster | None] = [None, None]
         self._raster_key: tuple[int, int, int, int | None] | None = None
 
     # --- snapshot -------------------------------------------------------------
 
-    def _snapshot(self, canvas: Any, widget: Any, cursor_pos: int) -> _Raster:
+    def _snapshot(
+        self, canvas: Any, widget: Any, cursor_pos: int, slot: int
+    ) -> _Raster:
         """Draw ``widget`` once into a cleared physical-resolution raster,
         through a ScaledCanvas wrapper when the live canvas is scaled so
         the widget paints exactly as it would on the panel."""
@@ -185,10 +234,13 @@ class Laser:
             canvas.scale if scaled else 1,
             canvas.content_height if scaled else None,
         )
-        if self._raster is None or self._raster_key != key:
-            self._raster = _Raster(real.width, real.height)
+        if self._raster_key != key:
+            self._rasters = [None, None]
             self._raster_key = key
-        raster = self._raster
+        raster = self._rasters[slot]
+        if raster is None:
+            raster = _Raster(real.width, real.height)
+            self._rasters[slot] = raster
         raster.Clear()
         target: Any = raster
         if scaled:
@@ -199,24 +251,40 @@ class Laser:
         return raster
 
     def _ensure_plan(self, canvas: Any, outgoing: Any, incoming: Any, pos: int) -> None:
-        if self._out is None:
-            self._out, parity = raster_order(
-                self._snapshot(canvas, outgoing, pos), self._origin
-            )
-            self._in, _ = raster_order(
-                self._snapshot(canvas, incoming, 0), self._origin, forward_first=parity
-            )
+        if self._tracks is not None:
+            return
+        out_r = self._snapshot(canvas, outgoing, pos, 0)
+        in_r = self._snapshot(canvas, incoming, 0, 1)
+        spans = _spans(out_r, in_r, self._origin, self.beams)
+        tracks: list[tuple[list[Pixel], list[Pixel]]] = []
+        for sp in spans:
+            o, par = raster_order(out_r, self._origin, across=sp)
+            i, _ = raster_order(in_r, self._origin, forward_first=par, across=sp)
+            tracks.append((o, i))
+        self._tracks = tracks
 
     # --- schedule -------------------------------------------------------------
 
-    def _visited(self, t: float) -> int:
-        """Pixels visited at progress ``t``: constant speed in lit pixels,
-        all ``n_out + n_in`` visited at ``SNAP_THRESHOLD``."""
-        assert self._out is not None and self._in is not None
-        n = len(self._out) + len(self._in)
+    @property
+    def _out(self) -> list[Pixel] | None:  # single-beam view (tests / debugging)
+        return None if self._tracks is None else self._tracks[0][0]
+
+    @property
+    def _in(self) -> list[Pixel] | None:
+        return None if self._tracks is None else self._tracks[0][1]
+
+    @staticmethod
+    def _visited_of(n: int, t: float) -> int:
+        """Pixels of an ``n``-pixel track visited at progress ``t``:
+        constant speed in lit pixels, all visited at ``SNAP_THRESHOLD``."""
         if t >= SNAP_THRESHOLD:
             return n
         return int(n * t / SNAP_THRESHOLD)
+
+    def _visited(self, t: float) -> int:
+        assert self._tracks is not None
+        o, i = self._tracks[0]
+        return self._visited_of(len(o) + len(i), t)
 
     # --- paint ----------------------------------------------------------------
 
@@ -240,8 +308,7 @@ class Laser:
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
     ) -> Canvas:
         if t < self._last_t:  # new firing -> fresh snapshots
-            self._out = None
-            self._in = None
+            self._tracks = None
         self._last_t = t
 
         if t >= SNAP_THRESHOLD:
@@ -251,29 +318,33 @@ class Laser:
 
         pos = kwargs.get("outgoing_scroll_pos", 0)
         self._ensure_plan(canvas, outgoing, incoming, pos)
-        assert self._out is not None and self._in is not None
+        assert self._tracks is not None
         # `real` is re-derived EVERY call, never cached (constraint #1).
         real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
         rw, rh = real.width, real.height
         set_px = real.SetPixel
 
-        v = self._visited(t)
-        n_out = len(self._out)
-        head: Pixel | None = None
-        if v <= n_out:
-            for i in range(v, n_out):
-                x, y, (r, g, b) = self._out[i]
-                set_px(x, y, r, g, b)
-            if v > 0:
-                head = self._out[v - 1]
-        else:
+        states = [(o, i, self._visited_of(len(o) + len(i), t)) for o, i in self._tracks]
+        # The bg cuts over to the incoming section the moment ANY beam
+        # starts writing (single beam: exactly at the erase/write boundary).
+        if any(v > len(o) for o, _i, v in states):
             snap_reset(canvas, kwargs.get("incoming_bg_color"))
-            written = v - n_out
-            for i in range(written):
-                x, y, (r, g, b) = self._in[i]
-                set_px(x, y, r, g, b)
-            head = self._in[written - 1]
-        if head is not None:
+        heads: list[Pixel] = []
+        for o, i, v in states:
+            n_out = len(o)
+            if v <= n_out:
+                for k in range(v, n_out):
+                    x, y, (r, g, b) = o[k]
+                    set_px(x, y, r, g, b)
+                if v > 0:
+                    heads.append(o[v - 1])
+            else:
+                written = v - n_out
+                for k in range(written):
+                    x, y, (r, g, b) = i[k]
+                    set_px(x, y, r, g, b)
+                heads.append(i[written - 1])
+        for head in heads:
             self._draw_beam(real, rw, rh, head)
         return canvas
 
@@ -302,12 +373,12 @@ class _LaserMulti:
     advanced on every new firing (``t < _last_t``), ``min_frames`` peeking
     the NEXT variant, ``frame_at`` delegated."""
 
-    def __init__(self) -> None:
+    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
         self._transitions: list[Laser] = [
-            Laser(),
-            LaserRight(),
-            LaserBottom(),
-            LaserLeft(),
+            Laser(beams=beams),
+            LaserRight(beams=beams),
+            LaserBottom(beams=beams),
+            LaserLeft(beams=beams),
         ]
         self._index: int = -1
         self._last_t: float = 1.0
@@ -342,8 +413,8 @@ class LaserRandom(_LaserMulti):
     (WipeRandom policy). ``_rng`` is an instance attribute so tests can
     seed it."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
+        super().__init__(beams=beams)
         self._rng = random.Random()
 
     def _next_index(self) -> int:

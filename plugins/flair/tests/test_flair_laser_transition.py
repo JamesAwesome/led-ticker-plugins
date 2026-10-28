@@ -8,6 +8,7 @@ on the stub so image widgets can draw live at the snap frame.
 from typing import Any
 from unittest import mock
 
+import pytest
 from led_ticker.plugin import ScaledCanvas, unwrap_to_real
 from PIL import Image
 
@@ -112,14 +113,14 @@ INC = [(5, 1, (0, 255, 0)), (6, 1, (0, 0, 255))]  # n_in = 2
 class TestLaserFrames:
     def test_t0_paints_outgoing_snapshot_only_no_beam(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
         assert c._pixels == {(x, y): col for x, y, col in OUT}
 
     def test_erase_frame_hides_visited_and_draws_beam_in_head_colour(self):
         # N=5; visited == int(5*0.4/0.95) == 2
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
         c.Clear()
         p.frame_at(0.4, c, _text_widget(OUT), _text_widget(INC))
@@ -135,7 +136,7 @@ class TestLaserFrames:
             lambda cv, bg: calls.append(bg),
         )
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
         c.Clear()
         p.frame_at(
@@ -150,7 +151,7 @@ class TestLaserFrames:
 
     def test_outgoing_not_drawn_live_after_snapshot(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         o = _text_widget(OUT)
         for t in (0.0, 0.2, 0.4):
             p.frame_at(t, c, o, _text_widget(INC))
@@ -163,7 +164,7 @@ class TestLaserFrames:
             lambda cv, bg: calls.append(bg),
         )
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         i = _text_widget(INC)
         p.frame_at(0.96, c, _text_widget(OUT), i, incoming_bg_color=(9, 9, 9))
         assert calls[-1] == (9, 9, 9)
@@ -173,14 +174,14 @@ class TestLaserFrames:
 
     def test_all_incoming_visited_at_0_95(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
         assert p._visited(0.95) == 5
         assert p._visited(0.949) == 4
 
     def test_empty_outgoing_starts_writing_immediately(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _make_widget(draw_pixel=False), _text_widget(INC))
         c.Clear()
         # visited = int(2*0.5/0.95) = 1
@@ -189,7 +190,7 @@ class TestLaserFrames:
 
     def test_zero_lit_pixels_both_sides_snaps_cleanly(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         for t in (0.0, 0.5, 0.96):
             p.frame_at(
                 t, c, _make_widget(draw_pixel=False), _make_widget(draw_pixel=False)
@@ -197,7 +198,7 @@ class TestLaserFrames:
 
     def test_refire_resnapshots_changed_incoming(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
         p.frame_at(0.96, c, _text_widget(OUT), _text_widget(INC))
         new = [(7, 1, (9, 9, 200))]
@@ -208,7 +209,7 @@ class TestLaserFrames:
 
     def test_equal_t_is_not_a_refire(self):
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         p.frame_at(0.3, c, _text_widget(OUT), _text_widget(INC))
         out_ref = p._out
         p.frame_at(0.3, c, _text_widget(OUT), _text_widget(INC))
@@ -219,7 +220,7 @@ class TestLaserFrames:
         img.putpixel((3, 1), (10, 20, 30))
         img.putpixel((5, 1), (1, 2, 3))
         c = _StubCanvas(8, 2)
-        p = Laser()
+        p = Laser(beams=1)
         blank = _make_widget(draw_pixel=False)
         p.frame_at(0.0, c, blank, _image_widget(img))
         c.Clear()
@@ -237,7 +238,7 @@ class TestLaserScaled:
     def test_scaled_canvas_beam_is_one_real_pixel_wide(self):
         real = _StubCanvas(256, 64)
         sc = ScaledCanvas(real, scale=4, content_height=8)  # 32-row band, y_offset 16
-        p = Laser()
+        p = Laser(beams=1)
         o = _make_widget(draw_pixel=False)
         # logical (0,0) = real 4x4 block at rows 16..19
         i = _text_widget([(0, 0, (0, 200, 0))])
@@ -252,7 +253,7 @@ class TestLaserScaled:
     def test_beam_reaches_real_edge_through_letterbox_band(self):
         real = _StubCanvas(256, 64)
         sc = ScaledCanvas(real, scale=2, content_height=16)  # 32-row band centred
-        p = Laser()
+        p = Laser(beams=1)
         i = _text_widget([(0, 0, (0, 200, 0))])
         p.frame_at(0.0, sc, _make_widget(draw_pixel=False), i)
         real.Clear()
@@ -290,7 +291,7 @@ class TestVariantsAndRegistration:
 
     def test_alternating_cycles_top_right_bottom_left(self):
         c = _StubCanvas(8, 2)
-        p = LaserAlternating()
+        p = LaserAlternating(beams=1)
         seen = []
         for _ in range(5):
             p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
@@ -300,7 +301,7 @@ class TestVariantsAndRegistration:
 
     def test_random_never_repeats_back_to_back(self):
         c = _StubCanvas(8, 2)
-        p = LaserRandom()
+        p = LaserRandom(beams=1)
         p._rng.seed(1)
         seen = []
         for _ in range(30):
@@ -326,7 +327,7 @@ class TestPerfUniformity:
         canvas = _StubCanvas(width=160, height=16)
         o = _text_widget(OUT)
         i = _text_widget(INC)
-        p = Laser()
+        p = Laser(beams=1)
         counts = []
         t = 0.02
         while t < 1.0:
@@ -344,7 +345,7 @@ class TestPerfUniformity:
         canvas = _StubCanvas(width=160, height=16)
         o = _text_widget(OUT)
         i = _text_widget(INC)
-        p = LaserAlternating()
+        p = LaserAlternating(beams=1)
         for t in (0.3, 0.6, 0.96):
             p.frame_at(t, canvas, o, i)
         panel = 160 * 16
@@ -359,10 +360,80 @@ class TestPerfUniformity:
         real = _StubCanvas(256, 64)
         sc = ScaledCanvas(real, scale=4, content_height=16)
         full = _make_widget(draw_pixel=False, fill=(7, 7, 7))
-        p = Laser()
+        p = Laser(beams=1)
         t = 0.02
         while t < 1.0:
             before = len(real.calls)
             p.frame_at(round(t, 3), sc, full, full)
             assert len(real.calls) - before <= int(1.5 * 256 * 64)
             t += 0.02
+
+
+class TestBeams:
+    """`beams` knob: N independent beams, each rastering an equal slice of
+    the lit CONTENT extent (not the panel). Default 3 (James's pick after
+    the spike gifs; the every-line-at-once mode read as a blur and was
+    dropped)."""
+
+    def test_default_beams_is_3(self):
+        assert Laser().beams == 3
+        assert all(tr.beams == 3 for tr in LaserAlternating()._transitions)
+
+    @pytest.mark.parametrize("bad", [0, -1, True, "all", 2.5, None])
+    def test_beams_validation(self, bad):
+        with pytest.raises(ValueError, match="beams"):
+            Laser(beams=bad)
+
+    def test_multi_variants_forward_beams(self):
+        assert all(tr.beams == 2 for tr in LaserAlternating(beams=2)._transitions)
+        assert all(tr.beams == 2 for tr in LaserRandom(beams=2)._transitions)
+
+    def test_beams_split_content_extent_not_panel(self):
+        # 6-px-wide content at x 60..65 on a 160-wide panel -> 3 beams of 2 px
+        c = _StubCanvas(160, 16)
+        content = [(x, 5, (200, 200, 0)) for x in range(60, 66)]
+        p = Laser(beams=3)
+        p.frame_at(0.0, c, _make_widget(draw_pixel=False), _text_widget(content))
+        assert p._tracks is not None
+        xs = [sorted(x for x, _y, _c in i) for _o, i in p._tracks]
+        assert xs == [[60, 61], [62, 63], [64, 65]]
+
+    def test_each_beam_draws_its_own_head(self):
+        # Three 2-px tracks, write-only; at t=0.6 each has visited int(2*0.6/0.95)=1
+        c = _StubCanvas(160, 16)
+        content = [(x, 5, (200, 200, 0)) for x in range(60, 66)]
+        p = Laser(beams=3)
+        p.frame_at(0.0, c, _make_widget(draw_pixel=False), _text_widget(content))
+        c.Clear()
+        p.frame_at(0.6, c, _make_widget(draw_pixel=False), _text_widget(content))
+        beam_cols = {x for (x, y) in c._pixels if y < 5}
+        assert len(beam_cols) == 3
+        assert beam_cols <= set(range(60, 66))
+
+    def test_bg_cuts_over_when_first_beam_starts_writing(self, monkeypatch):
+        calls: list[Any] = []
+        monkeypatch.setattr(
+            "led_ticker_flair.flair.laser.snap_reset",
+            lambda cv, bg: calls.append(bg),
+        )
+        c = _StubCanvas(160, 16)
+        # beam A: 1 out + 3 in px (n=4 -> at t=0.6 visited 2 -> writing);
+        # beam B: 4 out px (visited 2 -> still erasing)
+        out = [(60, 5, (255, 0, 0))] + [(70 + k, 5, (255, 0, 0)) for k in range(4)]
+        inc = [(60, 6 + k, (0, 0, 255)) for k in range(3)]
+        p = Laser(beams=2)
+        p.frame_at(0.0, c, _text_widget(out), _text_widget(inc))
+        c.Clear()
+        p.frame_at(
+            0.6, c, _text_widget(out), _text_widget(inc), incoming_bg_color=(1, 1, 1)
+        )
+        assert calls == [(1, 1, 1)]  # beam A is writing...
+        assert c._pixels[(60, 6)] == (0, 0, 255)
+        assert (73, 5) in c._pixels  # ...while beam B still has unerased pixels
+
+    def test_beams_clamp_to_content_width(self):
+        c = _StubCanvas(160, 16)
+        content = [(60, 5, (200, 200, 0)), (61, 5, (200, 200, 0))]
+        p = Laser(beams=3)
+        p.frame_at(0.0, c, _make_widget(draw_pixel=False), _text_widget(content))
+        assert p._tracks is not None and len(p._tracks) == 2
