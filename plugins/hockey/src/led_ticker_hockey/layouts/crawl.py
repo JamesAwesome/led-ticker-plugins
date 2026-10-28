@@ -105,7 +105,8 @@ def render_crawl(
     stale: bool = False,
 ) -> int:
     """Draw at LOGICAL `cursor_pos`; return the run's advance width, also
-    LOGICAL."""
+    LOGICAL (the card adds `cursor_pos` and padding for core's absolute
+    end)."""
     shim, real = phys_wrap(canvas)
     scale = safe_scale(canvas)
     yo = y_offset * scale

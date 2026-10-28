@@ -42,9 +42,17 @@ from a game disappearing. `polled_at` is wall-clock epoch seconds.
 **One shared source per session** — `shared_source(session)`; every widget's `want()`
 merges into it, and cadence is the source's (15 s live — or the fastest widget
 `update_interval` below that, via `want(live_interval=...)` — / 300 s pregame / 3600 s
-idle, `MIN_INTERVAL` 10 s floor; season schedule at most every 6 h). The landing "situation" call is
+idle, `MIN_INTERVAL` 10 s floor; season schedule at most every 6 h). The source only
+polls when a widget's `update()` calls it, and each widget's monitor loop runs every
+`max(MIN_INTERVAL, update_interval)` s, so an interval above 15 slows that widget (and a
+lone widget's polling). The landing "situation" call is
 gated to live games that some consumer displays (`note_displayed`, per consumer, so
 shared widgets do not multiply requests).
+
+**`run_monitor_loop(..., splay=False)`** — core's default splay adds a fixed random
+0–60 s to the poll interval at startup (a 15 s live cadence ran at 29 s on hardware, in
+football). The shared source rate-limits itself, so the widget loop must not add jitter
+(`test_start_registers_interest_updates_and_spawns`).
 
 **Next game vs `_games` share ONE hold predicate** — `_models.final_in_hold` (with
 `GAME_LENGTH`) is used by both `scores.select_stories` and `NHLSource._playing`. A team
@@ -70,7 +78,56 @@ per poll: celebration state, frame counters and the legacy story cache live on t
 actually DRAWN on a live (unpaused, `_frame_count > 0`) frame (`_shown`), so stale frame
 counts or transition compositing never eat an unseen celebration. Goals queued mid-visit
 wait for the next turn. Non-tracked goals highlight the score instead; empty `teams` means
-no celebrations.
+no celebrations. Scroll-mode sections (`ticker`, `one_at_a_time`) never call
+`reset_frame()`, so with no snapshot (`_playing is None`) the first live draw SELF-STARTS
+a run (`_run_start` = that `_frame_count`). Its phase is `_run_pos`, which advances once
+per frame the card is actually DRAWN (deduped by `_frame_count`), never by
+`_frame_count - _run_start`: core advances every buffered widget each tick but stops
+drawing once the cursor reaches the width, so a run hidden behind another card's takeover
+must not burn out unseen. The draw after its last frame consumes it exactly as `reset_frame` would, sets `_playing` and
+`_run_start` back to None and paints the board; the next live draw may self-start again.
+`reset_frame` always sets `_run_start = None` (visit runs start at frame 0), so the
+slideshow path never self-starts. A PAUSED `reset_frame` is a transition's
+(`run_transition` / `_scroll_transition` call `pause_frame()` then `reset_frame()` on the
+incoming widget; `FrameAwareBase.reset_frame` keeps the pause flag): it consumes as usual
+but sets `_playing = None`, because a scroll section never resets again and a leftover
+snapshot would stop the card self-starting for good; a slideshow's `_show_one` resets
+again live and snapshots (`test_transition_reset_keeps_self_started_runs`). Every celebration frame is a full-panel takeover: it
+first clears the real panel (to `bg_color` when set, else black, at every scale), because in a
+side-by-side scroll core resets once per tick and earlier widgets have already painted;
+it returns a `canvas.width` cursor, so later widgets are skipped for the tick. Core keeps
+decrementing the cursor beneath it, so a self-started run freezes the card's EFFECTIVE
+cursor: `_x_shift` (effective = raw + shift) puts the board back where the run began, and
+is cleared when the raw cursor next increases (a fresh pass), which also re-bases a run
+that spans passes (`test_scroll_mode_run_freezes_cursor_until_next_pass`,
+`test_run_cut_by_a_section_end_resumes_at_the_new_pass`). `reset_frame` clears it. Only
+the FIRST live draw of a frame (`_last_frame`) updates the freeze: a one-game `ticker`
+section cycles ONE card object, so at the pass junction core draws it two or three times in
+one tick, and a later copy's higher cursor must not read as a fresh pass (it zeroed the
+shift and teleported the left copy ~80 columns; `test_same_card_twice_per_tick_never_jumps`).
+A non-first draw (a later copy, or a paused transition redraw, since core pauses the
+outgoing widget too) paints with the shift when its cursor is at or left of the last raw
+cursor and raw otherwise (a later copy's cursor already chains off the shifted first copy)
+(`test_non_first_draws_never_touch_the_freeze`). A self-started run (and the demo re-arm that feeds one) also BEGINS
+only on a frame's first live draw: started on a later copy it would record that copy's
+cursor as `_run_cursor`, and the left copy would resume there after the run
+(`test_back_to_back_runs_on_a_repeated_card_never_jump`). Slideshow and `one_at_a_time`
+draw each card once per tick, so every draw there is a first draw.
+`hold_time` is not read in scroll modes.
+
+**Draw return is absolute** — `draw()` returns `cursor_pos + content width` (core's
+contract, like `widgets/message.py`): the hi-res held board paints at `cursor_pos`
+(`render_scoreboard(..., x_offset=)`, through `_paint.ShiftedReal`, clipped at both edges)
+and returns `cursor_pos + canvas.width`; the hi-res crawl returns
+`cursor_pos + run + padding`. Only the celebration takeover returns a bare `canvas.width`.
+Core ends a widget in a `ticker` / `one_at_a_time` section only once that end goes
+negative, so a constant return wedges the section on the first card forever (#113). The
+scale-1 band board returns `cursor_pos + width` too but still PAINTS at x = 0 (see Known
+gaps).
+Tripwires: `test_scroll_two_hires_cards_completes` and
+`test_scroll_with_celebration_completes` drive core's REAL `_scroll_one_by_one` /
+`_scroll_side_by_side` (`test_card_dispatch.py`, core-internal imports are fine in
+tests only), plus `test_scale4_scoreboard_scrolls_with_cursor_pos`.
 
 **`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
 with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
@@ -95,7 +152,9 @@ queue several goals MUST give them distinct scores.
 
 **Demo re-arm** — demo live cards carry `demo_goals`; `reset_frame` re-queues them after
 every `DEMO_EVERY` (3) COMPLETED visits (`_frame_count > 0` at reset, so a transition's
-extra `reset_frame` before `_show_one`'s is not counted).
+extra `reset_frame` before `_show_one`'s is not counted). Scroll-mode sections have no
+visits: a self-started run's end records `_demo_rest_from`, and the demo re-queues once
+`DEMO_REST_FRAMES` (3 x 80 = 240, 12 s) live frames pass with nothing pending.
 
 **`segments()` in `layouts/crawl.py` is the single wording source for the ticker** — the
 hi-res crawl paints it and the legacy ticker message joins the same list, so the two
@@ -119,12 +178,40 @@ extents, bands, ordering and colors.
 **Palette is one hue per field** (`_palette.py`) — white score/clock, amber period/PP/date,
 cyan SOG, dim labels, green final winner, gray loser. Black is invisible on the panels, so
 team chips are lifted for LED brightness.
+`bg_color` applies at every scale: core fills it before every draw (`reset_canvas`)
+and the renderers paint over it, never clearing it (the takeover refills it). `font_color`
+reaches only the scale-1 ticker message.
 
 ## Known gaps
 
 - The landing `situation` field shapes (power play, empty net) come from community docs and
   are unverified against a live game; capture a real payload as a fixture when one is on.
 - The scale-1 `ticker` layout's clock text updates per poll; boards and hi-res tick per second.
+- Scroll-mode takeover vs core's end-of-scroll hold (`ticker` sections only; `hold_at_end`
+  is the section `hold_time`, default 3 s): any celebration on the section's LAST card can be
+  cut once that card's end is inside the panel. Core starts the hold when the last buffered
+  widget's end is `<= canvas.width` and it has fetched the end sentinel. The takeover's
+  `canvas.width` end satisfies the first condition, and the sentinel is fetched as soon as
+  the last card's end is inside the panel while it is not first. So a last card narrower than
+  the panel (fully visible behind the previous card) has the hold start the moment the
+  previous card pops, mid-run. A card at least as wide as the panel only reaches it through
+  the hold itself. The run is cut to what is left of the hold and the rest plays on the
+  card's next pass, unless a section transition resets the card first (it is the section's
+  first card), which consumes the shown goal. No `hold_time` rules it out
+  (`test_narrow_last_card_celebration_is_cut_then_resumes`,
+  `test_goal_inside_the_end_hold_is_cut_then_resumes`,
+  `test_wide_last_card_celebration_before_the_end_hold_plays_in_full`).
+- A card celebrating at buffer index > 0 while the card to its left is still visible: the left
+  card keeps scrolling under the takeover and the frozen card resumes where its run began,
+  so a gap of up to 80 columns opens after the left card. By design (the celebrating card's
+  own board is never skipped).
+- The scale-1 band board (`_scoreboard.HockeyBandBoard.draw`) paints at x = 0 whatever the
+  cursor and `Fill`s the whole canvas with `bg_color`. It returns `cursor_pos + width`, so
+  scroll sections do not wedge, but a smallsign scoreboard does not visually scroll, and in
+  a side-by-side section it wipes the widget to its left. Pre-existing; not fixed here.
+- Celebration and demo timing in scroll modes count scroll ticks: 80 frames (and the demo's
+  240-frame rest) are 4 s (12 s) only at the default `scroll_step_ms` of 50 ms; the
+  end-of-scroll hold always ticks at 50 ms.
 
 ## Tests
 
