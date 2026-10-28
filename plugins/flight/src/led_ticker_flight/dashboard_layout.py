@@ -25,6 +25,7 @@ from led_ticker_flight.paint import (
     paging_dots,
     phys_wrap,
     px,
+    shift_canvas,
 )
 from led_ticker_flight.palette import (
     ALT,
@@ -92,7 +93,10 @@ def _row_value_size(values, prefix_w: int, col_w: int, last_budget: int) -> int:
     return _COL_VALUE_SIZES[-1]
 
 
-def render_dashboard(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> None:
+def render_dashboard(
+    canvas, flights, clock_ms: float, *, y_offset: int = 0, x_offset: int = 0
+) -> None:
+    canvas = shift_canvas(canvas, x_offset)
     shim, real = phys_wrap(canvas)
     scale = safe_scale(canvas)
     dy = y_offset * scale

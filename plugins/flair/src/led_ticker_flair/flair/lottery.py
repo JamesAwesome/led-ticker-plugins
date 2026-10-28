@@ -479,8 +479,9 @@ class Lottery(FrameAwareBase):
     # ones). See roll_order_for_slot.
     choreography: str = "rack_fill"
     border: Any | None = attrs.field(default=None, kw_only=True)
-    # Layout-contract field; inert for a held full-panel widget — the engine
-    # never scrolls this widget (draw() always returns cursor_pos == 0).
+    # Layout-contract field; inert for a full-panel widget — draw() returns
+    # the absolute end `cursor_pos + canvas.width`, so a scrolling section
+    # advances past it with no extra trailing gap.
     end_padding: int = 0
 
     # Resolved per-ball ring/fill colors: `colors` verbatim (as tuples) when
@@ -730,10 +731,12 @@ class Lottery(FrameAwareBase):
                     "flair.lottery requires a scaled display (bigsign); skipping"
                 )
                 self._warned_scale = True
-            return canvas, 0
+            return canvas, cursor_pos
 
         # Border paints FIRST (frames the panel, not the balls) — same
-        # order as every other bordered widget in core.
+        # order as every other bordered widget in core. It frames the PANEL,
+        # so it paints unshifted on every draw whatever the cursor (core's
+        # Message / Clock / Count do the same).
         if self.border is not None:
             self.border.paint(canvas, self.frame_for("border"))
 
@@ -756,11 +759,16 @@ class Lottery(FrameAwareBase):
         # keeps an outgoing mid-roll push from popping unrolled balls into
         # existence (it shows the exact mid-roll state, shifted).
         dy_logical = float(y_offset)
+        # `cursor_pos` is LOGICAL too: it adds straight onto every blit's
+        # `dx_logical` (blit clips to the target at both panel edges).
+        cursor_dx = float(cursor_pos)
 
         frame = self._frame_count
         # Angle/pivot are irrelevant at angle=0 — an identity copy of
         # whichever balls have already settled this visit.
-        self._rest_surface.blit(canvas, 0.0, 0.0, dy_logical=dy_logical)
+        self._rest_surface.blit(
+            canvas, 0.0, 0.0, dx_logical=cursor_dx, dy_logical=dy_logical
+        )
 
         # Rack-fill choreography: roll-order j (0-based, the TEMPORAL order
         # balls enter) carries word/slot index n-1-j — the first ball to
@@ -829,14 +837,16 @@ class Lottery(FrameAwareBase):
                 )
                 self._rest_surface.snapshot()
                 self._settled[i] = True
-                surfaces[i].blit(canvas, 0.0, slot_cx, dy_logical=dy_logical)
+                surfaces[i].blit(
+                    canvas, 0.0, slot_cx, dx_logical=cursor_dx, dy_logical=dy_logical
+                )
                 continue
 
             cx_logical = cx_real / canvas.scale
-            dx_logical = cx_logical - slot_cx
+            dx_logical = cx_logical - slot_cx + cursor_dx
             surfaces[i].blit(
                 canvas, angle, slot_cx, dx_logical=dx_logical, dy_logical=dy_logical
             )
             break
 
-        return canvas, 0
+        return canvas, cursor_pos + canvas.width

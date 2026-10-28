@@ -158,12 +158,20 @@ class OverheadWidget(FrameAwareBase):
         layout = resolve_layout(self.layout, scale, real.width)
         self._last_layout = layout
         if layout == "ticker":
-            render_ticker(canvas, self._flights, clock_ms, y_offset=y_offset)
+            render_ticker(
+                canvas, self._flights, clock_ms, y_offset=y_offset, x_offset=cursor_pos
+            )
         elif layout == "hero":
-            render_hero(canvas, self._flights, clock_ms, y_offset=y_offset)
+            render_hero(
+                canvas, self._flights, clock_ms, y_offset=y_offset, x_offset=cursor_pos
+            )
         else:
-            render_dashboard(canvas, self._flights, clock_ms, y_offset=y_offset)
-        return canvas, 0
+            render_dashboard(
+                canvas, self._flights, clock_ms, y_offset=y_offset, x_offset=cursor_pos
+            )
+        # ABSOLUTE end (cursor_pos + width), core's draw contract: ticker /
+        # one_at_a_time sections pop a widget once this goes below 0.
+        return canvas, cursor_pos + canvas.width
 
     def frames_to_transition_ready(self) -> int:
         """Settle the section transition onto the fade's black frame.

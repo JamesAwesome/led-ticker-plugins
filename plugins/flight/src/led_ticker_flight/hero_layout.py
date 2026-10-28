@@ -25,6 +25,7 @@ from led_ticker_flight.paint import (
     paging_dots,
     phys_wrap,
     px,
+    shift_canvas,
 )
 from led_ticker_flight.palette import (
     ALT,
@@ -40,7 +41,10 @@ from led_ticker_flight.palette import (
 DWELL_MS = 4200
 
 
-def render_hero(canvas, flights, clock_ms: float, *, y_offset: int = 0) -> None:
+def render_hero(
+    canvas, flights, clock_ms: float, *, y_offset: int = 0, x_offset: int = 0
+) -> None:
+    canvas = shift_canvas(canvas, x_offset)
     shim, real = phys_wrap(canvas)
     scale = safe_scale(canvas)
     dy = y_offset * scale

@@ -18,7 +18,7 @@ from led_ticker.plugin import (
 from led_ticker_flight.data import VR_COLOR, VR_GLYPH, Aircraft, fmt_alt, vr_state
 from led_ticker_flight.fins import draw_fin, fin_width, js_round
 from led_ticker_flight.glyphs import draw_glyph, glyph_size
-from led_ticker_flight.paint import dim, draw_empty
+from led_ticker_flight.paint import dim, draw_empty, shift_canvas
 from led_ticker_flight.palette import (
     ALT,
     DIST,
@@ -155,8 +155,14 @@ def _draw_row(
 
 
 def render_ticker(
-    canvas, flights: list[Aircraft], clock_ms: float, *, y_offset: int = 0
+    canvas,
+    flights: list[Aircraft],
+    clock_ms: float,
+    *,
+    y_offset: int = 0,
+    x_offset: int = 0,
 ) -> None:
+    canvas = shift_canvas(canvas, x_offset)
     scale = safe_scale(canvas)
 
     if not flights:

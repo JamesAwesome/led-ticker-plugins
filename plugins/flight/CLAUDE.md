@@ -126,6 +126,15 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
   it would erase whatever the other side of the transition already painted. `draw()`
   must stay paint-only against whatever the canvas already holds.
 
+- **Draw return is absolute.** `OverheadWidget.draw(canvas, cursor_pos, ...)` returns
+  `(canvas, cursor_pos + canvas.width)` and paints translated by `cursor_pos` (logical px,
+  via `paint.shift_canvas` / `ShiftedReal`, which clips at both panel edges). Core's
+  `ticker` / `one_at_a_time` sections pop a widget only when the returned end is `< 0`, so
+  a `canvas, 0` return (or painting at x=0 whatever the cursor) wedges the section on its
+  first widget. The slideshow (cursor 0) path must stay pixel-identical; every
+  `render_*` takes `x_offset` (logical) and applies it once at the top. Guarded by
+  `tests/test_scroll_mode_returns.py`, which drives core's real `Ticker` loops.
+
 - **Public surface only.** `widget.py` (and every module under `src/led_ticker_flight/`)
   imports ONLY from `led_ticker.plugin` (plus stdlib + `aiohttp` + `attrs`). Never reach
   into `led_ticker.<internal>`. Enforced by `tests/test_import_purity.py` (AST scan).
@@ -134,7 +143,7 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
 
 ## Commands
 
-`led-ticker-core` resolves from PyPI (`>=4.8`); no sibling checkout or `[tool.uv.sources]`.
+`led-ticker-core` resolves from PyPI (`>=4.16`); no sibling checkout or `[tool.uv.sources]`.
 Tests obtain canvases via `HeadlessCanvas`/`ScaledCanvas` from `led_ticker.plugin` — no
 rgbmatrix stub on the path. Run tooling from the repo root:
 
@@ -175,6 +184,7 @@ tests/
   test_data.py              # Aircraft formatting helpers
   test_palette.py / test_fins.py / test_glyphs.py / test_paint.py
   test_ticker_layout.py / test_hero_layout.py / test_dashboard_layout.py
+  test_scroll_mode_returns.py  # absolute draw end; drives core's real Ticker scroll loops
   test_import_purity.py    # AST: only led_ticker.plugin imports
   test_smoke.py             # entry-point registers flight.overhead
   conftest.py                # smallsign/bigsign/longboi canvas fixtures
