@@ -143,7 +143,7 @@ The entry-point name `flight` is the plugin namespace, so the config `type` is
 
 ## Commands
 
-`led-ticker-core` resolves from PyPI (`>=4.8`); no sibling checkout or `[tool.uv.sources]`.
+`led-ticker-core` resolves from PyPI (`>=4.16`); no sibling checkout or `[tool.uv.sources]`.
 Tests obtain canvases via `HeadlessCanvas`/`ScaledCanvas` from `led_ticker.plugin` — no
 rgbmatrix stub on the path. Run tooling from the repo root:
 

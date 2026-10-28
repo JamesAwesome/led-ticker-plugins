@@ -11,6 +11,7 @@ import PIL.features
 import pytest
 from led_ticker.plugin import HeadlessCanvas, ScaledCanvas
 from led_ticker.ticker import Ticker
+from led_ticker.transitions.push import PushLeft
 
 from led_ticker_flight.dashboard_layout import render_dashboard
 from led_ticker_flight.data import SAMPLE_AIRCRAFT
@@ -204,3 +205,17 @@ def test_shifted_real_subfill_and_pre_shift_clip():
     s.SetPixel(-1, 0, 255, 0, 0)  # outside the card's own box: dropped
     s.SubFill(-3, 0, 5, 1, 255, 0, 0)  # clamped to pre-shift [0, 2)
     assert {x for x, _ in lit(real)} == {4, 5}
+
+
+class _Blank:
+    def draw(self, canvas, cursor_pos=0, *, y_offset=0, font_color=None):
+        return canvas, cursor_pos
+
+
+def test_push_left_mid_transition_shifts_the_card():
+    canvas, real = _bigsign()
+    PushLeft().frame_at(0.5, canvas, _Blank(), _widget(), outgoing_scroll_pos=0)
+    xs = {x for x, _ in lit(real)}
+    assert xs
+    # The incoming card has slid in from the right: nothing in the left half.
+    assert min(xs) >= real.width // 2 - 8
