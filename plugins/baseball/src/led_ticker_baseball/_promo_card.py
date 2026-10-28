@@ -7,14 +7,16 @@ width) via `layouts.resolve_promo_layout`: scale <= 1 forwards verbatim to
 `self.legacy` (the pre-built SegmentMessage for this promo — unlike
 `MLBGameCard`, there is only ONE legacy shape here, so it's built eagerly by
 `MLBPromotionsMonitor.update()` and passed in, not lazily constructed).
-scale > 1 dispatches to the held card (`layouts.promo_card.render_promo_card`)
-or the hires crawl (`layouts.promo_crawl.render_promo_crawl`). Held layouts
-return cursor = `canvas.width` — the WRAPPER's LOGICAL width — same
-hold-vs-scroll lesson as `MLBGameCard`'s module docstring (core's
-`cursor_pos > canvas.width` check compares against that, not `real.width`).
-The crawl works in logical units too: `cursor_pos` in is logical, the segment
-run paints at physical `x = cursor_pos * scale`, and the returned advance is
-ceil-divided back to logical (core's `get_text_width` hires convention).
+scale > 1 dispatches to the held card
+(`layouts.promo_card.render_promo_card`) or the hires crawl
+(`layouts.promo_crawl.render_promo_crawl`). Held layouts paint at
+`cursor_pos` and return `cursor_pos + canvas.width` — the WRAPPER's LOGICAL
+width, an ABSOLUTE end — same hold-vs-scroll lesson as `MLBGameCard`'s
+module docstring (core's `cursor_pos > canvas.width` check compares against
+that, not `real.width`). The crawl works in logical units too: `cursor_pos`
+in is logical, the segment run paints at physical `x = cursor_pos * scale`,
+and the returned advance is ceil-divided back to logical (core's
+`get_text_width` hires convention).
 
 Per-card clock (`_clock_ticks`): advanced in `advance_frame` gated on
 `not self._frame_paused`, and deliberately NEVER reset — `reset_frame` fires
@@ -39,6 +41,7 @@ from led_ticker.plugin import (
     unwrap_to_real,
 )
 
+from led_ticker_baseball._paint import shift_canvas
 from led_ticker_baseball.layouts import resolve_promo_layout
 from led_ticker_baseball.layouts.promo_card import render_promo_card
 from led_ticker_baseball.layouts.promo_crawl import render_promo_crawl
@@ -88,9 +91,12 @@ class MLBPromoCard(FrameAwareBase):
                 y_offset=y_offset,
                 hold_padding=self.padding,
             )
-            return canvas, w + self.padding
+            # A run that fits is painted CENTRED across the panel (the
+            # renderer's own `held` test), so its extent is the full width.
+            end = w + self.padding
+            return canvas, cursor_pos + (canvas.width if end <= canvas.width else end)
         render_promo_card(
-            canvas,
+            shift_canvas(canvas, cursor_pos),
             self.promo,
             self._clock_ticks * ENGINE_TICK_MS,
             y_offset=y_offset,
@@ -100,8 +106,9 @@ class MLBPromoCard(FrameAwareBase):
         # Held layout: return the WRAPPER's logical width (not real.width)
         # so the engine's `cursor_pos > canvas.width` hold-vs-scroll check
         # (core ticker.py) takes the hold branch — same phase-1/2 lesson as
-        # MLBGameCard / MLBStandingsBoard.
-        return canvas, canvas.width
+        # MLBGameCard / MLBStandingsBoard — as an ABSOLUTE end, painted at
+        # `cursor_pos`, so scroll sections pop it (see MLBGameCard.draw).
+        return canvas, cursor_pos + canvas.width
 
     # Forward frame hooks to the (always-present) legacy story so its
     # frame-aware effects (rainbow / color_cycle font_color) behave at

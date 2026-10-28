@@ -106,11 +106,20 @@ extents (never exact freetype pins); any geometry/ladder change must pass it on 
 signs. The serve pip is fixed geometry — `test_serve_pip_clears_the_name_on_both_geometries`
 pins `name_x - (dot_cx + dot_r) >= 6`.
 
-**`TennisMatchCard` held-cursor contract** (`_card.py`): held layouts return
-`cursor = canvas.width` (the WRAPPER's logical width) so the engine's `cursor_pos >
-canvas.width` check takes the hold branch; the crawl treats `cursor_pos` as logical,
-paints at `cursor * scale`, ceil-divides its physical run back to logical and the card
-adds `self.padding`. Scale<=1 delegates to the cached legacy story; frame hooks forward
+**Draw return is absolute** — every hi-res `draw()` returns `cursor_pos + width`, never
+a bare width; core pops a `ticker` / `one_at_a_time` widget only when that end goes below
+0 (`tests/test_scroll_mode_returns.py` drives core's real `_scroll_one_by_one`).
+
+**`TennisMatchCard` held-cursor contract** (`_card.py`): held layouts paint at
+`cursor_pos` (`render_scoreboard(..., x_offset=)` / `HiresLine`, via `_paint.ShiftedReal`,
+clipped at both edges) and return `cursor_pos + canvas.width` (the WRAPPER's logical
+width) so the slideshow's `cursor_pos > canvas.width` check at cursor 0 takes the hold
+branch; the crawl treats `cursor_pos` as logical, paints at `cursor * scale`,
+ceil-divides its physical run back to logical and the card returns `cursor_pos +
+advance + self.padding` — or `cursor_pos + canvas.width` when the run fits, because
+the renderer then centres it across the whole panel. `ShiftedReal` also drops pixels
+whose UNSHIFTED x is outside `[0, width)`, so a shifted card never reveals overflow
+that cursor 0 hid. Scale<=1 delegates to the cached legacy story; frame hooks forward
 to it. Same shape as baseball's `MLBGameCard` — read that CLAUDE.md before changing this.
 
 **Hires text is never exact-pinned in tests** (freetype differs macOS vs Linux) — assert

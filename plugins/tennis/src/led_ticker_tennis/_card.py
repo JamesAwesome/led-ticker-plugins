@@ -4,11 +4,15 @@ baseball `MLBGameCard` pattern).
 One card per match. `draw()` resolves `(cfg_layout, scale, phys width)` via
 `layouts.resolve_layout` on every call: scale <= 1 delegates to the legacy
 text-glyph renderers (`_scoreboard.py`, cached on `self._legacy`); scale >
-1 dispatches to the physical renderers in `layouts/`. A held layout
-returns `cursor = canvas.width` — the WRAPPER's LOGICAL width, the units
-the engine's hold-vs-scroll check compares against (returning `real.width`
-would phantom-scroll). The crawl works in logical units end to end and
-adds `self.padding` for the engine's scroll loop.
+1 dispatches to the physical renderers in `layouts/`. Every return is
+ABSOLUTE (core's contract): a held layout paints at `cursor_pos` and
+returns `cursor_pos + canvas.width` — the WRAPPER's LOGICAL width, the
+units the engine's hold-vs-scroll check compares against (returning
+`real.width` would phantom-scroll); the crawl returns `cursor_pos +
+advance + self.padding`, or `cursor_pos + canvas.width` when the run fits
+and the renderer centres it across the panel. A cursor-relative return
+never goes below 0, so a `ticker` / `one_at_a_time` section would never
+pop the card.
 """
 
 from typing import Any
@@ -96,7 +100,10 @@ class TennisMatchCard(FrameAwareBase):
                 hold_padding=self.padding,
                 show_ranking=self.show_ranking,
             )
-            return canvas, w + self.padding
+            # A run that fits is painted CENTRED across the panel (the
+            # renderer's own `held` test), so its extent is the full width.
+            end = w + self.padding
+            return canvas, cursor_pos + (canvas.width if end <= canvas.width else end)
         render_scoreboard(
             canvas,
             self.match,
@@ -104,8 +111,9 @@ class TennisMatchCard(FrameAwareBase):
             y_offset=y_offset,
             story_index=self.story_index,
             story_total=self.story_total,
+            x_offset=cursor_pos,
         )
-        return canvas, canvas.width
+        return canvas, cursor_pos + canvas.width
 
     def advance_frame(self, *, visit_id: int | None = None) -> None:
         super().advance_frame(visit_id=visit_id)

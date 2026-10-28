@@ -119,6 +119,12 @@ don't reach around the surface.
 Bare `tuple[int, int, int]` annotations are fine. `ColorTuple` is defined locally in `teams.py`
 because it isn't on the public surface.
 
+**Draw return is absolute** — every hi-res `draw()` (all six cards + `HiresLine`) returns
+`cursor_pos + width`, never a bare width, and held renderers paint at `cursor_pos` through
+`_paint.shift_canvas` (`ShiftedReal`, clipped at both edges and to the card's own unshifted box `[0, width)`;
+cursor 0 returns the canvas untouched); core pops a `ticker` / `one_at_a_time` widget only when that end goes below 0
+(`tests/test_scroll_mode_returns.py` drives core's real `_scroll_one_by_one`).
+
 **`validate_config()` contract** (`MLBScoreMonitor.validate_config`, `scores.py`) — a classmethod
 run pre-coercion by the engine's `validate_widget_cfg`. It **returns `list[str]`** (does NOT raise);
 the engine turns any returned message into a pre-flight `ValueError`. It reproduces the two
@@ -140,14 +146,14 @@ re-resolve), then: **scale <= 1 delegates unconditionally to the legacy classes*
 dispatches to the physical renderers** in `layouts/` (`render_crawl`/`render_scoreboard`/
 `render_two_row`) and NEVER touches the legacy classes — `MLBScoreboardMessage.draw()` (with its
 `_MIN_LOGICAL_WIDTH` geometry guard) is scale<=1-only code post-uplift; a bigsign/longboi running
-`layout = "scoreboard"` cannot reach that guard (though `resolve_layout` now degrades an explicit `"scoreboard"` below 400 phys px to `"two_row"` before the card ever dispatches there — see the layout-table entry above). **Physical held layouts (`scoreboard`, `two_row` at scale > 1) return `cursor = canvas.width`** — the WRAPPER's LOGICAL width (`real.width // scale`), NOT `real.width`. The engine's hold-vs-scroll decision (`cursor_pos > canvas.width`, core `ticker.py`) compares against the wrapper's logical width, so returning `real.width` (a final-review Finding-1 bug) always took the scroll branch — the panel showed a frozen card while the engine "scrolled" nowhere for the padding-to-real-width distance, then held a SECOND time. The `ticker` layout SCROLLS on every sign: at scale 1 the card forwards the legacy `SegmentMessage`'s scroll cursor unchanged (smallsign behavior is pre-uplift identical); at scale > 1 `render_crawl` treats `cursor_pos` as LOGICAL throughout (matching the engine's own units) — it paints at physical `x = cursor_pos * scale` and returns its advance ceil-divided back to logical (core's `get_text_width` hires convention) — and the card adds `self.padding` (also logical) on top for the engine's scroll loop. Mixing physical paint offsets with the engine's logical cursor arithmetic here was final-review Finding 2 (over-scrolled past flush-right by `real.width - logical.width`). Never 'fix' the legacy ticker to return `canvas.width`/`real.width` — that would freeze smallsign scrolling (scale 1 has no wrapper; its cursor contract is the legacy `SegmentMessage`'s own). Frame-aware hooks
+`layout = "scoreboard"` cannot reach that guard (though `resolve_layout` now degrades an explicit `"scoreboard"` below 400 phys px to `"two_row"` before the card ever dispatches there — see the layout-table entry above). **Physical held layouts (`scoreboard`, `two_row` at scale > 1) paint at `cursor_pos` (`_paint.shift_canvas`) and return `cursor_pos + canvas.width`** (= `canvas.width` at the slideshow's cursor 0) — the WRAPPER's LOGICAL width (`real.width // scale`), NOT `real.width`. The engine's hold-vs-scroll decision (`cursor_pos > canvas.width`, core `ticker.py`) compares against the wrapper's logical width, so returning `real.width` (a final-review Finding-1 bug) always took the scroll branch — the panel showed a frozen card while the engine "scrolled" nowhere for the padding-to-real-width distance, then held a SECOND time. The `ticker` layout SCROLLS on every sign: at scale 1 the card forwards the legacy `SegmentMessage`'s scroll cursor unchanged (smallsign behavior is pre-uplift identical); at scale > 1 `render_crawl` treats `cursor_pos` as LOGICAL throughout (matching the engine's own units) — it paints at physical `x = cursor_pos * scale` and returns its advance ceil-divided back to logical (core's `get_text_width` hires convention) — and the card returns `cursor_pos + advance + self.padding` (`cursor_pos + canvas.width` when the run fits — the renderer then centres it across the whole panel, so the end is the panel edge) (also logical) on top for the engine's scroll loop. Mixing physical paint offsets with the engine's logical cursor arithmetic here was final-review Finding 2 (over-scrolled past flush-right by `real.width - logical.width`). Never 'fix' the legacy ticker to return `canvas.width`/`real.width` — that would freeze smallsign scrolling (scale 1 has no wrapper; its cursor contract is the legacy `SegmentMessage`'s own). Frame-aware hooks
 (`advance_frame`/`pause_frame`/`resume_frame`/`reset_frame`) forward to the cached `_legacy`
 story IN ADDITION TO the card's own base counters — don't drop either half when touching these.
 
 **`MLBStandingsBoard` scale-dispatch contract** (`_standings_card.py`) — the one story
 `standings.py`'s `update()` builds per tracked division, for `layout = "auto"`/`"board"`.
 **scale > 1 is held**: dispatches to `layouts/standings_board.py`'s `render_standings_board` and
-returns `cursor = canvas.width` — the WRAPPER's LOGICAL width, same held-cursor convention as
+returns `cursor_pos + canvas.width` — the WRAPPER's LOGICAL width, same held-cursor convention as
 `MLBGameCard` (see above); returning `real.width` would take the scroll branch instead of holding.
 **scale <= 1 forwards `legacy_rows[idx]` verbatim** — one pre-built legacy `SegmentMessage` per
 division team (the same shape `_build_ticker_stories` builds), one row advance per SECTION VISIT.
@@ -169,10 +175,11 @@ shape here, so it's built eagerly in `update()` and passed in, not lazily cached
 **scale > 1 resolves `(cfg_layout, scale, real.width)` via `layouts.resolve_promo_layout`** fresh
 on every call (same flight pattern as `resolve_layout`) and dispatches to the held card
 (`layouts.promo_card.render_promo_card`) or the hires crawl (`layouts.promo_crawl.render_promo_crawl`).
-**Held layout returns `cursor = canvas.width`** — the WRAPPER's LOGICAL width, same held-cursor
+**Held layout returns `cursor_pos + canvas.width`** — the WRAPPER's LOGICAL width, same held-cursor
 convention as `MLBGameCard`/`MLBStandingsBoard` above; the crawl instead treats `cursor_pos` as
-logical throughout and returns its advance ceil-divided back to logical, plus `self.padding`,
-mirroring `render_crawl`'s own contract. **The per-card clock (`_clock_ticks`) is deliberately
+logical throughout and returns its advance ceil-divided back to logical; the card returns
+`cursor_pos +` that advance `+ self.padding` (or `cursor_pos + canvas.width` when the run
+fits: the renderer centres it across the panel), mirroring `render_crawl`'s own contract. **The per-card clock (`_clock_ticks`) is deliberately
 NEVER reset** — advanced in `advance_frame` gated on `not self._frame_paused`, but there is no
 `reset_frame` override for it. `reset_frame` still fires (possibly twice per visit, same
 core double-reset as `MLBStandingsBoard` above) and the base `FrameAwareBase` counters reset
