@@ -90,7 +90,7 @@ Basketball's unit is the **day**: ESPN's scoreboard returns today's games (the d
 
 - **Smallsign (160×16):** one 16-row band, `PHI 98  Q4 1:48  101 NY`: a thin team-colour chip at each end, the abbreviation in team colour, the score in white, and the period (amber) and clock (white, **red** in clutch time) centred between them. No logos at this size and no leader line (the `ticker` layout carries it). When two three-digit scores and long abbreviations crowd the centre it shrinks rather than collide: the period drops first (the clock alone), then `FINAL/OT` becomes `F/OT`, then it ellipsizes. `STALE` joins the centre when it fits and replaces it otherwise.
 - **Bigsign (256×64):** a horizontal arena board. A 36 px logo at each edge, a large white score beside each, and the period over the clock in the centre. Each side's points leader (`EMBIID 31`, cyan) runs along the bottom; where the name cannot fit at a readable size the line is dropped instead of shrunk.
-- **Longboi (512×64):** the same arrangement with room to spare: 48 px logos, larger scores, and under each score a side line with the abbreviation, record and full leader (`PHI 5-2 · J. EMBIID 31 PTS`). The centre holds the period, a large clock and the **orange per-quarter linescore strip** (`24-28 · 26-24 · …`, an `OT` column added as played), dropped when the panel is too narrow for it.
+- **Longboi (512×64):** the same arrangement with room to spare: 48 px logos, larger scores, and under each score a side line with the abbreviation, record and full leader (`PHI 5-2 · J. EMBIID 31 PTS`). The centre holds the period and a large clock, and below the scores runs the **orange per-quarter linescore strip** (`24-28 · 26-24 · …`, an `OT` column added as played). The strip spans the width of the two scores, so double overtime still fits; it shrinks to 8 px and is dropped rather than cut, and on an overtime final the `OT` label under `FINAL` takes its row.
 - **`ticker`:** one scrolling line per game using the same wording as the boards: `PHI 98 · NY 101 · Q4 1:48 · J. EMBIID 31 · J. BRUNSON 28`. A final reads `PHI 115 · NY 118 · FINAL/OT` (no leaders); a future game reads `PHI 5-2 @ NY 4-3 · SAT NOV 1 7:30 PM · ESPN · <venue>`.
 
 With `logos = false`, or for a team with no bundled logo, the bigsign and longboi paint a two-tone team chip and the abbreviation in the logo's place. Smallsign always uses chips.
@@ -123,7 +123,7 @@ All `basketball.scores` widgets in one process share a single source, so several
 
 **The clock does not tick between polls.** A basketball clock stops on every whistle and the feed carries no "running" flag, so the board shows the clock exactly as last polled.
 
-A failed request tries the fallback host, then keeps the last good games and marks every card `STALE` beside the state, never in place of it. Backoff starts at twice the interval and doubles, capped at four hours. A game that disappears from the feed keeps its last state — a final is never inferred from a game vanishing.
+A failed request tries the fallback host, then keeps the last good games and marks every card `STALE`: beside the status on the bigsign and longboi; on the smallsign it joins the centre when it fits and replaces the status otherwise. Backoff starts at twice the interval and doubles, capped at four hours. A game that disappears from the feed keeps its last state — a final is never inferred from a game vanishing.
 
 ### Sign checks
 
