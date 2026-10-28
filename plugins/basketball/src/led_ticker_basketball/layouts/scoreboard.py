@@ -10,7 +10,8 @@ font's ascent (`_base`). Two geometries, picked by physical width
   column at x=128 (period over clock; HALF / END Q3 / FINAL take the clock
   slot), the two points leaders (short style) along the bottom.
 - longboi (512x64): 48px logos, size-46 scores, the centre column at
-  x=256 with an ORANGE per-period linescore strip under the clock, and one
+  x=256 with an ORANGE per-period linescore strip under the clock (as wide
+  as the two scores' footprint, so overtime columns fit), and one
   line along the bottom of each side (from under the logo toward the
   centre): abbrev + record + full-style points leader.
 
@@ -490,6 +491,18 @@ def _long_side_lines(shim, game, yo, boxes) -> None:
         x = _right(shim, text, x, base, color, _SIDE_SIZE) - _MIN_GAP
 
 
+def _strip_budget(cx: int, away_x0: int, home_x1: int, centre: int) -> int:
+    """Width the longboi linescore strip may take, centred on `cx`.
+
+    The strip's cap band (y~53-60) sits BELOW the size-46 scores' band
+    (which ends ~y50) and below the logos (y4..51), so it is not confined
+    to the centre column between the scores (~120 px: too narrow for even
+    five periods at the floor). It spans the scores' measured footprint
+    (away score's left edge .. home score's right edge), symmetric about
+    the centre; never narrower than the centre column."""
+    return max(centre, 2 * min(cx - away_x0, home_x1 - cx))
+
+
 def _long_board(shim, real, game, now, tz, yo, stale, highlight, logos):
     g = _LONG
     painted = _slots(real, game, g, yo, logos)
@@ -513,8 +526,11 @@ def _long_board(shim, real, game, now, tz, yo, stale, highlight, logos):
     base = _LONG_STRIP_BASE + yo
     top = _band_top(base, _LONG_STRIP_SIZES[0])
     if strip and not any(_shares_band(b, top, base) for b in boxes):
-        size = fit_size(strip, _LONG_STRIP_SIZES, budget)
-        if text_width(size, strip) <= budget:  # never an ellipsized strip
+        # Recorded in `boxes` BEFORE the side lines are fitted, so they
+        # shrink around it (`_row_limits`).
+        strip_budget = _strip_budget(g.center_x, away_x0, home_x1, budget)
+        size = fit_size(strip, _LONG_STRIP_SIZES, strip_budget)
+        if text_width(size, strip) <= strip_budget:  # never an ellipsized strip
             x0, x1 = _center(shim, strip, g.center_x, base, pal.ORANGE, size)
             boxes.append((x0, x1, _band_top(base, size), base))
 

@@ -8,6 +8,7 @@ through spies on `paint_logo` / `rect`. Assertions are invariant-based
 """
 
 import dataclasses
+import re
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -348,12 +349,34 @@ def test_longboi_linescore_strip_orange_and_dropped_when_narrow(longboi, monkeyp
     strip = "24-28 · 26-24 · 25-27 · 23-22"
     assert by[strip][5] == pal.ORANGE
     unwrap_to_real(longboi).Clear()
-    texts = _texts(_spy(monkeypatch, longboi, WORST_LIVE))  # six periods
+    # A budget that genuinely cannot hold even the floor: dropped, never
+    # ellipsized.
+    monkeypatch.setattr(board, "_strip_budget", lambda *a: 60)
+    texts = _texts(_spy(monkeypatch, longboi, WORST_LIVE))
     assert not [t for t in texts if "30-30" in t]
+    monkeypatch.undo()
     unwrap_to_real(longboi).Clear()
     none = dataclasses.replace(LIVE, away_linescores=(), home_linescores=())
     calls = _spy(monkeypatch, longboi, none)
     assert not [c for c in calls if c[5] == pal.ORANGE]
+
+
+def test_longboi_strip_renders_in_overtime(longboi, monkeypatch):
+    """2OT live, six periods per side: the strip spans the scores' footprint
+    (it sits below their band), so it renders at >= the 8 px floor."""
+    game = dataclasses.replace(
+        LIVE,
+        period=6,
+        away_linescores=(24, 28, 26, 25, 12, 10),
+        home_linescores=(28, 24, 27, 24, 12, 9),
+    )
+    calls, shapes = _spy_all(monkeypatch, longboi, game, stale=True)
+    strips = [c for c in calls if c[5] == pal.ORANGE]
+    assert len(strips) == 1
+    text, size = strips[0][0], strips[0][6]
+    assert len(re.findall(r"\d+-\d+", text)) == 6
+    assert size >= 8
+    _assert_clear(calls, shapes, unwrap_to_real(longboi))
 
 
 def test_bigsign_has_no_linescore_strip(bigsign, monkeypatch):
