@@ -516,3 +516,76 @@ class TestRealCoreWidgets:
         widget = GifPlayer(path=str(path), fit="stretch")
         with pytest.raises(AttributeError):
             p.frame_at(0.0, sc, _make_widget(draw_pixel=False), widget)
+
+
+class TestWriteFrom:
+    """`write_from`: the type names the ERASE edge; `write_from` picks the
+    edge the write phase comes from (`top`/`bottom`/`left`/`right`, or
+    `opposite` so it composes with alternating/random). Default: same edge."""
+
+    @pytest.mark.parametrize("bad", ["diagonal", 3, True, ""])
+    def test_write_from_validation(self, bad):
+        with pytest.raises(ValueError, match="write_from"):
+            Laser(write_from=bad)
+
+    def test_default_write_origin_is_the_erase_origin(self):
+        assert Laser()._write_origin == "top"
+        assert LaserLeft()._write_origin == "left"
+
+    def test_opposite_resolves_per_origin(self):
+        assert Laser(write_from="opposite")._write_origin == "bottom"
+        assert LaserBottom(write_from="opposite")._write_origin == "top"
+        assert LaserLeft(write_from="opposite")._write_origin == "right"
+        assert LaserRight(write_from="opposite")._write_origin == "left"
+
+    def test_multi_variants_forward_write_from(self):
+        for cls in (LaserAlternating, LaserRandom):
+            for tr in cls(write_from="opposite")._transitions:
+                assert tr._write_origin != tr._origin
+            for tr in cls(write_from="top")._transitions:
+                assert tr._write_origin == "top"
+
+    def test_write_phase_beam_comes_from_write_edge(self):
+        # erase from the LEFT (one px), write from the RIGHT: n=4, t=0.6 ->
+        # visited 2 -> one incoming px written; right origin writes the
+        # rightmost column first and its beam runs from the right edge.
+        c = _StubCanvas(8, 2)
+        p = LaserLeft(beams=1, write_from="right")
+        out = [(1, 0, (255, 0, 0))]
+        inc = [(4, 1, (0, 0, 255)), (5, 1, (0, 0, 255)), (6, 1, (0, 0, 255))]
+        p.frame_at(0.0, c, _text_widget(out), _text_widget(inc))
+        c.Clear()
+        p.frame_at(0.6, c, _text_widget(out), _text_widget(inc))
+        assert c._pixels[(6, 1)] == (0, 0, 255)  # first written = rightmost
+        assert c._pixels[(7, 1)] == (0, 0, 255)  # beam reaches the RIGHT edge
+        assert (0, 1) not in c._pixels  # nothing from the left edge
+        assert (4, 1) not in c._pixels and (5, 1) not in c._pixels
+
+    def test_erase_phase_beam_still_comes_from_erase_edge(self):
+        c = _StubCanvas(8, 2)
+        p = LaserLeft(beams=1, write_from="right")
+        out = [(3, 0, (255, 0, 0)), (4, 0, (255, 0, 0)), (5, 0, (255, 0, 0))]
+        inc = [(6, 1, (0, 0, 255))]
+        p.frame_at(0.0, c, _text_widget(out), _text_widget(inc))
+        c.Clear()
+        p.frame_at(0.4, c, _text_widget(out), _text_widget(inc))  # visited 1 -> erasing
+        assert c._pixels[(0, 0)] == (255, 0, 0)  # beam from the LEFT edge to head (3,0)
+        assert (7, 0) not in c._pixels
+
+    def test_cross_axis_pairs_tracks_by_index(self):
+        # erase from the LEFT (spans down the height), write from the TOP
+        # (spans across the width): beams pair by index, each with its own slice
+        c = _StubCanvas(160, 16)
+        p = LaserLeft(beams=2, write_from="top")
+        out = [(10, y, (255, 0, 0)) for y in range(4, 12)]
+        inc = [(x, 8, (0, 255, 0)) for x in range(60, 68)]
+        p.frame_at(0.0, c, _text_widget(out), _text_widget(inc))
+        assert p._tracks is not None and len(p._tracks) == 2
+        assert [sorted(y for _x, y, _c in o) for o, _i in p._tracks] == [
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+        assert [sorted(x for x, _y, _c in i) for _o, i in p._tracks] == [
+            [60, 61, 62, 63],
+            [64, 65, 66, 67],
+        ]

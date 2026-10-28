@@ -150,6 +150,20 @@ def raster_order(
 
 
 _DEFAULT_BEAMS = 3
+_OPPOSITE = {"top": "bottom", "bottom": "top", "left": "right", "right": "left"}
+
+
+def _coerce_write_from(write_from: Any) -> str | None:
+    """``None`` (write from the erase edge), one of the four edges, or
+    ``"opposite"`` (resolved per instance so it composes with the
+    alternating / random variants)."""
+    if write_from is None:
+        return None
+    if write_from in _ORIGINS or write_from == "opposite":
+        return write_from
+    raise ValueError(
+        f'write_from must be one of {_ORIGINS} or "opposite"; got {write_from!r}'
+    )
 
 
 def _coerce_beams(beams: Any) -> int:
@@ -172,13 +186,14 @@ def _lit_extent(raster: _Raster, vertical: bool) -> tuple[int, int] | None:
     return None if lo is None or hi is None else (lo, hi + 1)
 
 
-def _spans(out_r: _Raster, in_r: _Raster, origin: str, n: int) -> list[range]:
-    """Split the lit CONTENT extent along the across axis (width for
-    top/bottom, height for left/right) into ``n`` near-equal contiguous
-    spans, one per beam — so a centred headline gets all ``n`` beams, not
-    just the one whose panel-width slice it happens to sit in."""
+def _spans(rasters: list[_Raster], origin: str, n: int) -> list[range]:
+    """Split the lit CONTENT extent (union over ``rasters``) along the
+    across axis (width for top/bottom, height for left/right) into ``n``
+    near-equal contiguous spans, one per beam — so a centred headline gets
+    all ``n`` beams, not just the one whose panel-width slice it happens to
+    sit in."""
     vertical = origin in ("top", "bottom")
-    ext = [e for e in (_lit_extent(out_r, vertical), _lit_extent(in_r, vertical)) if e]
+    ext = [e for e in (_lit_extent(r, vertical) for r in rasters) if e]
     if not ext:
         return [range(0)]
     lo = min(e[0] for e in ext)
@@ -201,8 +216,12 @@ class Laser:
     head's colour. ``beams`` (default 3) splits the lit content extent into
     that many equal slices, each with its own independent beam; the bg
     cuts over to the incoming section the moment the first beam starts
-    writing. Snapshots are taken ONCE per firing (refire detected
-    by ``t < _last_t``); the outgoing is never drawn live after that —
+    writing. ``write_from`` lets the write phase come from a different
+    edge than the erase (``"opposite"`` mirrors whatever edge erases);
+    same-axis edges share beam spans, cross-axis edges split their extents
+    independently and pair beams by index. Snapshots are taken ONCE per
+    firing (refire detected by ``t < _last_t``); the outgoing is never
+    drawn live after that —
     a live draw can drift from the snapshot over a ≥2.4 s transition.
     """
 
@@ -210,13 +229,22 @@ class Laser:
     scale_switch_at = 1.0  # hard-edged family convention
     _origin = "top"
 
-    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
+    def __init__(self, beams: Any = _DEFAULT_BEAMS, write_from: Any = None) -> None:
         self.beams: int = _coerce_beams(beams)
+        self.write_from: str | None = _coerce_write_from(write_from)
         # tracks: parallel (out_pixels, in_pixels) pairs, one per beam
         self._tracks: list[tuple[list[Pixel], list[Pixel]]] | None = None
         self._last_t = 1.0
         self._rasters: list[_Raster | None] = [None, None]
         self._raster_key: tuple[int, int, int, int | None] | None = None
+
+    @property
+    def _write_origin(self) -> str:
+        if self.write_from is None:
+            return self._origin
+        if self.write_from == "opposite":
+            return _OPPOSITE[self._origin]
+        return self.write_from
 
     # --- snapshot -------------------------------------------------------------
 
@@ -255,12 +283,33 @@ class Laser:
             return
         out_r = self._snapshot(canvas, outgoing, pos, 0)
         in_r = self._snapshot(canvas, incoming, 0, 1)
-        spans = _spans(out_r, in_r, self._origin, self.beams)
+        eo, wo = self._origin, self._write_origin
         tracks: list[tuple[list[Pixel], list[Pixel]]] = []
-        for sp in spans:
-            o, par = raster_order(out_r, self._origin, across=sp)
-            i, _ = raster_order(in_r, self._origin, forward_first=par, across=sp)
-            tracks.append((o, i))
+        if (eo in ("top", "bottom")) == (wo in ("top", "bottom")):
+            # Same across axis: one set of spans, so each beam erases and
+            # writes the same slice and the raster parity carries over.
+            for sp in _spans([out_r, in_r], eo, self.beams):
+                o, par = raster_order(out_r, eo, across=sp)
+                i, _ = raster_order(in_r, wo, forward_first=par, across=sp)
+                tracks.append((o, i))
+        else:
+            # Cross-axis (e.g. erase from the left, write from the top):
+            # the extents live on different axes, so split each on its own
+            # and pair beams by index (an unmatched beam gets an empty side).
+            e_spans = _spans([out_r], eo, self.beams)
+            w_spans = _spans([in_r], wo, self.beams)
+            for k in range(max(len(e_spans), len(w_spans))):
+                o = (
+                    raster_order(out_r, eo, across=e_spans[k])[0]
+                    if k < len(e_spans)
+                    else []
+                )
+                i = (
+                    raster_order(in_r, wo, across=w_spans[k])[0]
+                    if k < len(w_spans)
+                    else []
+                )
+                tracks.append((o, i))
         self._tracks = tracks
 
     # --- schedule -------------------------------------------------------------
@@ -288,16 +337,19 @@ class Laser:
 
     # --- paint ----------------------------------------------------------------
 
-    def _draw_beam(self, real: Any, rw: int, rh: int, head: Pixel) -> None:
+    @staticmethod
+    def _draw_beam(real: Any, rw: int, rh: int, head: Pixel, origin: str) -> None:
+        """One-real-pixel bar from the ``origin`` edge to ``head``, in the
+        head's colour."""
         hx, hy, (r, g, b) = head
         set_px = real.SetPixel
-        if self._origin == "top":
+        if origin == "top":
             for y in range(0, hy + 1):
                 set_px(hx, y, r, g, b)
-        elif self._origin == "bottom":
+        elif origin == "bottom":
             for y in range(hy, rh):
                 set_px(hx, y, r, g, b)
-        elif self._origin == "left":
+        elif origin == "left":
             for x in range(0, hx + 1):
                 set_px(x, hy, r, g, b)
         else:
@@ -329,7 +381,8 @@ class Laser:
         # starts writing (single beam: exactly at the erase/write boundary).
         if any(v > len(o) for o, _i, v in states):
             snap_reset(canvas, kwargs.get("incoming_bg_color"))
-        heads: list[Pixel] = []
+        eo, wo = self._origin, self._write_origin
+        heads: list[tuple[Pixel, str]] = []
         for o, i, v in states:
             n_out = len(o)
             if v <= n_out:
@@ -337,15 +390,15 @@ class Laser:
                     x, y, (r, g, b) = o[k]
                     set_px(x, y, r, g, b)
                 if v > 0:
-                    heads.append(o[v - 1])
+                    heads.append((o[v - 1], eo))
             else:
                 written = v - n_out
                 for k in range(written):
                     x, y, (r, g, b) = i[k]
                     set_px(x, y, r, g, b)
-                heads.append(i[written - 1])
-        for head in heads:
-            self._draw_beam(real, rw, rh, head)
+                heads.append((i[written - 1], wo))
+        for head, origin in heads:
+            self._draw_beam(real, rw, rh, head, origin)
         return canvas
 
 
@@ -370,15 +423,15 @@ class LaserRight(Laser):
 class _LaserMulti:
     """Shared shape for the alternating / random variants (FairyAlternating
     convention): a list of the four single-origin instances, ``_index``
-    advanced on every new firing (``t < _last_t``), ``min_frames`` peeking
-    the NEXT variant, ``frame_at`` delegated."""
+    advanced on every new firing (``t < _last_t``), ``min_frames`` taken
+    from the first variant (all four share it), ``frame_at`` delegated."""
 
-    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
+    def __init__(self, beams: Any = _DEFAULT_BEAMS, write_from: Any = None) -> None:
         self._transitions: list[Laser] = [
-            Laser(beams=beams),
-            LaserRight(beams=beams),
-            LaserBottom(beams=beams),
-            LaserLeft(beams=beams),
+            Laser(beams=beams, write_from=write_from),
+            LaserRight(beams=beams, write_from=write_from),
+            LaserBottom(beams=beams, write_from=write_from),
+            LaserLeft(beams=beams, write_from=write_from),
         ]
         self._index: int = -1
         self._last_t: float = 1.0
@@ -413,8 +466,8 @@ class LaserRandom(_LaserMulti):
     (WipeRandom policy). ``_rng`` is an instance attribute so tests can
     seed it."""
 
-    def __init__(self, beams: Any = _DEFAULT_BEAMS) -> None:
-        super().__init__(beams=beams)
+    def __init__(self, beams: Any = _DEFAULT_BEAMS, write_from: Any = None) -> None:
+        super().__init__(beams=beams, write_from=write_from)
         self._rng = random.Random()
 
     def _next_index(self) -> int:

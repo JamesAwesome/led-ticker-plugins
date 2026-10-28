@@ -37,6 +37,10 @@
 #  11 PERF FEEL  — motion stays smooth through erase AND write; the FIRST
 #                  transition after boot may show one hitch frame while the two
 #                  snapshots are taken; nothing else.
+#  12 WRITE FROM — erase from the LEFT, write from the RIGHT: the old text
+#                  leaves leftward while the new text arrives from the right.
+#  13 OPPOSITE   — alternating origin, write_from = "opposite": every firing
+#                  erases from one edge and writes from the facing edge.
 #
 # If anything looks wrong: docs/visual-validation.md; reference renders in
 # session GIFs.
@@ -296,6 +300,50 @@ font_size = 30
 [[playlist.section.widget]]
 type = "message"
 text = "SMOOTH"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 12 · WRITE FROM — erase from the left, write from the right
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.laser.left", write_from = "right"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "12 EXIT LEFT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "ENTER RIGHT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 13 · OPPOSITE — alternating erase edge, write from the facing edge
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.laser.alternating", write_from = "opposite"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "13 OPPOSITE"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FACING EDGE"
 font_color = [130, 220, 150]
 font = "Inter-Bold"
 font_size = 30
