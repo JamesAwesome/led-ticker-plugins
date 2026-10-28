@@ -13,3 +13,14 @@ def test_entry_point_registers_basketball_namespace():
         assert get_widget_class("basketball.scores") is not None
     finally:
         L.reset_plugins()
+
+
+def test_ball_emoji_registered():
+    L.reset_plugins()
+    try:
+        L.load_plugins(None, entry_points_enabled=True)
+        from led_ticker.plugin import emoji_slugs
+
+        assert "basketball.ball" in emoji_slugs()
+    finally:
+        L.reset_plugins()
