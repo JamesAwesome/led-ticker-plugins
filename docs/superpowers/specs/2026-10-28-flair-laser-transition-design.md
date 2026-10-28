@@ -207,9 +207,28 @@ final letters").
 - `flair.laser.alternating` / `.random` forward `beams` to their four
   sub-transitions: `transition = {type = "flair.laser.alternating", beams = 2}`.
 
+## write_from (follow-up, 2026-10-28)
+
+After the hardware pass James asked: "is there a way to have the exiting
+text go the opposite direction than the entering text? exit left enter
+right?" Added as a follow-up PR:
+
+- `write_from` (`"top"` / `"bottom"` / `"left"` / `"right"` / `"opposite"`,
+  default omitted = same edge as the erase). The type names the ERASE edge;
+  `write_from` names the WRITE edge. `"opposite"` resolves against the
+  instance's own erase edge, so `flair.laser.alternating` + `"opposite"`
+  erases from a cycling edge and writes from the facing one.
+- Same-axis pairs (left/right, top/bottom) share beam spans over both
+  rasters, so each beam erases and writes the same slice and the raster
+  parity carries over. Cross-axis pairs (e.g. erase left, write top) split
+  each raster's extent on its own axis and pair beams by index; an
+  unmatched beam gets an empty side.
+- Each head's beam is drawn from the edge of the phase it is in: erase
+  heads from the erase edge, write heads from the write edge.
+
 ## Knobs
 
-`beams` (above). Nothing else beyond the runner's `duration` / `easing`.
+`beams` and `write_from` (above). Nothing else beyond the runner's `duration` / `easing`.
 `transition_colors` does not reach plugin transitions and is irrelevant here
 (the beam is always content-coloured). A future `beam_color` override is
 possible but not in scope.

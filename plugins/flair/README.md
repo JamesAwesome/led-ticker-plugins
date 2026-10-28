@@ -386,13 +386,26 @@ transition = {type = "flair.laser.left", beams = 2}
 transition = {type = "flair.laser.top", beams = 1}
 ```
 
+Erase from one edge, write from another — the old text leaves to the left while the new text arrives from the right:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.laser.left", write_from = "right"}
+```
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.laser.alternating", write_from = "opposite"}   # whatever edge erases, the opposite one writes
+```
+
 ### Knobs
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `beams` | positive int | `3` | Number of independent beams. The lit content is split into that many equal slices (across the panel for top/bottom, down it for left/right) and each beam erases then writes its own slice at its own constant speed. `1` is the classic single back-and-forth raster. |
+| `write_from` | `"top"` / `"bottom"` / `"left"` / `"right"` / `"opposite"`, or omitted | omitted (same edge as the erase) | The edge the **write** phase's beams come from. The type names the erase edge. `"opposite"` mirrors whatever edge is erasing, so it composes with `.alternating` and `.random`. When the two edges share an axis (left/right, or top/bottom) each beam erases and writes the same slice; across axes (left then top) the slices are split per phase and beams pair up by index. |
 
-Direction is **not** a knob — pick the variant. The beam colour is always the content's own colour.
+The erase direction is **not** a knob — pick the variant. The beam colour is always the content's own colour.
 
 ### Notes
 
