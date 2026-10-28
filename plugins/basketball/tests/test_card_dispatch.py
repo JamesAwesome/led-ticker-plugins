@@ -128,11 +128,29 @@ def _lit_cols(real):
     return {x for (x, _y), v in real._pixels.items() if v != (0, 0, 0)}
 
 
-def test_scale4_scoreboard_scrolls_with_cursor_pos():
+def _fresh_bigsign():
     real = HeadlessBackend(256, 64).create_canvas()
-    canvas = ScaledCanvas(real, scale=4, content_height=16)
+    return ScaledCanvas(real, scale=4, content_height=16), real
+
+
+def test_scale4_scoreboard_scrolls_with_cursor_pos():
+    """A `ticker` / `one_at_a_time` section hands the card a moving
+    cursor; the board must paint there and report its right edge, or the
+    engine never sees it leave and the section wedges forever."""
+    canvas, real = _fresh_bigsign()
+    _card().draw(canvas)
+    cols0 = _lit_cols(real)
+    assert cols0
+
+    canvas, real = _fresh_bigsign()
+    _, cursor = _card().draw(canvas, 10)
+    assert cursor == 10 + canvas.width
+    assert _lit_cols(real) == {x + 40 for x in cols0 if x + 40 < 256}
+
+    canvas, real = _fresh_bigsign()
     _, cursor = _card().draw(canvas, -20)
     assert cursor == -20 + canvas.width
+    assert _lit_cols(real) == {x - 80 for x in cols0 if x - 80 >= 0}
 
 
 def test_queue_final_only_for_tracked_winner_and_caps():
