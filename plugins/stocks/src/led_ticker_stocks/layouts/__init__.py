@@ -10,6 +10,11 @@ from led_ticker_stocks.layouts.card import draw_card_story
 from led_ticker_stocks.layouts.crawl import draw_crawl_story
 from led_ticker_stocks.layouts.dashboard import draw_dashboard_story
 
+# Panel-width thresholds (real pixels) used by `resolve_layout` and advertised
+# in the `--list-fields` hint; both read these names so they cannot drift.
+CRAWL_MAX_WIDTH = 160
+DASHBOARD_MIN_WIDTH = 400
+
 LAYOUTS = {
     "crawl": draw_crawl_story,
     "card": draw_card_story,
@@ -34,8 +39,8 @@ def resolve_layout(canvas, override: str | None) -> str:
             )
         return override
     width = getattr(unwrap_to_real(canvas), "width", 0)
-    if width <= 160:
+    if width <= CRAWL_MAX_WIDTH:
         return "crawl"
-    if width >= 400:
+    if width >= DASHBOARD_MIN_WIDTH:
         return "dashboard"  # longboi ~512 (real)
     return "card"  # ~256 bigsign

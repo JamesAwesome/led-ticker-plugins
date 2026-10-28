@@ -255,7 +255,7 @@ the width check into `validate_config` — there's nothing to check it against y
 the widget-facing canvas is a `ScaledCanvas`, and `ScaledCanvas.width` is the LOGICAL width
 (`real.width // scale`, e.g. 64 at scale=4 on a 256px-wide bigsign) — reading it directly would
 always resolve to `crawl` regardless of panel size. `resolve_layout` unwraps via
-`unwrap_to_real(canvas).width` before comparing against the `≤160` / `≥400` thresholds; a
+`unwrap_to_real(canvas).width` before comparing against the `CRAWL_MAX_WIDTH` (≤160) / `DASHBOARD_MIN_WIDTH` (≥400) constants; a
 plain/mock canvas passes through `unwrap_to_real` unchanged so the same code path works in
 tests. Don't "simplify" this back to `canvas.width` — it silently breaks auto-select on both
 big panels.
