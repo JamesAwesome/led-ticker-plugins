@@ -151,8 +151,20 @@ def test_flash_off_is_dark(bigsign):
     assert unwrap_to_real(bigsign).count_nonzero() == 0
 
 
+def _rgb(color):
+    return (color.red, color.green, color.blue)
+
+
+def _colors(boxes):
+    """text -> the set of (r, g, b) it was painted in."""
+    out = {}
+    for b in boxes:
+        out.setdefault(b[0], set()).add(b[4])
+    return out
+
+
 def _detail_boxes(canvas, game, ev, frame=30, **kw):
-    """(text, x0, x1, (top, bottom)) per painted text: cap band for hi-res,
+    """(text, x0, x1, (top, bottom), rgb) per painted text: cap band for hi-res,
     the band row for the bitmap font."""
     boxes = []
     if celeb.safe_scale(canvas) <= 1:
@@ -160,7 +172,7 @@ def _detail_boxes(canvas, game, ev, frame=30, **kw):
 
         def spy_bmp(cv, font, text, x, y, color):
             w = measure_width(font, text, cv)
-            boxes.append((text, x, x + w, (y - 7, y)))
+            boxes.append((text, x, x + w, (y - 7, y), _rgb(color)))
             return real_draw(cv, font, text, x, y, color)
 
         with mock.patch.object(celeb, "draw_text", spy_bmp):
@@ -171,7 +183,7 @@ def _detail_boxes(canvas, game, ev, frame=30, **kw):
     def spy(shim, text, x, y_top, color, size):
         base = y_top + resolve_font("Inter-Bold", size).ascent
         w = celeb.text_width(size, text)
-        boxes.append((text, x, x + w, (base - round(size * 0.72), base)))
+        boxes.append((text, x, x + w, (base - round(size * 0.72), base), _rgb(color)))
         return real_hires(shim, text, x, y_top, color, size)
 
     with mock.patch.object(celeb, "hires", spy):
@@ -195,25 +207,56 @@ def _assert_clearance(boxes, width):
 @pytest.mark.parametrize("ot", [False, True])
 def test_detail_draws_scores_final_and_leader(sign, ot, request):
     canvas = request.getfixturevalue(sign)
-    texts = [b[0] for b in _detail_boxes(canvas, GAME, _ev(final_ot=ot))]
+    boxes = _detail_boxes(canvas, GAME, _ev(final_ot=ot))
+    texts = [b[0] for b in boxes]
+    colors = _colors(boxes)
     assert texts.count("112") == 1 and texts.count("108") == 1
     assert "PHI" in texts and "NY" in texts
+    # Each abbreviation in its team's primary; the loser's score white.
+    assert colors["PHI"] == {_rgb(pal.chip("PHI")[0])}
+    assert colors["NY"] == {_rgb(pal.chip("NY")[0])}
+    assert colors["108"] == {_rgb(pal.WHITE)}
     if sign == "smallsign":
-        assert ("F/OT" if ot else "FINAL") in texts
+        label = "F/OT" if ot else "FINAL"
         assert not any("EMBIID" in t for t in texts)  # dropped at this size
     else:
-        assert ("FINAL/OT" if ot else "FINAL") in texts
-        assert "J. EMBIID 31 PTS" in texts
+        label = "FINAL/OT" if ot else "FINAL"
+        assert colors["J. EMBIID 31 PTS"] == {_rgb(pal.CYAN)}
+    assert colors[label] == {_rgb(pal.AMBER)}
 
 
 @pytest.mark.parametrize("sign", ["smallsign", "bigsign", "longboi"])
-def test_detail_pulses_winner_score(sign, request):
+@pytest.mark.parametrize("frame", [40, 60])
+def test_detail_pulses_winner_score(sign, frame, request):
     canvas = request.getfixturevalue(sign)
-    f = min(range(12, 80), key=pulse)
-    render_detail(canvas, GAME, FINAL, f)
-    k = pulse(f)
-    dimmed = tuple(int(255 * k) for _ in range(3))
-    assert any(v == dimmed for v in _pixels(canvas).values())
+    assert pulse(40) != pulse(60)  # the two frames really differ
+    colors = _colors(_detail_boxes(canvas, GAME, FINAL, frame))
+    # PHI (winner, away) 112 pulses; NY (loser) 108 stays white.
+    assert colors["112"] == {_rgb(pal.dim(pal.WHITE, pulse(frame)))}
+    assert colors["108"] == {_rgb(pal.WHITE)}
+
+
+@pytest.mark.parametrize(
+    ("sign", "chip"),
+    [
+        ("smallsign", (0, 0, 2, 15)),
+        ("bigsign", (3, 5, 8, 26)),
+        ("longboi", (6, 8, 13, 56)),
+    ],
+)
+def test_chip_fallback_painted_in_winner_primary(sign, chip, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    calls = []
+    real_rect = celeb.rect
+
+    def rect_spy(real, x0, y0, x1, y1, color):
+        calls.append(((x0, y0, x1, y1), _rgb(color)))
+        return real_rect(real, x0, y0, x1, y1, color)
+
+    monkeypatch.setattr(celeb, "rect", rect_spy)
+    monkeypatch.setattr(celeb, "sprite", lambda a, s: None)
+    render_detail(canvas, GAME, FINAL, 30)
+    assert (chip, _rgb(pal.chip("PHI")[0])) in calls
 
 
 def test_detail_uses_logo_when_available_and_chip_when_not(bigsign, monkeypatch):
