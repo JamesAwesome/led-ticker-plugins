@@ -5,7 +5,7 @@ import difflib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -251,6 +251,16 @@ def _build_standing_message(
 @attrs.define
 class MLBStandingsMonitor:
     """MLB overall standings showing top N teams and tracked teams."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "ticker" | "board"',
+            "auto = best layout for the sign; "
+            "ticker = scrolling rows; "
+            "board = held division board",
+            '"auto"',
+        ),
+    }
 
     session: aiohttp.ClientSession
     # Defaults to an empty list — already handled gracefully by

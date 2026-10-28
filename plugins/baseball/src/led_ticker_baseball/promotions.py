@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Self, TypeVar
+from typing import Any, ClassVar, Self, TypeVar
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -247,6 +247,16 @@ def _build_demo_promos() -> list[PromoInfo]:
 @attrs.define
 class MLBPromotionsMonitor:
     """Upcoming home-game promotions (giveaways / theme nights) for one team."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "layout": (
+            '"auto" | "ticker" | "card"',
+            "auto = best layout for the sign; "
+            "ticker = hi-res crawl; "
+            "card = held promo card",
+            '"auto"',
+        ),
+    }
 
     session: aiohttp.ClientSession
     # Defaults "" (not required at the attrs/construction level) so
