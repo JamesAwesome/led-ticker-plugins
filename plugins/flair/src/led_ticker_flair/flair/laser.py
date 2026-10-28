@@ -15,6 +15,11 @@ paints unvisited outgoing pixels (erase) or visited incoming pixels
 
 from typing import Any
 
+Pixel = tuple[int, int, tuple[int, int, int]]  # (x, y, (r, g, b))
+
+_ORIGINS = ("top", "bottom", "left", "right")
+_BLACK = (0, 0, 0)
+
 
 class _Raster:
     """Minimal readable canvas with real-canvas write semantics.
@@ -76,3 +81,55 @@ class _Raster:
         if 0 <= x < self.width and 0 <= y < self.height:
             return self._pixels[y * self.width + x]
         return None
+
+
+def _is_lit(px: tuple[int, int, int] | None) -> bool:
+    """Set and not pure black. The section ``bg_color`` is painted by the
+    ENGINE, never by the widget, so it never reaches a snapshot; black is
+    excluded so gif pillars / image letterbox fills aren't lasered."""
+    return px is not None and px != _BLACK
+
+
+def raster_order(
+    raster: _Raster, origin: str, forward_first: bool = True
+) -> tuple[list[Pixel], bool]:
+    """Lit pixels of ``raster`` in beam-visit order, plus the parity the
+    NEXT phase should start with.
+
+    Lines are physical rows (``top``/``bottom``) or columns
+    (``left``/``right``); the first line is the one nearest the origin
+    edge. Within a line the head runs forward (ascending) or backward,
+    flipping after every line that contributed at least one pixel —
+    empty lines are skipped without flipping (no frames spent on them).
+    """
+    if origin not in _ORIGINS:
+        raise ValueError(f"origin must be one of {_ORIGINS}; got {origin!r}")
+    w, h = raster.width, raster.height
+    by_rows = origin in ("top", "bottom")
+    if origin == "top":
+        lines: range = range(h)
+    elif origin == "bottom":
+        lines = range(h - 1, -1, -1)
+    elif origin == "left":
+        lines = range(w)
+    else:
+        lines = range(w - 1, -1, -1)
+    across = range(w) if by_rows else range(h)
+
+    out: list[Pixel] = []
+    forward = forward_first
+    get = raster.get
+    for line in lines:
+        hits: list[Pixel] = []
+        for k in across:
+            x, y = (k, line) if by_rows else (line, k)
+            px = get(x, y)
+            if _is_lit(px):
+                hits.append((x, y, px))  # type: ignore[arg-type]
+        if not hits:
+            continue
+        if not forward:
+            hits.reverse()
+        out.extend(hits)
+        forward = not forward
+    return out, forward
