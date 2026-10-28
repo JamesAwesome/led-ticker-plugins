@@ -3,7 +3,8 @@ and transitions.
 
 The entry-point name ``flair`` is the plugin namespace, so animations are
 referenced in config.toml as ``animation = "flair.propeller"`` and
-transitions as ``transition = "flair.spinout"``.
+transitions as ``transition = "flair.spinout"`` (or the six
+``flair.laser.<origin>`` beam-write variants).
 
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
@@ -52,6 +53,14 @@ def register(api):
     )
     from led_ticker_flair.flair.fireworks import Fireworks  # noqa: PLC0415
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
+    from led_ticker_flair.flair.laser import (  # noqa: PLC0415
+        Laser,
+        LaserAlternating,
+        LaserBottom,
+        LaserLeft,
+        LaserRandom,
+        LaserRight,
+    )
     from led_ticker_flair.flair.lightning import Lightning  # noqa: PLC0415
     from led_ticker_flair.flair.lottery import Lottery  # noqa: PLC0415
     from led_ticker_flair.flair.poker import Poker  # noqa: PLC0415
@@ -69,4 +78,10 @@ def register(api):
     api.transition("fairy.forward")(Fairy)
     api.transition("fairy.reverse")(FairyReverse)
     api.transition("fairy.alternating")(FairyAlternating)
+    api.transition("laser.top")(Laser)
+    api.transition("laser.bottom")(LaserBottom)
+    api.transition("laser.left")(LaserLeft)
+    api.transition("laser.right")(LaserRight)
+    api.transition("laser.alternating")(LaserAlternating)
+    api.transition("laser.random")(LaserRandom)
     api.widget("lottery")(Lottery)

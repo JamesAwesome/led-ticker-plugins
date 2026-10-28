@@ -1,6 +1,6 @@
 # led-ticker-flair
 
-Homage sprite-trail transitions and text animations for [led-ticker](https://github.com/JamesAwesome/led-ticker) — four sprite families plus the propeller animation, all in one wheel.
+Homage sprite-trail transitions and text animations for [led-ticker](https://github.com/JamesAwesome/led-ticker) — four sprite families plus text-effect transitions and animations, all in one wheel.
 
 ## Sprite-trail transitions
 
@@ -339,6 +339,68 @@ Direction is **not** a knob — pick the variant (`.forward` / `.reverse` / `.al
 - **Near-straight flight.** The path is single-valued per column (the reveal machinery requires it): a gentle center-band line with small drift and wobble. The magic is in the dust, not a loop-de-loop.
 - **Stateless sparks, no warm-up.** Every spark is a pure function of `(column, index, quantized t)` — no particle lists, no caches. The first firing after boot costs the same as every other, and per-frame paint volume is bounded by panel size (enforced by the `TestPerfUniformity` tripwires).
 
+
+## Laser transition
+
+`flair.laser` writes the sign the way a commercial LED message board's "laser" effect does: beams reach in from one panel edge, erase the old content pixel by pixel in a back-and-forth raster, then write the new content the same way. Each beam is a solid one-pixel bar from the edge to the pixel it is working on, in that pixel's own colour, so a red headline is erased by red beams and a rainbow one by rainbow beams. It works on every widget type — the content is snapshotted as pixels, not as text.
+
+![flair.laser — three beams erase the old message from the top, then write the new one](docs/transition-laser.gif)
+
+Requires **led-ticker-core >= 4.31.0**. Six variants, named by the edge the beams come from:
+
+| Type | Beams come from | Raster |
+| --- | --- | --- |
+| `flair.laser.top` | top edge | row by row, top row first |
+| `flair.laser.bottom` | bottom edge | row by row, bottom row first |
+| `flair.laser.left` | left edge | column by column, left first |
+| `flair.laser.right` | right edge | column by column, right first |
+| `flair.laser.alternating` | cycles top → right → bottom → left | one origin per firing |
+| `flair.laser.random` | a different edge each firing | never the same twice running |
+
+### Config
+
+```toml
+[transitions]
+duration = 2.5        # the floor is 2.4 s (min_frames = 48); 2.5–3.5 s reads well
+
+[[playlist.section]]
+transition = "flair.laser.top"
+```
+
+A different edge every firing:
+
+```toml
+[[playlist.section]]
+transition = "flair.laser.alternating"
+```
+
+Two beams instead of three, or the classic single raster:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.laser.left", beams = 2}
+```
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.laser.top", beams = 1}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `beams` | positive int | `3` | Number of independent beams. The lit content is split into that many equal slices (across the panel for top/bottom, down it for left/right) and each beam erases then writes its own slice at its own constant speed. `1` is the classic single back-and-forth raster. |
+
+Direction is **not** a knob — pick the variant. The beam colour is always the content's own colour.
+
+### Notes
+
+- **Two phases, one timeline.** The transition's `duration` covers both erase and write; time splits in proportion to how many lit pixels each side has, so a short message erases quickly and a long one takes longer. An empty outgoing (boot, wake from dark) goes straight to writing. All beams finish together at 95 % of the duration; the last 5 % is the usual snap to the incoming widget.
+- **Backgrounds.** The section `bg_color` is painted by the engine, never by the widget, so it is never lasered: erased pixels simply show the old background, and the panel switches to the new background the moment the first beam starts writing. A widget's own fill (`image`/`gif` `bg_color`, `two_row` band colours) IS content and gets written pixel by pixel.
+- **Snapshot, not a live draw.** Both widgets are drawn once per firing into an offscreen raster at physical resolution; the beams work from that. A clock ticking over or a source refreshing mid-transition can't leave stray pixels behind. On the bigsign a logical pixel is a 4×4 block and gets written in four passes of four, with a one-real-pixel beam.
+- **Cross-scale sections.** When the next section uses a different `scale`, the incoming content is written at the outgoing scale and pops to its own size on the final frame — the same accepted limitation as `flair.fairy` / `flair.lightning` / `flair.fireworks`.
+- **Perf.** Per-frame work is bounded by the number of lit pixels (≤ panel size) plus one bar per beam; the only non-trivial cost is the one snapshot frame per firing. Enforced by the `TestPerfUniformity` tripwires.
 
 ## Fisheye animation
 
