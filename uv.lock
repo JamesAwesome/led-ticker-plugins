@@ -414,6 +414,7 @@ source = { editable = "plugins/basketball" }
 dependencies = [
     { name = "aiohttp" },
     { name = "led-ticker-core" },
+    { name = "pillow" },
 ]
 
 [package.optional-dependencies]
@@ -430,6 +431,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.12" },
     { name = "led-ticker-core", specifier = ">=4.31" },
+    { name = "pillow", specifier = ">=13" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

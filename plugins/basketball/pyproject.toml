@@ -32,6 +32,7 @@ classifiers = [
 dependencies = [
     "led-ticker-core>=4.31",
     "aiohttp>=3.12",
+    "Pillow>=13",  # _logos.py decodes the bundled PNGs
 ]
 
 # The plugin is contributed to led-ticker via this entry point. The entry-point
