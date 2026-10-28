@@ -176,7 +176,9 @@ class TennisScoreMonitor:
             len(widget.feed_stories),
             interval,
         )
-        spawn_tracked(run_monitor_loop(widget, interval))
+        # splay=False: core's default adds a fixed random 0-60 s to the
+        # interval at startup. The shared source already rate-limits itself.
+        spawn_tracked(run_monitor_loop(widget, interval, splay=False))
         return widget
 
     # --- stories -----------------------------------------------------
