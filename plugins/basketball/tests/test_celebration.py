@@ -163,31 +163,50 @@ def _colors(boxes):
     return out
 
 
-def _detail_boxes(canvas, game, ev, frame=30, **kw):
+def _detail_boxes(canvas, game, ev, frame=30, *, shapes=False, **kw):
     """(text, x0, x1, (top, bottom), rgb) per painted text: cap band for hi-res,
-    the band row for the bitmap font."""
+    the band row for the bitmap font. `shapes=True` also records the chip
+    `rect`s and the `paint_logo` sprite as ("rect@x0" / "LOGO", x0, x1_excl,
+    (top, bottom), rgb|None) so clearance checks see them."""
     boxes = []
-    if celeb.safe_scale(canvas) <= 1:
-        real_draw = celeb.draw_text
+    real_rect, real_logo = celeb.rect, celeb.paint_logo
 
-        def spy_bmp(cv, font, text, x, y, color):
-            w = measure_width(font, text, cv)
-            boxes.append((text, x, x + w, (y - 7, y), _rgb(color)))
-            return real_draw(cv, font, text, x, y, color)
+    def rect_spy(real, x0, y0, x1, y1, color):
+        if shapes:
+            boxes.append((f"rect@{x0}", x0, x1 + 1, (y0, y1), _rgb(color)))
+        return real_rect(real, x0, y0, x1, y1, color)
 
-        with mock.patch.object(celeb, "draw_text", spy_bmp):
+    def logo_spy(real, spr, x, y):
+        if shapes:
+            boxes.append(("LOGO", x, x + spr.size, (y, y + spr.size - 1), None))
+        return real_logo(real, spr, x, y)
+
+    with (
+        mock.patch.object(celeb, "rect", rect_spy),
+        mock.patch.object(celeb, "paint_logo", logo_spy),
+    ):
+        if celeb.safe_scale(canvas) <= 1:
+            real_draw = celeb.draw_text
+
+            def spy_bmp(cv, font, text, x, y, color):
+                w = measure_width(font, text, cv)
+                boxes.append((text, x, x + w, (y - 7, y), _rgb(color)))
+                return real_draw(cv, font, text, x, y, color)
+
+            with mock.patch.object(celeb, "draw_text", spy_bmp):
+                render_detail(canvas, game, ev, frame, **kw)
+            return boxes
+        real_hires = celeb.hires
+
+        def spy(shim, text, x, y_top, color, size):
+            base = y_top + resolve_font("Inter-Bold", size).ascent
+            w = celeb.text_width(size, text)
+            band = (base - round(size * 0.72), base)
+            boxes.append((text, x, x + w, band, _rgb(color)))
+            return real_hires(shim, text, x, y_top, color, size)
+
+        with mock.patch.object(celeb, "hires", spy):
             render_detail(canvas, game, ev, frame, **kw)
-        return boxes
-    real_hires = celeb.hires
-
-    def spy(shim, text, x, y_top, color, size):
-        base = y_top + resolve_font("Inter-Bold", size).ascent
-        w = celeb.text_width(size, text)
-        boxes.append((text, x, x + w, (base - round(size * 0.72), base), _rgb(color)))
-        return real_hires(shim, text, x, y_top, color, size)
-
-    with mock.patch.object(celeb, "hires", spy):
-        render_detail(canvas, game, ev, frame, **kw)
     return boxes
 
 
@@ -231,8 +250,10 @@ def test_detail_pulses_winner_score(sign, frame, request):
     canvas = request.getfixturevalue(sign)
     assert pulse(40) != pulse(60)  # the two frames really differ
     colors = _colors(_detail_boxes(canvas, GAME, FINAL, frame))
-    # PHI (winner, away) 112 pulses; NY (loser) 108 stays white.
-    assert colors["112"] == {_rgb(pal.dim(pal.WHITE, pulse(frame)))}
+    # PHI (winner, away) 112 pulses team primary <-> white; NY (loser) 108
+    # stays white.
+    hot = pal.lerp(pal.chip("PHI")[0], pal.WHITE, pulse(frame))
+    assert colors["112"] == {_rgb(hot)}
     assert colors["108"] == {_rgb(pal.WHITE)}
 
 
@@ -290,7 +311,7 @@ def test_detail_logos_false_draws_chip(bigsign, monkeypatch):
     texts = _detail_boxes(bigsign, GAME, FINAL, logos=False)
     assert logo_calls == []
     final = next(b for b in texts if b[0] == "FINAL")
-    assert final[1] == 14  # the chip's content edge
+    assert final[1] == 15  # chip x 3..8, then the 6 px gap
 
 
 WORST_GAME = dataclasses.replace(GAME, away="UTAH", home="WSH")
@@ -310,9 +331,12 @@ WORST = FinalEvent(
 @pytest.mark.parametrize("logos", [True, False])
 def test_detail_texts_keep_clearance_worst_case(sign, logos, request):
     canvas = request.getfixturevalue(sign)
-    boxes = _detail_boxes(canvas, WORST_GAME, WORST, logos=logos)
+    boxes = _detail_boxes(canvas, WORST_GAME, WORST, logos=logos, shapes=True)
     texts = [b[0] for b in boxes]
     assert "148" in texts and "147" in texts
+    # The chip / logo is in the check (smallsign is always a chip).
+    shape = "LOGO" if logos and sign != "smallsign" else "rect@"
+    assert any(t.startswith(shape) for t in texts)
     if sign != "smallsign":
         assert any("ANTETOKOUNMPO" in t for t in texts)
     _assert_clearance(boxes, unwrap_to_real(canvas).width)

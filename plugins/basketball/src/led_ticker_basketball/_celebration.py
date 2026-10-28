@@ -6,8 +6,8 @@ The first `FLASH_FRAMES` are three on/off flashes (2 frames on, 2 off) of
 the full panel in the winner's colour with `<NICKNAME> WIN` knocked out
 (`<ABBREV> WIN` when the nickname does not fit); the rest is the detail
 card: the winner's logo (or a colour chip), the final score with the
-winner's number pulsing, `FINAL` / `FINAL/OT`, and the winner's points
-leader on the bigger signs.
+winner's number pulsing between its team colour and white, `FINAL` /
+`FINAL/OT`, and the winner's points leader on the bigger signs.
 
 Every text is measured and placed with >= 6 px clearance. Sparse events
 (no leader, unknown teams) render what they have and never raise.
@@ -92,8 +92,9 @@ def _final_label(ev: FinalEvent) -> str:
 
 def _scores(game: GameInfo, ev: FinalEvent, frame: int):
     """[(abbrev, team colour, score text, score colour)] away then home; the
-    winner's score pulses. Scores are the event's own snapshot."""
-    hot = pal.dim(pal.WHITE, pulse(frame))
+    winner's score pulses between the team primary and white. Scores are
+    the event's own snapshot."""
+    hot = pal.lerp(pal.chip(ev.winner)[0], pal.WHITE, pulse(frame))
     return [
         (
             abbrev,
@@ -205,7 +206,8 @@ def _detail_big(shim, real, game: GameInfo, ev: FinalEvent, frame, yo, logos):
     painted = _logo_or_chip(
         real, ev, logos, LOGO_BIG, 4, 14 + yo, (3, 5 + yo, 8, 26 + yo)
     )
-    x0 = 4 + LOGO_BIG + _GAP if painted else 14
+    # Chip path: chip x 3..8, so text at 15 keeps _GAP (6) clear of it.
+    x0 = 4 + LOGO_BIG + _GAP if painted else 8 + 1 + _GAP
     items = []
     for abbrev, tcolor, score, scolor in _scores(game, ev, frame):
         items += [(abbrev, tcolor, 14), (score, scolor, 16)]
@@ -264,7 +266,7 @@ def _detail_small(canvas, game: GameInfo, ev: FinalEvent, frame: int, yo: int, f
     def run_w(run) -> int:
         return sum(mw(t) for t, _ in run) + _GAP * max(0, len(run) - 1)
 
-    x = 5
+    x = 3 + _GAP  # the chip is x 0..2; 9 matches the band board's `left`
     run = items + tail
     if x + run_w(run) > width:
         run = items
