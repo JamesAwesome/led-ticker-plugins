@@ -38,7 +38,7 @@ dependencies = [
     # snap for auto_font_size — crisp Spleen ball faces). 4.27 honors
     # RESOLVES_OWN_FONT (lottery.Lottery sets it so a config-set `font`
     # stays a raw name instead of being coerced to a Font object).
-    "led-ticker-core>=4.31",
+    "led-ticker-core>=4.32",
 ]
 
 [project.urls]
