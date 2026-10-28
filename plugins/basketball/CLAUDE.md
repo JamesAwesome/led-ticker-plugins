@@ -59,10 +59,12 @@ at startup, which stretched the 15 s live cadence on hardware. Tripwires:
 
 **The day model keeps yesterday's slate** — today's scoreboard only; when a cached LIVE game
 is missing from today's payload (a West-coast game past midnight Eastern) the source also
-fetches `?dates=<yesterday>` (soft: a failure keeps today's payload). A live game missing
+fetches `?dates=<yesterday>` — yesterday in `_models.ESPN_TZ` (Eastern, the slate's
+day), NEVER the widget's tz (soft: a failure keeps today's payload). A live game missing
 from one payload stays live for `LIVE_GRACE` (30 min). NEVER infer a final from a game
 vanishing: a vanished game keeps its last state until the hold passes. Tripwires:
 `test_yesterday_feed_keeps_late_game`, `test_yesterday_feed_failure_is_soft`,
+`test_yesterday_feed_uses_eastern_date_for_western_users`,
 `test_vanished_game_keeps_state_until_hold`.
 
 **`FinalEvent` baseline lives in the source; celebrated keys live on the widget** — the
@@ -174,7 +176,9 @@ cyan points-leader lines, dim labels/dividers/`STALE`/`TBD`, green final winner,
 and records. **`RED` is reserved for the clutch clock** (live, 4th quarter or later, <= 2:00,
 margin <= 5 — `_models.is_clutch`; `test_clutch_clock_is_red`, `test_is_clutch_parses_tenths`)
 and **`ORANGE` for the ball emoji and the longboi per-quarter linescore strip**
-(`test_longboi_linescore_strip_orange_and_dropped_when_narrow`). Never restyle a field locally.
+(`test_longboi_linescore_strip_orange_and_dropped_when_narrow`); the strip is budgeted to the
+scores' footprint (`_strip_budget`), not the centre column, so OT fits
+(`test_longboi_strip_renders_in_overtime`). Never restyle a field locally.
 Black is invisible on the panels, so team chips are lifted; near-black primaries use the
 lifted secondary. `bg_color` fills at EVERY scale: core fills it before every draw and the
 celebration's takeover fills it explicitly
