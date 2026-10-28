@@ -27,7 +27,13 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from led_ticker_basketball._models import FinalEvent, GameInfo, final_event, parse_event
+from led_ticker_basketball._models import (
+    ESPN_TZ,
+    FinalEvent,
+    GameInfo,
+    final_event,
+    parse_event,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -249,7 +255,10 @@ class ESPNSource:
         return out
 
     def _yesterday_date(self) -> str:
-        day = self._wall().astimezone(self._tz).date() - timedelta(days=1)
+        # ESPN's default /scoreboard slate is the EASTERN calendar day, so
+        # "yesterday" is too -- never the widget's tz (a PT user at 21:30 is
+        # already on the next Eastern day).
+        day = self._wall().astimezone(ESPN_TZ).date() - timedelta(days=1)
         return day.strftime("%Y%m%d")
 
     async def _poll(self) -> None:

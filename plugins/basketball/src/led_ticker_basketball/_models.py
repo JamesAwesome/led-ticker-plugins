@@ -27,7 +27,9 @@ _NO_CLOCK_STATUSES = frozenset(
 _PERIODS = 4
 _CLUTCH_SECONDS = 120.0
 _CLUTCH_MARGIN = 5
-_ESPN_TZ = ZoneInfo("America/New_York")  # the feed's anchor for date-only tipoffs
+ESPN_TZ = ZoneInfo(
+    "America/New_York"
+)  # ESPN's day: date-only tipoffs + /scoreboard slate
 
 # The feed carries no end time: a final's hold runs from tip-off + this.
 GAME_LENGTH = timedelta(hours=2, minutes=30)
@@ -290,7 +292,7 @@ def status_lines(game: GameInfo, now: float, tz: ZoneInfo) -> tuple[str, str]:
     if game.time_tbd:
         # ESPN's TBD sentinel is 05:00Z = midnight Eastern: the game's date
         # is the Eastern date whatever the user's zone, and never TONIGHT.
-        start = game.start_utc.astimezone(_ESPN_TZ)
+        start = game.start_utc.astimezone(ESPN_TZ)
         return (f"{start:%a %b} {start.day}".upper(), "TBD")
     now_utc = datetime.fromtimestamp(now, UTC)
     day = day_label(game.start_utc, now_utc, tz)

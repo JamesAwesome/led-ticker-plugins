@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from led_ticker_basketball._models import FinalEvent
 from led_ticker_basketball._source import (
     HOSTS,
     IDLE_INTERVAL,
@@ -270,6 +271,32 @@ async def test_yesterday_feed_keeps_late_game():
     assert s.next_delay() == LIVE_INTERVAL
     assert [u for u in session.urls if "?dates=" in u] == [yday_url]
     assert s._yesterday_ids == {LIVE_ID}
+
+
+async def test_yesterday_feed_uses_eastern_date_for_western_users():
+    # 00:30 ET Oct 29 is 21:30 PT Oct 28: ESPN's default slate is already the
+    # 29th (Eastern), so yesterday is the 28th -- not the 27th a PT-local
+    # computation gives.
+    wall = datetime(2026, 10, 29, 4, 30, tzinfo=UTC)
+    session = FakeSession({SB[0]: (200, day(live_event()))})
+    clock = Clock()
+    s = ESPNSource(session, clock=clock, wall=lambda: wall)
+    s.want(
+        teams={"PHI"},
+        all_games=False,
+        tz=ZoneInfo("America/Los_Angeles"),
+        final_hold_hours=24,
+    )
+    await s.poll()
+    session.routes[SB[0]] = (200, day())
+    session.routes[f"{SB[0]}?dates=20261028"] = (200, day(final_event_json(112, 108)))
+    clock.advance()
+    snap = await s.poll()
+    yday = [u for u in session.urls if "?dates=" in u]
+    assert yday == [f"{SB[0]}?dates=20261028"]
+    assert not any("dates=20261027" in u for u in session.urls)
+    assert snap.games[LIVE_ID].state == "final"
+    assert isinstance(s.final_after_baseline(LIVE_ID), FinalEvent)
 
 
 async def test_yesterday_feed_failure_is_soft():
