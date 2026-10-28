@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 import pytest
 from led_ticker.plugin import HeadlessBackend, ScaledCanvas
 
+from led_ticker_basketball._source import _SHARED_SOURCES
+
 TZ = ZoneInfo("America/New_York")
 
 
@@ -36,11 +38,6 @@ def longboi():
 
 @pytest.fixture(autouse=True)
 def reset_sources():
-    try:
-        from led_ticker_basketball._source import _SHARED_SOURCES
-    except ImportError:  # _source.py lands in a later task
-        yield
-        return
     _SHARED_SOURCES.clear()
     yield
     _SHARED_SOURCES.clear()
