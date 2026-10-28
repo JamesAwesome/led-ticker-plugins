@@ -1,7 +1,7 @@
 [project]
 name = "led-ticker-flair"
 dynamic = ["version"]
-description = "Sprite-trail transitions, text animations, and flashy widgets for led-ticker: nyancat/pokeball/pacman/sailor_moon transitions, flair.fireworks & flair.spinout transitions, flair.propeller & flair.fisheye animations, and the flair.lottery ball-draw widget."
+description = "Sprite-trail transitions, text animations, and flashy widgets for led-ticker: nyancat/pokeball/pacman/sailor_moon transitions, flair.fireworks, flair.spinout & flair.laser transitions, flair.propeller & flair.fisheye animations, and the flair.lottery ball-draw widget."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

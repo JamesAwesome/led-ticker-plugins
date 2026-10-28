@@ -1,0 +1,301 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST — flair.laser transition (the flair release that ships laser)
+#
+# Prereqs on the sign:
+#   - led-ticker-core >= 4.31.0
+#   - led-ticker-flair at the release that ships laser (PyPI pin in
+#     config/requirements-plugins.txt), then `docker compose down -v && docker compose up -d`
+#   - copy to config/config.toml, then `make restart`
+#
+# Preflight: led-ticker validate config/config.toml  -> expect: No issues found.
+#
+# WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
+# and on each section's entry). Default is THREE beams, each writing an equal
+# slice of the content; every beam is one real pixel wide and takes the colour
+# of the pixel it is erasing or writing.
+#
+#   1 TOP        — beams drop from the TOP edge; the old text is eaten row by
+#                  row from the top, then the new text is written row by row.
+#   2 BOTTOM     — same, beams reach UP from the bottom edge.
+#   3 LEFT       — beams reach in from the LEFT; columns are written left to
+#                  right, so it reads like three typists on stacked rows.
+#   4 RIGHT      — same from the RIGHT edge, columns right to left.
+#   5 ALTERNATING— origin cycles top → right → bottom → left: watch two full
+#                  cycles.
+#   6 RANDOM     — a different origin each firing, never the same twice running.
+#   7 BG HOLD    — TEAL section followed by a PURPLE section: erased pixels
+#                  show TEAL behind them; the panel turns PURPLE the moment the
+#                  first beam starts writing; no black flash at the end.
+#   8 ONE BEAM   — beams = 1: the classic single raster, for comparison.
+#   9 CLOCK      — a live clock as the OUTGOING widget: the erase must leave no
+#                  stray pixels at the erase/write boundary (snapshot, not a
+#                  live draw).
+#  10 FULL PANEL — a gif widget written pixel by pixel from the bottom (the
+#                  perf worst case: ~16k pixels). Uses the stock
+#                  assets/phoenix.gif from config/ (same path as the core
+#                  example configs).
+#  11 PERF FEEL  — motion stays smooth through erase AND write; the FIRST
+#                  transition after boot may show one hitch frame while the two
+#                  snapshots are taken; nothing else.
+#
+# If anything looks wrong: docs/visual-validation.md; reference renders in
+# session GIFs.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 2.5
+between_sections = "cut"
+
+# ---------------------------------------------------------------------------
+# 1 · TOP — beams drop from the top edge
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.top"
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 TOP"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "ROW BY ROW"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 2 · BOTTOM — beams reach up from the bottom edge
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.bottom"
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 BOTTOM"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FROM BELOW"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 3 · LEFT — beams reach in from the left, columns left to right
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.left"
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 LEFT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "TYPES IN"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 4 · RIGHT — beams reach in from the right, columns right to left
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.right"
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 RIGHT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "REVERSE"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 5 · ALTERNATING — origin cycles top → right → bottom → left per firing
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.alternating"
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 ALT"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "CYCLES"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 6 · RANDOM — a different origin each firing, never the same twice running
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.random"
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 RANDOM"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "ANY EDGE"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 7 · BG HOLD — teal section, then purple: erased pixels show teal, the panel
+#     turns purple when the first beam starts writing, no black flash at the end
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.laser.top", beams = 2}
+bg_color = [0, 40, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "7 BG TEAL"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.left"
+bg_color = [40, 0, 60]
+
+[[playlist.section.widget]]
+type = "message"
+text = "BG PURPLE"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 8 · ONE BEAM — beams = 1, the classic single raster
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.laser.top", beams = 1}
+
+[[playlist.section.widget]]
+type = "message"
+text = "8 ONE BEAM"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SINGLE"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 9 · CLOCK — live clock as the outgoing widget (snapshot drift probe)
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.right"
+
+[[playlist.section.widget]]
+type = "clock"
+font_color = [255, 183, 3]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "9 CLOCK"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 10 · FULL PANEL — a gif written pixel by pixel (perf worst case)
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.bottom"
+
+[[playlist.section.widget]]
+type = "gif"
+path = "assets/phoenix.gif"
+
+# ---------------------------------------------------------------------------
+# 11 · PERF FEEL — smooth erase + write; only the first firing may hitch once
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.laser.alternating"
+
+[[playlist.section.widget]]
+type = "message"
+text = "11 PERF"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SMOOTH"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
