@@ -60,6 +60,12 @@ def test_football_is_publishable(tmp_path):
     assert plugin_dir == str(Path(root) / "football"), msg
 
 
+def test_basketball_is_publishable(tmp_path):
+    root = _mk(tmp_path, "basketball")
+    plugin_dir, msg = resolve("basketball-v0.1.0", root)
+    assert plugin_dir == str(Path(root) / "basketball"), msg
+
+
 def test_unknown_plugin_rejected(tmp_path):
     root = _mk(tmp_path, "telnet")
     plugin_dir, msg = resolve("bogus-v1.0.0", root)
