@@ -52,6 +52,7 @@ def register(api):
     )
     from led_ticker_flair.flair.fireworks import Fireworks  # noqa: PLC0415
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
+    from led_ticker_flair.flair.laser import Laser  # noqa: PLC0415
     from led_ticker_flair.flair.lightning import Lightning  # noqa: PLC0415
     from led_ticker_flair.flair.lottery import Lottery  # noqa: PLC0415
     from led_ticker_flair.flair.poker import Poker  # noqa: PLC0415
@@ -69,4 +70,5 @@ def register(api):
     api.transition("fairy.forward")(Fairy)
     api.transition("fairy.reverse")(FairyReverse)
     api.transition("fairy.alternating")(FairyAlternating)
+    api.transition("laser.top")(Laser)
     api.widget("lottery")(Lottery)
