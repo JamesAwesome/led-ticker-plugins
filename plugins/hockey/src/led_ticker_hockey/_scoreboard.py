@@ -85,8 +85,9 @@ class HockeyBandBoard(FrameAwareBase):
     ) -> DrawResult:
         g = self.game
         font = self.font
-        if self.bg_color is not None:
-            canvas.Fill(self.bg_color.red, self.bg_color.green, self.bg_color.blue)
+        # Core fills `bg_color` before every draw; never clear here (a scroll
+        # section's earlier widgets are already on the canvas this tick).
+        ox = cursor_pos  # a scroll section's cursor; 0 when held
         scale = safe_scale(canvas)
         half_h = canvas.height // 2
         baseline = compute_baseline_for_band(font, half_h, scale, valign="center")
@@ -103,14 +104,14 @@ class HockeyBandBoard(FrameAwareBase):
                     canvas,
                     font,
                     text,
-                    width - measure_width(font, text, canvas),
+                    ox + width - measure_width(font, text, canvas),
                     y,
                     color,
                 )
 
         if g.state == "future":
             y0, y1 = ys
-            x = _X_ABBREV
+            x = ox + _X_ABBREV
             for text, color in (
                 (g.away, pal.chip(g.away)[0]),
                 (" @ ", pal.GRAY),
@@ -118,7 +119,7 @@ class HockeyBandBoard(FrameAwareBase):
             ):
                 x = draw_text(canvas, font, text, x, y0, color)
             right(top, y0, pal.AMBER)
-            draw_text(canvas, font, g.venue.upper(), _X_ABBREV, y1, pal.DIM)
+            draw_text(canvas, font, g.venue.upper(), ox + _X_ABBREV, y1, pal.DIM)
             right(bottom, y1, pal.WHITE)
             return canvas, cursor_pos + canvas.width
 
@@ -148,23 +149,24 @@ class HockeyBandBoard(FrameAwareBase):
         sit_x = col(_X_SITUATION, [t for t in values if t], value_end)
         for band, (abbrev, _, _) in enumerate(rows):
             y = ys[band]
-            r0 = band * half_h
+            # the chip rides PushUp/PushDown with the text
+            r0 = band * half_h + y_offset
             primary, _ = pal.chip(abbrev)
-            rect(real, 0, r0, 2, r0 + half_h - 2 + band, primary)
-            draw_text(canvas, font, abbrev, _X_ABBREV, y, primary)
+            rect(real, ox, r0, ox + 2, r0 + half_h - 2 + band, primary)
+            draw_text(canvas, font, abbrev, ox + _X_ABBREV, y, primary)
             color = self._score_color(abbrev)
-            draw_text(canvas, font, scores[band], _X_SCORE, y, color)
+            draw_text(canvas, font, scores[band], ox + _X_SCORE, y, color)
             if labels[band]:
-                draw_text(canvas, font, labels[band], label_x, y, pal.DIM)
+                draw_text(canvas, font, labels[band], ox + label_x, y, pal.DIM)
             if values[band]:
-                draw_text(canvas, font, values[band], value_x, y, pal.CYAN)
+                draw_text(canvas, font, values[band], ox + value_x, y, pal.CYAN)
             if sit is not None:
                 if sit.pp_team == abbrev:
                     pp = fmt_clock(live_pp_seconds(g, now))
                     text = f"PP {pp}".rstrip()
-                    draw_text(canvas, font, text, sit_x, y, pal.AMBER)
+                    draw_text(canvas, font, text, ox + sit_x, y, pal.AMBER)
                 elif sit.en_team == abbrev:
-                    draw_text(canvas, font, "EN", sit_x, y, pal.AMBER)
+                    draw_text(canvas, font, "EN", ox + sit_x, y, pal.AMBER)
 
         if g.state == "final":
             right(top, ys[0], pal.WHITE)

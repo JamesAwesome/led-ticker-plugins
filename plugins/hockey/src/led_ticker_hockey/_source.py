@@ -36,6 +36,7 @@ IDLE_INTERVAL = 3600
 SEASON_INTERVAL = 6 * 3600
 MIN_INTERVAL = 10
 MAX_BACKOFF = 4 * 3600
+LIVE_GRACE = 30 * 60  # a live game missing from one payload stays live this long
 REQUEST_TIMEOUT = 20
 _MAX_SHARED_SOURCES = 8
 _USER_AGENT = "led-ticker-hockey (+https://github.com/JamesAwesome/led-ticker-plugins)"
@@ -85,6 +86,7 @@ class NHLSource:
         self._known_goals: dict[int, set[str]] = {}
         self._situations: dict[int, Any] = {}
         self._backoff = 0
+        self._ever_ok = False
         self._next_allowed = float("-inf")
         self.snapshot = Snapshot()
 
@@ -137,8 +139,24 @@ class NHLSource:
 
     # ------------------------------------------------------------- cadence
 
+    def _active(self) -> list[GameInfo]:
+        """Games that drive cadence only (`_playing` keeps iterating `_games`):
+        this payload's, plus a LIVE game a partial payload left out, for
+        `LIVE_GRACE` after it was last seen (the card still shows it live, so
+        polling must stay live)."""
+        now_utc = self._wall()
+        out: list[GameInfo] = []
+        for gid, g in self._games.items():
+            if gid in self._latest_ids:
+                out.append(g)
+            elif g.state == "live":
+                seen = self._last_seen.get(gid)
+                if seen is not None and (now_utc - seen).total_seconds() <= LIVE_GRACE:
+                    out.append(g)
+        return out
+
     def _cadence(self) -> float:
-        games = [g for i, g in self._games.items() if i in self._latest_ids]
+        games = self._active()
         if any(g.state == "live" for g in games):
             return max(MIN_INTERVAL, self._live_interval)
         if any(g.state == "future" for g in games):
@@ -176,7 +194,9 @@ class NHLSource:
             return self.snapshot
 
     def _fail(self, message: str) -> None:
-        base = max(MIN_INTERVAL, self._cadence())
+        # Before anything ever loaded the cadence reads IDLE (no games): a
+        # sign that boots before its network must retry in seconds, not hours.
+        base = max(MIN_INTERVAL, self._cadence()) if self._ever_ok else LIVE_INTERVAL
         self._backoff = (
             min(MAX_BACKOFF, self._backoff * 2) if self._backoff else 2 * base
         )
@@ -231,11 +251,28 @@ class NHLSource:
         )
         try:
             fetched.update(await self._fetch_scores(today, polled_at))
+            yday_date = today - timedelta(days=1)
             if want_yday:
-                yday = await self._fetch_scores(today - timedelta(days=1), polled_at)
+                yday = await self._fetch_scores(yday_date, polled_at)
                 yday_ids = set(yday) - set(fetched)
                 for gid, game in yday.items():
                     fetched.setdefault(gid, game)
+            elif any(
+                g.state == "live" and gid not in fetched
+                for gid, g in self._games.items()
+            ):
+                # A cached live game today's feed omits may have started
+                # before midnight; yesterday's feed is where it lives. Soft:
+                # a failure here keeps today's good payload and lets the game
+                # ride the hold/grace window.
+                try:
+                    yday = await self._fetch_scores(yday_date, polled_at)
+                except Exception as exc:  # noqa: BLE001 — soft
+                    logger.debug("hockey: yesterday feed failed: %s", exc)
+                else:
+                    yday_ids = set(yday) - set(fetched)
+                    for gid, game in yday.items():
+                        fetched.setdefault(gid, game)
         except _FetchError as exc:
             self._fail(str(exc))
             return
@@ -257,7 +294,15 @@ class NHLSource:
                 self._games[gid] = game
                 self._last_seen[gid] = now_utc
                 self._track_goals(game)
-        for gid in [g for g, t in self._last_seen.items() if now_utc - t > hold]:
+        grace = timedelta(seconds=LIVE_GRACE)
+
+        def keep_for(gid: int) -> timedelta:
+            # A live game a partial payload omitted must outlive the hold (0
+            # is valid) long enough for `_active()`'s grace to see it.
+            g = self._games.get(gid)
+            return max(hold, grace) if g is not None and g.state == "live" else hold
+
+        for gid in [g for g, t in self._last_seen.items() if now_utc - t > keep_for(g)]:
             self._games.pop(gid, None)
             self._last_seen.pop(gid, None)
             self._situations.pop(gid, None)
@@ -269,6 +314,7 @@ class NHLSource:
         await self._refresh_next(fetched)
 
         self._backoff = 0
+        self._ever_ok = True
         self.snapshot = Snapshot(
             games=dict(self._games), next_games=dict(self._next), stale=False
         )
