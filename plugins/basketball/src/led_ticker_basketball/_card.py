@@ -232,7 +232,7 @@ class BasketballGameCard(FrameAwareBase):
                 canvas,
                 _chip(ev.winner)[0],
                 name == "flash_on",
-                celeb.win_word(ev, canvas.width, 0),
+                ev,
                 y_offset=y_offset,
             )
         return True
