@@ -320,17 +320,27 @@ def test_bigsign_leader_dropped_rather_than_tiny(bigsign, monkeypatch):
     assert not [c for c in calls if c[5] == pal.CYAN]
 
 
-def test_longboi_side_line_ellipsizes_leader_then_drops(longboi, monkeypatch):
-    calls = _spy(monkeypatch, longboi, WORST_LIVE)
-    leaders = [c for c in calls if c[5] == pal.CYAN]
-    for c in leaders:
-        assert c[0].endswith(("PTS", "…"))
-    long_name = dataclasses.replace(
-        LIVE, away_leader=Leader("X. " + "W" * 60, 50), home_leader=None
-    )
-    unwrap_to_real(longboi).Clear()
-    calls = _spy(monkeypatch, longboi, long_name)
-    assert "PHI" in _texts(calls)
+def test_longboi_side_line_ellipsizes_leader_then_drops():
+    """Shrinking budgets walk the fit order: full line -> leader ellipsized
+    (record kept) -> record dropped -> leader dropped (record back) -> abbrev."""
+    leader = "X. WWWWWWWWWWWW 50 PTS"
+
+    def texts(budget):
+        return [t for t, _ in board._side_pieces("PHI", "5-2", leader, budget)]
+
+    assert texts(300) == ["PHI", "5-2", "·", leader]
+    cut = texts(120)
+    assert cut[:3] == ["PHI", "5-2", "·"] and len(cut) == 4
+    assert cut[3].endswith("…") and len(cut[3].rstrip("…")) >= board._LEADER_KEEP
+    no_rec = texts(100)
+    assert no_rec[:2] == ["PHI", "·"] and len(no_rec) == 3
+    assert no_rec[2].endswith("…") and len(no_rec[2].rstrip("…")) >= board._LEADER_KEEP
+    assert texts(80) == ["PHI", "5-2"]
+    assert texts(20) == ["PHI"]
+    for budget in (300, 120, 100, 80, 20):
+        pieces = board._side_pieces("PHI", "5-2", leader, budget)
+        w = sum(board.text_width(board._SIDE_SIZE, t) for t, _ in pieces)
+        assert w + _MIN_GAP * (len(pieces) - 1) <= budget
 
 
 def test_longboi_linescore_strip_orange_and_dropped_when_narrow(longboi, monkeypatch):
@@ -374,6 +384,21 @@ def test_next_game_shows_records_day_and_label(sign, request, monkeypatch):
     ppd = dataclasses.replace(NEXT, status="STATUS_POSTPONED")
     texts = _texts(_spy(monkeypatch, canvas, ppd))
     assert "PPD" in texts and "NEXT GAME" not in texts
+
+
+def test_longboi_next_day_clears_the_label(longboi, monkeypatch):
+    """No names to narrow the centre column: the day line, whose band
+    touches the label's, still starts >= _MIN_GAP past the label."""
+    game = dataclasses.replace(
+        WORST_NEXT, away="", home="", away_record="", home_record=""
+    )
+    monkeypatch.setattr(
+        board, "status_lines", lambda *a: ("WEDNESDAY NOVEMBER 15TH " * 3, "TBD")
+    )
+    by = _by(_spy(monkeypatch, longboi, game, logos=False))
+    label = by["NEXT GAME"]
+    day = next(c for c in by.values() if c[0].startswith("WEDNESDAY"))
+    assert day[1] - label[2] >= _MIN_GAP
 
 
 def test_next_game_longboi_nicknames(longboi, monkeypatch):

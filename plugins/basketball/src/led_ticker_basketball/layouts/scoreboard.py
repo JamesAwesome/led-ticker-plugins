@@ -622,13 +622,17 @@ def _long_next(shim, real, game, now, tz, yo, stale, logos):
         home_x0 = _right(
             shim, game.home_record, home_x0 - _MIN_GAP, 32 + yo, pal.GRAY, rec_size
         )
-    _base(shim, _next_label(game), name_l, _LONG_NEXT_LABEL_BASE + yo, pal.GRAY, 8)
+    label = _next_label(game)
+    label_x1 = name_l + _base(
+        shim, label, name_l, _LONG_NEXT_LABEL_BASE + yo, pal.GRAY, 8
+    )
     half = min(cx - (away_x1 + _MIN_GAP), home_x0 - _MIN_GAP - cx)
     stale_x0 = g.stale_right
     if stale:
         stale_x0 = _stale(shim, g, g.stale_right, g.stale_base + yo)
     day, clock = status_lines(game, now, tz)
-    day_half = min(half, stale_x0 - _MIN_GAP - cx)
+    # The day line's band touches the label's (top-left) and STALE's (top-right).
+    day_half = min(half, stale_x0 - _MIN_GAP - cx, cx - (label_x1 + _MIN_GAP))
     day, day_size = _fit(day, (14, 13, 12, 11), 2 * day_half)
     _center(shim, day, cx, 17 + yo, pal.AMBER, day_size)
     clock, clock_size = _fit(clock, (26, 24, 22, 20), 2 * half)
