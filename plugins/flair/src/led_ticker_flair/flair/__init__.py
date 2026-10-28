@@ -52,6 +52,9 @@ def register(api):
         FairyReverse,
     )
     from led_ticker_flair.flair.fireworks import Fireworks  # noqa: PLC0415
+    from led_ticker_flair.flair.fireworks_border import (  # noqa: PLC0415
+        FireworksBorder,
+    )
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
     from led_ticker_flair.flair.laser import (  # noqa: PLC0415
         Laser,
@@ -72,6 +75,7 @@ def register(api):
     api.animation("fisheye")(Fisheye)
     api.transition("spinout")(Spinout)
     api.transition("fireworks")(Fireworks)
+    api.border("fireworks")(FireworksBorder)
     api.transition("stickers")(Stickers)
     api.transition("poker")(Poker)
     api.transition("lightning")(Lightning)

@@ -128,6 +128,45 @@ transition = {type = "flair.fireworks", bursts = 3, colors = [[255, 60, 60], [0,
 - **Complement pass scales with the black area, not the panel.** Phase two paints black only OUTSIDE the burst union, computed per row as merged circle/x-intervals (each circle meets a row in at most one interval; merging <= 8 is trivial) — cost is `O(rows x bursts log bursts + black_pixels)`, shrinking to zero as the bloom completes. The widest late-bloom frames on a 512-wide longboi measure well under a millisecond.
 
 
+## Fireworks border
+
+`flair.fireworks` is ALSO a **border** effect: `border = "flair.fireworks"` on a `message`, `countdown`/`countup`, `two_row`, `gif`, `image`, or `clock` widget plays continuous fireworks BEHIND the widget's content for as long as it is on screen. Same look as the transition (a rocket streak rises from the bottom edge, pops into a 10-14 spoke asterisk that eases open, coasts and fades), but it never blacks anything out and never ends — a new rocket launches every `3s / bursts`. The name is shared with the transition on purpose; `border = ...` and `transition = ...` are different registries, so the two coexist.
+
+Requires **led-ticker-core >= 4.10** (the `border` field on the host widgets; `clock` needs its own core floor).
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "HAPPY NEW YEAR"
+font_color = [255, 255, 255]
+border = "flair.fireworks"
+```
+
+With knobs:
+
+```toml
+border = {style = "flair.fireworks", bursts = 3, speed = 1.5, colors = [[255, 60, 60], [255, 180, 0]]}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `bursts` | size-adaptive (3-6) | Concurrent firework slots, phase-staggered evenly. Same auto-pick as the transition (smallsign: 5, bigsign: 4, longboi: 6) or explicit in `[2, 8]`. |
+| `speed` | `1.0` | Playback multiplier. `1.0` = a slot's full launch→open→fade cycle takes 3 s (60 engine ticks); `2.0` halves that, `0.5` doubles it. |
+| `colors` | 8-color built-in palette | List of `[r, g, b]` triples; each burst picks one at random (the transition cycles them in order). |
+| `seed` | `None` (OS entropy) | Fixes the show for reproducible demo GIFs. Unseeded, each instance draws one seed at construction, so two signs differ but a single sign's show is still a pure function of its frame counter. |
+
+### Notes
+
+- **Behind the text, by construction.** Every host widget paints `border` before its text (and `gif`/`image` paint it over the image), so text always wins on collision — no z-order knob needed.
+- **Never paints black.** The transition's burn-through holes and complement blackout are deliberately NOT used here, and any spoke/tail pixel that rounds to pure black is dropped — a background effect must not erase a host's `bg_color` or image.
+- **Frame-pure.** Each burst's plan is derived from `(seed, slot, cycle index)` and its phase from the host's `frame_for("border")` counter alone, so a transition that pauses the counter and re-renders the widget while compositing sees the same pixels every time. `restart_on_visit = False`: the show continues across `loop_count > 1` visits instead of replaying the opening rocket.
+- **Physical resolution.** Paints to the real canvas (`unwrap_to_real`), so a spoke is one LED on the bigsign, not a 4×4 block; burst count and radius follow the REAL panel dims.
+- **Static fast paths.** `frame_invariant = False`, so the `gif`/`image` static-text fast path is bypassed and the border animates — the same contract `rainbow` / `color_cycle` borders use.
+
 ## Stickers transition
 
 `flair.stickers` holds the outgoing widget while individual emoji stickers pop on randomly across the panel in a jittered grid, building toward full coverage by `t=0.5`, then pop off in an independent order revealing the incoming widget underneath.

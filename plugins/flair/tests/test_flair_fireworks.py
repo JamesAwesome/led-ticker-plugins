@@ -926,6 +926,7 @@ class _RecordingAPI:
         self.animations: dict[str, type] = {}
         self.transitions: dict[str, type] = {}
         self.widgets: dict[str, type] = {}
+        self.borders: dict[str, type] = {}
 
     def animation(self, style: str):
         def deco(cls):
@@ -944,6 +945,13 @@ class _RecordingAPI:
     def widget(self, name: str):
         def deco(cls):
             self.widgets[name] = cls
+            return cls
+
+        return deco
+
+    def border(self, name: str):
+        def deco(cls):
+            self.borders[name] = cls
             return cls
 
         return deco
