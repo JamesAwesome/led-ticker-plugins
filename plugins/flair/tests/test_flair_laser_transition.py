@@ -11,7 +11,15 @@ from unittest import mock
 from led_ticker.plugin import ScaledCanvas, unwrap_to_real
 from PIL import Image
 
-from led_ticker_flair.flair.laser import Laser
+from led_ticker_flair import flair as flair_pkg
+from led_ticker_flair.flair.laser import (
+    Laser,
+    LaserAlternating,
+    LaserBottom,
+    LaserLeft,
+    LaserRandom,
+    LaserRight,
+)
 
 
 class _StubCanvas:
@@ -250,3 +258,111 @@ class TestLaserScaled:
         real.Clear()
         p.frame_at(0.3, sc, _make_widget(draw_pixel=False), i)
         assert (0, 0) in real._pixels  # top origin: beam starts at REAL row 0
+
+
+class TestVariantsAndRegistration:
+    def test_registration_six_types_distinct_instances(self):
+        api = mock.Mock()
+        reg: dict[str, Any] = {}
+        api.transition.side_effect = lambda name: (
+            lambda cls: reg.__setitem__(name, cls) or cls
+        )
+        api.animation.side_effect = lambda name: lambda cls: cls
+        api.widget.side_effect = lambda name: lambda cls: cls
+        flair_pkg.register(api)
+        names = {
+            "laser.top",
+            "laser.bottom",
+            "laser.left",
+            "laser.right",
+            "laser.alternating",
+            "laser.random",
+        }
+        assert names <= set(reg)
+        assert reg["laser.top"]() is not reg["laser.top"]()
+
+    def test_origins_per_variant(self):
+        assert (LaserBottom._origin, LaserLeft._origin, LaserRight._origin) == (
+            "bottom",
+            "left",
+            "right",
+        )
+
+    def test_alternating_cycles_top_right_bottom_left(self):
+        c = _StubCanvas(8, 2)
+        p = LaserAlternating()
+        seen = []
+        for _ in range(5):
+            p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
+            seen.append(p._transitions[p._index]._origin)
+            p.frame_at(0.96, c, _text_widget(OUT), _text_widget(INC))
+        assert seen == ["top", "right", "bottom", "left", "top"]
+
+    def test_random_never_repeats_back_to_back(self):
+        c = _StubCanvas(8, 2)
+        p = LaserRandom()
+        p._rng.seed(1)
+        seen = []
+        for _ in range(30):
+            p.frame_at(0.0, c, _text_widget(OUT), _text_widget(INC))
+            seen.append(p._transitions[p._index]._origin)
+            p.frame_at(0.96, c, _text_widget(OUT), _text_widget(INC))
+        assert all(a != b for a, b in zip(seen, seen[1:], strict=False))
+        assert len(set(seen)) >= 3
+
+    def test_min_frames_48_on_every_type(self):
+        for cls in (Laser, LaserBottom, LaserLeft, LaserRight):
+            assert cls.min_frames == 48
+        assert LaserAlternating().min_frames == 48
+        assert LaserRandom().min_frames == 48
+
+
+class TestPerfUniformity:
+    """Committed CI-safe perf gate (lightning convention): count WORK per
+    frame, not time — a deferred-backlog bug fails the bound
+    deterministically."""
+
+    def test_per_frame_paint_volume_bounded(self):
+        canvas = _StubCanvas(width=160, height=16)
+        o = _text_widget(OUT)
+        i = _text_widget(INC)
+        p = Laser()
+        counts = []
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            counts.append((round(t, 2), len(canvas.calls) - before))
+            t += 0.02
+        panel = 160 * 16
+        worst_t, worst = max(counts, key=lambda c: c[1])
+        assert worst <= int(1.5 * panel), (
+            f"frame at t={worst_t} painted {worst} px (> 1.5x panel {panel})"
+        )
+
+    def test_alternating_refire_frames_equally_bounded(self):
+        canvas = _StubCanvas(width=160, height=16)
+        o = _text_widget(OUT)
+        i = _text_widget(INC)
+        p = LaserAlternating()
+        for t in (0.3, 0.6, 0.96):
+            p.frame_at(t, canvas, o, i)
+        panel = 160 * 16
+        t = 0.02
+        while t < 1.0:
+            before = len(canvas.calls)
+            p.frame_at(round(t, 3), canvas, o, i)
+            assert len(canvas.calls) - before <= int(1.5 * panel)
+            t += 0.02
+
+    def test_full_panel_fill_within_paint_bound(self):
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        full = _make_widget(draw_pixel=False, fill=(7, 7, 7))
+        p = Laser()
+        t = 0.02
+        while t < 1.0:
+            before = len(real.calls)
+            p.frame_at(round(t, 3), sc, full, full)
+            assert len(real.calls) - before <= int(1.5 * 256 * 64)
+            t += 0.02

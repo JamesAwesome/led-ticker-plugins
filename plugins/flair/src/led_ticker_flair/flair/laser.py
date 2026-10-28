@@ -13,6 +13,7 @@ paints unvisited outgoing pixels (erase) or visited incoming pixels
 (write), plus a one-real-pixel beam from the origin edge to the head.
 """
 
+import random
 from typing import Any
 
 from led_ticker.plugin import (
@@ -275,3 +276,76 @@ class Laser:
         if head is not None:
             self._draw_beam(real, rw, rh, head)
         return canvas
+
+
+class LaserBottom(Laser):
+    """Beam reaches up from the bottom edge; rasters bottom row first."""
+
+    _origin = "bottom"
+
+
+class LaserLeft(Laser):
+    """Beam reaches in from the left edge; rasters left column first."""
+
+    _origin = "left"
+
+
+class LaserRight(Laser):
+    """Beam reaches in from the right edge; rasters right column first."""
+
+    _origin = "right"
+
+
+class _LaserMulti:
+    """Shared shape for the alternating / random variants (FairyAlternating
+    convention): a list of the four single-origin instances, ``_index``
+    advanced on every new firing (``t < _last_t``), ``min_frames`` peeking
+    the NEXT variant, ``frame_at`` delegated."""
+
+    def __init__(self) -> None:
+        self._transitions: list[Laser] = [
+            Laser(),
+            LaserRight(),
+            LaserBottom(),
+            LaserLeft(),
+        ]
+        self._index: int = -1
+        self._last_t: float = 1.0
+
+    def _next_index(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def min_frames(self) -> int:
+        return self._transitions[0].min_frames
+
+    def frame_at(
+        self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
+    ) -> Canvas:
+        if t < self._last_t:
+            self._index = self._next_index()
+        self._last_t = t
+        return self._transitions[self._index].frame_at(
+            t, canvas, outgoing, incoming, **kwargs
+        )
+
+
+class LaserAlternating(_LaserMulti):
+    """Cycles top -> right -> bottom -> left, one origin per firing."""
+
+    def _next_index(self) -> int:
+        return (self._index + 1) % len(self._transitions)
+
+
+class LaserRandom(_LaserMulti):
+    """Picks an origin per firing; never the same one back-to-back
+    (WipeRandom policy). ``_rng`` is an instance attribute so tests can
+    seed it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._rng = random.Random()
+
+    def _next_index(self) -> int:
+        choices = [i for i in range(len(self._transitions)) if i != self._index]
+        return self._rng.choice(choices)
