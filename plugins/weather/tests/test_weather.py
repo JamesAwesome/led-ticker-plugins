@@ -764,3 +764,58 @@ class TestWeatherStart:
         w = await WeatherWidget.start(session=session, location="NYC", text="NYC")
         # Must not raise — widget returned with zero defaults.
         assert w.current_temp == 0
+
+    async def test_start_polls_immediately_after_failed_eager_fetch(self, monkeypatch):
+        # A failed eager fetch must not fall into run_monitor_loop's default
+        # immediate=False (a full update_interval, ~3h, of showing 0 degrees
+        # before the first retry). Patch spawn_tracked and run_monitor_loop so
+        # no real task is created; assert only on the loop's kwargs.
+        async def _noop_coro():
+            return None
+
+        mock_loop = mock.MagicMock(return_value=_noop_coro())
+        mock_spawn = mock.Mock(side_effect=lambda coro: coro.close())
+        with (
+            mock.patch(
+                "led_ticker_weather.weather.fetch_current",
+                mock.AsyncMock(side_effect=ValueError("boom")),
+            ),
+            mock.patch("led_ticker_weather.weather.run_monitor_loop", mock_loop),
+            mock.patch("led_ticker_weather.weather.spawn_tracked", mock_spawn),
+        ):
+            w = await WeatherWidget.start(
+                session=mock.MagicMock(), location="NYC", text="NYC"
+            )
+
+        mock_loop.assert_called_once_with(w, 10800, immediate=True)
+        mock_spawn.assert_called_once_with(mock_loop.return_value)
+
+    async def test_start_does_not_poll_immediately_after_successful_eager_fetch(
+        self, monkeypatch
+    ):
+        async def _noop_coro():
+            return None
+
+        mock_loop = mock.MagicMock(return_value=_noop_coro())
+        mock_spawn = mock.Mock(side_effect=lambda coro: coro.close())
+        with (
+            mock.patch(
+                "led_ticker_weather.weather.fetch_current",
+                mock.AsyncMock(
+                    return_value={
+                        "temp_f": 70.0,
+                        "temp_c": 21.0,
+                        "condition": {"text": "Clear"},
+                    }
+                ),
+            ),
+            mock.patch("led_ticker_weather.weather.run_monitor_loop", mock_loop),
+            mock.patch("led_ticker_weather.weather.spawn_tracked", mock_spawn),
+        ):
+            w = await WeatherWidget.start(
+                session=mock.MagicMock(), location="NYC", text="NYC"
+            )
+
+        assert w.current_temp == 70
+        mock_loop.assert_called_once_with(w, 10800, immediate=False)
+        mock_spawn.assert_called_once_with(mock_loop.return_value)
