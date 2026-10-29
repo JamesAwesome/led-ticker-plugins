@@ -206,6 +206,7 @@ class _RecordingAPI:
         self.transitions: dict[str, type] = {}
         self.widgets: dict[str, type] = {}
         self.borders: dict[str, type] = {}
+        self.backgrounds: dict[str, type] = {}
 
     def animation(self, name):
         def _dec(cls):
@@ -231,6 +232,13 @@ class _RecordingAPI:
     def border(self, name):
         def _dec(cls):
             self.borders[name] = cls
+            return cls
+
+        return _dec
+
+    def background(self, name):
+        def _dec(cls):
+            self.backgrounds[name] = cls
             return cls
 
         return _dec

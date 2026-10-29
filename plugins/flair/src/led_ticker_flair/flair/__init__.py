@@ -35,6 +35,14 @@ def _import_seam():
             "seam); update the core image, not the flair plugin."
         ) from exc
     try:
+        from led_ticker.plugin import BackgroundEffectBase  # noqa: F401, PLC0415
+    except ImportError as exc:
+        raise ImportError(
+            "flair requires led-ticker-core >= 4.32 (the BackgroundEffectBase "
+            "seam the flair.fireworks background needs); update the core "
+            "image, not the flair plugin."
+        ) from exc
+    try:
         from led_ticker.plugin import emoji_slugs  # noqa: F401, PLC0415
     except ImportError as exc:
         raise ImportError(
@@ -52,8 +60,8 @@ def register(api):
         FairyReverse,
     )
     from led_ticker_flair.flair.fireworks import Fireworks  # noqa: PLC0415
-    from led_ticker_flair.flair.fireworks_border import (  # noqa: PLC0415
-        FireworksBorder,
+    from led_ticker_flair.flair.fireworks_background import (  # noqa: PLC0415
+        FireworksBackground,
     )
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
     from led_ticker_flair.flair.laser import (  # noqa: PLC0415
@@ -75,7 +83,7 @@ def register(api):
     api.animation("fisheye")(Fisheye)
     api.transition("spinout")(Spinout)
     api.transition("fireworks")(Fireworks)
-    api.border("fireworks")(FireworksBorder)
+    api.background("fireworks")(FireworksBackground)
     api.transition("stickers")(Stickers)
     api.transition("poker")(Poker)
     api.transition("lightning")(Lightning)

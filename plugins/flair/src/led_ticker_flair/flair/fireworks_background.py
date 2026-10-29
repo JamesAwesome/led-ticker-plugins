@@ -1,8 +1,8 @@
-"""flair.fireworks BORDER effect — continuous fireworks painted BEHIND a
-widget's text (``border = "flair.fireworks"``).
+"""flair.fireworks BACKGROUND effect — continuous fireworks painted BEHIND a
+widget's content (``background = "flair.fireworks"``).
 
 Same name as the ``flair.fireworks`` TRANSITION in ``fireworks.py`` but a
-different registry (``api.border`` vs ``api.transition``), so the two
+different registry (``api.background`` vs ``api.transition``), so the two
 coexist: the transition fires once between widgets; this effect loops for
 as long as the host widget is on screen. It reuses the transition's
 ``Burst`` plan shape, ``_spoke_angles`` geometry and the ``Fireworks``
@@ -10,12 +10,12 @@ class's two pure painters (``_draw_launch_streak`` / ``_draw_spokes``) so
 the look is identical — a rocket streak rises from the bottom edge, pops
 into a 10-14 spoke asterisk that eases open, coasts and fades.
 
-Why it rides the ``border`` field: every host widget (``message``,
-``countdown``/``countup``, ``two_row``, ``gif``/``image``, ``clock``)
-already paints ``border`` BEFORE its text at physical resolution and
-threads ``frame_for("border")`` through transitions' pause/resume. That is
-exactly the "background layer behind text" contract this effect needs, so
-no core change is required.
+Why ``background`` and not ``border`` (core >= 4.32): a widget has ONE
+``border`` slot, and this effect shipped briefly as a border (plugins#128,
+never released) — which meant fireworks OR a rainbow ring, not both. Core's
+``background`` field is the dedicated "paint behind the content, every tick"
+layer: hosts paint background → image → border → text, with its own
+``frame_for("background")`` counter and ``frame_invariant`` fast-path gate.
 
 Design rules (load-bearing):
 
@@ -30,8 +30,8 @@ Design rules (load-bearing):
   stays frame-pure afterwards.
 - **Never paints black.** ``_draw_spokes``' tail/fade math can round a
   dim color to ``(0, 0, 0)``; the transition doesn't care (it paints onto a
-  cleared canvas) but a background effect stamping black would erase a
-  host's ``bg_color`` or image underneath. ``_LightOnly`` filters those
+  cleared canvas) but a background stamping black would erase a host's
+  ``bg_color`` fill or image underneath. ``_LightOnly`` filters those
   calls out. Nothing here ever calls ``_fill_burst_black``.
 - **Physical resolution.** Paints to ``unwrap_to_real(canvas)``, so a
   spoke is one real LED on the bigsign, not a 4×4 block; burst count /
@@ -42,7 +42,7 @@ import math
 import random
 from typing import Any
 
-from led_ticker.plugin import BorderEffectBase, unwrap_to_real
+from led_ticker.plugin import BackgroundEffectBase, unwrap_to_real
 
 from led_ticker_flair.flair.fireworks import (
     _LAUNCH_OPEN_BOUNDARY,
@@ -105,8 +105,8 @@ class _LightOnly:
             self._real.SetPixel(x, y, r, g, b)
 
 
-class FireworksBorder(BorderEffectBase):
-    """Continuous fireworks behind the host widget's content."""
+class FireworksBackground(BackgroundEffectBase):
+    """Continuous fireworks behind the host widget's content (``background`` slot)."""
 
     frame_invariant = False
     # Continuous phase across ``loop_count > 1`` visits — a show that
