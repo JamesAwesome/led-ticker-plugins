@@ -342,8 +342,7 @@ def test_future_icon_left_of_matchup(smallsign, tz, monkeypatch):
     assert min(c[1] for c in top_texts) == sb._ICON + sb._ICON_GAP
     venue = next(c for c in calls if c[3] == 1 and c[1] < 100)
     assert venue[1] == sb.X_ABBREV
-    lit = _lit(smallsign, TOP, range(0, sb._ICON))
-    assert lit and _px(smallsign, TOP, range(0, sb._ICON), pal.WHITE)
+    assert len(_lit(smallsign, TOP, range(0, sb._ICON))) == len(BALL)
 
 
 @pytest.mark.parametrize(
