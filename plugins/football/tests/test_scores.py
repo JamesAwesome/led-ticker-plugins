@@ -133,6 +133,8 @@ class TestValidate:
         assert v({"teams": ["PHI"], "final_hold_hours": -1})
         assert v({"teams": ["PHI"], "update_interval": 0})
         assert v({"teams": ["PHI"], "demo": "yes"})
+        assert v({"teams": ["PHI"], "logos": "yes"})
+        assert v({"teams": ["PHI"], "logos": False}) == []
         assert v({"teams": ["PHI"], "hold_time": -1})
         assert v({"teams": ["PHI"], "padding": "6"})
         assert v({"teams": ["PHI"], "max_games": True})

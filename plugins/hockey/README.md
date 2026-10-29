@@ -1,13 +1,13 @@
 # led-ticker-hockey
 
-Live NHL scores for [led-ticker](https://github.com/JamesAwesome/led-ticker). One `hockey.scores` widget shows a held scoreboard per game: score, period, clock, shots on goal, power play (team and time left), empty net, finals and the next scheduled game. When a team you follow scores, the card plays a goal celebration on its next turn in the rotation.
+Live NHL scores for [led-ticker](https://github.com/JamesAwesome/led-ticker). One `hockey.scores` widget shows a held scoreboard per game: score, period, clock, shots on goal, power play (team and time left), empty net, finals and the next scheduled game. On the bigsign and longboi each team carries its logo; the logos are bundled, so a sign never fetches an image. When a team you follow scores, the card plays a goal celebration on its next turn in the rotation.
 
-> **Disclosure:** the data comes from the NHL's public web API (`https://api-web.nhle.com`). That feed is **unofficial and undocumented**. It needs no key and no account, but the NHL can change its shape at any time. The plugin parses it defensively: a bad or missing payload keeps the last good scores on the panel with a `STALE` label instead of crashing. This plugin is not affiliated with or endorsed by the NHL.
+> **Disclosure:** the data comes from the NHL's public web API (`https://api-web.nhle.com`). That feed is **unofficial and undocumented**. It needs no key and no account, but the NHL can change its shape at any time. The plugin parses it defensively: a bad or missing payload keeps the last good scores on the panel with a `STALE` label instead of crashing. This plugin is not affiliated with or endorsed by the NHL or ESPN. Team logos are the teams' marks (sourced from ESPN's logo CDN), bundled for display on your own sign.
 
 ## Prerequisites
 
 - A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install (`led-ticker-core >= 4.30`).
-- Internet access on the Pi.
+- Internet access on the Pi (for the scores; the logos are already in the package).
 - No API key.
 
 ## Install
@@ -53,6 +53,7 @@ timezone = "America/New_York"   # for start times and the day boundary
 | `final_hold_hours` | int | `6` | How long a final stays in the rotation, measured from the game's start time + 2 h 30 min (the feed carries no end time). |
 | `timezone` | string | `"America/New_York"` | IANA timezone for start times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
+| `logos` | bool | `true` | Paint the bundled team logos on the bigsign and longboi. `false` paints the two-tone colour chips instead. Ignored on the smallsign, which never shows logos. |
 | `update_interval` | int | `15` | How often, in seconds, this widget refreshes its cards and asks the shared source to poll. **Floored at 10.** While a game is live the source polls at most every 15 s, or at the lowest `update_interval` below that among the widgets sharing it. A value below 15 therefore speeds up live polling. A value above 15 slows this widget: its cards refresh only every `update_interval` seconds, and if no other widget polls more often, so does the source. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per goal **plus** the larger of this and 4 s for the board afterwards. |
 | `padding` | int | `6` | Horizontal padding (logical px) after the line in the hi-res `layout = "ticker"` crawl (bigsign / longboi); it also counts toward whether the line fits and holds instead of scrolling. The scale-1 ticker, the held scoreboards and the celebration ignore it. A number >= 0 (a float is truncated to an int). |
@@ -75,16 +76,17 @@ timezone = "America/New_York"   # for start times and the day boundary
 - **`layout = "auto"` (default)** — `scoreboard` on **all three** signs (smallsign, bigsign, longboi). A held board reads better than a crawl on a 16-row strip, so `auto` never picks `ticker`.
 - **`layout = "scoreboard"`** — a held board per game:
   - **smallsign (160×16, bitmap font):** two 8-row bands, away on top. Each band has a brand chip, the abbreviation, the score and `SOG nn` (`STALE` replaces the `SOG` label when the data is stale); `PP m:ss` or `EN` sits on that team's band during play (not in intermission); the period is right-aligned in the top band, with a small stick-and-puck icon just left of it so the card reads as hockey at a glance next to other sports (left out when the top band is too full for it), and the clock in the bottom band. Columns move right as needed so 2-digit scores and shot counts never touch.
-  - **bigsign (256×64):** two rows with a dotted divider — chip, abbreviation, large score, `SOG nn` (cyan) — and an amber **PP** badge on the power-play team's row. The right column shows the period (amber), the clock (white) and `PP m:ss`.
-  - **longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, `SOG`, huge score), the home team mirrors it on the right, and the centre holds the period, a large clock and the **PP** badge with `TEAM m:ss` beneath. Next-game cards add the team nicknames.
-  - **Intermission:** the clock reads `2ND INT` with the countdown. **Empty net:** `EN` marks the team that pulled its goalie. **Final:** `FINAL`, `FINAL/OT` or `FINAL/SO`, the winner's score green and the loser's dimmed. **Next game:** the day and date (amber), the time (white) and the arena (dim), with the teams drawn per sign. Smallsign shows the stick-and-puck icon, then `PHI @ NYI` in team colors and no chips. Bigsign shows the away chip, `PHI @ NYI` and a `NEXT GAME` label. Longboi shows both chips and abbreviations on their sides, with the team nicknames and no `@`.
+  - **bigsign (256×64):** two rows with a dotted divider — the team's 28 px logo, abbreviation, large score, `SOG nn` (cyan) — and an amber **PP** badge on the power-play team's row. The right column shows the period (amber), the clock (white) and `PP m:ss`.
+  - **longboi (512×64):** a full scoreboard. The away team fills the left third (48 px logo at the edge, large abbreviation, `SOG`, huge score), the home team mirrors it on the right, and the centre holds the period, a large clock and the **PP** badge with `TEAM m:ss` beneath. Next-game cards add the team nicknames.
+  - **Intermission:** the clock reads `2ND INT` with the countdown. **Empty net:** `EN` marks the team that pulled its goalie. **Final:** `FINAL`, `FINAL/OT` or `FINAL/SO`, the winner's score green and the loser's dimmed. **Next game:** the day and date (amber), the time (white) and the arena (dim), with the teams drawn per sign. Smallsign shows the stick-and-puck icon, then `PHI @ NYI` in team colors and no chips. Bigsign shows `PHI @ NYI` with each team's logo in front of its name and a `NEXT GAME` label. Longboi shows both logos and abbreviations on their sides, with the team nicknames and no `@`.
+  - **Logos:** with `logos = false`, or for a team with no bundled logo, the bigsign and longboi paint that team's two-tone chip in the logo's place.
 - **`layout = "ticker"`** — one scrolling line per game, using the same wording as the boards (`STALE` follows the period/clock when the data is stale). Scale-1 renders it as a bitmap `SegmentMessage`; scale>1 as a hi-res crawl.
 
 Team abbreviations shrink to fit on the physical boards (both rows always share one size) and are ellipsized only when even the smallest size would collide. The physical boards use a fixed palette; only `bg_color` (the fill behind it) is configurable.
 
 ### Goal celebration
 
-When a team in `teams` scores, that game's card plays a ~4 second celebration **the next time its turn comes around** — in a slideshow it never interrupts other content (scroll-mode sections are below). Three quick flashes of the panel in the scoring team's color with `GOAL` knocked out, then the new score with the scorer's number pulsing, the scorer and season goal count (`KONECNY (5)`), the assists, and the period and time. Then the normal board for the rest of the hold.
+When a team in `teams` scores, that game's card plays a ~4 second celebration **the next time its turn comes around** — in a slideshow it never interrupts other content (scroll-mode sections are below). Three quick flashes of the panel in the scoring team's color with `GOAL` knocked out, then the new score with the scorer's number pulsing, the scorer and season goal count (`KONECNY (5)`), the assists, and the period and time, with the scoring team's logo at the left on the bigsign and longboi. Then the normal board for the rest of the hold.
 
 - A section's hold is **extended automatically** while a celebration is pending: the card asks for 4 s per queued goal plus the larger of the widget's `hold_time` and 4 s for the board that follows (the engine still uses the section's `hold_time` if that is longer). The celebration never eats the board's own time, so you do not need to raise `hold_time` for it.
 - Several goals scored between turns celebrate in order, up to 3 per turn; older ones are dropped.
@@ -125,11 +127,14 @@ Validate the chosen file with `led-ticker validate <path>` before starting the s
 - **Live situation fields are unverified.** The power-play and empty-net parsing follows community documentation of the game `landing` endpoint's `situation` data; it has not yet been checked against a live game. If those fields are absent or shaped differently, the board simply omits `PP` / `EN` and everything else keeps working.
 - **Scale-1 clock updates per poll.** On a smallsign using `layout = "ticker"` the clock text refreshes with each poll rather than every second (the scoreboards, including the smallsign bands, and the hi-res crawl tick every second).
 - **The sign runs ahead of your TV.** The feed is near real-time, broadcasts are delayed, so a goal can appear on the panel before you see it on screen. There is no spoiler delay.
+- **Logos are small.** The bigsign board's logos are 28 px (36 px in the celebration), so thin detail in a mark reads as a blob; the longboi's 48 px logos hold up better. Near-black pixels are dropped as invisible on the panel.
 - NHL only.
 
 ## Data
 
 NHL web API, base URL `https://api-web.nhle.com`, no key. Community reference: <https://github.com/Zmalski/NHL-API-Reference>.
+
+**Logos** are 64×64 PNGs for all 32 teams under `src/led_ticker_hockey/assets/logos/`, listed in `MANIFEST.txt` with their source URL and fetch date. They are refreshed by a person running `tools/fetch_logos.py` (never by CI or a sign); the plugin decodes each once per size and replays cached pixels.
 
 ## Development
 

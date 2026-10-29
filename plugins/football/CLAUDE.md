@@ -167,6 +167,26 @@ else, and it is the element that is LEFT OUT when it cannot (never the score, cl
 status). The bigsign celebration detail puts `+PAT` on its own bottom row because
 `TOUCHDOWN` plus the score run cannot share row 1.
 
+**Logos are bundled assets, never fetched** (`_logos.py`) — 32 64x64 RGBA PNGs under
+`assets/logos/` with `MANIFEST.txt` (source URL + fetch date per file). A human refreshes them
+with `tools/fetch_logos.py`; CI, tests and the sign never run it, and the render path never
+makes an image request. Same module shape as the basketball plugin: `_logos.sprite(abbrev,
+size)` is `functools.cache`'d per (team, size), drops alpha < `ALPHA_MIN` and near-black
+(< `DARK_FLOOR`) pixels, and returns None for an unknown team or an undecodable asset — it
+NEVER raises. Sizes: `LOGO_ROW` 28 (bigsign, one per 32 px team row — the board AND the
+celebration detail, where the logo sits in the BOTTOM row beside the play because
+`TOUCHDOWN` needs the top row's full width left of the score run), `LOGO_LONG` 48 (longboi
+board edges and detail). A logo REPLACES
+the chip in place (`_slot`); when it can't be drawn (`logos = false`, missing sprite) the chip
+goes in and that side's abbrev moves back to `name_x` — per SIDE, so one missing logo never
+shifts the other team. On the bigsign next-game card the home logo rides inside the name run
+(its width is in the run's `fixed`); the longboi next card keeps the chip-era name limits so
+a logo eats the names' budget, never the centre column's. Smallsign never shows logos.
+Tripwires: `test_logos.py`, `test_logos_replace_both_chips`, `test_logos_false_paints_chips`,
+`test_missing_sprite_falls_back_to_chip`, `test_one_missing_logo_keeps_the_other`,
+`test_detail_paints_scoring_team_logo_clear_of_text`, and `test_worst_case_keeps_min_clearance`
+parametrized over `logos`.
+
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert
 extents, bands, ordering and colors.
 
@@ -206,6 +226,7 @@ takeover fills it explicitly — so `FootballGameCard.bg_color` is a plain field
   possession hold, vanished games, schedule/bye. Fake session + injected clock; no network.
 - `test_scores.py` — `validate_config`, selection per mode, demo, stale, persistent cards,
   play queueing.
+- `test_logos.py` — logo decode, floors, fallback, cache, clipping.
 - `test_celebration.py` — timeline, flash/detail renderers, card lifecycle.
 - `test_resolve_layout.py` / `test_card_dispatch.py` — resolver; scale dispatch.
 - `test_layout_scoreboard.py` / `test_layout_crawl.py` / `test_scoreboard.py` — physical and

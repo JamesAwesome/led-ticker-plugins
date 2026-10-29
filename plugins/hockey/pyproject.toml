@@ -1,7 +1,7 @@
 [project]
 name = "led-ticker-hockey"
 dynamic = ["version"]
-description = "Live NHL hockey scores widget for led-ticker, fed by the NHL public web API (no key)."
+description = "Live NHL hockey scores widget for led-ticker, fed by the NHL public web API (no key). Bundled team logos."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -32,6 +32,7 @@ classifiers = [
 dependencies = [
     "led-ticker-core>=4.31",
     "aiohttp>=3.12",
+    "Pillow>=13",  # _logos.py decodes the bundled PNGs
 ]
 
 # The plugin is contributed to led-ticker via this entry point. The entry-point

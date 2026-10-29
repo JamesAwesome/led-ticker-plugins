@@ -111,6 +111,7 @@ class FootballGameCard(FrameAwareBase):
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
+    logos: bool = attrs.field(default=True, kw_only=True)
     demo_plays: tuple[ScoringPlay, ...] = attrs.field(default=(), kw_only=True)
     pending: list[ScoringPlay] = attrs.field(init=False, factory=list)
     highlight: tuple[str, int] | None = attrs.field(init=False, default=None)
@@ -266,7 +267,13 @@ class FootballGameCard(FrameAwareBase):
             real.Clear()
         if name == "detail":
             render_detail(
-                canvas, self.game, play, f, y_offset=y_offset, font=self.small_font
+                canvas,
+                self.game,
+                play,
+                f,
+                y_offset=y_offset,
+                font=self.small_font,
+                logos=self.logos,
             )
         else:
             render_flash(
@@ -403,6 +410,7 @@ class FootballGameCard(FrameAwareBase):
             stale=self.stale,
             highlight=self._board_highlight(),
             bye=self.bye,
+            logos=self.logos,
             x_offset=cursor_pos,
         )
         return canvas, cursor_pos + canvas.width
