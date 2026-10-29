@@ -16,8 +16,11 @@ fits and otherwise REPLACES it (a stale clock is the one thing the board
 must not assert). A next-game card reads `NY (ball) PHI`: the 8x8
 `:basketball.ball:` IS the `@` (and the `VS` on a neutral site), vertically
 centred, `_ICON_GAP` px from each name. At 14 px it is narrower than the
-18 px ` @ ` it replaces, so it is always drawn. `ball_at = False` puts the
-text `@` / `VS` back and draws no ball. The chips and the ball are recorded
+18 px ` @ ` it replaces, so it is always drawn. Every other card (live,
+halftime, final) puts the ball flush against the away chip with the away
+abbrev `_LIVE_ICON_GAP` px after it: the run moves only 4 px, which never
+costs centre text. `ball_at = False` puts the text `@` / `VS` back and
+draws no ball anywhere. The chips and the ball are recorded
 in `shape_extents` for the clearance tripwire.
 """
 
@@ -53,6 +56,7 @@ _CHIP = 3
 _GAP = 6
 _ICON = 8  # the `:basketball.ball:` sprite on a next-game card
 _ICON_GAP = 3  # each name -> the ball between them
+_LIVE_ICON_GAP = 2  # live/final: the ball (flush on the chip) -> the away abbrev
 _ELLIPSIS = "…"
 _STALE = "STALE"
 
@@ -148,6 +152,10 @@ class BasketballBandBoard(FrameAwareBase):
             )
             return canvas, cursor_pos + canvas.width
 
+        if self.ball_at:
+            sprite(real, BALL, ox + _CHIP, y_offset + (16 - _ICON) // 2)
+            self.shape_extents.append(("ICON", ox + _CHIP, ox + _CHIP + _ICON - 1))
+            left = _CHIP + _ICON + _LIVE_ICON_GAP
         away_s, home_s = str(g.away_score), str(g.home_score)
         away_score_x = left + w(g.away) + _GAP
         home_abbrev_x = right - w(g.home)

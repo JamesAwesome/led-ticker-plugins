@@ -171,8 +171,12 @@ next-game ball (`"ICON"` in `shape_extents`, `emoji.BALL`) IS the `@` / `VS` bet
 names, `_ICON_GAP` (3 px) from each; at 14 px it is narrower than the 18 px ` @ ` it replaces,
 so it is always drawn and never costs day/tip/STALE text
 (`test_future_ball_is_narrower_than_the_at`, `test_future_ball_worst_case_clearance`).
-`ball_at = false` (widget -> card -> board) restores the GRAY text separator and draws no
-ball (`test_future_ball_at_off_keeps_the_text`). `ball_at` must be a bool
+Every other card puts the ball flush on the away chip (`x = _CHIP`, 0 px gap) with the away
+abbrev `_LIVE_ICON_GAP` (2 px) after it, moving the away run 4 px; 5 px starts costing centre
+text (`FINAL/OT` -> `F/OT`, `Q4` dropped), so never loosen it without re-running
+`test_live_ball_never_costs_any_text`. `ball_at = false` (widget -> card -> board) restores
+the GRAY text separator and draws no ball anywhere
+(`test_future_ball_at_off_keeps_the_text`, `test_live_ball_at_off_is_today`). `ball_at` must be a bool
 (`test_validate_bool_options`).
 
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert

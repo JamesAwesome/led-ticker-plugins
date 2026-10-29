@@ -62,7 +62,7 @@ def _rgb(c):
 
 def test_band_board_live_columns(smallsign, tz, monkeypatch):
     calls, board = _spy(monkeypatch, smallsign, LIVE, tz)
-    chips = {(x0, x1) for _n, x0, x1 in board.shape_extents}
+    chips = {(x0, x1) for n, x0, x1 in board.shape_extents if n == "CHIP"}
     assert chips == {(0, 2), (157, 159)}
     assert _px(smallsign, range(3), pal.chip("PHI")[0]) == {
         (x, y) for x in range(3) for y in ROWS
@@ -254,8 +254,14 @@ def _assert_clearance(calls, shapes, width):
     for item in items:
         assert item[1] >= 0 and item[2] <= width, f"{item!r} off-panel"
     for a, b in zip(items, items[1:], strict=False):
-        # The ball may sit `_ICON_GAP` from the names either side of it.
+        # The next-game ball may sit `_ICON_GAP` from the names either side;
+        # the live ball sits flush on the away chip, `_LIVE_ICON_GAP` from
+        # the away abbrev.
         if "ICON" in (a[0], b[0]) and b[1] - a[2] == sb._ICON_GAP:
+            continue
+        if (a[0], b[0]) == ("CHIP", "ICON") and b[1] == a[2]:
+            continue
+        if a[0] == "ICON" and b[1] - a[2] == sb._LIVE_ICON_GAP:
             continue
         assert b[1] - a[2] >= 6, f"{a!r} / {b!r}"
 
@@ -414,3 +420,39 @@ def test_ball_follows_cursor_and_y_offset(smallsign, tz):
     assert _lit(moved, range(icon[1] + 20, icon[2] + 21)) == {
         (x + 20, y + 2) for x, y in lit0
     }
+
+
+@pytest.mark.parametrize("game", [LIVE, HALF, FINAL_OT], ids=["live", "half", "final"])
+def test_live_ball_flush_on_the_away_chip(smallsign, tz, monkeypatch, game):
+    calls, board = _spy(monkeypatch, smallsign, game, tz)
+    assert _icons(board) == [("ICON", sb._CHIP, sb._CHIP + 7)]
+    away = next(c for c in calls if c[0] == game.away)
+    assert away[1] == sb._CHIP + sb._ICON + sb._LIVE_ICON_GAP
+    ball = _lit(smallsign, range(sb._CHIP, sb._CHIP + 8))
+    assert len(ball) == len(BALL) and {y for _, y in ball} <= set(range(4, 12))
+    _assert_clearance(_coalesce(calls), board.shape_extents, 160)
+
+
+def test_live_ball_at_off_is_today(smallsign, tz, monkeypatch):
+    calls, board = _spy(monkeypatch, smallsign, LIVE, tz, ball_at=False)
+    assert not _icons(board)
+    assert next(c for c in calls if c[0] == LIVE.away)[1] == _LEFT
+
+
+@pytest.mark.parametrize(
+    "base", [LIVE, HALF, FINAL_OT, WORST], ids=["live", "half", "final", "worst"]
+)
+@pytest.mark.parametrize("away,home", [("PHI", "NY"), ("UTAH", "WSH"), ("GS", "NY")])
+@pytest.mark.parametrize("scores", [(98, 101), (118, 121), (148, 148)], ids=str)
+@pytest.mark.parametrize("stale", [False, True])
+def test_live_ball_never_costs_any_text(
+    smallsign, tz, monkeypatch, base, away, home, scores, stale
+):
+    game = dataclasses.replace(
+        base, away=away, home=home, away_score=scores[0], home_score=scores[1]
+    )
+    with monkeypatch.context() as m:
+        off, _ = _spy(m, _fresh(), game, tz, stale=stale, ball_at=False)
+    calls, board = _spy(monkeypatch, smallsign, game, tz, stale=stale)
+    assert [c[0] for c in calls] == [c[0] for c in off]
+    _assert_clearance(_coalesce(calls), board.shape_extents, 160)
