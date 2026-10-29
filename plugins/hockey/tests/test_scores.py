@@ -125,6 +125,8 @@ class TestValidateConfig:
             assert v({**base, "final_hold_hours": bad}), bad
         assert v({**base, "final_hold_hours": 0}) == []
         assert v({**base, "demo": "yes"})
+        assert v({**base, "logos": "yes"})
+        assert v({**base, "logos": False}) == []
         for bad in (0, True, "15", 10.0):
             assert v({**base, "update_interval": bad}), bad
 

@@ -29,6 +29,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_hockey import _palette as pal
+from led_ticker_hockey._logos import LOGO_BIG, LOGO_LONG, paint_logo, sprite
 from led_ticker_hockey._models import GameInfo, Goal
 from led_ticker_hockey._paint import (
     fit_text,
@@ -149,32 +150,61 @@ def _assists_line(shim, goal: Goal, x: int, base: int, max_w: int, size: int):
     _base(shim, text, x, base, pal.CYAN, size)
 
 
-def _detail_big(shim, real, game: GameInfo, goal: Goal, frame: int, yo: int):
+def _logo_or_chip(
+    real,
+    goal: Goal,
+    logos: bool,
+    size: int,
+    x: int,
+    y: int,
+    chip: tuple[int, int, int, int],
+) -> bool:
+    """Paint the scoring team's logo at (x, y); True when it painted, else
+    the chip rectangle `chip` = (x0, y0, x1, y1) and False."""
+    spr = sprite(goal.team, size) if logos and goal.team else None
+    if spr is not None:
+        paint_logo(real, spr, x, y)
+        return True
+    cx0, cy0, cx1, cy1 = chip
+    rect(real, cx0, cy0, cx1, cy1, pal.chip(goal.team)[0])
+    return False
+
+
+def _detail_big(shim, real, game: GameInfo, goal: Goal, frame, yo, logos):
     primary = pal.chip(goal.team)[0]
-    rect(real, 3, 5 + yo, 8, 26 + yo, primary)
-    _base(shim, "GOAL", 14, 26 + yo, primary, 26)
+    painted = _logo_or_chip(
+        real, goal, logos, LOGO_BIG, 4, 14 + yo, (3, 5 + yo, 8, 26 + yo)
+    )
+    # Chip path: chip x 3..8, so text at 14 keeps _GAP (6) clear of it.
+    x0 = 4 + LOGO_BIG + _GAP if painted else 14
+    _base(shim, "GOAL", x0, 26 + yo, primary, 26)
     items = []
     for abbrev, tcolor, score, scolor in _scores(game, goal, frame):
         items += [(abbrev, tcolor, 14), (score, scolor, 16)]
-    # Four short tokens (~90 px) end at the right edge; GOAL ends ~x85.
+    # Four short tokens (~90 px) end at the right edge; GOAL ends ~x117
+    # beside the logo.
     _right_run(shim, items, real.width - 5, lambda s: (20 if s == 14 else 21) + yo)
-    for x in range(0, real.width, 3):
-        if 0 <= 32 + yo < real.height:
+    if 0 <= 32 + yo < real.height:
+        # The divider starts past the logo, which spans it.
+        for x in range(x0 if painted else 0, real.width, 3):
             real.SetPixel(x, 32 + yo, pal.DIM.red, pal.DIM.green, pal.DIM.blue)
     time_s = _time_label(goal)
     time_w = text_width(11, time_s) if time_s else 0
     right = real.width - 5
     if time_s:
         _base(shim, time_s, right - time_w, 50 + yo, pal.DIM, 11)
-    name_max = right - 14 - (time_w + _GAP if time_s else 0)
-    _scorer_line(shim, goal, 14, 50 + yo, name_max, 17, 12)
-    _assists_line(shim, goal, 14, 61 + yo, right - 14, 9)
+    name_max = right - x0 - (time_w + _GAP if time_s else 0)
+    _scorer_line(shim, goal, x0, 50 + yo, name_max, 17, 12)
+    _assists_line(shim, goal, x0, 61 + yo, right - x0, 9)
 
 
-def _detail_long(shim, real, game: GameInfo, goal: Goal, frame: int, yo: int):
+def _detail_long(shim, real, game: GameInfo, goal: Goal, frame, yo, logos):
     primary = pal.chip(goal.team)[0]
-    rect(real, 6, 8 + yo, 13, 56 + yo, primary)
-    _base(shim, "GOAL", 22, 48 + yo, primary, 40)
+    painted = _logo_or_chip(
+        real, goal, logos, LOGO_LONG, 8, 8 + yo, (6, 8 + yo, 13, 56 + yo)
+    )
+    goal_x = 8 + LOGO_LONG + _GAP if painted else 22
+    _base(shim, "GOAL", goal_x, 48 + yo, primary, 40)
     scores = _scores(game, goal, frame)
     time_s = _time_label(goal)
     right = real.width - 7
@@ -191,7 +221,7 @@ def _detail_long(shim, real, game: GameInfo, goal: Goal, frame: int, yo: int):
     ):
         adv = _base(shim, abbrev, x_score, ab + yo, tcolor, 18)
         _base(shim, score, x_score + adv + _GAP, sb + yo, scolor, 22)
-    x0 = 160
+    x0 = 160 + goal_x - 22  # the scorer column keeps its gap after GOAL
     col_max = x_score - _GAP - x0
     _scorer_line(shim, goal, x0, 32 + yo, col_max, 24, 14)
     _assists_line(shim, goal, x0, 52 + yo, col_max, 12)
@@ -249,8 +279,10 @@ def render_detail(
     *,
     y_offset: int = 0,
     font: Font | None = None,
+    logos: bool = True,
 ) -> None:
-    """The post-flash detail card for the sign `canvas` belongs to."""
+    """The post-flash detail card for the sign `canvas` belongs to.
+    `logos=False` paints the scoring team's chip instead of its logo."""
     scale = safe_scale(canvas)
     if scale <= 1:
         _detail_small(
@@ -265,6 +297,6 @@ def render_detail(
     shim, real = phys_wrap(canvas)
     yo = y_offset * scale
     if real.width > 300:
-        _detail_long(shim, real, game, goal, frame, yo)
+        _detail_long(shim, real, game, goal, frame, yo, logos)
     else:
-        _detail_big(shim, real, game, goal, frame, yo)
+        _detail_big(shim, real, game, goal, frame, yo, logos)

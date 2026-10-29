@@ -940,3 +940,51 @@ def test_second_draw_in_the_same_tick_keeps_the_freeze(bigsign):
         c.advance_frame()
         c.draw(bigsign, pos - 1)
         assert board.call_args.kwargs["x_offset"] == pos - 1 + shift  # intact
+
+
+# --------------------------------------------------------------- logos
+
+
+def _logo_and_texts(canvas, game, play, **kw):
+    logos, texts = [], []
+    real_logo, real_hires = cel.paint_logo, cel.hires
+
+    def logo_spy(real, sprite, x, y):
+        logos.append((x, x + sprite.size, y, y + sprite.size - 1))
+        real_logo(real, sprite, x, y)
+
+    def hires_spy(shim, text, x, y_top, color, size):
+        base = y_top + resolve_font("Inter-Bold", size).ascent
+        texts.append(
+            (text, x, x + cel.text_width(size, text), base - round(size * 0.72), base)
+        )
+        return real_hires(shim, text, x, y_top, color, size)
+
+    with (
+        mock.patch.object(cel, "paint_logo", logo_spy),
+        mock.patch.object(cel, "hires", hires_spy),
+    ):
+        render_detail(canvas, game, play, 30, **kw)
+    return logos, texts
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_detail_paints_scoring_team_logo_clear_of_text(sign, request):
+    canvas = request.getfixturevalue(sign)
+    logos, texts = _logo_and_texts(canvas, GAME, TD)
+    assert len(logos) == 1
+    x0, x1, top, bottom = logos[0]
+    real = unwrap_to_real(canvas)
+    assert x0 >= 0 and top >= 0 and bottom < real.height
+    for text, tx0, _tx1, cap, base in texts:
+        if cap > bottom or top > base:
+            continue  # different rows
+        assert tx0 >= x1 + 6, (text, tx0, logos[0])
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_detail_logos_false_paints_the_chip(sign, request):
+    canvas = request.getfixturevalue(sign)
+    logos, texts = _logo_and_texts(canvas, GAME, TD, logos=False)
+    assert not logos
+    assert min(t[1] for t in texts) < 30  # text back beside the narrow chip

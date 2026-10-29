@@ -28,6 +28,7 @@ from led_ticker.plugin import (
 )
 
 from led_ticker_football import _palette as pal
+from led_ticker_football._logos import LOGO_LONG, LOGO_ROW, paint_logo, sprite
 from led_ticker_football._models import GameInfo, ScoringPlay
 from led_ticker_football._paint import (
     fit_size,
@@ -151,9 +152,36 @@ def _kind_line(shim, play, x: int, base: int, budget: int, sizes, extra_size: in
         _base(shim, play.extra, x + adv + _GAP, base, pal.AMBER, extra_size)
 
 
-def _detail_big(shim, real, game: GameInfo, play: ScoringPlay, frame: int, yo: int):
+def _logo_or_chip(
+    real,
+    play: ScoringPlay,
+    logos: bool,
+    size: int,
+    x: int,
+    y: int,
+    chip: tuple[int, int, int, int],
+) -> bool:
+    """Paint the scoring team's logo at (x, y); True when it painted, else
+    the chip rectangle `chip` = (x0, y0, x1, y1) and False."""
+    spr = sprite(play.team, size) if logos and play.team else None
+    if spr is not None:
+        paint_logo(real, spr, x, y)
+        return True
+    cx0, cy0, cx1, cy1 = chip
+    rect(real, cx0, cy0, cx1, cy1, pal.chip(play.team)[0])
+    return False
+
+
+def _detail_big(shim, real, game: GameInfo, play: ScoringPlay, frame, yo, logos):
     primary = pal.chip(play.team)[0]
-    rect(real, 3, 5 + yo, 8, 26 + yo, primary)
+    # The logo sits in the BOTTOM row (beside the play): `TOUCHDOWN` needs
+    # the top row's full width left of the score run. Chip path: the chip
+    # stays top-left (x 3..8) and text at 14 keeps _GAP (6) clear of it.
+    painted = _logo_or_chip(
+        real, play, logos, LOGO_ROW, 2, 34 + yo, (3, 5 + yo, 8, 26 + yo)
+    )
+    x0 = 14  # the kind word, beside the chip or alone
+    x1 = 2 + LOGO_ROW + _GAP if painted else 14  # the bottom row's text
     items = []
     for abbrev, tcolor, score, scolor in _scores(game, play, frame):
         items += [(abbrev, tcolor, 14), (score, scolor, 16)]
@@ -161,12 +189,12 @@ def _detail_big(shim, real, game: GameInfo, play: ScoringPlay, frame: int, yo: i
     run_x0 = _right_run(shim, items, right, lambda s: (20 if s == 14 else 21) + yo)
     # The kind word alone on row 1 (the score run owns the right); the try
     # result sits on the free bottom row so TOUCHDOWN never ellipsizes.
-    budget = max(1, run_x0 - _GAP - 14)
+    budget = max(1, run_x0 - _GAP - x0)
     word = flash_word(play.kind)
     size = fit_size(word, (26, 22, 20, 18, 16), budget)
-    _base(shim, fit_text(word, budget, size), 14, 26 + yo, primary, size)
+    _base(shim, fit_text(word, budget, size), x0, 26 + yo, primary, size)
     if play.extra:
-        _base(shim, play.extra, 14, 61 + yo, pal.AMBER, 10)
+        _base(shim, play.extra, x1, 61 + yo, pal.AMBER, 10)
     for x in range(0, real.width, 3):
         if 0 <= 32 + yo < real.height:
             real.SetPixel(x, 32 + yo, pal.DIM.red, pal.DIM.green, pal.DIM.blue)
@@ -174,15 +202,16 @@ def _detail_big(shim, real, game: GameInfo, play: ScoringPlay, frame: int, yo: i
     time_w = text_width(11, time_s) if time_s else 0
     if time_s:
         _base(shim, time_s, right - time_w, 50 + yo, pal.DIM, 11)
-    text_max = right - 14 - (time_w + _GAP if time_s else 0)
+    text_max = right - x1 - (time_w + _GAP if time_s else 0)
     if play.text:
         size = fit_size(play.text, (17, 15, 13, 12), text_max)
-        _base(shim, fit_text(play.text, text_max, size), 14, 50 + yo, pal.WHITE, size)
+        _base(shim, fit_text(play.text, text_max, size), x1, 50 + yo, pal.WHITE, size)
 
 
-def _detail_long(shim, real, game: GameInfo, play: ScoringPlay, frame: int, yo: int):
-    primary = pal.chip(play.team)[0]
-    rect(real, 6, 8 + yo, 13, 56 + yo, primary)
+def _detail_long(shim, real, game: GameInfo, play: ScoringPlay, frame, yo, logos):
+    painted = _logo_or_chip(
+        real, play, logos, LOGO_LONG, 8, 8 + yo, (6, 8 + yo, 13, 56 + yo)
+    )
     scores = _scores(game, play, frame)
     time_s = _time_label(play)
     right = real.width - 7
@@ -199,7 +228,7 @@ def _detail_long(shim, real, game: GameInfo, play: ScoringPlay, frame: int, yo: 
     ):
         adv = _base(shim, abbrev, x_score, ab + yo, tcolor, 18)
         _base(shim, score, x_score + adv + _GAP, sb + yo, scolor, 22)
-    x0 = 22
+    x0 = 8 + LOGO_LONG + _GAP if painted else 22
     col_max = x_score - _GAP - x0
     _kind_line(shim, play, x0, 30 + yo, col_max, (34, 30, 26, 22), 14)
     if play.text:
@@ -261,8 +290,10 @@ def render_detail(
     *,
     y_offset: int = 0,
     font: Font | None = None,
+    logos: bool = True,
 ) -> None:
-    """The post-flash detail card for the sign `canvas` belongs to."""
+    """The post-flash detail card for the sign `canvas` belongs to.
+    `logos=False` paints the scoring team's chip instead of its logo."""
     scale = safe_scale(canvas)
     if scale <= 1:
         _detail_small(
@@ -277,6 +308,6 @@ def render_detail(
     shim, real = phys_wrap(canvas)
     yo = y_offset * scale
     if real.width > 300:
-        _detail_long(shim, real, game, play, frame, yo)
+        _detail_long(shim, real, game, play, frame, yo, logos)
     else:
-        _detail_big(shim, real, game, play, frame, yo)
+        _detail_big(shim, real, game, play, frame, yo, logos)

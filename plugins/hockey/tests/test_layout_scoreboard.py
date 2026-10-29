@@ -104,6 +104,7 @@ def _spy_all(monkeypatch, canvas, game, **kw):
     the dotted divider, each as (label, x0, x1_excl, y_top, y_bottom)."""
     shapes = []
     orig_rect, orig_dotted = board.rect, board._dotted
+    orig_logo = board.paint_logo
 
     def rect_spy(real, x0, y0, x1, y1, color):
         shapes.append((f"rect@{x0}", x0, x1 + 1, y0, y1))
@@ -113,8 +114,13 @@ def _spy_all(monkeypatch, canvas, game, **kw):
         shapes.append(("divider", 0, x1 + 1, y, y))
         orig_dotted(real, y, x1)
 
+    def logo_spy(real, sprite, x, y):
+        shapes.append(("LOGO", x, x + sprite.size, y, y + sprite.size - 1))
+        orig_logo(real, sprite, x, y)
+
     monkeypatch.setattr(board, "rect", rect_spy)
     monkeypatch.setattr(board, "_dotted", dotted_spy)
+    monkeypatch.setattr(board, "paint_logo", logo_spy)
     return _spy(monkeypatch, canvas, game, **kw), shapes
 
 
@@ -160,9 +166,10 @@ def _texts(calls):
     "game", [WORST_LIVE, WORST_FINAL, WORST_NEXT, WORST_INT], ids=str
 )
 @pytest.mark.parametrize("stale", [False, True])
-def test_worst_case_keeps_min_clearance(sign, game, stale, request, monkeypatch):
+@pytest.mark.parametrize("logos", [True, False])
+def test_worst_case_keeps_min_clearance(sign, game, stale, logos, request, monkeypatch):
     canvas = request.getfixturevalue(sign)
-    calls, shapes = _spy_all(monkeypatch, canvas, game, stale=stale)
+    calls, shapes = _spy_all(monkeypatch, canvas, game, stale=stale, logos=logos)
     assert calls and shapes
     real = unwrap_to_real(canvas)
     _assert_separated(calls, real)
@@ -349,3 +356,73 @@ def test_divider_keeps_full_length_when_status_is_narrow(bigsign, monkeypatch):
     _, shapes = _spy_all(monkeypatch, bigsign, LIVE)
     div = next(s for s in shapes if s[0] == "divider")
     assert div[2] == board._BIG_DIVIDER_X1 + 1
+
+
+# ------------------------------------------------------------------ logos
+
+
+def _logos(shapes):
+    return [s for s in shapes if s[0] == "LOGO"]
+
+
+def _chips(shapes):
+    return [s for s in shapes if s[0].startswith("rect@")]
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_logos_replace_both_chips(sign, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    g = geometry_for(unwrap_to_real(canvas).width)
+    for game in (LIVE, NEXT):
+        calls, shapes = _spy_all(monkeypatch, canvas, game)
+        logos = _logos(shapes)
+        assert len(logos) == 2, game.state
+        assert all(s[2] - s[1] == g.logo_size for s in logos)
+        assert logos[0][1] == g.logo_x
+        assert not [c for c in _chips(shapes) if c[1] in (g.chip_x[0],)]
+        # Each abbrev sits beside its logo, not where the chip's abbrev went.
+        by = {c[0]: c for c in calls}
+        assert by[game.away][1] == g.logo_x + g.logo_size + _MIN_GAP
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_logos_false_paints_chips(sign, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    g = geometry_for(unwrap_to_real(canvas).width)
+    calls, shapes = _spy_all(monkeypatch, canvas, LIVE, logos=False)
+    assert not _logos(shapes)
+    assert {c[1] for c in _chips(shapes)} >= {g.chip_x[0]}
+    by = {c[0]: c for c in calls}
+    assert by[LIVE.away][1] == g.name_x
+
+
+@pytest.mark.parametrize("sign", ["bigsign", "longboi"])
+def test_missing_sprite_falls_back_to_chip(sign, request, monkeypatch):
+    canvas = request.getfixturevalue(sign)
+    monkeypatch.setattr(board, "sprite", lambda abbrev, size: None)
+    calls, shapes = _spy_all(monkeypatch, canvas, LIVE)
+    assert not _logos(shapes)
+    assert _chips(shapes)
+    assert LIVE.away in _texts(calls) and LIVE.home in _texts(calls)
+
+
+def test_one_missing_logo_keeps_the_other(longboi, monkeypatch):
+    real_sprite = board.sprite
+    monkeypatch.setattr(
+        board,
+        "sprite",
+        lambda abbrev, size: None if abbrev == LIVE.home else real_sprite(abbrev, size),
+    )
+    calls, shapes = _spy_all(monkeypatch, longboi, LIVE)
+    assert len(_logos(shapes)) == 1
+    by = {c[0]: c for c in calls}
+    assert by[LIVE.home][2] == board._LONG_HOME_NAME_R  # back beside its chip
+    _assert_separated(calls, unwrap_to_real(longboi))
+    _assert_shapes_clear(calls, shapes, unwrap_to_real(longboi))
+
+
+def test_logo_helper_reports_whether_it_painted(bigsign):
+    real = unwrap_to_real(bigsign)
+    assert board._logo(real, "PHI", 28, 2, 2, True) is True
+    assert board._logo(real, "PHI", 28, 2, 2, False) is False
+    assert board._logo(real, "ZZZ", 28, 2, 2, True) is False

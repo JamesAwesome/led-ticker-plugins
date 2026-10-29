@@ -1,13 +1,13 @@
 # led-ticker-football
 
-Live NFL scores for [led-ticker](https://github.com/JamesAwesome/led-ticker). One `football.scores` widget shows a held scoreboard per game: score, quarter and clock, who has the ball, down and distance with the ball spot, timeouts remaining, the red zone lit in red, finals and the next scheduled game (with a `BYE WEEK` label when your team is off). When a team you follow scores, the card plays a touchdown / field goal / safety celebration on its next turn in the rotation.
+Live NFL scores for [led-ticker](https://github.com/JamesAwesome/led-ticker). One `football.scores` widget shows a held scoreboard per game: score, quarter and clock, who has the ball, down and distance with the ball spot, timeouts remaining, the red zone lit in red, finals and the next scheduled game (with a `BYE WEEK` label when your team is off). On the bigsign and longboi each team carries its logo; the logos are bundled, so a sign never fetches an image. When a team you follow scores, the card plays a touchdown / field goal / safety celebration on its next turn in the rotation.
 
-> **Disclosure:** the data comes from ESPN's public site API (`https://site.api.espn.com`, with `https://site.web.api.espn.com` as a fallback host). That feed is **unofficial and undocumented**. It needs no key and no account, but ESPN can change its shape or block clients at any time. The plugin parses it defensively: a bad or missing payload keeps the last good scores on the panel with a `STALE` label instead of crashing. This plugin is not affiliated with or endorsed by ESPN or the NFL.
+> **Disclosure:** the data comes from ESPN's public site API (`https://site.api.espn.com`, with `https://site.web.api.espn.com` as a fallback host). That feed is **unofficial and undocumented**. It needs no key and no account, but ESPN can change its shape or block clients at any time. The plugin parses it defensively: a bad or missing payload keeps the last good scores on the panel with a `STALE` label instead of crashing. This plugin is not affiliated with or endorsed by ESPN or the NFL. Team logos are the teams' marks, bundled for display on your own sign.
 
 ## Prerequisites
 
 - A working [led-ticker](https://github.com/JamesAwesome/led-ticker) install (`led-ticker-core >= 4.30`).
-- Internet access on the Pi.
+- Internet access on the Pi (for the scores; the logos are already in the package).
 - No API key.
 
 ## Install
@@ -62,6 +62,7 @@ timezone = "America/New_York"   # for kickoff times and the day boundary
 | `final_hold_hours` | int | `24` | How long a final stays in the rotation, measured from kickoff + 3 h 30 min (the feed carries no end time). A team plays once a week, so Sunday's result stays up through Monday by default; lower it to see the next game sooner. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for kickoff times (`TODAY`, `TONIGHT`, dates) and the day boundary. |
 | `layout` | string | `"auto"` | `"auto"`, `"scoreboard"` or `"ticker"` — see [Layouts](#layouts). |
+| `logos` | bool | `true` | Paint the bundled team logos on the bigsign and longboi. `false` paints the two-tone colour chips instead. Ignored on the smallsign, which never shows logos. |
 | `update_interval` | int | `15` | How often, in seconds, this widget refreshes its cards and asks the shared source to poll. **Floored at 10** (ESPN caches for 10 s). While a game is live the source polls at most every 15 s, or at the lowest `update_interval` below that among the widgets sharing it. A value below 15 therefore speeds up live polling. A value above 15 slows this widget: its cards refresh only every `update_interval` seconds, and if no other widget polls more often, so does the source. Quieter periods poll more slowly regardless — see [Polling cadence](#polling-cadence). |
 | `hold_time` | float | `0.0` | Minimum per-card hold in seconds (a number ≥ 0). The engine uses the larger of this and the section's `hold_time`. While a celebration is pending the card asks for 4 s per score **plus** the larger of this and 4 s for the board afterwards. |
 | `padding` | int | `6` | Horizontal padding (logical px) after the line in the hi-res `layout = "ticker"` crawl (bigsign / longboi); it also counts toward whether the line fits and holds instead of scrolling. The scale-1 ticker, the held scoreboards and the celebration ignore it. A number >= 0 (a float is truncated to an int). |
@@ -86,15 +87,15 @@ Football's unit is the **week**: every team plays once between Thursday and Mond
 `layout = "auto"` resolves to `scoreboard` on all three reference signs.
 
 - **Smallsign (160×16):** two 8-row bands, away on top. Each band: a 3-px brand chip, the abbreviation, the score, the possession dot, three timeout pips, and the down & distance on the band of the team with the ball (`3RD & 4`, cyan; red in the red zone). The quarter is right-aligned in the top band, with a small football icon just left of it so the card reads as football at a glance next to other sports; the clock is in the bottom band. The icon is left out when the top band is too full for it. The ball spot is omitted at this size (the `ticker` layout carries it).
-- **Bigsign (256×64):** two held rows, one per team, with a dotted divider. Each row: chip, abbreviation, a large white score, the possession triangle and the timeout pips. The right status column shows the quarter (amber), the clock (white) and `3RD & 4 · PHI 38` (cyan, red in the red zone; the spot is dropped first when the column is narrow).
-- **Longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, pips beneath, huge score), the home team mirrors it on the right, and the centre holds the quarter, a large clock and the down & distance line. The possession triangle sits between the possessing team's score and the centre.
+- **Bigsign (256×64):** two held rows, one per team, with a dotted divider. Each row: the team's 28 px logo, abbreviation, a large white score, the possession triangle and the timeout pips. The right status column shows the quarter (amber), the clock (white) and `3RD & 4 · PHI 38` (cyan, red in the red zone; the spot is dropped first when the column is narrow).
+- **Longboi (512×64):** a full scoreboard. The away team fills the left third (48 px logo at the edge, large abbreviation, pips beneath, huge score), the home team mirrors it on the right, and the centre holds the quarter, a large clock and the down & distance line. The possession triangle sits between the possessing team's score and the centre.
 - **`ticker`:** one scrolling line per game using the same wording as the boards: `PHI 20 · NYG 17 · Q4 2:13 · NYG BALL 2ND & 7 · PHI 24 · TOL 1-2`.
 
-Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows the day (`TONIGHT`, `SUN NOV 1`, amber), the kickoff (`TBD` when the league hasn't set it) and the venue (dim), with the teams drawn per sign. Smallsign shows the football icon, then `PHI @ NYG` (or `VS` at a neutral site) in team colors, no chips and no records, with ` BYE` after it in a bye week. Bigsign shows the away chip, `PHI 5-2 @ NYG 4-3` (the records drop first when the line is too wide) and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Longboi shows both chips and abbreviations on their sides with the records, the team nicknames and that label, and no `@`. Nothing on the physical boards is user-tunable (fixed palette).
+Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows the day (`TONIGHT`, `SUN NOV 1`, amber), the kickoff (`TBD` when the league hasn't set it) and the venue (dim), with the teams drawn per sign. Smallsign shows the football icon, then `PHI @ NYG` (or `VS` at a neutral site) in team colors, no chips and no records, with ` BYE` after it in a bye week. Bigsign shows `PHI 5-2 @ NYG 4-3` with each team's logo in front of its name (the records drop first when the line is too wide) and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Longboi shows both logos and abbreviations on their sides with the records, the team nicknames and that label, and no `@`. With `logos = false`, or for a team with no bundled logo, the bigsign and longboi paint that team's two-tone chip in the logo's place. Apart from `logos`, nothing on the physical boards is user-tunable (fixed palette).
 
 ### Scoring celebration
 
-When a team in `teams` scores, that game's card plays a ~4 second celebration **the next time its turn comes around** — in a slideshow it never interrupts other content (scroll-mode sections are below). Three quick flashes of the panel in the scoring team's color with `TOUCHDOWN` / `FIELD GOAL` / `SAFETY` knocked out, then the new score with the scoring team's number pulsing, the play (`JALEN HURTS 12 YD RUSH`), `+PAT` / `+2PT` once the try is in, and the quarter and clock. Then the normal board for the rest of the hold.
+When a team in `teams` scores, that game's card plays a ~4 second celebration **the next time its turn comes around** — in a slideshow it never interrupts other content (scroll-mode sections are below). Three quick flashes of the panel in the scoring team's color with `TOUCHDOWN` / `FIELD GOAL` / `SAFETY` knocked out, then the new score with the scoring team's number pulsing, the play (`JALEN HURTS 12 YD RUSH`), `+PAT` / `+2PT` once the try is in, and the quarter and clock, with the scoring team's logo at the left on the bigsign and longboi. Then the normal board for the rest of the hold.
 
 - A section's hold is **extended automatically** while a celebration is pending: the card asks for 4 s per queued score plus the larger of the widget's `hold_time` and 4 s for the board that follows.
 - **The extra point folds in.** A touchdown's kick or two-point conversion never celebrates on its own: it updates the queued celebration's score and `+PAT` / `+2PT` label.
@@ -136,11 +137,14 @@ Validate the chosen file with `led-ticker validate <path>` before starting the s
 - **The live `situation` shape is hand-written.** No game was live when the plugin was built, so the possession / down & distance / timeouts parsing follows the community-documented shape and a captured preseason payload. If a field is absent or shaped differently the board simply omits it and everything else keeps working.
 - **Scores can collapse.** Polls are 10–15 s apart, so a touchdown and its extra point usually arrive together (`+PAT` from the start). Two scores inside one poll (a touchdown and a field goal, say) celebrate once.
 - **The sign runs ahead of your TV.** The feed is near real-time, broadcasts are delayed, so a score can appear on the panel before you see it on screen. There is no spoiler delay.
+- **Logos are small.** The bigsign's logos are 28 px, so thin detail in a mark reads as a blob; the longboi's 48 px logos hold up better. Near-black pixels are dropped as invisible on the panel, so a mostly-black mark shows only its lighter parts.
 - NFL only.
 
 ## Data
 
 ESPN site API, base URL `https://site.api.espn.com/apis/site/v2/sports/football/nfl` (mirror `https://site.web.api.espn.com`), no key. Endpoints: `/scoreboard` (the current week) and `/teams/{ABBR}/schedule` (next game, bye week). Community references: the [akeaswaran ESPN API gist](https://gist.github.com/akeaswaran/b48b02f1c94f873c6655e7129910fc3b), [pseudo-r/Public-ESPN-API](https://github.com/pseudo-r/Public-ESPN-API).
+
+**Logos** are 64×64 PNGs for all 32 teams under `src/led_ticker_football/assets/logos/`, listed in `MANIFEST.txt` with their source URL and fetch date. They are refreshed by a person running `tools/fetch_logos.py` (never by CI or a sign); the plugin decodes each once per size and replays cached pixels.
 
 ## Development
 
