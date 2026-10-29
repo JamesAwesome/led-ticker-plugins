@@ -95,6 +95,7 @@ class BasketballGameCard(FrameAwareBase):
     font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     logos: bool = attrs.field(default=True, kw_only=True)
+    ball_at: bool = attrs.field(default=True, kw_only=True)
     demo_final: FinalEvent | None = attrs.field(default=None, kw_only=True)
     pending: list[FinalEvent] = attrs.field(init=False, factory=list)
     # team -> frames of score pulse left
@@ -269,6 +270,7 @@ class BasketballGameCard(FrameAwareBase):
                     now_fn=self.now_fn,
                     tz=self.tz,
                     font=self.font if self.font is not None else FONT_DEFAULT,
+                    ball_at=self.ball_at,
                 )
                 self._legacy = board
             board.game = self.game

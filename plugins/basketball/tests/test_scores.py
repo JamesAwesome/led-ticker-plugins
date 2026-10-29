@@ -6,6 +6,8 @@ import logging
 import unittest.mock as mock
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 import led_ticker_basketball.scores as mod
 from led_ticker_basketball._card import BasketballGameCard
 from led_ticker_basketball._models import (
@@ -96,10 +98,11 @@ class TestValidate:
             "the smallsign board uses font"
         ]
 
-    def test_validate_logos_bool(self):
+    @pytest.mark.parametrize("name", ["logos", "ball_at"])
+    def test_validate_bool_options(self, name):
         v = BasketballScoreMonitor.validate_config
-        assert v({"teams": ["PHI"], "logos": "yes"})
-        assert v({"teams": ["PHI"], "logos": False}) == []
+        assert v({"teams": ["PHI"], name: "yes"})
+        assert v({"teams": ["PHI"], name: False}) == []
 
     def test_teams_mode_requires_teams(self):
         msgs = BasketballScoreMonitor.validate_config({})
@@ -346,6 +349,7 @@ class TestStart:
                 final_hold_hours=4,
                 hold_time=7.5,
                 logos=False,
+                ball_at=False,
             )
         assert w.teams == ["PHI", "NY"]
         kw = src.want.call_args.kwargs
@@ -354,6 +358,7 @@ class TestStart:
         assert src.polls == 1 and len(w.feed_stories) == 1
         card = w.feed_stories[0]
         assert card.hold_time == 7.5 and card.logos is False
+        assert card.ball_at is False
         assert card.tracked == frozenset({"PHI", "NY"})
         loop.assert_called_once_with(w, MIN_INTERVAL, splay=False)
         spawn.assert_called_once_with("LOOP")

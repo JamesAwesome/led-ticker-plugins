@@ -130,7 +130,7 @@ def test_band_board_future_row(smallsign, tz, monkeypatch):
     colors = {t: _rgb(c) for t, _a, _b, c in calls}
     assert colors["NY"] == _rgb(pal.chip("NY")[0])
     assert colors["PHI"] == _rgb(pal.chip("PHI")[0])
-    assert colors[" @ "] == _rgb(pal.GRAY)
+    assert " @ " not in colors  # the ball is the `@`
     chips = {(x0, x1) for n, x0, x1 in board.shape_extents if n == "CHIP"}
     assert chips == {(0, 2), (157, 159)}
     time_call = next(c for c in calls if c[0].startswith("7:30"))
@@ -144,7 +144,7 @@ def test_band_board_future_row(smallsign, tz, monkeypatch):
     calls, _ = _spy(
         monkeypatch, _fresh(), dataclasses.replace(NEXT, neutral_site=True), tz
     )
-    assert " VS " in [c[0] for c in calls]
+    assert " VS " not in [c[0] for c in calls]  # the ball is the `VS` too
     calls, _ = _spy(monkeypatch, _fresh(), dataclasses.replace(NEXT, time_tbd=True), tz)
     tbd = next(c for c in calls if c[0] == "TBD")
     assert _rgb(tbd[3]) == _rgb(pal.DIM)
@@ -233,7 +233,7 @@ def test_ticker_message_uses_segments(tz):
 
 
 def _coalesce(calls):
-    """Merge texts drawn flush (`NY`, ` @ `, `PHI`; `Q4`, ` 1:48`): one run
+    """Merge texts drawn flush (`FINAL`, `/OT`; `Q4`, ` 1:48`): one run
     whose own spaces carry its gaps."""
     out = []
     for text, x0, x1, color in sorted(calls, key=lambda c: c[1]):
@@ -254,8 +254,8 @@ def _assert_clearance(calls, shapes, width):
     for item in items:
         assert item[1] >= 0 and item[2] <= width, f"{item!r} off-panel"
     for a, b in zip(items, items[1:], strict=False):
-        # The ball may sit `_ICON_GAP` from the names it labels.
-        if a[0] == "ICON" and b[1] - a[2] == sb._ICON_GAP:
+        # The ball may sit `_ICON_GAP` from the names either side of it.
+        if "ICON" in (a[0], b[0]) and b[1] - a[2] == sb._ICON_GAP:
             continue
         assert b[1] - a[2] >= 6, f"{a!r} / {b!r}"
 
@@ -349,14 +349,6 @@ def test_band_board_cancelled_final(smallsign, tz, monkeypatch):
 _LEFT = max(sb.X_ABBREV, sb._CHIP + sb._GAP)
 
 
-def _no_ball(monkeypatch, canvas, game, tz, **kw):
-    """The same card with the ball made impossible to fit: today's layout."""
-    with monkeypatch.context() as m:
-        m.setattr(sb, "_ICON", 200)
-        calls, _ = _spy(m, canvas, game, tz, **kw)
-    return [c[:3] for c in calls]
-
-
 def _icons(board):
     return [e for e in board.shape_extents if e[0] == "ICON"]
 
@@ -364,77 +356,61 @@ def _icons(board):
 SHORT = dataclasses.replace(NEXT, start_utc=None)  # `TBD`: a short right side
 
 
-def test_future_ball_when_it_fits(smallsign, tz, monkeypatch):
-    calls, board = _spy(monkeypatch, smallsign, SHORT, tz)
-    assert _icons(board) == [("ICON", _LEFT, _LEFT + 7)]
-    away = next(c for c in calls if c[0] == SHORT.away)
-    assert away[1] == _LEFT + sb._ICON + sb._ICON_GAP
-    ball = _lit(smallsign, range(_LEFT, _LEFT + 8))
+@pytest.mark.parametrize("neutral", [False, True])
+def test_future_ball_is_the_at(smallsign, tz, monkeypatch, neutral):
+    game = dataclasses.replace(NEXT, neutral_site=neutral)
+    calls, board = _spy(monkeypatch, smallsign, game, tz)
+    away = next(c for c in calls if c[0] == game.away)
+    home = next(c for c in calls if c[0] == game.home)
+    (icon,) = _icons(board)
+    assert icon == ("ICON", away[2] + sb._ICON_GAP, away[2] + sb._ICON_GAP + 7)
+    assert home[1] == icon[2] + 1 + sb._ICON_GAP
+    ball = _lit(smallsign, range(icon[1], icon[2] + 1))
     assert len(ball) == len(BALL) and {y for _, y in ball} <= set(range(4, 12))
     _assert_clearance(_coalesce(calls), board.shape_extents, 160)
 
 
-@pytest.mark.parametrize(
-    "day,tip", [("TONIGHT", "7:00 PM"), ("WED DEC 25", "10:00 PM")], ids=str
-)
-def test_future_ball_keeps_the_day_and_tip(smallsign, tz, monkeypatch, day, tip):
-    monkeypatch.setattr(sb, "status_lines", lambda *_a: (day, tip))
-    game = dataclasses.replace(NEXT, away="PHI", home="BOS")
-    expected = _no_ball(monkeypatch, _fresh(), game, tz)
-    calls, board = _spy(monkeypatch, smallsign, game, tz)
-    assert [c[0] for c in calls] == [c[0] for c in expected]
-    if not _icons(board):
-        assert [c[:3] for c in calls] == expected
-    _assert_clearance(_coalesce(calls), board.shape_extents, 160)
-
-
-def test_future_ball_drops_when_it_would_cost_the_tip(smallsign, tz, monkeypatch):
-    # Long names leave only room for the run picked without the ball:
-    # no ball, and the card is exactly today's.
-    monkeypatch.setattr(sb, "status_lines", lambda *_a: ("DEC 25", "10:00 PM"))
-    game = dataclasses.replace(NEXT, away="UTAH", home="PHI")
-    calls, board = _spy(monkeypatch, smallsign, game, tz)
+@pytest.mark.parametrize("neutral,at", [(False, " @ "), (True, " VS ")])
+def test_future_ball_at_off_keeps_the_text(smallsign, tz, monkeypatch, neutral, at):
+    game = dataclasses.replace(NEXT, neutral_site=neutral)
+    calls, board = _spy(monkeypatch, smallsign, game, tz, ball_at=False)
     assert not _icons(board)
-    assert [c[:3] for c in calls] == _no_ball(monkeypatch, _fresh(), game, tz)
-
-
-def test_future_ball_never_costs_stale(smallsign, tz, monkeypatch):
-    # STALE fits beside the short `TBD` card today: the ball must not cost it.
-    expected = _no_ball(monkeypatch, _fresh(), SHORT, tz, stale=True)
-    assert "STALE" in [c[0] for c in expected]
-    calls, board = _spy(monkeypatch, smallsign, SHORT, tz, stale=True)
-    texts = [c[0] for c in calls]
-    assert "STALE" in texts
-    if not _icons(board):
-        assert [c[:3] for c in calls] == expected
+    away, sep, home = calls[:3]
+    assert (away[0], sep[0], home[0]) == (game.away, at, game.home)
+    assert sep[1] == away[2] and home[1] == sep[2]  # one run, drawn flush
+    assert _rgb(sep[3]) == _rgb(pal.GRAY)
     _assert_clearance(_coalesce(calls), board.shape_extents, 160)
+
+
+def test_future_ball_is_narrower_than_the_at(smallsign):
+    w = measure_width(FONT_DEFAULT, " @ ", smallsign)
+    assert w > sb._ICON_GAP + sb._ICON + sb._ICON_GAP
 
 
 @pytest.mark.parametrize(
     "away,home", [("NY", "PHI"), ("UTAH", "PHI"), ("PHI", "GS")], ids=str
 )
 @pytest.mark.parametrize("stale", [False, True])
-def test_future_ball_never_costs_any_text(
+def test_future_ball_worst_case_clearance(
     smallsign, tz, monkeypatch, away, home, stale
 ):
+    monkeypatch.setattr(sb, "status_lines", lambda *_a: ("WED DEC 25", "10:00 PM"))
     game = dataclasses.replace(NEXT, away=away, home=home)
-    expected = _no_ball(monkeypatch, _fresh(), game, tz, stale=stale)
     calls, board = _spy(monkeypatch, smallsign, game, tz, stale=stale)
-    # Same texts in the same order (only the names may shift for the ball).
-    assert [c[0] for c in calls] == [c[0] for c in expected]
-    if not _icons(board):
-        assert [c[:3] for c in calls] == expected
+    assert len(_icons(board)) == 1
+    assert any(c[0].startswith("10:00") for c in calls)  # the tip always shows
     _assert_clearance(_coalesce(calls), board.shape_extents, 160)
 
 
 def test_ball_follows_cursor_and_y_offset(smallsign, tz):
     board = _board(SHORT, tz)
     board.draw(smallsign)
-    lit0 = _lit(smallsign, range(_LEFT, _LEFT + 8))
+    (icon,) = _icons(board)
+    lit0 = _lit(smallsign, range(icon[1], icon[2] + 1))
     moved = _fresh()
     shifted = _board(SHORT, tz)
     shifted.draw(moved, 20, y_offset=2)
-    assert _icons(shifted) == [("ICON", _LEFT + 20, _LEFT + 27)]
-    assert _lit(moved, range(_LEFT + 20, _LEFT + 28)) == {
+    assert _icons(shifted) == [("ICON", icon[1] + 20, icon[2] + 20)]
+    assert _lit(moved, range(icon[1] + 20, icon[2] + 21)) == {
         (x + 20, y + 2) for x, y in lit0
     }

@@ -13,11 +13,12 @@ push the window narrower instead of touching. When the centre cannot keep
 `_GAP` from both runs it shrinks: the period drops (clock alone), then
 `FINAL/OT` -> `F/OT`, then it ellipsizes. `STALE` joins the centre when it
 fits and otherwise REPLACES it (a stale clock is the one thing the board
-must not assert). A next-game card puts the 8x8 `:basketball.ball:` at
-`left`, vertically centred, with the names `_ICON_GAP` px after it, but
-only when the card it would show without the ball (`STALE`, weekday, AM/PM
-and all) still fits: the ball is the first thing to drop. The chips and the
-ball are recorded in `shape_extents` for the clearance tripwire.
+must not assert). A next-game card reads `NY (ball) PHI`: the 8x8
+`:basketball.ball:` IS the `@` (and the `VS` on a neutral site), vertically
+centred, `_ICON_GAP` px from each name. At 14 px it is narrower than the
+18 px ` @ ` it replaces, so it is always drawn. `ball_at = False` puts the
+text `@` / `VS` back and draws no ball. The chips and the ball are recorded
+in `shape_extents` for the clearance tripwire.
 """
 
 import time
@@ -51,7 +52,7 @@ X_ABBREV = 5
 _CHIP = 3
 _GAP = 6
 _ICON = 8  # the `:basketball.ball:` sprite on a next-game card
-_ICON_GAP = 2  # ball -> the names it labels
+_ICON_GAP = 3  # each name -> the ball between them
 _ELLIPSIS = "…"
 _STALE = "STALE"
 
@@ -71,6 +72,8 @@ class BasketballBandBoard(FrameAwareBase):
     highlight: dict[str, float] | None = attrs.field(default=None, kw_only=True)
     stale: bool = attrs.field(default=False, kw_only=True)
     font: Font = attrs.field(default=FONT_DEFAULT, kw_only=True)
+    # The next-game card's `@` / `VS` is the ball sprite; False keeps the text.
+    ball_at: bool = attrs.field(default=True, kw_only=True)
     # (name, x0, x1) of every shape the last draw painted, INCLUSIVE bounds.
     shape_extents: list[tuple[str, int, int]] = attrs.field(init=False, factory=list)
 
@@ -191,20 +194,19 @@ class BasketballBandBoard(FrameAwareBase):
     def _draw_future(
         self, g, now, tz, left, right, w, run_w, paint, real, ox, y_offset
     ) -> None:
-        """`NY @ PHI` in team colours left; the day label (AMBER) and the
-        tip-off (WHITE, `TBD` DIM) right-aligned against the home chip. The
-        day label sheds its weekday, then the tip-off its AM/PM, then the day
-        label goes, until the pair clears the names by `_GAP`. `STALE` sits
-        left of the day label only when it fits with a day label kept. The
-        ball goes in front of the names only when the run picked without it
-        still fits with it."""
+        """`NY (ball) PHI` in team colours left; the day label (AMBER) and
+        the tip-off (WHITE, `TBD` DIM) right-aligned against the home chip.
+        The day label sheds its weekday, then the tip-off its AM/PM, then the
+        day label goes, until the pair clears the names by `_GAP`. `STALE`
+        sits left of the day label only when it fits with a day label kept.
+        With `ball_at` off the ball is the text ` @ ` (` VS `, neutral) in
+        GRAY."""
         at = " VS " if g.neutral_site else " @ "
-        names: list[Part] = [
-            (g.away, pal.chip(g.away)[0], 0),
-            (at, pal.GRAY, 0),
-            (g.home, pal.chip(g.home)[0], 0),
-        ]
-        lo = left + run_w(names) + _GAP
+        ball_x = left + w(g.away) + _ICON_GAP
+        home_x = ball_x + _ICON + _ICON_GAP
+        if not self.ball_at:
+            home_x = left + w(g.away) + w(at)
+        lo = home_x + w(g.home) + _GAP
         day, tip = status_lines(g, now, tz)
         tip_color = pal.DIM if g.time_tbd and tip == "TBD" else pal.WHITE
         days = [day]
@@ -230,15 +232,18 @@ class BasketballBandBoard(FrameAwareBase):
         if self.stale:
             candidates += [parts_for(d, t, stale=True) for d, t in pairs if d]
         candidates += [parts_for(d, t, stale=False) for d, t in pairs]
-        pick = next((p for p in candidates if p and right - run_w(p) >= lo), None)
-        names_x = left
-        if pick is not None and right - run_w(pick) >= lo + _ICON + _ICON_GAP:
-            sprite(real, BALL, ox + left, y_offset + (16 - _ICON) // 2)
-            self.shape_extents.append(("ICON", ox + left, ox + left + _ICON - 1))
-            names_x = left + _ICON + _ICON_GAP
-        paint(names, names_x)
-        if pick is not None:
-            paint(pick, right - run_w(pick))
+        paint([(g.away, pal.chip(g.away)[0], 0)], left)
+        if self.ball_at:
+            sprite(real, BALL, ox + ball_x, y_offset + (16 - _ICON) // 2)
+            self.shape_extents.append(("ICON", ox + ball_x, ox + ball_x + _ICON - 1))
+        else:
+            paint([(at, pal.GRAY, 0)], left + w(g.away))
+        paint([(g.home, pal.chip(g.home)[0], 0)], home_x)
+        for parts in candidates:
+            x = right - run_w(parts)
+            if parts and x >= lo:
+                paint(parts, x)
+                return
 
 
 def _place(need: int, lo: int, hi: int, centre: int) -> int | None:
