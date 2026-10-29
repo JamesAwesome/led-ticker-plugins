@@ -166,7 +166,11 @@ a logo in place) on both physical signs — it spies `hires()` / `rect()` / `pai
 `test_demo_cards_keep_min_clearance` and the celebration's
 `test_detail_texts_keep_clearance_worst_case`. The smallsign twin is
 `tests/test_scoreboard.py::test_band_board_worst_case_clearance` (fed by the band board's
-`shape_extents`), with `test_band_board_worst_final_shrinks_to_f_ot`.
+`shape_extents`), with `test_band_board_worst_final_shrinks_to_f_ot`. The smallsign
+next-game ball (`"ICON"` in `shape_extents`, `emoji.BALL`) is drawn only when the run
+`_draw_future` picks WITHOUT it still fits with it — it never changes which day/tip/STALE
+text is shown (`test_future_ball_never_costs_any_text`); it may sit `_ICON_GAP` (2 px) from
+the names and keeps >= 6 px from the chip.
 
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert
 extents, bands, ordering and colors. Logo sprites are tested for footprint, never artwork.

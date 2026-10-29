@@ -175,7 +175,11 @@ everything stays inside the panel vertically (cap top >= 0, baseline < height). 
 bigsign chip is x2-7 for that reason, and the divider clamps to the measured left edge of
 any status line on its row. Any geometry/ladder change must pass it. The smallsign twin is
 `tests/test_scoreboard.py::test_band_board_worst_case_clearance` (texts per band, from
-measured columns).
+measured columns, plus the band board's `shape_extents`). The smallsign sport icon
+(`:hockey.puck:`, `emoji.PUCK`) is the only entry in `shape_extents` (`"ICON"`); it may sit
+`_ICON_GAP` (2 px) from the text it labels (the period on a live/final card, the matchup on
+a next game), keeps >= 6 px from everything else, and is the element LEFT OUT when it
+cannot (never the score, clock or period).
 
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert
 extents, bands, ordering and colors.

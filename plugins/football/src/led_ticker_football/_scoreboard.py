@@ -9,7 +9,11 @@ that column on a band with no situation text); the quarter (top band) and
 clock (bottom band) right-aligned. The x anchors are MINIMUMS: each column
 starts at least `_GAP` px past the widest item of the column before it
 (both bands share columns), so 2-digit scores push later columns right
-instead of touching. Shapes (dot, pips) are recorded in `shape_extents`
+instead of touching. The 8x8 sport icon (`:football.ball:`) sits
+`_ICON_GAP` px left of the quarter when it keeps `_GAP` from the top band's
+columns, and is left out otherwise; a next-game card puts it at x0 of the
+top band with the matchup `_ICON_GAP` px after it (left out when that would
+crowd the date). Shapes (dot, pips, icon) are recorded in `shape_extents`
 for the clearance tripwire.
 """
 
@@ -37,7 +41,8 @@ from led_ticker.plugin import (
 
 from led_ticker_football import _palette as pal
 from led_ticker_football._models import GameInfo, status_lines, winner
-from led_ticker_football._paint import pips, rect
+from led_ticker_football._paint import pips, rect, sprite
+from led_ticker_football.emoji import BALL
 from led_ticker_football.layouts.crawl import segments
 
 X_ABBREV = 5
@@ -50,6 +55,8 @@ _DOT = 3
 _PIP = 2
 _PIP_GAP = 1
 _PIPS_W = 3 * _PIP + 2 * _PIP_GAP
+_ICON = 8  # the sport icon (`:football.ball:`), one band tall
+_ICON_GAP = 2  # icon -> the text it labels
 
 
 @attrs.define
@@ -68,6 +75,10 @@ class FootballBandBoard(FrameAwareBase):
     shape_extents: list[tuple[str, int, int, int]] = attrs.field(
         init=False, factory=list
     )
+
+    def _icon(self, real: Any, x: int, y: int) -> None:
+        sprite(real, BALL, x, y)
+        self.shape_extents.append(("ICON", x, x + _ICON, 0))
 
     def _score_color(self, abbrev: str) -> Color:
         g = self.game
@@ -117,13 +128,18 @@ class FootballBandBoard(FrameAwareBase):
 
         if g.state == "future":
             y0, y1 = ys
-            x = ox + X_ABBREV
             at = " VS " if g.neutral_site else " @ "
-            for text, color in (
+            names = (
                 (g.away, pal.chip(g.away)[0]),
                 (at, pal.GRAY),
                 (g.home, pal.chip(g.home)[0]),
-            ):
+            )
+            run = sum(w(t) for t, _ in names) + (w(" BYE") if self.bye else 0)
+            x = ox + X_ABBREV
+            if _ICON + _ICON_GAP + run + _GAP <= width - w(top):
+                self._icon(real, ox, y_offset)
+                x = ox + _ICON + _ICON_GAP
+            for text, color in names:
                 x = draw_text(canvas, font, text, x, y0, color)
             if self.bye:
                 draw_text(canvas, font, " BYE", x, y0, pal.GRAY)
@@ -201,6 +217,19 @@ class FootballBandBoard(FrameAwareBase):
             if stale_band == band:
                 draw_text(canvas, font, "STALE", ox + sit_x, y, pal.DIM)
 
+        # Right edge of the top band's columns: abbrev and score, then the
+        # dot / pips (shape_extents so far), then the situation or STALE.
+        top_end = max(X_ABBREV + w(g.away), X_SCORE + w(scores[0]))
+        top_end = max(
+            [top_end] + [x1 - ox for _n, _x0, x1, b in self.shape_extents if b == 0]
+        )
+        if sit is not None and sit.possession == g.away and sit.down_distance:
+            top_end = max(top_end, sit_x + w(sit.down_distance))
+        if stale_band == 0:
+            top_end = max(top_end, sit_x + w("STALE"))
+        icon_x = width - w(top) - _ICON_GAP - _ICON if top else width - _ICON
+        if icon_x >= top_end + _GAP:
+            self._icon(real, ox + icon_x, y_offset)
         if g.state == "final":
             right(top, ys[0], pal.WHITE)
             right(bottom, ys[1], pal.AMBER)

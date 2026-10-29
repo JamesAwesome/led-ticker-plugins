@@ -13,8 +13,11 @@ push the window narrower instead of touching. When the centre cannot keep
 `_GAP` from both runs it shrinks: the period drops (clock alone), then
 `FINAL/OT` -> `F/OT`, then it ellipsizes. `STALE` joins the centre when it
 fits and otherwise REPLACES it (a stale clock is the one thing the board
-must not assert). The chips are recorded in `shape_extents` for the
-clearance tripwire.
+must not assert). A next-game card puts the 8x8 `:basketball.ball:` at
+`left`, vertically centred, with the names `_ICON_GAP` px after it, but
+only when the card it would show without the ball (`STALE`, weekday, AM/PM
+and all) still fits: the ball is the first thing to drop. The chips and the
+ball are recorded in `shape_extents` for the clearance tripwire.
 """
 
 import time
@@ -40,12 +43,15 @@ from led_ticker.plugin import (
 
 from led_ticker_basketball import _palette as pal
 from led_ticker_basketball._models import GameInfo, is_clutch, status_lines, winner
-from led_ticker_basketball._paint import rect
+from led_ticker_basketball._paint import rect, sprite
+from led_ticker_basketball.emoji import BALL
 from led_ticker_basketball.layouts.crawl import segments
 
 X_ABBREV = 5
 _CHIP = 3
 _GAP = 6
+_ICON = 8  # the `:basketball.ball:` sprite on a next-game card
+_ICON_GAP = 2  # ball -> the names it labels
 _ELLIPSIS = "…"
 _STALE = "STALE"
 
@@ -134,7 +140,9 @@ class BasketballBandBoard(FrameAwareBase):
         right = width - _CHIP - _GAP  # end-exclusive edge of the home run
 
         if g.state == "future":
-            self._draw_future(g, now, tz, left, right, w, run_w, paint)
+            self._draw_future(
+                g, now, tz, left, right, w, run_w, paint, real, ox, y_offset
+            )
             return canvas, cursor_pos + canvas.width
 
         away_s, home_s = str(g.away_score), str(g.home_score)
@@ -180,19 +188,22 @@ class BasketballBandBoard(FrameAwareBase):
         hue = pal.RED if is_clutch(g) else pal.WHITE
         return [[(label, pal.AMBER, 0), (f" {clock}", hue, 0)], [(clock, hue, 0)]]
 
-    def _draw_future(self, g, now, tz, left, right, w, run_w, paint) -> None:
+    def _draw_future(
+        self, g, now, tz, left, right, w, run_w, paint, real, ox, y_offset
+    ) -> None:
         """`NY @ PHI` in team colours left; the day label (AMBER) and the
         tip-off (WHITE, `TBD` DIM) right-aligned against the home chip. The
         day label sheds its weekday, then the tip-off its AM/PM, then the day
         label goes, until the pair clears the names by `_GAP`. `STALE` sits
-        left of the day label only when it fits with a day label kept."""
+        left of the day label only when it fits with a day label kept. The
+        ball goes in front of the names only when the run picked without it
+        still fits with it."""
         at = " VS " if g.neutral_site else " @ "
         names: list[Part] = [
             (g.away, pal.chip(g.away)[0], 0),
             (at, pal.GRAY, 0),
             (g.home, pal.chip(g.home)[0], 0),
         ]
-        paint(names, left)
         lo = left + run_w(names) + _GAP
         day, tip = status_lines(g, now, tz)
         tip_color = pal.DIM if g.time_tbd and tip == "TBD" else pal.WHITE
@@ -219,11 +230,15 @@ class BasketballBandBoard(FrameAwareBase):
         if self.stale:
             candidates += [parts_for(d, t, stale=True) for d, t in pairs if d]
         candidates += [parts_for(d, t, stale=False) for d, t in pairs]
-        for parts in candidates:
-            x = right - run_w(parts)
-            if parts and x >= lo:
-                paint(parts, x)
-                return
+        pick = next((p for p in candidates if p and right - run_w(p) >= lo), None)
+        names_x = left
+        if pick is not None and right - run_w(pick) >= lo + _ICON + _ICON_GAP:
+            sprite(real, BALL, ox + left, y_offset + (16 - _ICON) // 2)
+            self.shape_extents.append(("ICON", ox + left, ox + left + _ICON - 1))
+            names_x = left + _ICON + _ICON_GAP
+        paint(names, names_x)
+        if pick is not None:
+            paint(pick, right - run_w(pick))
 
 
 def _place(need: int, lo: int, hi: int, centre: int) -> int | None:

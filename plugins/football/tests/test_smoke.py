@@ -11,5 +11,9 @@ def test_entry_point_registers_football_namespace():
         from led_ticker.widgets import get_widget_class
 
         assert get_widget_class("football.scores") is not None
+
+        from led_ticker.plugin import emoji_slugs
+
+        assert "football.ball" in emoji_slugs()
     finally:
         L.reset_plugins()

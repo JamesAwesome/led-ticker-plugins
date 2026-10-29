@@ -5,8 +5,10 @@ The entry-point name ``football`` is the plugin namespace, so the widget is
 ``type = "football.scores"``. Data: ESPN's public scoreboard API (no key).
 """
 
+from led_ticker_football.emoji import BALL
 from led_ticker_football.scores import FootballScoreMonitor
 
 
 def register(api):
     api.widget("scores")(FootballScoreMonitor)
+    api.emoji("ball", BALL)

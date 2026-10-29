@@ -9,6 +9,11 @@ period (top band) and clock (bottom band) right-aligned. The x anchors are
 MINIMUMS: each column starts at least `_GAP` px past the widest text of
 the column before it (both bands share columns), so 2-digit scores, the
 `STALE` label and 2-digit SOG push later columns right instead of touching.
+The 8x8 sport icon (`:hockey.puck:`) sits `_ICON_GAP` px left of the period
+when it keeps `_GAP` from the top band's columns, and is left out
+otherwise; a next-game card puts it at x0 of the top band with the matchup
+`_ICON_GAP` px after it (left out when that would crowd the date). The icon
+is recorded in `shape_extents` for the clearance tripwire.
 """
 
 import time
@@ -41,7 +46,8 @@ from led_ticker_hockey._models import (
     status_lines,
     winner,
 )
-from led_ticker_hockey._paint import rect
+from led_ticker_hockey._paint import rect, sprite
+from led_ticker_hockey.emoji import PUCK
 from led_ticker_hockey.layouts.crawl import segments
 
 _X_ABBREV = 5
@@ -50,6 +56,8 @@ _X_SOG_LABEL = 40
 _X_SOG_VALUE = 60
 _X_SITUATION = 84
 _GAP = 6
+_ICON = 8  # the sport icon (`:hockey.puck:`), one band tall
+_ICON_GAP = 2  # icon -> the text it labels
 
 
 @attrs.define
@@ -64,6 +72,14 @@ class HockeyBandBoard(FrameAwareBase):
     highlight: tuple[str, float] | None = attrs.field(default=None, kw_only=True)
     stale: bool = attrs.field(default=False, kw_only=True)
     font: Font = attrs.field(default=FONT_SMALL, kw_only=True)
+    # (name, x0, x1, band) of every shape the last draw painted (the icon).
+    shape_extents: list[tuple[str, int, int, int]] = attrs.field(
+        init=False, factory=list
+    )
+
+    def _icon(self, real: Any, x: int, y: int) -> None:
+        sprite(real, PUCK, x, y)
+        self.shape_extents.append(("ICON", x, x + _ICON, 0))
 
     def _score_color(self, abbrev: str) -> Color:
         g = self.game
@@ -85,6 +101,7 @@ class HockeyBandBoard(FrameAwareBase):
     ) -> DrawResult:
         g = self.game
         font = self.font
+        self.shape_extents = []
         # Core fills `bg_color` before every draw; never clear here (a scroll
         # section's earlier widgets are already on the canvas this tick).
         ox = cursor_pos  # a scroll section's cursor; 0 when held
@@ -111,12 +128,18 @@ class HockeyBandBoard(FrameAwareBase):
 
         if g.state == "future":
             y0, y1 = ys
-            x = ox + _X_ABBREV
-            for text, color in (
+            names = (
                 (g.away, pal.chip(g.away)[0]),
                 (" @ ", pal.GRAY),
                 (g.home, pal.chip(g.home)[0]),
-            ):
+            )
+            run = sum(measure_width(font, t, canvas) for t, _ in names)
+            date_x = width - (measure_width(font, top, canvas) if top else 0)
+            x = ox + _X_ABBREV
+            if _ICON + _ICON_GAP + run + _GAP <= date_x:
+                self._icon(real, ox, y_offset)
+                x = ox + _ICON + _ICON_GAP
+            for text, color in names:
                 x = draw_text(canvas, font, text, x, y0, color)
             right(top, y0, pal.AMBER)
             draw_text(canvas, font, g.venue.upper(), ox + _X_ABBREV, y1, pal.DIM)
@@ -147,26 +170,46 @@ class HockeyBandBoard(FrameAwareBase):
         value_x = col(_X_SOG_VALUE, [t for t in labels if t], label_end)
         value_end = value_x + max(w(t) for t in values)
         sit_x = col(_X_SITUATION, [t for t in values if t], value_end)
+        top_end = 0  # right edge of the top band's columns
         for band, (abbrev, _, _) in enumerate(rows):
             y = ys[band]
             # the chip rides PushUp/PushDown with the text
             r0 = band * half_h + y_offset
             primary, _ = pal.chip(abbrev)
             rect(real, ox, r0, ox + 2, r0 + half_h - 2 + band, primary)
-            draw_text(canvas, font, abbrev, ox + _X_ABBREV, y, primary)
-            color = self._score_color(abbrev)
-            draw_text(canvas, font, scores[band], ox + _X_SCORE, y, color)
+            ends = [
+                draw_text(canvas, font, abbrev, ox + _X_ABBREV, y, primary),
+                draw_text(
+                    canvas,
+                    font,
+                    scores[band],
+                    ox + _X_SCORE,
+                    y,
+                    self._score_color(abbrev),
+                ),
+            ]
             if labels[band]:
-                draw_text(canvas, font, labels[band], ox + label_x, y, pal.DIM)
+                ends.append(
+                    draw_text(canvas, font, labels[band], ox + label_x, y, pal.DIM)
+                )
             if values[band]:
-                draw_text(canvas, font, values[band], ox + value_x, y, pal.CYAN)
+                ends.append(
+                    draw_text(canvas, font, values[band], ox + value_x, y, pal.CYAN)
+                )
             if sit is not None:
                 if sit.pp_team == abbrev:
                     pp = fmt_clock(live_pp_seconds(g, now))
                     text = f"PP {pp}".rstrip()
-                    draw_text(canvas, font, text, ox + sit_x, y, pal.AMBER)
+                    ends.append(draw_text(canvas, font, text, ox + sit_x, y, pal.AMBER))
                 elif sit.en_team == abbrev:
-                    draw_text(canvas, font, "EN", ox + sit_x, y, pal.AMBER)
+                    ends.append(draw_text(canvas, font, "EN", ox + sit_x, y, pal.AMBER))
+            if band == 0:
+                top_end = max(ends) - ox
+
+        top_w = measure_width(font, top, canvas) if top else 0
+        icon_x = width - top_w - _ICON_GAP - _ICON if top else width - _ICON
+        if icon_x >= top_end + _GAP:
+            self._icon(real, ox + icon_x, y_offset)
 
         if g.state == "final":
             right(top, ys[0], pal.WHITE)

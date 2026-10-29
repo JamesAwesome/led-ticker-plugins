@@ -12,6 +12,7 @@ import math
 
 from led_ticker.plugin import (
     Color,
+    PixelData,
     ScaledCanvas,
     draw_text,
     fit_text_size,
@@ -121,3 +122,10 @@ def rect(real, x0: int, y0: int, x1: int, y1: int, color: Color) -> None:
     for y in range(max(0, y0), min(real.height - 1, y1) + 1):
         for x in range(max(0, x0), min(real.width - 1, x1) + 1):
             real.SetPixel(x, y, color.red, color.green, color.blue)
+
+
+def sprite(real, pixels: PixelData, x: int, y: int) -> None:
+    """Paint an 8x8 emoji sprite with its top-left at (x, y), clipped."""
+    for dx, dy, r, g, b in pixels:
+        if 0 <= x + dx < real.width and 0 <= y + dy < real.height:
+            real.SetPixel(x + dx, y + dy, r, g, b)
