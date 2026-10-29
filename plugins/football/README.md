@@ -30,7 +30,21 @@ docker compose up -d --build
 pip install led-ticker-football
 ```
 
-Once installed, the `football.scores` widget (and the `:football.ball:` emoji) is available automatically.
+Once installed, the `football.scores` widget (and the `:football.ball:` emoji, plus a logo emoji for every team) is available automatically.
+
+### Team logo emoji
+
+Every bundled logo is also an inline emoji, named after the team code in lower case: `:football.phi:`, `:football.dal:`, and so on. Use them in any text, such as a message, a section title or a two-row card:
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = ":football.phi: PHILLY :football.phi:"
+font = "Inter-Bold"
+font_size = 28
+```
+
+On the bigsign and longboi a logo emoji is 32 px tall, cropped to the mark and up to 64 px wide, so a wordmark keeps its shape. On the smallsign it is an 8×8 sprite, which is a splash of team colour rather than a readable logo.
 
 ## Reading the board (if you don't follow football)
 
@@ -138,6 +152,7 @@ Validate the chosen file with `led-ticker validate <path>` before starting the s
 - **Scores can collapse.** Polls are 10–15 s apart, so a touchdown and its extra point usually arrive together (`+PAT` from the start). Two scores inside one poll (a touchdown and a field goal, say) celebrate once.
 - **The sign runs ahead of your TV.** The feed is near real-time, broadcasts are delayed, so a score can appear on the panel before you see it on screen. There is no spoiler delay.
 - **Logos are small.** The bigsign's logos are 28 px, so thin detail in a mark reads as a blob; the longboi's 48 px logos hold up better. Near-black pixels are dropped as invisible on the panel, so a mostly-black mark shows only its lighter parts.
+- **Logo emoji on the smallsign are colour splashes.** At 8×8 a logo keeps its colours and rough shape, not its detail. A mostly-navy or mostly-black mark (the Capitals) is dim on any sign.
 - NFL only.
 
 ## Data

@@ -150,6 +150,18 @@ lives in `_logos.py` at decode time, so a tuning change needs no asset refresh. 
 `test_logos_painted_on_both_sides`, `test_logos_false_paints_chips_and_abbrevs`.
 Smallsign never shows logos.
 
+**Every team logo is an inline emoji** (`register` → `_logos.emoji(abbrev)`) — `:basketball.<team>:`
+(lower-case code), a lo-res + hi-res pair per team, because inline text resolves through the
+lo-res registry and a hi-res-only slug renders as literal text. `emoji` crops to the alpha
+bbox and fits aspect-preserving (`_decode_fit`): hi-res `EMOJI_HIRES` 32 tall (core's inline
+sprite height) up to `EMOJI_HIRES_MAX_W` 64 wide, lo-res within 8×8 with the lenient
+`TINY_ALPHA_MIN` and no premultiply (the board's square resize + thresholds leave wide marks —
+WSH, NYJ — blank at 8×8). Both are trimmed flush left with `physical_width` set: core
+auto-trims its OWN hi-res emoji but stores plugin ones as given. `emoji` is cached and NEVER
+raises; a team whose pair is None is skipped, never fatal to `register` (a raise there drops
+the whole plugin, widget included). It does not share `sprite`'s cache or thresholds — keep
+the board's look and the emoji's tuning independent.
+
 **`small_font` is rejected; the smallsign board is ONE 16-row band in `font`** —
 `validate_config` returns a message for a `small_font` key (football's two 8-row bands in 5x8
 do not exist here) (`test_validate_rejects_small_font`). `logos` must be a bool

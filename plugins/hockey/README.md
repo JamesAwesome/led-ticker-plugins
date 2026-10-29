@@ -30,7 +30,21 @@ docker compose up -d --build
 pip install led-ticker-hockey
 ```
 
-Once installed, the `hockey.scores` widget (and the `:hockey.puck:` emoji) is available automatically.
+Once installed, the `hockey.scores` widget (and the `:hockey.puck:` emoji, plus a logo emoji for every team) is available automatically.
+
+### Team logo emoji
+
+Every bundled logo is also an inline emoji, named after the team code in lower case: `:hockey.phi:`, `:hockey.nyr:`, and so on. Use them in any text, such as a message, a section title or a two-row card:
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = ":hockey.phi: PHILLY :hockey.phi:"
+font = "Inter-Bold"
+font_size = 28
+```
+
+On the bigsign and longboi a logo emoji is 32 px tall, cropped to the mark and up to 64 px wide, so a wordmark keeps its shape. On the smallsign it is an 8×8 sprite, which is a splash of team colour rather than a readable logo.
 
 ## Widget: `hockey.scores`
 
@@ -128,6 +142,7 @@ Validate the chosen file with `led-ticker validate <path>` before starting the s
 - **Scale-1 clock updates per poll.** On a smallsign using `layout = "ticker"` the clock text refreshes with each poll rather than every second (the scoreboards, including the smallsign bands, and the hi-res crawl tick every second).
 - **The sign runs ahead of your TV.** The feed is near real-time, broadcasts are delayed, so a goal can appear on the panel before you see it on screen. There is no spoiler delay.
 - **Logos are small.** The bigsign board's logos are 28 px (36 px in the celebration), so thin detail in a mark reads as a blob; the longboi's 48 px logos hold up better. Near-black pixels are dropped as invisible on the panel.
+- **Logo emoji on the smallsign are colour splashes.** At 8×8 a logo keeps its colours and rough shape, not its detail. A mostly-navy or mostly-black mark (the Capitals) is dim on any sign.
 - NHL only.
 
 ## Data

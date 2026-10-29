@@ -30,7 +30,21 @@ docker compose up -d --build
 pip install led-ticker-basketball
 ```
 
-Once installed, the `basketball.scores` widget (and the `:basketball.ball:` emoji) is available automatically.
+Once installed, the `basketball.scores` widget (and the `:basketball.ball:` emoji, plus a logo emoji for every team) is available automatically.
+
+### Team logo emoji
+
+Every bundled logo is also an inline emoji, named after the team code in lower case: `:basketball.phi:`, `:basketball.bos:`, and so on. Use them in any text, such as a message, a section title or a two-row card:
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = ":basketball.phi: PHILLY :basketball.phi:"
+font = "Inter-Bold"
+font_size = 28
+```
+
+On the bigsign and longboi a logo emoji is 32 px tall, cropped to the mark and up to 64 px wide, so a wordmark keeps its shape. On the smallsign it is an 8×8 sprite, which is a splash of team colour rather than a readable logo.
 
 ## Reading the board (if you don't follow basketball)
 
@@ -140,6 +154,7 @@ Validate the chosen file with `led-ticker validate <path>` before starting the s
 - **The live and final fixtures are hand-written.** No NBA game was captured live while the plugin was built, so the `leaders`, `linescores` and in-game clock parsing follow the community-documented shape and a captured scheduled-game payload (the hand-written fixtures are flagged `_handwritten` pending a real capture). If a field is absent or shaped differently the board simply omits it and everything else keeps working.
 - **The sign runs ahead of your TV.** The feed is near real-time, broadcasts are delayed, so a score can appear on the panel before you see it on screen. There is no spoiler delay.
 - **Logos at 36 px lose fine detail.** The bigsign logos are 36 px, and thin lettering (the Knicks' wordmark especially) reads as a blob. The longboi's 48 px logos hold up better. Near-black pixels are dropped as invisible on the panel.
+- **Logo emoji on the smallsign are colour splashes.** At 8×8 a logo keeps its colours and rough shape, not its detail. A mostly-navy or mostly-black mark (the Capitals) is dim on any sign.
 - **Smallsign dark team colours read dim.** A very dark primary (`UTAH` purple, for one) is lifted but still reads dimmer than the others at 3 px chip width.
 - **Bigsign chip fallback with two 3-digit scores** (`logos = false`, or a missing logo) drops the abbreviation to keep clear of the score.
 - NBA only.
