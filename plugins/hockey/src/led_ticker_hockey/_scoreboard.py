@@ -170,6 +170,7 @@ class HockeyBandBoard(FrameAwareBase):
         value_x = col(_X_SOG_VALUE, [t for t in labels if t], label_end)
         value_end = value_x + max(w(t) for t in values)
         sit_x = col(_X_SITUATION, [t for t in values if t], value_end)
+        top_end = 0  # right edge of the top band's columns
         for band, (abbrev, _, _) in enumerate(rows):
             y = ys[band]
             # the chip rides PushUp/PushDown with the text

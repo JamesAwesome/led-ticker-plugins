@@ -18,8 +18,9 @@ _ROWS = [
     ".BBB....",
 ]
 BALL: PixelData = [
-    (x, y, *(_W if c == "W" else _B))
+    (x, y, color[0], color[1], color[2])
     for y, row in enumerate(_ROWS)
     for x, c in enumerate(row)
     if c != "."
+    for color in (_W if c == "W" else _B,)
 ]

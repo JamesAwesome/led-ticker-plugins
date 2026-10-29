@@ -17,8 +17,9 @@ _ROWS = [
     ".GGG....",
 ]
 PUCK: PixelData = [
-    (x, y, *(_G if c == "G" else _S))
+    (x, y, color[0], color[1], color[2])
     for y, row in enumerate(_ROWS)
     for x, c in enumerate(row)
     if c != "."
+    for color in (_G if c == "G" else _S,)
 ]
