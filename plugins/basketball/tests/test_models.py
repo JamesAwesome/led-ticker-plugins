@@ -81,6 +81,22 @@ def test_parse_final_ot_event():
     assert g is not None and g.final_ot is True
     assert g.status == "STATUS_FINAL" and g.period == 5
     assert status_lines(g, NOW, None) == ("FINAL", "OT")  # type: ignore[arg-type]
+    assert g.away_linescores == (22, 29, 34, 20, 12)
+    assert g.home_linescores == (32, 23, 30, 20, 6)
+
+
+def test_parse_real_phi_final():
+    # 2026-10-28 PHI @ IND, captured after the buzzer (not hand-written).
+    g = parse_event(_load("event_final_phi.json"), polled_at=0.0)
+    assert g is not None and (g.state, g.away, g.home) == ("final", "PHI", "IND")
+    assert (g.away_score, g.home_score) == (114, 109)
+    assert (g.away_record, g.home_record) == ("4-1", "2-3")
+    assert g.away_leader == Leader("T. MAXEY", 27)
+    assert g.home_leader == Leader("P. SIAKAM", 26)
+    assert g.away_linescores == (25, 37, 13, 39) and not g.final_ot
+    fe = final_event(g)
+    assert fe is not None and (fe.winner, fe.loser) == ("PHI", "IND")
+    assert fe.leader == g.away_leader
 
 
 def test_parse_live_event_leaders_and_linescores():
@@ -218,8 +234,8 @@ def test_final_event_carries_winner_leader():
     ot = parse_event(_load("event_final_ot.json"), polled_at=0.0)
     assert ot is not None
     fe = final_event(ot)
-    assert fe is not None and fe.winner == "NY" and fe.final_ot
-    assert fe.leader == ot.home_leader
+    assert fe is not None and fe.winner == "SA" and fe.final_ot
+    assert fe.leader == ot.away_leader
     assert fe == final_event(replace(ot))
 
 
