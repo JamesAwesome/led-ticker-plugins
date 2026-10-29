@@ -30,7 +30,7 @@ docker compose up -d --build
 pip install led-ticker-football
 ```
 
-Once installed, the `football.scores` widget is available automatically.
+Once installed, the `football.scores` widget (and the `:football.ball:` emoji) is available automatically.
 
 ## Reading the board (if you don't follow football)
 
@@ -85,12 +85,12 @@ Football's unit is the **week**: every team plays once between Thursday and Mond
 
 `layout = "auto"` resolves to `scoreboard` on all three reference signs.
 
-- **Smallsign (160×16):** two 8-row bands, away on top. Each band: a 3-px brand chip, the abbreviation, the score, the possession dot, three timeout pips, and the down & distance on the band of the team with the ball (`3RD & 4`, cyan; red in the red zone). The quarter is right-aligned in the top band, the clock in the bottom band. The ball spot is omitted at this size (the `ticker` layout carries it).
+- **Smallsign (160×16):** two 8-row bands, away on top. Each band: a 3-px brand chip, the abbreviation, the score, the possession dot, three timeout pips, and the down & distance on the band of the team with the ball (`3RD & 4`, cyan; red in the red zone). The quarter is right-aligned in the top band, with a small football icon just left of it so the card reads as football at a glance next to other sports; the clock is in the bottom band. The icon is left out when the top band is too full for it. The ball spot is omitted at this size (the `ticker` layout carries it).
 - **Bigsign (256×64):** two held rows, one per team, with a dotted divider. Each row: chip, abbreviation, a large white score, the possession triangle and the timeout pips. The right status column shows the quarter (amber), the clock (white) and `3RD & 4 · PHI 38` (cyan, red in the red zone; the spot is dropped first when the column is narrow).
 - **Longboi (512×64):** a full scoreboard. The away team fills the left third (chip, large abbreviation, pips beneath, huge score), the home team mirrors it on the right, and the centre holds the quarter, a large clock and the down & distance line. The possession triangle sits between the possessing team's score and the centre.
 - **`ticker`:** one scrolling line per game using the same wording as the boards: `PHI 20 · NYG 17 · Q4 2:13 · NYG BALL 2ND & 7 · PHI 24 · TOL 1-2`.
 
-Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows the day (`TONIGHT`, `SUN NOV 1`, amber), the kickoff (`TBD` when the league hasn't set it) and the venue (dim), with the teams drawn per sign. Smallsign shows `PHI @ NYG` (or `VS` at a neutral site) in team colors, no chips and no records, with ` BYE` after it in a bye week. Bigsign shows the away chip, `PHI 5-2 @ NYG 4-3` (the records drop first when the line is too wide) and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Longboi shows both chips and abbreviations on their sides with the records, the team nicknames and that label, and no `@`. Nothing on the physical boards is user-tunable (fixed palette).
+Halftime, the end of a quarter and a delay show `HALF` / `END Q3` / `DELAY` with no clock and no situation. A final shows `FINAL` (plus `OT`) with the winner's score green. A next game shows the day (`TONIGHT`, `SUN NOV 1`, amber), the kickoff (`TBD` when the league hasn't set it) and the venue (dim), with the teams drawn per sign. Smallsign shows the football icon, then `PHI @ NYG` (or `VS` at a neutral site) in team colors, no chips and no records, with ` BYE` after it in a bye week. Bigsign shows the away chip, `PHI 5-2 @ NYG 4-3` (the records drop first when the line is too wide) and a small `NEXT GAME` / `BYE WEEK` / `PPD` label. Longboi shows both chips and abbreviations on their sides with the records, the team nicknames and that label, and no `@`. Nothing on the physical boards is user-tunable (fixed palette).
 
 ### Scoring celebration
 

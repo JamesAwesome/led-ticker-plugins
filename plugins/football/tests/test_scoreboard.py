@@ -9,6 +9,7 @@ import led_ticker_football._scoreboard as sb
 from led_ticker_football import _palette as pal
 from led_ticker_football._models import Situation, build_demo_games
 from led_ticker_football._scoreboard import FootballBandBoard, build_ticker_message
+from led_ticker_football.emoji import BALL
 
 NOW = 1_700_000_000.0
 GAMES, _TD = build_demo_games(NOW)
@@ -163,6 +164,29 @@ def test_band_board_honours_cursor_pos(smallsign, tz):
     }
 
 
+@pytest.mark.parametrize("game", [LIVE, NEXT], ids=["live", "next"])
+def test_icon_follows_cursor_pos(smallsign, tz, game):
+    board = _board(game, tz)
+    board.draw(smallsign)
+    icon0 = next(e for e in board.shape_extents if e[0] == "ICON")
+    moved = _board(game, tz)
+    moved.draw(_fresh(), 20)
+    icon1 = next(e for e in moved.shape_extents if e[0] == "ICON")
+    assert icon1 == ("ICON", icon0[1] + 20, icon0[2] + 20, icon0[3])
+
+
+@pytest.mark.parametrize("game", [LIVE, NEXT], ids=["live", "next"])
+def test_icon_follows_y_offset(smallsign, tz, game):
+    board = _board(game, tz)
+    board.draw(smallsign)
+    _, x0, x1, _ = next(e for e in board.shape_extents if e[0] == "ICON")
+    lit0 = _lit(smallsign, TOP, range(x0, x1))
+    assert len(lit0) == len(BALL)
+    moved = _fresh()
+    _board(game, tz).draw(moved, y_offset=4)
+    assert _lit(moved, range(16), range(x0, x1)) >= {(x, y + 4) for x, y in lit0}
+
+
 def test_band_board_shapes_follow_y_offset(smallsign, tz):
     """PushUp/PushDown hand every draw a y_offset: chips, the possession
     dot and the pips must move with the text, not sit at rest."""
@@ -220,6 +244,8 @@ def _spy_texts(monkeypatch, canvas, game, tz, **kw):
 
 
 def _assert_band_clearance(calls, width):
+    """Every pair on a band keeps 6 px, except the sport icon and the item it
+    labels (the next one to its right), which may sit `_ICON_GAP` apart."""
     for i, a in enumerate(calls):
         assert a[1] >= 0 and a[2] <= width, f"{a[0]!r} off-panel: {a[1]}..{a[2]}"
         for b in calls[i + 1 :]:
@@ -227,6 +253,8 @@ def _assert_band_clearance(calls, width):
                 continue
             left, right = (a, b) if a[1] <= b[1] else (b, a)
             gap = right[1] - left[2]
+            if left[0] == "ICON" and gap == sb._ICON_GAP:
+                continue
             assert gap >= 6, f"{left[0]!r}..{left[2]} / {right[0]!r} @{right[1]}"
 
 
@@ -301,3 +329,57 @@ def _coalesce(calls):
         else:
             out.append((text, x0, x1, band))
     return out
+
+
+def _icon(board):
+    return [e for e in board.shape_extents if e[0] == "ICON"]
+
+
+def test_future_icon_left_of_matchup(smallsign, tz, monkeypatch):
+    calls = _spy_texts(monkeypatch, smallsign, NEXT, tz)
+    assert ("ICON", 0, sb._ICON, 0) in calls
+    top_texts = [c for c in calls if c[3] == 0 and c[0] != "ICON"]
+    assert min(c[1] for c in top_texts) == sb._ICON + sb._ICON_GAP
+    venue = next(c for c in calls if c[3] == 1 and c[1] < 100)
+    assert venue[1] == sb.X_ABBREV
+    lit = _lit(smallsign, TOP, range(0, sb._ICON))
+    assert lit and _px(smallsign, TOP, range(0, sb._ICON), pal.WHITE)
+
+
+@pytest.mark.parametrize(
+    "game,status", [(LIVE, "Q4"), (HALF, "HALF"), (FINAL_OT, "FINAL")]
+)
+def test_live_and_final_icon_left_of_status(smallsign, tz, monkeypatch, game, status):
+    calls = _spy_texts(monkeypatch, smallsign, game, tz)
+    icon = next(c for c in calls if c[0] == "ICON")
+    st = next(c for c in calls if c[0] == status and c[3] == 0)
+    assert icon[3] == 0
+    assert icon[2] + sb._ICON_GAP == st[1]
+    _assert_band_clearance(calls, smallsign.width)
+
+
+def test_icon_drops_when_top_band_crowded(smallsign, tz, monkeypatch):
+    # The away team has the ball (its down & distance is on the top band)
+    # and the top status is long: the icon would crowd `1ST & GOAL`.
+    sit = dataclasses.replace(WORST_LIVE.situation, possession=WORST_LIVE.away)
+    game = dataclasses.replace(WORST_LIVE, situation=sit)
+    monkeypatch.setattr(sb, "status_lines", lambda *_a: ("DELAYED", "2:00"))
+    calls = _spy_texts(monkeypatch, smallsign, game, tz)
+    assert "DELAYED" in [c[0] for c in calls]
+    assert not [c for c in calls if c[0] == "ICON"]
+    _assert_band_clearance(calls, smallsign.width)
+
+
+def test_future_icon_bye_long_codes_clear(smallsign, tz, monkeypatch):
+    game = dataclasses.replace(BYE, away="WSH", home="JAX")
+    calls = _spy_texts(monkeypatch, smallsign, game, tz, bye=True)
+    assert " BYE" in [c[0] for c in calls]
+    _assert_band_clearance(_coalesce(calls), smallsign.width)
+
+
+def test_future_icon_drops_when_matchup_crowds_date(smallsign, tz, monkeypatch):
+    monkeypatch.setattr(sb, "status_lines", lambda *_a: ("WEDNESDAY DEC 31", "1:00 PM"))
+    calls = _spy_texts(monkeypatch, smallsign, BYE, tz, bye=True)
+    assert not [c for c in calls if c[0] == "ICON"]
+    top = [c for c in calls if c[3] == 0]
+    assert min(c[1] for c in top) == sb.X_ABBREV

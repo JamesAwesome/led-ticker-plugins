@@ -160,7 +160,11 @@ next game, `STALE`) on both physical signs; it spies `rect()` / `triangle()` / `
 `_dotted()` so the chips, possession triangle, timeout pips and divider keep >= 6 px from
 any text sharing their rows. The smallsign twin is
 `tests/test_scoreboard.py::test_band_board_worst_case_clearance`, fed by the band board's
-`shape_extents`. The bigsign celebration detail puts `+PAT` on its own bottom row because
+`shape_extents`. The smallsign sport icon (`:football.ball:`, `emoji.BALL`) is in
+`shape_extents` as `"ICON"`; it may sit `_ICON_GAP` (2 px) from the text it labels (the
+quarter on a live/final card, the matchup on a next game) and keeps >= 6 px from everything
+else, and it is the element that is LEFT OUT when it cannot (never the score, clock or
+status). The bigsign celebration detail puts `+PAT` on its own bottom row because
 `TOUCHDOWN` plus the score run cannot share row 1.
 
 **Hi-res text is never pixel-pinned in tests** (freetype differs macOS vs Linux) — assert
