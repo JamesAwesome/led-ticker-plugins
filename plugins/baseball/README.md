@@ -1,6 +1,6 @@
 # led-ticker-baseball
 
-MLB scores, standings, promotions, Statcast, and attendance widgets, a rolling-baseball sprite transition, and a `:baseball.ball:` emoji for [led-ticker](https://github.com/JamesAwesome/led-ticker). Live game data comes from MLB's free StatsAPI — no API key required.
+MLB scores, standings, promotions, Statcast, and attendance widgets, a rolling-baseball sprite transition, a `:baseball.ball:` emoji and a logo emoji for every team for [led-ticker](https://github.com/JamesAwesome/led-ticker). Live game data comes from MLB's free StatsAPI — no API key required.
 
 ## Screenshots
 
@@ -51,7 +51,7 @@ pip install led-ticker-baseball
 
 See the led-ticker [Plugins docs](https://docs.ledticker.dev/plugins/) for the constraint-based install the Docker image uses.
 
-Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` / `baseball.attendance` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji are available automatically.
+Once installed, the `baseball.scores` / `baseball.standings` / `baseball.promotions` / `baseball.statcast` / `baseball.attendance` widgets, the `baseball.roll*` transitions, and the `:baseball.ball:` emoji (plus a logo emoji for every team) are available automatically.
 
 ## Widgets
 
@@ -76,6 +76,8 @@ Fetches live game state for a tracked team and renders its current series. Four 
 | scale>1, real width < 400px (bigsign) | `two_row` |
 | scale>1, real width >= 400px (longboi) | `scoreboard` |
 
+**Team logos (bigsign, longboi):** each team carries its bundled logo. On the bigsign `two_row` card a 24 px logo leads each abbreviation in the top band; when two long abbreviations, two-digit scores and the series dashes would crowd the band, both abbreviations shrink together. On the longboi `scoreboard` a 30 px logo sits at each outer edge beside the score. Both next-game matchups put each team's logo in front of its name. With `logos = false`, or for a team with no bundled logo, that side is drawn exactly as it is without logos. The smallsign never shows logos, and neither does the `ticker` crawl.
+
 Explicit layout names skip resolution and always mean what they say, with one width-fit guard: `layout = "scoreboard"` on a panel narrower than 400 real px (bigsign, 256 real px) degrades to `two_row` instead — the physical scoreboard's fixed anchors assume a >=400px panel and would otherwise silently clip the entire home team's name/score/dashes/bases to nothing. Explicit `layout = "two_row"` (or `"ticker"`) always renders as requested at any width.
 
 > **Migration note:** before this release, the default `layout` was `"ticker"` on every sign. The new default is `"auto"`, which keeps `ticker` on smallsign but switches bigsign/longboi to the new physical `two_row`/`scoreboard` renderers unless you set `layout` explicitly. If you want the old scroll-everywhere behavior back, set `layout = "ticker"` explicitly in your config.
@@ -94,6 +96,7 @@ timezone = "America/New_York"  # set to your local timezone
 | `team` | string | required | MLB team abbreviation, 2–3 letters (e.g. `"NYY"`, `"KC"`, `"SD"`) — see [Team codes](#team-codes). Case-insensitive. |
 | `layout` | string | `"auto"` | `"auto"`, `"ticker"`, `"scoreboard"`, or `"two_row"` — see the resolution table above. |
 | `timezone` | string | `"America/New_York"` | IANA timezone for game-time formatting. |
+| `logos` | bool | `true` | Paint the bundled team logos on the bigsign `two_row` card and the longboi `scoreboard`. `false` draws those cards without logos. Ignored on the smallsign. |
 | `padding` | int | `6` | Horizontal padding (logical px) after each message when scrolling (ticker). |
 | `final_hold_hours` | int | `6` | Hours after a game ends to keep showing the final score. |
 | `bg_color` | RGB list | none | Background fill behind all game messages. Scale-1 only — the scale>1 physical renderers paint their own fixed palette and ignore it. |
@@ -532,6 +535,29 @@ text = ":baseball.ball: Play ball!"
 ```
 
 It renders as an 8×8 sprite, auto-upgrading to a 32×32 hi-res sprite on bigsign.
+
+### Team logo emoji
+
+Every bundled logo is also an inline emoji, named after the [team code](#team-codes) in lower case: `:baseball.phi:`, `:baseball.nyy:`, and so on. Use them in any text, such as a message, a section title or a two-row card:
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = ":baseball.phi: RED OCTOBER :baseball.phi:"
+font = "Inter-Bold"
+font_size = 28
+```
+
+On the bigsign and longboi a logo emoji is 32 px tall, cropped to the mark and up to 64 px wide, so a wide mark (the Reds' wishbone C) keeps its shape. On the smallsign it is an 8×8 sprite, which is a splash of team colour rather than a readable logo.
+
+### Logo caveats
+
+- **Dark marks are dim.** Near-black pixels are dropped because they're invisible on the panel, so a navy or brown mark (Yankees, Padres, Royals, Tigers, Rays) reads dim on any sign. The Rockies' black-and-silver CR keeps only its silver.
+- **Logos are small.** At 24–30 px thin detail in a mark reads as a blob.
+
+## Logos
+
+Team logos are 64×64 PNGs for all 30 teams under `src/led_ticker_baseball/assets/logos/`, listed in `MANIFEST.txt` with their source URL and fetch date. They are the teams' marks (sourced from ESPN's logo CDN), bundled for display on your own sign; this plugin is not affiliated with or endorsed by MLB or ESPN. A person refreshes them by running `tools/fetch_logos.py` (never CI or a sign); the plugin decodes each once per size and replays cached pixels, so a sign never fetches an image.
 
 ## Development
 

@@ -52,6 +52,7 @@ class MLBGameCard(FrameAwareBase):
     top_font: Font | None = attrs.field(default=None, kw_only=True)
     top_row_height: int | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
+    logos: bool = attrs.field(default=True, kw_only=True)
     _legacy: Any = attrs.field(init=False, default=None)
 
     def _legacy_story(self, layout: str) -> Any:
@@ -149,6 +150,7 @@ class MLBGameCard(FrameAwareBase):
                 y_offset=y_offset,
                 story_index=self.story_index,
                 story_total=self.story_total,
+                logos=self.logos,
             )
         else:
             render_two_row(
@@ -158,6 +160,7 @@ class MLBGameCard(FrameAwareBase):
                 y_offset=y_offset,
                 story_index=self.story_index,
                 story_total=self.story_total,
+                logos=self.logos,
             )
         # Held layout: painted at `cursor_pos` (`shift_canvas`) and returns
         # the ABSOLUTE end `cursor_pos + canvas.width` — the WRAPPER's

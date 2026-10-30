@@ -382,6 +382,33 @@ physical renderers before the pattern was fixed everywhere. The correct gate is
 `game.state == "postponed" and game.postpone_tag`, checking `state` first. All three renderers
 share this exact pattern; keep them in sync if `GameInfo`'s postponed-state fields change.
 
+**Logos are bundled assets, never fetched** (`_logos.py`) — 30 64x64 RGBA PNGs under
+`assets/logos/` with `MANIFEST.txt` (source URL + fetch date per file). A human refreshes them
+with `tools/fetch_logos.py` (ESPN slugs differ for `CWS`→`chw` and `OAK`→`ath`); CI, tests and
+the sign never run it, and the render path never makes an image request. Same module as the
+football/hockey/basketball plugins: `_logos.sprite(abbrev, size)` is `functools.cache`'d per
+(team, size), drops alpha < `ALPHA_MIN` and near-black (< `DARK_FLOOR`) pixels, and returns
+None for an unknown team or an undecodable asset — it NEVER raises. Sizes: `LOGO_ROW` 24
+(bigsign `two_row`: before each abbrev in the top band, and in the next-game run),
+`LOGO_LONG` 30 (longboi `scoreboard`: at each outer edge beside the score — NOT beside the
+name, whose row is boxed in by the live cluster at x=176 and the bases at x=317 — and in the
+next-game run). Baseball's score cards had no chip, so a logo that can't be drawn
+(`logos = false`, missing sprite) is just LEFT OUT and that side keeps its logo-free position,
+per SIDE. On `two_row` both abbrevs share one size from `_NAME_SIZES` (20/18/16), the largest
+at which the series-dash pairs keep `_GAP` apart (`_fit_names`) — so a missing logo can grow
+both names back, but the home logo always leads its abbrev by `_GAP`. The smallsign and the
+`ticker` crawl never show logos. Tripwires: `test_logos.py`, `test_layout_logos.py`
+(clearance on every card, `logos=False`, one missing logo, worst-case shrink).
+
+**Every team logo is an inline emoji** (`register` → `_logos.emoji(abbrev)`) —
+`:baseball.<team>:` (lower-case code), a lo-res + hi-res pair per team, because inline text
+resolves through the lo-res registry and a hi-res-only slug renders as literal text. Identical
+to the sibling sports' `emoji`: crop to the alpha bbox, hi-res `EMOJI_HIRES` 32 tall up to
+`EMOJI_HIRES_MAX_W` 64 wide, lo-res within 8×8 (lenient `TINY_ALPHA_MIN`, no premultiply), both
+trimmed flush left with `physical_width` set. Cached, NEVER raises; a team whose pair is None
+is skipped (a raise in `register` drops the whole plugin). Tripwires: `test_logos.py`,
+`test_smoke.py::test_team_logo_emoji_registered`, `test_team_without_a_logo_is_skipped_not_fatal`.
+
 **`render_scoreboard` draws no paging dots** (`layouts/scoreboard.py`) — a deliberate omission,
 not a missing feature: the prototype's dot position (`w - n*8 - 6, h - 10`) collides with the
 home score's px34 glyph box on live/final games. `story_index`/`story_total` are still accepted

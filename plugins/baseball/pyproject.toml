@@ -1,7 +1,7 @@
 [project]
 name = "led-ticker-baseball"
 dynamic = ["version"]
-description = "MLB scores/standings widgets, baseball emoji, and baseball transitions for led-ticker."
+description = "MLB scores/standings widgets, baseball emoji, and baseball transitions for led-ticker. Bundled team logos."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

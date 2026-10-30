@@ -1692,6 +1692,23 @@ class TestScoresValidateConfig:
         assert "demo" in msgs[0]
         assert "bool" in msgs[0]
 
+    def test_logos_bool_passes(self):
+        for v in (True, False):
+            assert MLBScoreMonitor.validate_config({"logos": v, "team": "NYY"}) == []
+
+    def test_logos_must_be_bool(self):
+        msgs = MLBScoreMonitor.validate_config({"logos": "no", "team": "NYY"})
+        assert len(msgs) == 1
+        assert "logos" in msgs[0]
+        assert "bool" in msgs[0]
+
+    def test_logos_false_reaches_every_demo_card(self):
+        widget = MLBScoreMonitor(session=None, demo=True, logos=False)
+        widget._load_demo()
+        cards = [s for s in widget.feed_stories if isinstance(s, MLBGameCard)]
+        assert cards
+        assert all(c.logos is False for c in cards)
+
     def test_validate_config_accepts_auto_and_default_is_auto(self):
         assert MLBScoreMonitor.validate_config({"layout": "auto", "team": "NYY"}) == []
         import attrs

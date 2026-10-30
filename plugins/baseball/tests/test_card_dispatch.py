@@ -16,7 +16,7 @@ from led_ticker_baseball._models import GameInfo
 TZ = ZoneInfo("America/New_York")
 
 
-def _card(layout="auto", **g_over):
+def _card(layout="auto", logos=True, **g_over):
     g = GameInfo(
         away_abbr="TB",
         home_abbr="BOS",
@@ -33,7 +33,13 @@ def _card(layout="auto", **g_over):
         **g_over,
     )
     return MLBGameCard(
-        game=g, team_abbr="BOS", tz=TZ, cfg_layout=layout, story_index=0, story_total=3
+        game=g,
+        team_abbr="BOS",
+        tz=TZ,
+        cfg_layout=layout,
+        story_index=0,
+        story_total=3,
+        logos=logos,
     )
 
 
@@ -138,3 +144,22 @@ def test_scale1_two_row_final_series_text_uses_story_total():
 
     assert card_bottom_texts == expected_bottom_texts
     assert any("leads" in t for t in card_bottom_texts)
+
+
+def test_card_forwards_logos_to_both_held_renderers(monkeypatch):
+    import led_ticker_baseball._card as card_mod
+
+    seen = []
+    for name in ("render_two_row", "render_scoreboard"):
+        monkeypatch.setattr(
+            card_mod, name, lambda *a, _n=name, **kw: seen.append((_n, kw["logos"]))
+        )
+    for logos in (True, False):
+        _card(logos=logos).draw(_bigsign()[0])
+        _card(logos=logos).draw(_longboi()[0])
+    assert seen == [
+        ("render_two_row", True),
+        ("render_scoreboard", True),
+        ("render_two_row", False),
+        ("render_scoreboard", False),
+    ]

@@ -140,6 +140,11 @@ class MLBScoreMonitor:
             "two_row = held series title over a scrolling game line",
             '"auto"',
         ),
+        "logos": (
+            "bool",
+            "paint bundled team logos on bigsign/longboi",
+            "true",
+        ),
     }
 
     session: aiohttp.ClientSession
@@ -164,6 +169,7 @@ class MLBScoreMonitor:
     font: Font | None = attrs.field(default=None, kw_only=True)
     small_font: Font = attrs.field(default=FONT_SMALL, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
+    logos: bool = attrs.field(default=True, kw_only=True)
     top_font: Font | None = attrs.field(default=None, kw_only=True)
     top_row_height: int | None = attrs.field(default=None, kw_only=True)
     _team_id: int = attrs.field(init=False, default=0)
@@ -211,6 +217,12 @@ class MLBScoreMonitor:
                     f"{fields} only applies when layout='two_row'; "
                     f"remove the field(s) or set layout='two_row'."
                 )
+
+        logos = cfg.get("logos")
+        if logos is not None and not isinstance(logos, bool):
+            msgs.append(
+                f"baseball.scores logos must be a bool (true/false), got {logos!r}"
+            )
 
         demo = cfg.get("demo")
         if demo is not None and not isinstance(demo, bool):
@@ -322,6 +334,7 @@ class MLBScoreMonitor:
                 top_font=self.top_font,
                 top_row_height=self.top_row_height,
                 font_color=self.font_color,
+                logos=self.logos,
             )
             for i, g in enumerate(series.games)
         )
@@ -556,6 +569,7 @@ class MLBScoreMonitor:
                 top_font=self.top_font,
                 top_row_height=self.top_row_height,
                 font_color=self.font_color,
+                logos=self.logos,
             )
             for i, g in enumerate(current.games)
         )
