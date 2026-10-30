@@ -60,3 +60,32 @@ def test_paint_logo_clips_on_shifted_real():
     _logos.paint_logo(real, sp, -20, 10)
     assert real.lit
     assert all(0 <= x < 256 and 0 <= y < 64 for x, y in real.lit)
+
+
+def test_every_team_has_a_trimmed_emoji_pair():
+    for abbrev in NFL_TEAMS:
+        pair = _logos.emoji(abbrev)
+        assert pair is not None, abbrev
+        lo, hi = pair
+        assert len(lo) >= 12, abbrev  # a visible mark, not a blank sprite
+        assert all(0 <= x < 8 and 0 <= y < 8 for x, y, *_ in lo), abbrev
+        assert min(x for x, *_ in lo) == 0, abbrev
+        assert hi.physical_size == _logos.EMOJI_HIRES
+        xs = [x for x, *_ in hi.pixels]
+        assert min(xs) == 0 and max(xs) + 1 == hi.physical_width, abbrev
+        assert all(0 <= y < hi.physical_size for _, y, *_ in hi.pixels), abbrev
+
+
+def test_emoji_is_none_when_logo_unavailable(monkeypatch, request):
+    _logos.emoji.cache_clear()
+    request.addfinalizer(_logos.emoji.cache_clear)
+    monkeypatch.setattr(_logos, "_read_asset", lambda abbrev: b"not a png")
+    assert _logos.emoji("PHI") is None
+    assert _logos.emoji("ZZZ") is None
+
+
+def test_wide_logo_emoji_keeps_its_aspect():
+    lo, hi = _logos.emoji("NYJ")
+    assert hi.physical_width > _logos.EMOJI_HIRES  # wider than tall, not squashed
+    assert hi.physical_width <= _logos.EMOJI_HIRES_MAX_W
+    assert len(lo) >= 12  # still a visible mark at 8x8
