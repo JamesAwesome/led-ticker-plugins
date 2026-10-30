@@ -185,6 +185,7 @@ class HockeyScoreMonitor:
     small_font: Font = attrs.field(default=FONT_SMALL, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
     logos: bool = attrs.field(default=True, kw_only=True)
+    celebration_flash: bool = attrs.field(default=False, kw_only=True)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
     _source: NHLSource | None = attrs.field(init=False, default=None)
     _cards: dict[_CardKey, HockeyGameCard] = attrs.field(init=False, factory=dict)
@@ -281,6 +282,12 @@ class HockeyScoreMonitor:
             msgs.append(
                 f"hockey.scores logos must be a bool (true/false), got {logos!r}"
             )
+        flash = cfg.get("celebration_flash")
+        if flash is not None and not isinstance(flash, bool):
+            msgs.append(
+                f"hockey.scores celebration_flash must be a bool (true/false), "
+                f"got {flash!r}"
+            )
         demo = cfg.get("demo")
         if demo is not None and not isinstance(demo, bool):
             msgs.append(f"hockey.scores demo must be a bool (true/false), got {demo!r}")
@@ -304,6 +311,12 @@ class HockeyScoreMonitor:
         widget.teams = [normalize_team(t) or t.strip().upper() for t in widget.teams]
         widget._tz = ZoneInfo(widget.timezone)
         widget.padding = int(widget.padding)  # validated: a number >= 0
+        if widget.celebration_flash:
+            logger.warning(
+                "hockey.scores: celebration_flash is on. Celebrations open with a "
+                "full-panel flash (~5 Hz), a photosensitive-epilepsy hazard; "
+                "set celebration_flash = false on signs in shared spaces"
+            )
         if widget.demo:
             widget._load_demo()
             return widget
@@ -346,6 +359,7 @@ class HockeyScoreMonitor:
             small_font=self.small_font,
             font_color=self.font_color,
             logos=self.logos,
+            flash=self.celebration_flash,
         )
 
     def _load_demo(self) -> None:

@@ -112,6 +112,9 @@ class FootballGameCard(FrameAwareBase):
     small_font: Font | None = attrs.field(default=None, kw_only=True)
     font_color: Color | ColorProvider | None = attrs.field(default=None, kw_only=True)
     logos: bool = attrs.field(default=True, kw_only=True)
+    # The full-panel strobe opens each celebration only when the widget's
+    # `celebration_flash` is on (photosensitivity: off by default).
+    flash: bool = attrs.field(default=False, kw_only=True)
     demo_plays: tuple[ScoringPlay, ...] = attrs.field(default=(), kw_only=True)
     pending: list[ScoringPlay] = attrs.field(init=False, factory=list)
     highlight: tuple[str, int] | None = attrs.field(init=False, default=None)
@@ -248,7 +251,7 @@ class FootballGameCard(FrameAwareBase):
                 self._run_pos += 1
                 self._run_frame = self._frame_count
             frame = self._run_pos
-        phase = phase_at(frame, len(playing))
+        phase = phase_at(frame, len(playing), flash=self.flash)
         if phase is None:
             if self._run_start is not None:
                 self._end_self_started_run(cursor_pos)

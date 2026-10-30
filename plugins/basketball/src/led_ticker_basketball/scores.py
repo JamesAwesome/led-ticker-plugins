@@ -176,6 +176,7 @@ class BasketballScoreMonitor:
     font: Font | None = attrs.field(default=None, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
     logos: bool = attrs.field(default=True, kw_only=True)
+    celebration_flash: bool = attrs.field(default=False, kw_only=True)
     ball_at: bool = attrs.field(default=True, kw_only=True)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
     _source: ESPNSource | None = attrs.field(init=False, default=None)
@@ -286,6 +287,12 @@ class BasketballScoreMonitor:
                     msgs.append(
                         f"basketball.scores {name} must be a number >= 0, got {v!r}"
                     )
+        flash = cfg.get("celebration_flash")
+        if flash is not None and not isinstance(flash, bool):
+            msgs.append(
+                f"basketball.scores celebration_flash must be a bool (true/false), "
+                f"got {flash!r}"
+            )
         demo = cfg.get("demo")
         if demo is not None and not isinstance(demo, bool):
             msgs.append(
@@ -311,6 +318,12 @@ class BasketballScoreMonitor:
         widget.teams = [normalize_team(t) or t.strip().upper() for t in widget.teams]
         widget._tz = ZoneInfo(widget.timezone)
         widget.padding = int(widget.padding)  # validated: a number >= 0
+        if widget.celebration_flash:
+            logger.warning(
+                "basketball.scores: celebration_flash is on. Celebrations open with a "
+                "full-panel flash (~5 Hz), a photosensitive-epilepsy hazard; "
+                "set celebration_flash = false on signs in shared spaces"
+            )
         if widget.demo:
             widget._load_demo()
             return widget
@@ -352,6 +365,7 @@ class BasketballScoreMonitor:
             font=self.font if self.font is not None else FONT_DEFAULT,
             font_color=self.font_color,
             logos=self.logos,
+            flash=self.celebration_flash,
             ball_at=self.ball_at,
         )
 

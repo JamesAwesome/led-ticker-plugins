@@ -2,7 +2,8 @@
 detail painters.
 
 Timeline (engine tick = 50 ms): each final gets `CELEBRATION_FRAMES` (4 s).
-The first `FLASH_FRAMES` are three on/off flashes (2 frames on, 2 off) of
+With `celebration_flash` on (off by default: a photosensitivity hazard),
+the first `FLASH_FRAMES` are three on/off flashes (2 frames on, 2 off) of
 the full panel in the winner's colour with `<NICKNAME> WIN` knocked out
 (`<ABBREV> WIN` when the nickname does not fit); the rest is the detail
 card: the winner's logo (or a colour chip), the final score with the
@@ -53,12 +54,15 @@ _FONT = "Inter-Bold"
 _BLACK = make_color(0, 0, 0)
 
 
-def phase_at(frame: int, n: int) -> tuple[int, str, int] | None:
-    """`(index, phase, frame_in_event)`; None once the run is over."""
+def phase_at(frame: int, n: int, *, flash: bool = False) -> tuple[int, str, int] | None:
+    """`(index, phase, frame_in_event)`; None once the run is over.
+
+    `flash=False` (the `celebration_flash` default) skips the flashes:
+    the detail card fills the whole slot."""
     if frame < 0 or frame >= n * CELEBRATION_FRAMES:
         return None
     idx, f = divmod(frame, CELEBRATION_FRAMES)
-    if f < FLASH_FRAMES:
+    if flash and f < FLASH_FRAMES:
         return idx, ("flash_on" if (f // 2) % 2 == 0 else "flash_off"), f
     return idx, "detail", f
 

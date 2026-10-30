@@ -367,7 +367,9 @@ class TestGoals:
 class TestStart:
     async def test_demo_live_card_celebrates_every_third_visit(self, bigsign):
         with mock.patch.object(mod, "spawn_tracked", mock.Mock()):
-            w = await HockeyScoreMonitor.start(None, demo=True, teams=["PHI", "NYI"])
+            w = await HockeyScoreMonitor.start(
+                None, demo=True, teams=["PHI", "NYI"], celebration_flash=True
+            )
         card = w.feed_stories[0]
         assert card.game.state == "live" and len(card.pending) == 1
         shown = []
