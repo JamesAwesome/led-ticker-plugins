@@ -176,6 +176,7 @@ class BasketballScoreMonitor:
     font: Font | None = attrs.field(default=None, kw_only=True)
     layout: str = attrs.field(default="auto", kw_only=True)
     logos: bool = attrs.field(default=True, kw_only=True)
+    ball_at: bool = attrs.field(default=True, kw_only=True)
     _tz: ZoneInfo | None = attrs.field(init=False, default=None)
     _source: ESPNSource | None = attrs.field(init=False, default=None)
     _cards: dict[_CardKey, BasketballGameCard] = attrs.field(init=False, factory=dict)
@@ -193,6 +194,11 @@ class BasketballScoreMonitor:
         "logos": (
             "bool",
             "paint bundled team logos on bigsign/longboi",
+            "true",
+        ),
+        "ball_at": (
+            "bool",
+            "the ball is the @ on smallsign next-game cards",
             "true",
         ),
         "timezone": ("IANA zone", "tip-off times and day labels", '"America/New_York"'),
@@ -253,11 +259,12 @@ class BasketballScoreMonitor:
                 "basketball.scores does not accept small_font: "
                 "the smallsign board uses font"
             )
-        logos = cfg.get("logos")
-        if logos is not None and not isinstance(logos, bool):
-            msgs.append(
-                f"basketball.scores logos must be a bool (true/false), got {logos!r}"
-            )
+        for name in ("logos", "ball_at"):
+            v = cfg.get(name)
+            if v is not None and not isinstance(v, bool):
+                msgs.append(
+                    f"basketball.scores {name} must be a bool (true/false), got {v!r}"
+                )
         try:
             ZoneInfo(cfg.get("timezone", "America/New_York"))
         except ZoneInfoNotFoundError, ValueError, TypeError:
@@ -345,6 +352,7 @@ class BasketballScoreMonitor:
             font=self.font if self.font is not None else FONT_DEFAULT,
             font_color=self.font_color,
             logos=self.logos,
+            ball_at=self.ball_at,
         )
 
     def _load_demo(self) -> None:

@@ -45,6 +45,10 @@ def test_scale1_uses_band_board(smallsign):
     assert isinstance(small._legacy, BasketballBandBoard)
     assert cursor == smallsign.width
     assert _lit(smallsign)
+    assert small._legacy.ball_at is True
+    off = _card(idx=3, ball_at=False)
+    off.draw(HeadlessBackend(160, 16).create_canvas())
+    assert off._legacy.ball_at is False
 
 
 def test_scale4_calls_render_scoreboard(bigsign):
