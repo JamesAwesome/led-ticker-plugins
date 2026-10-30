@@ -40,3 +40,19 @@ def make_widget():
         return widget
 
     return _factory
+
+
+@pytest.fixture
+def synthetic_logo_png() -> bytes:
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((4, 4, 60, 60), fill=(0, 107, 182, 255))
+    draw.rectangle((2, 2, 5, 5), fill=(20, 20, 20, 255))
+    draw.rectangle((58, 2, 61, 5), fill=(255, 255, 255, 60))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
