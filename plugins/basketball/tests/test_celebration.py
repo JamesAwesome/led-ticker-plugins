@@ -22,6 +22,7 @@ from led_ticker_basketball._celebration import (
     win_word,
 )
 from led_ticker_basketball._models import FinalEvent, Leader, build_demo_games
+from led_ticker_basketball.scores import BasketballScoreMonitor
 
 from .conftest import TZ
 
@@ -37,6 +38,9 @@ def _ev(**over):
 
 
 def _card(layout="auto", tracked=("PHI",), **kw):
+    # These tests pin the flash timeline; the widget default (no flash)
+    # is pinned separately below.
+    kw.setdefault("flash", True)
     return BasketballGameCard(
         game=GAME,
         tz=TZ,
@@ -60,14 +64,14 @@ def test_constants():
 
 
 def test_phase_timeline():
-    assert phase_at(0, 1) == (0, "flash_on", 0)
-    assert phase_at(2, 1) == (0, "flash_off", 2)
-    assert phase_at(12, 1) == (0, "detail", 12)
-    assert phase_at(79, 1) == (0, "detail", 79)
-    assert phase_at(80, 1) is None
-    assert phase_at(80, 2) == (1, "flash_on", 0)
-    assert phase_at(0, 0) is None
-    assert phase_at(-1, 1) is None
+    assert phase_at(0, 1, flash=True) == (0, "flash_on", 0)
+    assert phase_at(2, 1, flash=True) == (0, "flash_off", 2)
+    assert phase_at(12, 1, flash=True) == (0, "detail", 12)
+    assert phase_at(79, 1, flash=True) == (0, "detail", 79)
+    assert phase_at(80, 1, flash=True) is None
+    assert phase_at(80, 2, flash=True) == (1, "flash_on", 0)
+    assert phase_at(0, 0, flash=True) is None
+    assert phase_at(-1, 1, flash=True) is None
 
 
 def test_win_word_falls_back_to_abbrev():
@@ -577,3 +581,55 @@ def test_core_fill_of_bg_color_survives_every_scale(layout, sign, celebrating, r
         if celebrating and f < FLASH_FRAMES and (f // 2) % 2 == 0:
             continue  # flash_on: the full panel is the team colour by design
         assert BG in set(_pixels(canvas).values()), i
+
+
+# --------------------------------------- celebration_flash (photosensitivity)
+# The full-panel strobe is a photosensitive-epilepsy hazard: it is opt-in.
+
+
+def test_phase_timeline_without_flash():
+    assert phase_at(0, 1) == phase_at(0, 1, flash=False)
+    for f in range(CELEBRATION_FRAMES):
+        assert phase_at(f, 1) == (0, "detail", f)
+    assert phase_at(CELEBRATION_FRAMES, 2) == (1, "detail", 0)
+    assert phase_at(CELEBRATION_FRAMES, 1) is None
+
+
+def test_widget_default_never_flashes(bigsign):
+    c = BasketballScoreMonitor(session=None, teams=["PHI"])._new_card(GAME)
+    assert c.flash is False
+    c.queue_final(FINAL)
+    c.reset_frame()
+    with (
+        mock.patch.object(celeb, "render_flash") as flash,
+        mock.patch.object(celeb, "render_detail") as detail,
+    ):
+        for _ in range(CELEBRATION_FRAMES - 1):
+            c.advance_frame()
+            c.draw(bigsign)
+    assert flash.call_count == 0
+    assert detail.call_count == CELEBRATION_FRAMES - 1  # same slot length
+
+
+def test_celebration_flash_option_reaches_card():
+    w = BasketballScoreMonitor(session=None, teams=["PHI"], celebration_flash=True)
+    assert w._new_card(GAME).flash is True
+
+
+def test_validate_celebration_flash_must_be_bool():
+    v = BasketballScoreMonitor.validate_config
+    assert not [
+        m for m in v({"teams": ["PHI"], "celebration_flash": True}) if "flash" in m
+    ]
+    msgs = v({"teams": ["PHI"], "celebration_flash": "yes"})
+    assert any("celebration_flash must be a bool" in m for m in msgs)
+
+
+@pytest.mark.parametrize("on", [False, True])
+async def test_start_warns_only_when_flash_on(caplog, on):
+    caplog.set_level("WARNING")
+    await BasketballScoreMonitor.start(
+        None, demo=True, teams=["PHI"], celebration_flash=on
+    )
+    warned = [r for r in caplog.records if "photosensitive" in r.getMessage()]
+    assert len(warned) == (1 if on else 0)

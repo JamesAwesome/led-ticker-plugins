@@ -106,6 +106,16 @@ keeps decrementing `pos` under it. Tripwires:
 `test_takeover_clear_uses_bg_color_at_every_scale`. The celebration paints only on live
 frames (`_celebrate` returns False while `_frame_paused`).
 
+**Celebration flash is opt-in (photosensitivity)** — the full-panel on/off strobe that opens a
+celebration (`FLASH_FRAMES`, ~5 Hz in a saturated team colour) is a photosensitive-epilepsy
+hazard, so it plays only when the widget's `celebration_flash = true`. The default
+(`false`) threads through `_new_card(flash=...)` into `phase_at(..., flash=False)`, which
+returns `"detail"` for the whole `CELEBRATION_FRAMES` slot. Slot length, queueing and the
+`hold_time` math are identical either way. `start()` logs one WARNING while it is on. Never
+flip the default, never add another full-panel flash that bypasses `flash`, and keep any new
+celebration effect below 3 Hz full-panel. The README warning sits next to the option.
+Tripwires: `test_widget_default_never_flashes`, `test_phase_timeline_without_flash`.
+
 **`hold_time` property** — `base_hold` with nothing due; with a celebration due it is
 `CELEBRATION_SECONDS` (4 s) + `max(base_hold, BOARD_FLOOR)` (4 s), `MAX_QUEUED` = 1 (a game
 ends once). Core reads it as `max(section_hold, getattr(story, "hold_time", 0.0))` right

@@ -1,7 +1,8 @@
 """Goal celebration: the frame timeline plus the flash and detail painters.
 
 Timeline (engine tick = 50 ms): each goal gets `CELEBRATION_FRAMES` (4 s).
-The first `FLASH_FRAMES` are three on/off flashes (2 frames on, 2 off) of
+With `celebration_flash` on (off by default: a photosensitivity hazard),
+the first `FLASH_FRAMES` are three on/off flashes (2 frames on, 2 off) of
 the full panel in the scoring team's color with `GOAL` knocked out; the
 rest is the detail card (scorer, season count, assists, new score with the
 scorer's number pulsing, period + time).
@@ -51,12 +52,17 @@ _FONT = "Inter-Bold"
 _BLACK = make_color(0, 0, 0)
 
 
-def phase_at(frame: int, n_goals: int) -> tuple[int, str, int] | None:
-    """`(goal_index, phase, frame_in_goal)`; None once the run is over."""
+def phase_at(
+    frame: int, n_goals: int, *, flash: bool = False
+) -> tuple[int, str, int] | None:
+    """`(goal_index, phase, frame_in_goal)`; None once the run is over.
+
+    `flash=False` (the `celebration_flash` default) skips the flashes:
+    the detail card fills the whole slot."""
     if frame < 0 or frame >= n_goals * CELEBRATION_FRAMES:
         return None
     idx, f = divmod(frame, CELEBRATION_FRAMES)
-    if f < FLASH_FRAMES:
+    if flash and f < FLASH_FRAMES:
         return idx, ("flash_on" if (f // 2) % 2 == 0 else "flash_off"), f
     return idx, "detail", f
 

@@ -134,6 +134,16 @@ Tripwires: `test_scroll_two_hires_cards_completes` and
 `_scroll_side_by_side` (`test_card_dispatch.py`, core-internal imports are fine in
 tests only), plus `test_scale4_scoreboard_scrolls_with_cursor_pos`.
 
+**Celebration flash is opt-in (photosensitivity)** — the full-panel on/off strobe that opens a
+celebration (`FLASH_FRAMES`, ~5 Hz in a saturated team colour) is a photosensitive-epilepsy
+hazard, so it plays only when the widget's `celebration_flash = true`. The default
+(`false`) threads through `_new_card(flash=...)` into `phase_at(..., flash=False)`, which
+returns `"detail"` for the whole `CELEBRATION_FRAMES` slot. Slot length, queueing and the
+`hold_time` math are identical either way. `start()` logs one WARNING while it is on. Never
+flip the default, never add another full-panel flash that bypasses `flash`, and keep any new
+celebration effect below 3 Hz full-panel. The README warning sits next to the option.
+Tripwires: `test_widget_default_never_flashes`, `test_phase_timeline_without_flash`.
+
 **`hold_time` property** — `HockeyGameCard.hold_time` = `base_hold` with nothing due;
 with `n` celebrations due it is `n * CELEBRATION_SECONDS` (80 frames x 50 ms = 4 s) +
 `max(base_hold, BOARD_FLOOR)` (4 s) so the board after the celebration keeps its own hold.

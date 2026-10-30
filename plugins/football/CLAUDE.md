@@ -118,6 +118,16 @@ resets once per tick and earlier widgets have already painted; it returns a
 `canvas.width` cursor, so later widgets are skipped for the tick. The scroll position
 keeps moving beneath it. `hold_time` is not read in scroll modes.
 
+**Celebration flash is opt-in (photosensitivity)** — the full-panel on/off strobe that opens a
+celebration (`FLASH_FRAMES`, ~5 Hz in a saturated team colour) is a photosensitive-epilepsy
+hazard, so it plays only when the widget's `celebration_flash = true`. The default
+(`false`) threads through `_new_card(flash=...)` into `phase_at(..., flash=False)`, which
+returns `"detail"` for the whole `CELEBRATION_FRAMES` slot. Slot length, queueing and the
+`hold_time` math are identical either way. `start()` logs one WARNING while it is on. Never
+flip the default, never add another full-panel flash that bypasses `flash`, and keep any new
+celebration effect below 3 Hz full-panel. The README warning sits next to the option.
+Tripwires: `test_widget_default_never_flashes`, `test_phase_timeline_without_flash`.
+
 **`hold_time` property** — `base_hold` with nothing due; with `n` celebrations due it is
 `n * CELEBRATION_SECONDS` (4 s) + `max(base_hold, BOARD_FLOOR)` (4 s). Core reads it as
 `max(section_hold, getattr(story, "hold_time", 0.0))` right AFTER `reset_frame()`.
