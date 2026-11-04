@@ -84,6 +84,7 @@ def test_effective_peek_caps_to_avg_spacing():
     cards = _seg(r)
     assert effective_peek(cards, 8) == 3.0
     assert effective_peek(cards[:1], 8) == 8
+    assert isinstance(effective_peek(cards[:1], 8), float)
 
 
 def test_ring_depth_from_thickness():
@@ -93,10 +94,32 @@ def test_ring_depth_from_thickness():
 
 
 def test_ring_depth_measured_without_thickness():
+    # An unknown, attribute-less border shape: a solid 3-px ring is measured.
+    r = Raster(20, 16)
+    for y in range(16):
+        for x in range(20):
+            if y < 3 or y >= 13 or x < 3 or x >= 17:
+                r.SetPixel(x, y, *W)
+    assert ring_depth(SimpleNamespace(border=object()), r) == 3
+
+
+def test_ring_depth_ignores_content_touching_top_edge():
+    # The measured fallback runs only when a border is set, so a bordered
+    # widget of unknown shape whose CONTENT touches the top edge (full-width
+    # top rows, the old "≥ 50% of the row" false positive) must read 0.
     r = Raster(20, 16)
     for y in range(3):
         _cols(r, range(20), rows=[y])
-    assert ring_depth(SimpleNamespace(border=object()), r) == 3
+    assert ring_depth(SimpleNamespace(border=object()), r) == 0
+    assert ring_depth(SimpleNamespace(border=None), r) == 0
+
+
+def test_ring_depth_ignores_full_height_text():
+    # Tall glyphs touching BOTH the top and bottom rows (but not the side
+    # columns) are content, not a ring.
+    r = Raster(40, 16)
+    _cols(r, [x for x in range(2, 38) if x % 3])
+    assert ring_depth(SimpleNamespace(border=object()), r) == 0
 
 
 def test_bordered_inset_splits():
@@ -338,3 +361,100 @@ def test_t0_matches_snapshot_clipped_content():
     }
     assert painted == lit
     assert len(calls) == len(painted)
+
+
+# --- real core borders (tests may import core internals; plugin SOURCE may
+# not — see test_import_purity.py, which scans src/ only) -------------------
+
+from led_ticker.borders import (  # noqa: E402
+    ColorBandsBorder,
+    LightbulbBorder,
+    RainbowChaseBorder,
+)
+
+GEOMETRIES = [(160, 16), (128, 64), (256, 64)]
+
+
+def _bulb(**kw):
+    return lambda: LightbulbBorder(**kw)
+
+
+BORDERS = {
+    "bulb-chase": (_bulb(mode="chase"), None),
+    "bulb-alternate": (_bulb(mode="alternate"), None),
+    "bulb-unison": (_bulb(mode="unison"), None),
+    "bulb-rainbow": (_bulb(mode="chase", lit_color="rainbow"), None),
+    "bulb-black-unlit": (_bulb(mode="chase", unlit_color=(0, 0, 0)), None),
+    "bulb-size2-gap5": (_bulb(bulb_size=2, gap=5), 2),
+    "rainbow-t2": (lambda: RainbowChaseBorder(thickness=2), 2),
+    "bands-t2": (
+        lambda: ColorBandsBorder(colors=[(255, 0, 0), (0, 0, 255)], thickness=2),
+        2,
+    ),
+}
+
+
+def _expected_depth(name, h):
+    fixed = BORDERS[name][1]
+    if fixed is not None:
+        return fixed
+    return 3 if h >= 32 else 1  # LightbulbBorder's auto bulb size
+
+
+def _bordered_raster(border, w, h, frame):
+    r = Raster(w, h)
+    border.paint(r, frame)
+    return r
+
+
+def _inset_content(r, d):
+    # Glyph-ish blocks pressed right up against the ring's inner edge.
+    w, h = r.width, r.height
+    for x in (d, d + 1, w // 2, w - d - 2, w - d - 1):
+        for y in range(d, h - d):
+            r.SetPixel(x, y, 0, 255, 0)
+
+
+@pytest.mark.parametrize("w,h", GEOMETRIES)
+@pytest.mark.parametrize("name", sorted(BORDERS))
+@pytest.mark.parametrize("frame", [0, 2, 8, 17])
+def test_core_border_ring_depth(name, w, h, frame):
+    border = BORDERS[name][0]()
+    r = _bordered_raster(border, w, h, frame)
+    assert ring_depth(SimpleNamespace(border=border), r) == _expected_depth(name, h)
+
+
+@pytest.mark.parametrize("w,h", GEOMETRIES)
+@pytest.mark.parametrize("name", sorted(BORDERS))
+def test_core_border_no_inset_card_touches_ring(name, w, h):
+    border = BORDERS[name][0]()
+    d = _expected_depth(name, h)
+    r = _bordered_raster(border, w, h, 0)
+    _inset_content(r, d)
+    widget = SimpleNamespace(border=border, bottom_text="")
+    decks, ring = build_decks(r, widget, Raster(w, h), mirror=False)
+    cards = decks[0].cards
+    assert len(cards) >= 3  # the inset content splits; the ring is no card
+    for card in cards:
+        for dx, y, _ in card.pixels:
+            x = card.slot + dx
+            assert d <= x < w - d and d <= y < h - d, (name, x, y)
+    in_band = {
+        (x, y)
+        for y in range(h)
+        for x in range(w)
+        if (y < d or y >= h - d or x < d or x >= w - d)
+        and r.get(x, y) not in (None, (0, 0, 0))
+    }
+    assert {(x, y) for x, y, _ in ring} == in_band
+    assert ring  # every geometry keeps a visible ring
+
+
+@pytest.mark.parametrize("w,h", GEOMETRIES)
+@pytest.mark.parametrize("mode", ["chase", "alternate", "unison"])
+def test_lightbulb_measured_fallback_without_duck_type(mode, w, h):
+    # Same pixels, but a border object exposing none of LightbulbBorder's
+    # attributes: the measured four-edge fallback must still find the bulbs.
+    r = _bordered_raster(LightbulbBorder(mode=mode), w, h, 0)
+    expected = 3 if h >= 32 else 1
+    assert ring_depth(SimpleNamespace(border=object()), r) == expected

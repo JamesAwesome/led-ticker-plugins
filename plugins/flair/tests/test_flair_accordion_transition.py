@@ -14,6 +14,7 @@ from led_ticker.plugin import ScaledCanvas, unwrap_to_real
 from PIL import Image
 
 from led_ticker_flair import flair as flair_pkg
+from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair.accordion import AccordionStretch, AccordionSweep
 
 BOTH = [AccordionSweep, AccordionStretch]
@@ -340,6 +341,44 @@ class TestContent:
             p_ for p_ in painted if p_[2] == RED and (p_[0], p_[1]) not in ring_xy
         }
         assert red_now and red_now != set(glyphs)  # the glyphs have moved
+
+    @pytest.mark.parametrize("cls", BOTH)
+    @pytest.mark.parametrize("mode", ["chase", "alternate", "unison"])
+    def test_lightbulb_ring_static_smallsign(self, cls, mode):
+        # Real core LightbulbBorder on the 160x16 smallsign (1x1 bulbs,
+        # gap 3, ~25% of each edge lit): the bulbs must stay painted, at
+        # their snapshot colours, throughout the outgoing phase, and never
+        # become cards.
+        from led_ticker.borders import LightbulbBorder
+
+        border = LightbulbBorder(mode=mode)
+        ring_raster = Raster(160, 16)
+        border.paint(ring_raster, 0)
+        ring = [
+            (x, y, ring_raster.get(x, y))
+            for y in range(16)
+            for x in range(160)
+            if ring_raster.get(x, y) not in (None, (0, 0, 0))
+        ]
+        assert ring
+        glyphs = _glyph(10, 3, 3, 13, RED) + _glyph(60, 4, 3, 13, RED)
+        out = _text_widget(ring + glyphs, border=border)
+        p = cls()
+        _paint(p, 0.0, out, _text_widget([]), w=160, h=16)
+        decks = p._out_plan[0]
+        ring_xy = {(x, y) for x, y, _ in ring}
+        assert len(decks[0].cards) == 2  # just the glyphs
+        for card in decks[0].cards:
+            for dx, y, _ in card.pixels:
+                assert (card.slot + dx, y) not in ring_xy
+        for t in (0.1, 0.3, 0.47):
+            c = _paint(p, t, out, _text_widget([]), w=160, h=16)
+            assert set(ring) <= _pset(c), t
+            n = len(ring)
+            assert {(x, y, (r, g, b)) for x, y, r, g, b in c.calls[-n:]} == set(ring)
+        # By the end of the outgoing phase only the ring is left.
+        end = _paint(p, 0.4749, out, _text_widget([]), w=160, h=16)
+        assert _pset(end) == set(ring)
 
     @pytest.mark.parametrize("cls", BOTH)
     def test_two_row_decks_in_sync(self, cls):
