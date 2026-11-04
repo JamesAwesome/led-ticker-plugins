@@ -117,7 +117,11 @@ class _Accordion:
     def frame_at(
         self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
     ) -> Canvas:
-        if t < self._last_t:  # new firing -> fresh snapshots
+        # New firing -> fresh snapshots. t == 0.0 always starts a firing:
+        # one cancelled right after its t=0 frame leaves _last_t == 0, and
+        # the next firing's t=0 must not replay that stale outgoing plan.
+        # Equal NON-zero t is a repeated frame, not a refire.
+        if t == 0.0 or t < self._last_t:
             self._out_plan = None
             self._in_plan = None
         self._last_t = t

@@ -233,11 +233,37 @@ class TestTimeline:
         out2 = _text_widget(new_px)
         c = _paint(p, 0.0, out2, inc)
         assert _pset(c) == set(new_px)
-        # Equal t is not a refire: a third widget is never snapshotted.
+        # Equal NON-ZERO t is not a refire: a third widget is never
+        # snapshotted. (t == 0.0 always refires: test_t0_always_refires.)
+        mid = _paint(p, 0.2, out2, inc)
         out3 = _text_widget(_glyph(1, 1, 1, 2, GREEN))
-        c = _paint(p, 0.0, out3, inc)
+        c = _paint(p, 0.2, out3, inc)
         assert out3.draw.call_count == 0
+        assert _pset(c) == _pset(mid)
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_t0_always_refires(self, cls):
+        # A firing cancelled right after its t=0 frame leaves _last_t == 0;
+        # the next firing's t=0 must still re-snapshot, not replay the
+        # stale outgoing plan.
+        p = cls()
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        _paint(p, 0.0, out, inc)  # cancelled firing: only its t=0 frame
+        new_px = _glyph(9, 2, 2, 12, BLUE)
+        out2 = _text_widget(new_px)
+        c = _paint(p, 0.0, out2, inc)
+        assert out2.draw.call_count == 1
         assert _pset(c) == set(new_px)
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_equal_nonzero_t_is_not_a_refire(self, cls):
+        p = cls()
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        _paint(p, 0.0, out, inc)
+        _paint(p, 0.2, out, inc)
+        out2 = _text_widget(_glyph(1, 1, 1, 2, GREEN))
+        _paint(p, 0.2, out2, inc)
+        assert out2.draw.call_count == 0
 
     @pytest.mark.parametrize("cls", BOTH)
     def test_outgoing_scroll_pos_forwarded(self, cls):
