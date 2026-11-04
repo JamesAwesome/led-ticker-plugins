@@ -455,6 +455,49 @@ The erase direction is **not** a knob — pick the variant. The beam colour is a
 - **Cross-scale sections.** When the next section uses a different `scale`, the incoming content is written at the outgoing scale and pops to its own size on the final frame — the same accepted limitation as `flair.fairy` / `flair.lightning` / `flair.fireworks`.
 - **Perf.** Per-frame work is bounded by the number of lit pixels (≤ panel size) plus one bar per beam; the only non-trivial cost is the one snapshot frame per firing. Enforced by the `TestPerfUniformity` tripwires.
 
+## Accordion transition
+
+`flair.accordion` plays the outgoing content like a dealer spreading a deck of cards: the message bunches into an overlapping stack that slides off one edge, then the incoming stack slides in from the far edge and fans out into place. Overlap is real occlusion, like a card fan, and the spread is tied to travel, so the content is tightest at the panel edge and reaches its full spacing exactly on arrival. It works on every widget type; the content is snapshotted as pixels, not as text.
+
+![flair.accordion.sweep — the old message bunches into a deck and slides off left, the new one slides in and fans out](docs/transition-accordion.gif)
+
+Requires **led-ticker-core >= 4.31.0**. Two variants:
+
+| Type | Motion |
+| --- | --- |
+| `flair.accordion.sweep` | Cards are scooped up one by one and the stack is pushed off; the incoming stack is laid down card by card. |
+| `flair.accordion.stretch` | The content moves as one piece, squeezing shut as it leaves and opening up as it lands. |
+
+### Config
+
+```toml
+[transitions]
+duration = 2.0
+easing = "ease_in_out"
+
+[[playlist.section]]
+transition = "flair.accordion.sweep"
+
+[[playlist.section]]
+transition = {type = "flair.accordion.stretch", direction = "right"}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `direction` | `"left"` / `"right"` | `"left"` | `"left"` exits left and enters from the right; `"right"` mirrors it. |
+
+Recommended: `duration = 2.0` with `easing = "ease_in_out"`.
+
+### Notes
+
+- **Borders stay still.** A bordered widget keeps its border ring in place, painted over the cards; only the content inside the ring moves.
+- **Two-row widgets.** Each row gets its own deck; the decks move in lockstep.
+- **Background effects.** A widget with a `background` effect (and full-panel image/gif widgets) has no gaps to fan, so it slides as a single card.
+- **Backgrounds.** The section `bg_color` is painted by the engine; the panel switches to the new background during the short empty beat between decks, with no black flash.
+- **Cross-scale sections.** The incoming content is snapshotted at its own scale, so it arrives at its native size.
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
