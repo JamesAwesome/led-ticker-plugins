@@ -4,7 +4,8 @@ and transitions.
 The entry-point name ``flair`` is the plugin namespace, so animations are
 referenced in config.toml as ``animation = "flair.propeller"`` and
 transitions as ``transition = "flair.spinout"`` (or the six
-``flair.laser.<origin>`` beam-write variants).
+``flair.laser.<origin>`` beam-write variants, or the two
+``flair.accordion.<motion>`` card-deck variants).
 
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
@@ -54,6 +55,10 @@ def _import_seam():
 
 def register(api):
     _import_seam()
+    from led_ticker_flair.flair.accordion import (  # noqa: PLC0415
+        AccordionStretch,
+        AccordionSweep,
+    )
     from led_ticker_flair.flair.fairy import (  # noqa: PLC0415
         Fairy,
         FairyAlternating,
@@ -96,4 +101,6 @@ def register(api):
     api.transition("laser.right")(LaserRight)
     api.transition("laser.alternating")(LaserAlternating)
     api.transition("laser.random")(LaserRandom)
+    api.transition("accordion.sweep")(AccordionSweep)
+    api.transition("accordion.stretch")(AccordionStretch)
     api.widget("lottery")(Lottery)
