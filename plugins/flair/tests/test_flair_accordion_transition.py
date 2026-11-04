@@ -447,3 +447,68 @@ class TestContent:
                 assert (col == RED) == (y < boundary), (t, x, y, col)
         assert right._out_plan is not None
         assert len(right._out_plan[0]) == 2
+
+
+def _frames(p: Any, canvas: Any, calls: list, out: Any, inc: Any):
+    """Yield per-frame SetPixel counts for one firing (t 0.02 -> 1.0)."""
+    t = 0.02
+    while t < 1.0:
+        before = len(calls)
+        p.frame_at(round(t, 3), canvas, out, inc)
+        yield round(t, 2), len(calls) - before
+        t += 0.02
+
+
+class TestPerfUniformity:
+    """Committed CI-safe perf gate (laser convention): count WORK per
+    frame, not time, so a deferred-backlog bug fails deterministically."""
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_per_frame_paint_volume_bounded(self, cls):
+        canvas = _StubCanvas(width=160, height=16)
+        p = cls()
+        counts = list(
+            _frames(p, canvas, canvas.calls, _text_widget(TEXT), _text_widget(INC_TEXT))
+        )
+        panel = 160 * 16
+        worst_t, worst = max(counts, key=lambda c: c[1])
+        assert worst <= int(1.5 * panel), (
+            f"frame at t={worst_t} painted {worst} px (> 1.5x panel {panel})"
+        )
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_refire_frames_equally_bounded(self, cls):
+        canvas = _StubCanvas(width=160, height=16)
+        p = cls()
+        o = _text_widget(TEXT)
+        i = _text_widget(INC_TEXT)
+        for t in (0.3, 0.6, 0.96):  # a partial firing, then refire
+            p.frame_at(t, canvas, o, i)
+        panel = 160 * 16
+        for t, n in _frames(p, canvas, canvas.calls, o, i):
+            assert n <= int(1.5 * panel), (t, n)
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_full_panel_image_bounded_bigsign(self, cls):
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        full = _image_widget(Image.new("RGB", (256, 64), (7, 7, 7)))
+        p = cls()
+        for t, n in _frames(p, sc, real.calls, full, full):
+            assert n <= int(1.5 * 256 * 64), (t, n)
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_many_tiny_cards_bounded(self, cls):
+        img = Image.new("RGB", (256, 64), (0, 0, 0))
+        for x in range(0, 256, 2):  # every other column lit: 128 1-px cards
+            for y in range(64):
+                img.putpixel((x, y), (200, 200, 200))
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        w = _image_widget(img)
+        p = cls()
+        for t, n in _frames(p, sc, real.calls, w, w):
+            assert n <= int(1.5 * 256 * 64), (t, n)
+        decks = p._out_plan[0]
+        assert sum(len(d.cards) for d in decks) >= 100
+        assert all(d.peek < 8 for d in decks)
