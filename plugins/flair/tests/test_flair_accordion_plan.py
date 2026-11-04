@@ -156,9 +156,14 @@ def _deck(slots, widths, peek):
     )
 
 
+def _dense_deck():
+    cards = tuple(Card(slot=s, width=5, pixels=()) for s in (0, 2, 4, 6))
+    return Deck(cards=cards, peek=effective_peek(cards, 8))
+
+
 _DECKS = [
     _deck([0, 40, 90], [20, 30, 25], 4.0),
-    _deck([0, 2, 4, 6], [5, 5, 5, 5], 2.0),  # dense: P=8 capped to 2
+    _dense_deck(),  # dense: P=8 capped to 2
     _deck([10, 70], [12, 40], 5.0),
 ]
 _OUT = [am.sweep_out, am.stretch_out]
@@ -200,23 +205,34 @@ def test_in_k1_is_slots():
             assert fn(d, _PW, 1.0) == pytest.approx(_slots(d))
 
 
+def _anchor_travel(fn, d):
+    """Exact per-step (1/100) anchor travel and extra spread allowance."""
+    s = _slots(d)
+    p = d.peek
+    n = len(s)
+    right = max(i * p + c.width for i, c in enumerate(d.cards))
+    if fn is am.sweep_out:
+        g0 = max(_PW - (n - 1) * p, max(s[i] - i * p for i in range(n)))
+        return abs(g0 - (-right - 1)) / 100, 0.0
+    if fn is am.sweep_in:
+        return abs(_PW - min(s[i] - i * p for i in range(n))) / 100, 0.0
+    spread = max(abs((s[i] - s[0]) - i * p) for i in range(n))
+    if fn is am.stretch_out:
+        return abs(s[0] - (-right - 1)) / 100, spread / 100
+    return abs(_PW - s[0]) / 100, spread / 100
+
+
 def test_continuity():
-    # Per-step move of any card is bounded by the anchor's travel plus one
-    # peek (plus, for stretch, the spread collapsing at 1/100 per step).
-    # A discontinuity would blow through that bound.
+    # sweep is 1-Lipschitz in the anchor; stretch adds the spread collapse.
+    # No +P slack: a card snapping a peek at pickup must fail.
     for fn in _OUT + _IN:
         for d in _DECKS:
-            s = _slots(d)
-            spread = max(abs((s[i] - s[0]) - i * d.peek) for i in range(len(s)))
-            extra = spread / 100 if fn in (am.stretch_out, am.stretch_in) else 0.0
+            anchor_dx, extra = _anchor_travel(fn, d)
             prev = fn(d, _PW, 0.0)
             for step in range(1, 101):
                 cur = fn(d, _PW, step / 100)
-                # card 0 sits at the anchor for stretch; for sweep it is
-                # min/max(slot, anchor), so its travel is <= anchor travel.
-                anchor_dx = abs(cur[0] - prev[0])
                 for c, q in zip(cur, prev, strict=True):
-                    assert abs(c - q) <= anchor_dx + d.peek + extra + 1e-9
+                    assert abs(c - q) <= anchor_dx + extra + 1e-9
                 prev = cur
 
 
@@ -238,8 +254,12 @@ def test_t0_positions_equal_slots_clipped_content():
 
 
 def test_stacked_never_wider_than_fanned():
-    d = _DECKS[1]
-    n = len(d.cards)
-    stacked = (n - 1) * d.peek + d.cards[-1].width
-    fanned = d.cards[-1].slot + d.cards[-1].width - d.cards[0].slot
-    assert stacked <= fanned
+    cards = tuple(Card(slot=s, width=5, pixels=()) for s in (0, 2, 4, 6))
+    d = Deck(cards=cards, peek=effective_peek(cards, 8))
+    assert d.peek == 2  # P=8 capped to the average spacing
+    fanned = cards[-1].slot + cards[-1].width - cards[0].slot
+    for fn in _OUT:
+        pos = fn(d, _PW, 1.0)  # fully stacked
+        stacked = pos[-1] + cards[-1].width - pos[0]
+        assert stacked == pytest.approx((len(cards) - 1) * d.peek + 5)
+        assert stacked <= fanned
