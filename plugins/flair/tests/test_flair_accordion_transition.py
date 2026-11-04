@@ -576,11 +576,11 @@ class TestPerfUniformity:
             (deck,), _ring = p._out_plan
             xs = [round(x) for x in p._out(deck, 256, t / 0.475)]
             covered = set()
-            for x, card in zip(xs, deck.cards):
+            for x, card in zip(xs, deck.cards, strict=True):
                 covered.update(range(max(x, 0), min(x + card.width, 256)))
             raw = sum(
                 max(0, min(x + c.width, 256) - max(x, 0))
-                for x, c in zip(xs, deck.cards)
+                for x, c in zip(xs, deck.cards, strict=True)
             )
             overlapped |= raw > len(covered)
             assert painted <= len(covered) * 64, (t, painted, len(covered) * 64)
