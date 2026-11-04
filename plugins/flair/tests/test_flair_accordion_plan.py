@@ -2,10 +2,14 @@
 
 from types import SimpleNamespace
 
+import pytest
 from led_ticker.plugin import ScaledCanvas
 
+from led_ticker_flair.flair import accordion_motion as am
 from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair.accordion_cards import (
+    Card,
+    Deck,
     band_rows,
     build_decks,
     effective_peek,
@@ -136,3 +140,106 @@ def test_two_row_bands_scaled():
     widget = SimpleNamespace(border=None, bottom_text="x", top_row_height=None)
     bands = band_rows(widget, canvas, 64, 0)
     assert bands == [range(0, 32), range(32, 64)]
+
+
+# ---- motion functions (Task 3) ----
+
+_PW = 160
+
+
+def _deck(slots, widths, peek):
+    return Deck(
+        cards=tuple(
+            Card(slot=s, width=w, pixels=()) for s, w in zip(slots, widths, strict=True)
+        ),
+        peek=peek,
+    )
+
+
+_DECKS = [
+    _deck([0, 40, 90], [20, 30, 25], 4.0),
+    _deck([0, 2, 4, 6], [5, 5, 5, 5], 2.0),  # dense: P=8 capped to 2
+    _deck([10, 70], [12, 40], 5.0),
+]
+_OUT = [am.sweep_out, am.stretch_out]
+_IN = [am.sweep_in, am.stretch_in]
+
+
+def _slots(d):
+    return [float(c.slot) for c in d.cards]
+
+
+def test_empty_deck():
+    d = Deck(cards=(), peek=0.0)
+    for fn in _OUT + _IN:
+        assert fn(d, _PW, 0.5) == []
+
+
+def test_out_k0_is_slots():
+    for fn in _OUT:
+        for d in _DECKS:
+            assert fn(d, _PW, 0.0) == pytest.approx(_slots(d))
+
+
+def test_out_k1_offscreen():
+    for fn in _OUT:
+        for d in _DECKS:
+            pos = fn(d, _PW, 1.0)
+            assert all(p + c.width <= 0 for p, c in zip(pos, d.cards, strict=True))
+
+
+def test_in_k0_offscreen():
+    for fn in _IN:
+        for d in _DECKS:
+            assert all(p >= _PW for p in fn(d, _PW, 0.0))
+
+
+def test_in_k1_is_slots():
+    for fn in _IN:
+        for d in _DECKS:
+            assert fn(d, _PW, 1.0) == pytest.approx(_slots(d))
+
+
+def test_continuity():
+    # Per-step move of any card is bounded by the anchor's travel plus one
+    # peek (plus, for stretch, the spread collapsing at 1/100 per step).
+    # A discontinuity would blow through that bound.
+    for fn in _OUT + _IN:
+        for d in _DECKS:
+            s = _slots(d)
+            spread = max(abs((s[i] - s[0]) - i * d.peek) for i in range(len(s)))
+            extra = spread / 100 if fn in (am.stretch_out, am.stretch_in) else 0.0
+            prev = fn(d, _PW, 0.0)
+            for step in range(1, 101):
+                cur = fn(d, _PW, step / 100)
+                # card 0 sits at the anchor for stretch; for sweep it is
+                # min/max(slot, anchor), so its travel is <= anchor travel.
+                anchor_dx = abs(cur[0] - prev[0])
+                for c, q in zip(cur, prev, strict=True):
+                    assert abs(c - q) <= anchor_dx + d.peek + extra + 1e-9
+                prev = cur
+
+
+def test_sweep_in_lands_right_to_left():
+    d = _deck([0, 10, 20], [5, 5, 5], 2.0)
+    landed = []
+    for i in range(3):
+        for step in range(0, 1001):
+            if am.sweep_in(d, _PW, step / 1000)[i] == pytest.approx(d.cards[i].slot):
+                landed.append(step)
+                break
+    assert landed[0] > landed[1] > landed[2]
+
+
+def test_t0_positions_equal_slots_clipped_content():
+    d = _deck([-3, 150], [6, 8], 4.0)
+    for fn in _OUT:
+        assert fn(d, _PW, 0.0) == pytest.approx([-3.0, 150.0])
+
+
+def test_stacked_never_wider_than_fanned():
+    d = _DECKS[1]
+    n = len(d.cards)
+    stacked = (n - 1) * d.peek + d.cards[-1].width
+    fanned = d.cards[-1].slot + d.cards[-1].width - d.cards[0].slot
+    assert stacked <= fanned
