@@ -263,3 +263,78 @@ def test_stacked_never_wider_than_fanned():
         stacked = pos[-1] + cards[-1].width - pos[0]
         assert stacked == pytest.approx((len(cards) - 1) * d.peek + 5)
         assert stacked <= fanned
+
+
+# --- Task 4: occluding compositor ---------------------------------------
+
+from led_ticker_flair.flair.accordion_compose import compose  # noqa: E402
+
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+
+
+def _full_card(slot, width, rgb, rows=(0,)):
+    return Card(
+        slot=slot,
+        width=width,
+        pixels=tuple((dx, y, rgb) for dx in range(width) for y in rows),
+    )
+
+
+def _run(deck, positions, W, mirror=False):
+    calls = []
+    compose(
+        deck,
+        positions,
+        W,
+        lambda x, y, r, g, b: calls.append((x, y, (r, g, b))),
+        mirror=mirror,
+    )
+    return calls
+
+
+def test_top_card_occludes():
+    deck = Deck(cards=(_full_card(0, 4, RED), _full_card(2, 4, BLUE)), peek=2.0)
+    calls = _run(deck, [0, 2], 10)
+    got = {x: rgb for x, _, rgb in calls}
+    assert got == {0: RED, 1: RED, 2: BLUE, 3: BLUE, 4: BLUE, 5: BLUE}
+    assert len(calls) == 6
+
+
+def test_unlit_top_cells_paint_nothing():
+    top = Card(slot=0, width=2, pixels=((0, 0, BLUE),))  # no pixel at (1, 0)
+    under = Card(slot=0, width=2, pixels=((0, 0, RED), (1, 0, RED)))
+    deck = Deck(cards=(under, top), peek=1.0)
+    calls = _run(deck, [0, 0], 4)
+    assert calls == [(0, 0, BLUE)]
+
+
+def test_offscreen_clipped():
+    deck = Deck(cards=(_full_card(0, 4, RED),), peek=1.0)
+    calls = _run(deck, [-2], 10)
+    assert {x for x, _, _ in calls} == {0, 1}
+    calls = _run(deck, [8], 10)
+    assert {x for x, _, _ in calls} == {8, 9}
+
+
+def test_mirror_maps_columns():
+    deck = Deck(cards=(_full_card(0, 1, RED),), peek=1.0)
+    assert _run(deck, [0], 10, mirror=True) == [(9, 0, RED)]
+
+
+def test_t0_matches_snapshot_clipped_content():
+    r = Raster(20, 6)
+    _cols(r, [0, 1, 2, 8, 9, 17, 18, 19])  # clipped at both edges
+    cards = _seg(r)
+    deck = Deck(cards=tuple(cards), peek=2.0)
+    pos = am.sweep_out(deck, 20, 0.0)
+    calls = _run(deck, pos, 20)
+    painted = {(x, y) for x, y, _ in calls}
+    lit = {
+        (x, y)
+        for x in range(20)
+        for y in range(6)
+        if r.get(x, y) is not None and r.get(x, y) != (0, 0, 0)
+    }
+    assert painted == lit
+    assert len(calls) == len(painted)
