@@ -219,7 +219,7 @@ phase progress. Joining or leaving the stack never jumps.
   outgoing bg before 0.5 and incoming bg after, so a cross-scale section
   change gets its native size for the whole incoming phase, and bg needs no
   handling in the plugin. (Unlike laser, which pins 1.0.)
-- Refire detection: `t < self._last_t` invalidates both snapshots and the
+- Refire detection: `t == 0.0 or t < self._last_t` invalidates both snapshots and the
   card lists. Re-allocate rasters only when the geometry key (real w, h,
   scale, content_height) changes.
 - Re-derive `real` from the live canvas on every call and never cache it
@@ -313,7 +313,7 @@ that.
 - **SetImage widget:** snapshots, becomes one card, and slides.
 - **Lazy incoming snapshot:** the incoming widget is not drawn before
   t=0.5. A cross-scale fixture snapshots incoming at the re-wrapped scale.
-- **Refire:** re-snapshots changed content. Equal `t` is not a refire.
+- **Refire:** re-snapshots changed content. `t == 0.0` always refires; an equal non-zero `t` is not a refire.
   The outgoing widget is never drawn live after its snapshot (drift probe).
 - **Registration:** both types are present as distinct instances, and a
   bad `direction` raises `ValueError` at construction.
