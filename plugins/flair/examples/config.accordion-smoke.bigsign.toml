@@ -217,7 +217,7 @@ transition = "flair.accordion.sweep"
 
 [[playlist.section.widget]]
 type = "gif"
-path = "/Users/james/projects/github/jamesawesome/led-ticker/config/assets/phoenix.gif"
+path = "assets/phoenix.gif"
 play_count = 1
 
 [[playlist.section.widget]]

@@ -386,7 +386,7 @@ Direction is **not** a knob — pick the variant (`.forward` / `.reverse` / `.al
 
 ![flair.laser — three beams erase the old message from the top, then write the new one](docs/transition-laser.gif)
 
-Requires **led-ticker-core >= 4.31.0**. Six variants, named by the edge the beams come from:
+Requires **led-ticker-core >= 4.32**. Six variants, named by the edge the beams come from:
 
 | Type | Beams come from | Raster |
 | --- | --- | --- |
@@ -461,7 +461,7 @@ The erase direction is **not** a knob — pick the variant. The beam colour is a
 
 ![flair.accordion.sweep — the old message bunches into a deck and slides off left, the new one slides in and fans out](docs/transition-accordion.gif)
 
-Requires **led-ticker-core >= 4.31.0**. Two variants:
+Requires **led-ticker-core >= 4.32**. Two variants:
 
 | Type | Motion |
 | --- | --- |
