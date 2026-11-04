@@ -449,14 +449,64 @@ class TestContent:
         assert len(right._out_plan[0]) == 2
 
 
-def _frames(p: Any, canvas: Any, calls: list, out: Any, inc: Any):
-    """Yield per-frame SetPixel counts for one firing (t 0.02 -> 1.0)."""
-    t = 0.02
-    while t < 1.0:
+# Overpaint slack: 0. Each lit card pixel is painted at most once per frame
+# (the compositor's owner check) and the ring once, so painted SetPixels can
+# never exceed lit-snapshot pixels + ring pixels. Any slack would only hide
+# an overpaint bug.
+_SLACK = 0
+
+
+def _lit_bound(p: Any, t: float) -> int | None:
+    """Max SetPixels frame ``t`` may paint, from the active plan; None for
+    the snap frame (t >= SNAP_THRESHOLD: the widget's own draw)."""
+    if t >= 0.95:
+        return None
+    if t < 0.475:
+        plan = p._out_plan
+    elif t >= 0.5:
+        plan = p._in_plan
+    else:
+        return _SLACK  # the beat: nothing painted
+    decks, ring = plan
+    return sum(len(c.pixels) for d in decks for c in d.cards) + len(ring) + _SLACK
+
+
+def _sweep(p: Any, canvas: Any, calls: list, out: Any, inc: Any, panel: int):
+    """One firing, t = 0.0, 0.02 ... 0.98: assert the panel bound and the
+    lit-snapshot overpaint bound on every frame."""
+    for n in range(50):
+        t = round(n * 0.02, 3)
         before = len(calls)
-        p.frame_at(round(t, 3), canvas, out, inc)
-        yield round(t, 2), len(calls) - before
-        t += 0.02
+        p.frame_at(t, canvas, out, inc)
+        painted = len(calls) - before
+        assert painted <= int(1.5 * panel), (t, painted)
+        bound = _lit_bound(p, t)
+        if bound is not None:
+            assert painted <= bound, (t, painted, bound)
+
+
+def _dense_img() -> Any:
+    """15 fully-lit 12-px columns spaced 16 apart on a 256x64 raster; the
+    deck peek is 8 so neighbours overlap by 4 px (buried card area)."""
+    img = Image.new("RGB", (256, 64), (0, 0, 0))
+    for c in range(15):
+        for x in range(8 + c * 16, 8 + c * 16 + 12):
+            for y in range(64):
+                img.putpixel((x, y), (200, 100, 50))
+    return img
+
+
+def _tiny_img() -> Any:
+    img = Image.new("RGB", (256, 64), (0, 0, 0))
+    for x in range(0, 256, 2):  # every other column lit: 128 1-px cards
+        for y in range(64):
+            img.putpixel((x, y), (200, 200, 200))
+    return img
+
+
+def _bigsign(img: Any):
+    real = _StubCanvas(256, 64)
+    return real, ScaledCanvas(real, scale=4, content_height=16), _image_widget(img)
 
 
 class TestPerfUniformity:
@@ -466,14 +516,13 @@ class TestPerfUniformity:
     @pytest.mark.parametrize("cls", BOTH)
     def test_per_frame_paint_volume_bounded(self, cls):
         canvas = _StubCanvas(width=160, height=16)
-        p = cls()
-        counts = list(
-            _frames(p, canvas, canvas.calls, _text_widget(TEXT), _text_widget(INC_TEXT))
-        )
-        panel = 160 * 16
-        worst_t, worst = max(counts, key=lambda c: c[1])
-        assert worst <= int(1.5 * panel), (
-            f"frame at t={worst_t} painted {worst} px (> 1.5x panel {panel})"
+        _sweep(
+            cls(),
+            canvas,
+            canvas.calls,
+            _text_widget(TEXT),
+            _text_widget(INC_TEXT),
+            160 * 16,
         )
 
     @pytest.mark.parametrize("cls", BOTH)
@@ -484,31 +533,55 @@ class TestPerfUniformity:
         i = _text_widget(INC_TEXT)
         for t in (0.3, 0.6, 0.96):  # a partial firing, then refire
             p.frame_at(t, canvas, o, i)
-        panel = 160 * 16
-        for t, n in _frames(p, canvas, canvas.calls, o, i):
-            assert n <= int(1.5 * panel), (t, n)
+        _sweep(p, canvas, canvas.calls, o, i, 160 * 16)
 
     @pytest.mark.parametrize("cls", BOTH)
-    def test_full_panel_image_bounded_bigsign(self, cls):
-        real = _StubCanvas(256, 64)
-        sc = ScaledCanvas(real, scale=4, content_height=16)
-        full = _image_widget(Image.new("RGB", (256, 64), (7, 7, 7)))
+    @pytest.mark.parametrize("refire", [False, True])
+    def test_full_panel_image_bounded_bigsign(self, cls, refire):
+        real, sc, w = _bigsign(Image.new("RGB", (256, 64), (7, 7, 7)))
         p = cls()
-        for t, n in _frames(p, sc, real.calls, full, full):
-            assert n <= int(1.5 * 256 * 64), (t, n)
+        if refire:
+            for t in (0.3, 0.6, 0.96):
+                p.frame_at(t, sc, w, w)
+        _sweep(p, sc, real.calls, w, w, 256 * 64)
 
     @pytest.mark.parametrize("cls", BOTH)
-    def test_many_tiny_cards_bounded(self, cls):
-        img = Image.new("RGB", (256, 64), (0, 0, 0))
-        for x in range(0, 256, 2):  # every other column lit: 128 1-px cards
-            for y in range(64):
-                img.putpixel((x, y), (200, 200, 200))
-        real = _StubCanvas(256, 64)
-        sc = ScaledCanvas(real, scale=4, content_height=16)
-        w = _image_widget(img)
+    @pytest.mark.parametrize("refire", [False, True])
+    def test_many_tiny_cards_bounded(self, cls, refire):
+        real, sc, w = _bigsign(_tiny_img())
         p = cls()
-        for t, n in _frames(p, sc, real.calls, w, w):
-            assert n <= int(1.5 * 256 * 64), (t, n)
+        if refire:
+            for t in (0.3, 0.6, 0.96):
+                p.frame_at(t, sc, w, w)
+        _sweep(p, sc, real.calls, w, w, 256 * 64)
         decks = p._out_plan[0]
         assert sum(len(d.cards) for d in decks) >= 100
         assert all(d.peek < 8 for d in decks)
+
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_no_buried_card_overpaint(self, cls):
+        """Dense overlapping deck: painted pixels must not exceed the lit
+        area of the VISIBLE (union) card spans, so painting any buried
+        card pixel fails. Columns are fully lit (64 rows)."""
+        real, sc, w = _bigsign(_dense_img())
+        p = cls()
+        overlapped = False
+        for n in range(24):  # outgoing phase + beat
+            t = round(n * 0.02, 3)
+            if t >= 0.475:
+                break
+            before = len(real.calls)
+            p.frame_at(t, sc, w, w)
+            painted = len(real.calls) - before
+            (deck,), _ring = p._out_plan
+            xs = [round(x) for x in p._out(deck, 256, t / 0.475)]
+            covered = set()
+            for x, card in zip(xs, deck.cards):
+                covered.update(range(max(x, 0), min(x + card.width, 256)))
+            raw = sum(
+                max(0, min(x + c.width, 256) - max(x, 0))
+                for x, c in zip(xs, deck.cards)
+            )
+            overlapped |= raw > len(covered)
+            assert painted <= len(covered) * 64, (t, painted, len(covered) * 64)
+        assert overlapped, "fixture never produced buried card area"
