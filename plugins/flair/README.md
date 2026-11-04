@@ -495,7 +495,7 @@ Recommended: `duration = 2.0` with `easing = "ease_in_out"`.
 - **Borders stay still.** A bordered widget keeps its border ring in place, painted over the cards; only the content inside the ring moves.
 - **Two-row widgets.** Each row gets its own deck; the decks move in lockstep.
 - **Background effects.** A widget with a `background` effect (and full-panel image/gif widgets) has no gaps to fan, so it slides as a single card.
-- **Backgrounds.** The section `bg_color` is painted by the engine; the panel switches to the new background during the short empty beat between decks, with no black flash.
+- **Backgrounds.** The section `bg_color` is painted by the engine, never by the transition. The panel switches to the new section's background at the halfway point, on the same frame the incoming deck starts to slide in, with no black flash. The short empty beat just before it (which can be zero frames on a fast transition) still shows the outgoing background.
 - **Cross-scale sections.** The incoming content is snapshotted at its own scale, so it arrives at its native size.
 
 ## Fisheye animation
