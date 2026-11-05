@@ -10,6 +10,7 @@ from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair.accordion_cards import (
     Card,
     Deck,
+    assign_bands,
     band_rows,
     build_decks,
     effective_peek,
@@ -585,15 +586,99 @@ def test_two_row_descender_crossing_stays_in_one_deck_bigsign():
     _assert_rows_stay_whole(plan, 32)
 
 
-def test_band_split_falls_back_to_nominal_without_unlit_row():
+def _owned(r, boundary=8, small=2, pull=(0, 0)):
+    return assign_bands(r, range(r.height), range(r.width), boundary, small, pull=pull)
+
+
+def test_band_split_glyph_goes_whole_to_its_majority():
     r = Raster(10, 16)
-    for y in range(16):
-        r.SetPixel(3, y, *W)  # one tall glyph: no blank row anywhere
-    widget = SimpleNamespace(border=None, bottom_text="x", top_row_height=None)
-    assert band_rows(widget, r, 16, 0, raster=r, cols=range(10)) == [
-        range(0, 8),
-        range(8, 16),
-    ]
+    for y in range(3, 10):
+        r.SetPixel(3, y, *W)  # one glyph, rows 3..9: crosses row 8
+    top, bottom = _owned(r)
+    assert top == {(3, y) for y in range(3, 10)}
+    assert bottom == set()
+
+
+def test_band_split_touching_large_glyphs_keep_their_halves():
+    # A top glyph A (column 0 plus a foot on row 7) grazes a bottom capital
+    # B (column 4): two LARGE pieces touching across the boundary are two
+    # glyphs, so the nominal split stands between them. A's descender tip
+    # (6, 8) still rides with A.
+    r = Raster(10, 16)
+    a = {(0, y) for y in range(2, 8)} | {(x, 7) for x in range(0, 6)}
+    b = {(4, y) for y in range(8, 14)} | {(5, 13)}
+    for x, y in a | b | {(6, 8)}:
+        r.SetPixel(x, y, *W)
+    top, bottom = _owned(r)
+    assert top == a | {(6, 8)}
+    assert bottom == b
+
+
+def test_band_split_small_chain_between_two_rows_keeps_nominal():
+    # top A, bottom tip t, top tip s, bottom B, each touching the next
+    # diagonally: no single glyph owns the chain, so each piece keeps its
+    # own half (one merged group would hand all of it to one deck).
+    r = Raster(10, 16)
+    a = {(0, y) for y in range(2, 8)}
+    b = {(3, y) for y in range(8, 14)}
+    for x, y in a | b | {(1, 8), (2, 7)}:
+        r.SetPixel(x, y, *W)
+    top, bottom = _owned(r)
+    assert top == a | {(2, 7)}
+    assert bottom == b | {(1, 8)}
+
+
+def test_band_split_dot_inherits_its_stem_across_the_boundary():
+    # A bottom-row i nudged up: its dot (row 7) sits in the top half,
+    # 1 blank row over its stem (rows 9..13).
+    r = Raster(10, 16)
+    r.SetPixel(3, 7, *W)
+    for y in range(9, 14):
+        r.SetPixel(3, y, *W)
+    top, bottom = _owned(r)
+    assert top == set()
+    assert (3, 7) in bottom
+
+
+def _assert_rows_separate(plan):
+    """No top-colour pixel in the bottom deck and vice versa."""
+    red, green = (255, 0, 0), (0, 255, 0)
+    top, bottom = plan.decks
+    assert any(rgb == red for c in top.cards for *_, rgb in c.pixels)
+    assert any(rgb == green for c in bottom.cards for *_, rgb in c.pixels)
+    assert all(rgb != green for c in top.cards for *_, rgb in c.pixels)
+    assert all(rgb != red for c in bottom.cards for *_, rgb in c.pixels)
+
+
+@pytest.mark.parametrize(
+    ("w", "h", "scale", "top", "bot", "nudge"),
+    [
+        (160, 16, 1, "Open now", "now serving", {"bottom_text_y_offset": -1}),
+        (160, 16, 1, "Open now", "join in", {"bottom_text_y_offset": -1}),
+        (256, 64, 4, "Good morning", "join in", {"bottom_text_y_offset": -1}),
+        (256, 64, 4, "Open now", "now serving", {"bottom_text_y_offset": -1}),
+    ],
+)
+def test_two_row_dots_stay_with_their_row(w, h, scale, top, bot, nudge):
+    # A 1-row nudge puts the bottom row's i/j dots on (or next to) the
+    # nominal boundary. The old nearest-unlit-row split moved the boundary
+    # onto the dot-to-stem gap and handed the dots to the TOP deck.
+    plan, _ = _two_row_plan(w, h, scale, top=top, bot=bot, **nudge)
+    _assert_rows_separate(plan)
+
+
+@pytest.mark.parametrize(
+    ("w", "h", "scale", "top", "bot"),
+    [
+        (160, 16, 1, "Happy hour", "12:30"),  # colon under a top descender
+        (160, 16, 1, "8:30", "WORLD"),  # colon over a bottom capital
+        (256, 64, 4, "Happy hour", "12:30"),
+        (256, 64, 4, "!!!", "WORLD"),  # "!" dot between its bar and the row below
+    ],
+)
+def test_two_row_colon_and_bang_dots_stay_with_their_row(w, h, scale, top, bot):
+    plan, _ = _two_row_plan(w, h, scale, top=top, bot=bot, bottom_text_y_offset=-1)
+    _assert_rows_separate(plan)
 
 
 def test_background_two_row_is_one_card_rigid_under_sweep():

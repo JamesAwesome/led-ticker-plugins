@@ -119,8 +119,9 @@ exception: core's `draw()` paints only their picture during transitions
   `resolve_band_heights(content_height, top_row_height)`, which is on the
   public plugin surface, converted to real rows through `scale` and the
   wrapper's vertical offset.
-- **Segmentation.** Cards are segmented per band, and occlusion is per
-  band (a per-band owner array).
+- **Segmentation.** Each band's cards are segmented from the pixels
+  assigned to that band (see the two-row band split below), and occlusion
+  is per band (a per-band owner array).
 - **Motion.** Both decks use the same anchor and spread progression, so
   they move in sync. Each deck uses its own slots and peek. The shared
   trajectory comes from the union of the decks' extents (sweep: one hand
@@ -142,11 +143,27 @@ would grow while "squeezing" and sweep would race.
   construction. The one merge: a widget with a background effect uses a
   single band over the whole content area (even a `two_row`) and merges it
   into ONE card, so it slides as one piece and its rows cannot shear.
-- **Two-row band split.** The nominal boundary is the top band's height. If
-  glyphs cross it (a `text_y_offset` nudge, a descender), the split moves to
-  the fully-unlit content row nearest the boundary, searched within a quarter
-  of the band height (at least 1 row) each way, so no glyph is cut across
-  decks. With no unlit row in that window it stays at the nominal boundary.
+- **Two-row band split.** The nominal boundary is the top band's height.
+  Pixels are assigned per glyph, not per row, so no glyph is cut across
+  decks when it crosses the boundary (a `text_y_offset` nudge, a descender).
+  Ring pixels are never content. "Small" means at most a quarter of the
+  shorter band tall (at least 1 real row); "near" means at most half that
+  many blank rows apart in a shared column.
+  - A glyph is an 8-connected component of lit pixels. It goes whole to the
+    band that holds the majority of its pixels (the top band wins a tie).
+  - Two large pieces that touch across the boundary are two rows' glyphs,
+    and each keeps its own side (the nominal split). So does every piece of
+    a chain of small pieces bridging two such glyphs.
+  - A small piece near another piece on its own side (a dot over its stem,
+    a colon's other dot) stays on that side even where it touches a glyph
+    across the boundary. The exception is when the other row's text is
+    nudged further toward the boundary: then the piece is that row's
+    descender tip.
+  - A small detached component that is not near a piece on its own side
+    (an i/j dot pushed across the boundary) inherits the band of the
+    nearest large component sharing a column with it, searching up and
+    down within "near". With no such neighbour, or a tie between bands, it
+    keeps its own majority.
 
 ## Stack geometry
 
@@ -315,8 +332,8 @@ that.
   - The inset content is split into multiple cards.
   - Each core border class's ring depth is honoured.
 - **Two-row:**
-  - Cards are segmented per band.
-  - No card spans the band boundary.
+  - Each band's cards hold only that band's pixels.
+  - No glyph is split across the two decks.
   - Both decks reach stacked or landed at the same `t`.
 - **Occlusion:** two overlapping cards paint only the top card in their
   shared columns, and the buried card's peek columns show its own pixels.
