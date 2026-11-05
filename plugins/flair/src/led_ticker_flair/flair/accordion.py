@@ -73,17 +73,23 @@ def _attrs_widget(widget: Any) -> Any:
     return None
 
 
-def _copy_frame_state(live: Any, copy: Any) -> None:
+def _copy_frame_state(live: Any, copy: Any, keep: str) -> None:
     """Give ``copy`` the live widget's frame counters and paused state (so
-    animated effects paint the same frame), then resolve its value tokens
-    once: a paused copy would otherwise draw the raw token template."""
+    animated effects paint the same frame), plus the live widget's FROZEN
+    resolved text/segments for the row it keeps (``"top"`` or ``"bottom"``).
+    The copy must draw exactly what the live widget draws, so it never
+    resolves tokens against the registry itself; it stays locked. Raises
+    ``AttributeError`` when ``live`` lacks the resolved-state attributes (the
+    caller falls back to the nominal split)."""
     if isinstance(live, FrameAwareBase):
         for f in attrs.fields(FrameAwareBase):
             value = getattr(live, f.name)
             setattr(copy, f.name, dict(value) if isinstance(value, dict) else value)
-    resolve = getattr(copy, "resolve_tokens_now", None)
-    if callable(resolve):
-        resolve()
+    resolved = getattr(live, f"_resolved_{keep}")
+    segments = getattr(live, f"_{keep}_segments")
+    setattr(copy, f"_resolved_{keep}", resolved)
+    setattr(copy, f"_{keep}_segments", segments)
+    copy._resolution_locked = True
 
 
 class _Accordion:
@@ -182,11 +188,14 @@ class _Accordion:
                 return None
             drop = {n: None for n in _DROP_FIELDS if n in fields and fields[n].init}
             out: list[Raster] = []
-            for slot, blank in ((3, "bottom_text"), (4, "top_text")):
+            for slot, blank, keep in (
+                (3, "bottom_text", "top"),
+                (4, "top_text", "bottom"),
+            ):
                 with warnings.catch_warnings():  # e.g. a deprecated alias
                     warnings.simplefilter("ignore")
                     copy = attrs.evolve(live, **drop, **{blank: " "})
-                _copy_frame_state(live, copy)
+                _copy_frame_state(live, copy, keep)
                 raster = self._scratch(slot, w, h)
                 snapshot_into(raster, canvas, copy, cursor_pos)
                 out.append(raster)

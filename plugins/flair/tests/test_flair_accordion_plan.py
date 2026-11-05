@@ -756,13 +756,19 @@ def test_planning_leaves_the_live_widget_untouched():
     from led_ticker.backends.headless import HeadlessCanvas
     from led_ticker.borders import RainbowChaseBorder
     from led_ticker.color_providers import Rainbow
+    from led_ticker.sources import DataRegistry, StaticSource, set_data_registry
     from led_ticker.widgets.message import TickerMessage
     from led_ticker.widgets.two_row import TwoRowMessage
 
     from led_ticker_flair.flair.accordion import AccordionSweep
 
+    reg = DataRegistry()
+    src = StaticSource(id="cond", value="jog by")
+    src.refresh()
+    reg.add(src)
+    set_data_registry(reg)
     widget = TwoRowMessage(
-        "jog by",
+        ":cond:",
         "WORLD",
         top_color=Rainbow(),
         bottom_color=Rainbow(),
@@ -770,9 +776,12 @@ def test_planning_leaves_the_live_widget_untouched():
     )
     for _ in range(7):
         widget.advance_frame()
-    widget.pause_frame()  # as run_transition does
     canvas = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
-    widget.draw(canvas)  # warm the widget's own width caches, as a hold does
+    widget.draw(canvas)  # warm caches + resolve tokens, as a hold does
+    widget.pause_frame()  # as run_transition does
+    assert widget._resolved_top == "jog by"
+    src.value = "changed"
+    src.refresh()
     before = attrs.astuple(widget, recurse=False)
     effect_frames = dict(widget._effect_frames)
     p = AccordionSweep()
@@ -783,6 +792,43 @@ def test_planning_leaves_the_live_widget_untouched():
     assert widget._effect_frames == effect_frames
     assert widget._frame_count == 7
     assert widget._frame_paused is True
+    assert widget._resolved_top == "jog by"
+    assert widget._resolved_bottom == "WORLD"
+    assert widget._resolution_locked is True
+
+
+def test_solo_rows_cover_full_snapshot_when_token_changes_after_freeze():
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.sources import DataRegistry, StaticSource, set_data_registry
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair._raster import Raster, snapshot_into
+    from led_ticker_flair.flair.accordion import AccordionSweep
+    from led_ticker_flair.flair.accordion_cards import is_lit
+
+    reg = DataRegistry()
+    src = StaticSource(id="cond", value="Light rain")
+    src.refresh()
+    reg.add(src)
+    set_data_registry(reg)
+    w = TwoRowMessage(":cond:", "WORLD", top_text_y_offset=2, bottom_text_y_offset=-2)
+    c = HeadlessCanvas(160, 16)
+    w.draw(c)
+    w.pause_frame()
+    src.value = "Fog"
+    src.refresh()
+    full = Raster(160, 16)
+    snapshot_into(full, c, w, 0)
+    solo = AccordionSweep()._solo_rows(c, w, 0, 160, 16)
+    assert solo is not None
+
+    def lit(r):
+        return {(x, y) for x in range(160) for y in range(16) if is_lit(r.get(x, y))}
+
+    full_px, top_px, bot_px = lit(full), lit(solo[0]), lit(solo[1])
+    assert full_px
+    assert full_px - top_px - bot_px == set()
+    assert w._resolved_top == "Light rain"
 
 
 def test_solo_rows_unwraps_the_transition_guard():
