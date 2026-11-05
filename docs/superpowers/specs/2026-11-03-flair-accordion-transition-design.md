@@ -138,8 +138,15 @@ would grow while "squeezing" and sweep would race.
 - **Effective peek, per deck:** `P_eff = min(P, (slot_{n−1} − slot_0) / (n − 1))`,
   with `P_eff = P` when `n ≤ 1`. The stacked deck is then never wider than
   the fanned one.
-- **No card cap and no merging.** Cards smaller than one real column are
-  impossible by construction.
+- **No card cap.** Cards smaller than one real column are impossible by
+  construction. The one merge: a widget with a background effect uses a
+  single band over the whole content area (even a `two_row`) and merges it
+  into ONE card, so it slides as one piece and its rows cannot shear.
+- **Two-row band split.** The nominal boundary is the top band's height. If
+  glyphs cross it (a `text_y_offset` nudge, a descender), the split moves to
+  the fully-unlit content row nearest the boundary, searched within a quarter
+  of the band height (at least 1 row) each way, so no glyph is cut across
+  decks. With no unlit row in that window it stays at the nominal boundary.
 
 ## Stack geometry
 
