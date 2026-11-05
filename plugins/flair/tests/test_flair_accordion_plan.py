@@ -488,3 +488,16 @@ def test_exact_ring_untrusted_render_falls_back():
         snap, widget, snap, mirror=False, border_only=other
     )
     assert under == [] and {x for x, _, _ in ring} == {0, 9}
+
+
+def test_sweep_out_hand_starts_at_right_edge():
+    # Spec: g starts at max(W-(n-1)P, ...): the hand begins at the panel's
+    # right edge, so left-aligned content stays in its slots while the hand
+    # crosses the empty right part. Without the term the hand starts at the
+    # content and the first card moves at once.
+    d = _deck([2, 10, 20], [4, 4, 4], 3.0)
+    for k in (0.02, 0.05, 0.1):
+        assert am.sweep_out(d, _PW, k) == pytest.approx(_slots(d)), k
+    # ... and it does start moving eventually.
+    assert am.sweep_out(d, _PW, 0.9) != pytest.approx(_slots(d))
+

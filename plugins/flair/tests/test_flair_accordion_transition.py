@@ -887,3 +887,48 @@ class TestPerfUniformity:
             overlapped |= raw > len(covered)
             assert painted <= len(covered) * 64, (t, painted, len(covered) * 64)
         assert overlapped, "fixture never produced buried card area"
+
+
+class TestCycle2Gaps:
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_refire_with_new_incoming_slides_the_new_widget(self, cls):
+        p = cls()
+        out = _text_widget(TEXT)
+        inc_b = _text_widget(_glyph(10, 3, 4, 10, GREEN))
+        for t in (0.0, 0.3, 0.6, 0.9):  # firing 1 leaves _in_plan = B's deck
+            _paint(p, t, out, inc_b)
+        inc_c = _text_widget(_glyph(10, 3, 4, 10, BLUE))
+        _paint(p, 0.0, out, inc_c)
+        for t in (0.3, 0.6, 0.9):
+            c = _paint(p, t, out, inc_c)
+            if t >= 0.5:
+                colours = {col for col in c._pixels.values()}
+                assert colours == {BLUE}, (t, colours)
+        assert inc_c.draw.call_count >= 1
+
+    def test_border_probe_is_cleared_between_widgets(self):
+        # Outgoing: 2px blue ring. Incoming: 1px green ring + left text.
+        # A stale second ring layer in the shared border-only raster would
+        # drop the exact-ring match under 50% and freeze incoming text in
+        # the ring zone at the panel edge while the deck is still off-panel.
+        from led_ticker.borders import ConstantBorder
+        from led_ticker.widgets.message import TickerMessage
+
+        out = TickerMessage(
+            text="AB",
+            center=True,
+            font_color=(255, 255, 0),
+            border=ConstantBorder((0, 0, 255), thickness=2),
+        )
+        inc = TickerMessage(
+            text="HELLO",
+            center=False,
+            font_color=RED,
+            border=ConstantBorder(GREEN, thickness=1),
+        )
+        p = AccordionSweep()
+        _paint(p, 0.0, out, inc, w=160, h=16)
+        c = _paint(p, 0.5, out, inc, w=160, h=16)
+        assert p._in_plan is not None
+        assert p._in_plan.under, "incoming fell back to the depth ring"
+        assert not any(col == RED for col in c._pixels.values())
