@@ -525,3 +525,101 @@ def test_background_widget_is_one_card_per_band(mirror, frame):
     decks = p._out_plan.decks
     assert [len(d.cards) for d in decks] == [1]
     assert decks[0].cards[0].pixels
+
+
+def _two_row_plan(w, h, scale, *, font=None, top="jog by 9pm", bot="STANDUP", **kw):
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.plugin import make_color
+    from led_ticker.widgets.message import TickerMessage
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair.accordion import AccordionSweep
+
+    fonts = {} if font is None else {"top_font": font, "bottom_font": font}
+    widget = TwoRowMessage(
+        top,
+        bot,
+        top_color=make_color(255, 0, 0),
+        bottom_color=make_color(0, 255, 0),
+        **fonts,
+        **kw,
+    )
+    real = HeadlessCanvas(w, h)
+    canvas = ScaledCanvas(real, scale=scale, content_height=16) if scale > 1 else real
+    p = AccordionSweep()
+    p.frame_at(0.0, canvas, widget, TickerMessage(text="X"))
+    return p._out_plan, canvas
+
+
+def _assert_rows_stay_whole(plan, boundary):
+    red, green = (255, 0, 0), (0, 255, 0)
+    top, bottom = plan.decks
+    colours = {rgb for c in top.cards for *_, rgb in c.pixels}
+    assert red in colours
+    assert all(rgb != green for c in top.cards for *_, rgb in c.pixels)
+    assert all(rgb != red for c in bottom.cards for *_, rgb in c.pixels)
+    # ... and the crossing really happens: red ink sits at/below the nominal
+    # boundary, which the old fixed split would have handed to the bottom deck.
+    assert any(y >= boundary for c in top.cards for _dx, y, rgb in c.pixels)
+
+
+def test_two_row_nudged_glyph_stays_in_one_deck_smallsign():
+    # A +1 nudge pushes the top row's descenders onto row 8 (the nominal
+    # boundary); the bottom row is nudged too, leaving row 9 unlit.
+    plan, _ = _two_row_plan(
+        160,
+        16,
+        1,
+        top="jog by",
+        bot="WORLD",
+        top_text_y_offset=1,
+        bottom_text_y_offset=1,
+    )
+    _assert_rows_stay_whole(plan, 8)
+
+
+def test_two_row_descender_crossing_stays_in_one_deck_bigsign():
+    from led_ticker.fonts import resolve_font
+
+    plan, _ = _two_row_plan(256, 64, 4, font=resolve_font("spleen-16x32", 32))
+    _assert_rows_stay_whole(plan, 32)
+
+
+def test_band_split_falls_back_to_nominal_without_unlit_row():
+    r = Raster(10, 16)
+    for y in range(16):
+        r.SetPixel(3, y, *W)  # one tall glyph: no blank row anywhere
+    widget = SimpleNamespace(border=None, bottom_text="x", top_row_height=None)
+    assert band_rows(widget, r, 16, 0, raster=r, cols=range(10)) == [
+        range(0, 8),
+        range(8, 16),
+    ]
+
+
+def test_background_two_row_is_one_card_rigid_under_sweep():
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.widgets.message import TickerMessage
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair.accordion import AccordionStretch, AccordionSweep
+    from led_ticker_flair.flair.fireworks_background import FireworksBackground
+
+    for cls in (AccordionSweep, AccordionStretch):
+        w = TwoRowMessage(
+            "GRAND",
+            "OPENING :tada:",
+            background=FireworksBackground(seed=3),
+        )
+        for _ in range(25):
+            w.advance_frame()
+        canvas = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
+        p = cls()
+        p.frame_at(0.0, canvas, w, TickerMessage(text="X"))
+        decks = p._out_plan.decks
+        assert [len(d.cards) for d in decks] == [1]
+        card = decks[0].cards[0]
+        ys = {y for _dx, y, _c in card.pixels}
+        assert min(ys) < 32 <= max(ys)  # spans both rows
+        for k in (0.25, 0.5, 0.75):
+            (pos,) = p._out(decks, 256, k)
+            assert len(pos) == 1  # one shared offset for the whole widget

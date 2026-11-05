@@ -190,7 +190,44 @@ def ring_pixels(raster: Raster, depth: int) -> list[Pixel]:
     return out
 
 
-def band_rows(widget: Any, canvas: Any, real_h: int, depth: int) -> list[range]:
+def _unlit_row_split(
+    raster: Raster,
+    lo: int,
+    hi: int,
+    nominal: int,
+    window: int,
+    cols: range,
+    exclude: Container[tuple[int, int]] | None,
+) -> int:
+    """The row in ``[lo, hi)`` within ``window`` of ``nominal`` that has no
+    lit content pixel, nearest first (the upper row wins a tie), else
+    ``nominal``. Splitting there keeps a glyph that straddles the nominal
+    boundary whole in one deck."""
+
+    def blank(y: int) -> bool:
+        for x in cols:
+            px = raster.get(x, y)
+            if is_lit(px) and (exclude is None or (x, y) not in exclude):
+                return False
+        return True
+
+    for d in range(window + 1):
+        for y in (nominal - d, nominal + d):
+            if lo < y < hi and blank(y):
+                return y
+    return nominal
+
+
+def band_rows(
+    widget: Any,
+    canvas: Any,
+    real_h: int,
+    depth: int,
+    *,
+    raster: Raster | None = None,
+    cols: range | None = None,
+    exclude: Container[tuple[int, int]] | None = None,
+) -> list[range]:
     if not getattr(widget, "bottom_text", ""):
         return [range(depth, real_h - depth)]
     scaled = is_scaled(canvas)
@@ -199,6 +236,18 @@ def band_rows(widget: Any, canvas: Any, real_h: int, depth: int) -> list[range]:
     y_off = canvas.y_offset_real if scaled else 0
     top_h, _ = resolve_band_heights(content_h, getattr(widget, "top_row_height", None))
     boundary = y_off + top_h * scale
+    if raster is not None and cols is not None:
+        # A glyph can cross the nominal boundary (a text_y_offset nudge, a
+        # descender): split at the nearest fully-unlit row instead.
+        boundary = _unlit_row_split(
+            raster,
+            depth,
+            real_h - depth,
+            boundary,
+            max(1, top_h * scale // 4),
+            cols,
+            exclude,
+        )
     return [range(depth, boundary), range(boundary, real_h - depth)]
 
 
@@ -282,10 +331,17 @@ def build_decks(
         ring, under = ring_pixels(raster, depth), []
     cols = range(depth, w - depth)
     # A background effect (sparse streaks/spokes bridging the glyphs) has no
-    # gaps worth fanning: each band slides as a single card.
+    # gaps worth fanning, and a per-row split would shear the rows apart
+    # under sweep: one band over the whole content area, merged to ONE card.
     has_background = getattr(widget, "background", None) is not None
+    if has_background:
+        bands = [range(depth, h - depth)]
+    else:
+        bands = band_rows(
+            widget, canvas, h, depth, raster=raster, cols=cols, exclude=exclude
+        )
     decks: list[Deck] = []
-    for rows in band_rows(widget, canvas, h, depth):
+    for rows in bands:
         cards = segment_cards(raster, rows, cols, mirror=mirror, exclude=exclude)
         if has_background:
             cards = merge_cards(cards)
