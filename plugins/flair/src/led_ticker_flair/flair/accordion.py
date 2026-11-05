@@ -20,13 +20,19 @@ from typing import Any
 from led_ticker.plugin import (
     SNAP_THRESHOLD,
     Canvas,
+    ScaledCanvas,
     is_scaled,
     snap_reset,
     unwrap_to_real,
 )
 
-from led_ticker_flair.flair._raster import Pixel, Raster, snapshot_into
-from led_ticker_flair.flair.accordion_cards import Deck, build_decks
+from led_ticker_flair.flair._raster import Raster, snapshot_into
+from led_ticker_flair.flair.accordion_cards import (
+    Deck,
+    Plan,
+    build_decks,
+    is_image_widget,
+)
 from led_ticker_flair.flair.accordion_compose import compose
 from led_ticker_flair.flair.accordion_motion import (
     stretch_in_decks,
@@ -38,8 +44,6 @@ from led_ticker_flair.flair.accordion_motion import (
 _DIRECTIONS = ("left", "right")
 _OUT_END = 0.475  # outgoing phase [0, 0.475); beat [0.475, 0.5)
 _IN_START = 0.5  # incoming phase [0.5, SNAP_THRESHOLD)
-
-_Plan = tuple[list[Deck], list[Pixel]]  # (decks, ring pixels in real coords)
 
 
 def _clamp01(k: float) -> float:
@@ -65,11 +69,12 @@ class _Accordion:
         self._mirror: bool = direction == "right"
         self._last_t = 1.0
         # Immutable extracted data, built once per firing.
-        self._out_plan: _Plan | None = None
-        self._in_plan: _Plan | None = None
-        # Scratch rasters, reused across frames/firings while the geometry
-        # key matches. Re-keying never touches a plan already built.
-        self._rasters: list[Raster | None] = [None, None]
+        self._out_plan: Plan | None = None
+        self._in_plan: Plan | None = None
+        # Scratch rasters (outgoing, incoming, border-only), reused across
+        # frames/firings while the geometry key matches. Re-keying never
+        # touches a plan already built.
+        self._rasters: list[Raster | None] = [None, None, None]
         self._raster_key: tuple[int, int, int, int | None] | None = None
 
     # --- motion (bound by subclasses) ---------------------------------------
@@ -85,7 +90,43 @@ class _Accordion:
 
     # --- snapshot -------------------------------------------------------------
 
-    def _plan(self, canvas: Any, widget: Any, cursor_pos: int, slot: int) -> _Plan:
+    def _scratch(self, slot: int, w: int, h: int) -> Raster:
+        raster = self._rasters[slot]
+        if raster is None:
+            raster = Raster(w, h)
+            self._rasters[slot] = raster
+        return raster
+
+    def _border_only(self, canvas: Any, widget: Any, w: int, h: int) -> Raster | None:
+        """Paint the widget's border ALONE, exactly as the widget's own draw
+        does (``border.paint(canvas, widget.frame_for("border"))``, through
+        the same wrapper), so ``build_decks`` can tell ring pixels from
+        content in the ring zone. ``None`` when that isn't possible; the
+        depth-based ring is then the fallback. Never raises."""
+        border = getattr(widget, "border", None)
+        if border is None or is_image_widget(widget):
+            return None
+        paint = getattr(border, "paint", None)
+        frame_for = getattr(widget, "frame_for", None)
+        if not callable(paint) or not callable(frame_for):
+            return None
+        try:
+            frame = frame_for("border")
+            if not isinstance(frame, int) or isinstance(frame, bool):
+                return None
+            raster = self._scratch(2, w, h)
+            raster.Clear()
+            target: Any = raster
+            if is_scaled(canvas):
+                target = ScaledCanvas(
+                    raster, scale=canvas.scale, content_height=canvas.content_height
+                )
+            paint(target, frame)
+        except Exception:  # a probe must never break a transition
+            return None
+        return raster
+
+    def _plan(self, canvas: Any, widget: Any, cursor_pos: int, slot: int) -> Plan:
         scaled = is_scaled(canvas)
         real = unwrap_to_real(canvas) if scaled else canvas
         key = (
@@ -95,21 +136,25 @@ class _Accordion:
             canvas.content_height if scaled else None,
         )
         if self._raster_key != key:
-            self._rasters = [None, None]
+            self._rasters = [None, None, None]
             self._raster_key = key
-        raster = self._rasters[slot]
-        if raster is None:
-            raster = Raster(real.width, real.height)
-            self._rasters[slot] = raster
+        raster = self._scratch(slot, real.width, real.height)
         snapshot_into(raster, canvas, widget, cursor_pos)
-        return build_decks(raster, widget, canvas, mirror=self._mirror)
+        border_only = self._border_only(canvas, widget, real.width, real.height)
+        return build_decks(
+            raster, widget, canvas, mirror=self._mirror, border_only=border_only
+        )
 
     # --- paint ----------------------------------------------------------------
 
-    def _paint(self, real: Any, plan: _Plan, motion: Any, k: float) -> None:
-        decks, ring = plan
+    def _paint(self, real: Any, plan: Plan, motion: Any, k: float) -> None:
+        decks, ring, under = plan
         w = real.width
         set_px = real.SetPixel
+        # Border pixels the content covered: under the cards, so the ring
+        # has no hole once a card moves off them.
+        for x, y, (r, g, b) in under:
+            set_px(x, y, r, g, b)
         for deck, positions in zip(decks, motion(decks, w, k), strict=True):
             if deck.cards:
                 compose(deck, positions, w, set_px, mirror=self._mirror)

@@ -2,9 +2,10 @@
 (maximal runs of lit columns), per-band decks, and the border ring that
 stays put. No canvas drawing here."""
 
-from collections.abc import Sequence
+import inspect
+from collections.abc import Container, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 from led_ticker.plugin import is_scaled, resolve_band_heights
 
@@ -24,10 +25,25 @@ class Deck:
     peek: float  # P_eff
 
 
+class Plan(NamedTuple):
+    """Everything one widget's phase paints, in real coordinates."""
+
+    decks: list[Deck]
+    ring: list[Pixel]  # static border ring, painted AFTER the cards
+    under: list[Pixel]  # border pixels the content covered: painted BEFORE
+
+
 def segment_cards(
-    raster: Raster, rows: range, cols: range, *, mirror: bool
+    raster: Raster,
+    rows: range,
+    cols: range,
+    *,
+    mirror: bool,
+    exclude: Container[tuple[int, int]] | None = None,
 ) -> list[Card]:
-    """A card is a maximal run of columns with >=1 lit pixel in ``rows``."""
+    """A card is a maximal run of columns with >=1 lit pixel in ``rows``.
+    ``exclude`` holds raster ``(x, y)`` positions that are not content (the
+    exact border ring)."""
     w = raster.width
     cards: list[Card] = []
     start: int | None = None
@@ -53,6 +69,8 @@ def segment_cards(
         for y in rows:
             px = raster.get(src, y)
             if is_lit(px) and px is not None:
+                if exclude is not None and (src, y) in exclude:
+                    continue
                 col_px.append((c, y, px))
         if col_px:
             if start is None:
@@ -171,15 +189,87 @@ def band_rows(widget: Any, canvas: Any, real_h: int, depth: int) -> list[range]:
     return [range(depth, boundary), range(boundary, real_h - depth)]
 
 
+def is_image_widget(widget: Any) -> bool:
+    """Core ``gif`` / ``image`` widgets (duck-typed: an async ``play`` plus a
+    ``_paint_full`` hook, the ``_BaseImageWidget`` shape; nothing on the
+    plugin surface names the class). Their ``draw()`` — the transition
+    compositing path — paints ONLY the picture: no border, no text overlay.
+    So neither a ring nor a row split exists in their snapshot."""
+    play = getattr(widget, "play", None)
+    return inspect.iscoroutinefunction(play) and callable(
+        getattr(widget, "_paint_full", None)
+    )
+
+
+# A border-only render is trusted only when at least this share of its lit
+# pixels shows up, colour-exact, in the snapshot. Content can cover part of
+# the ring; a render that mostly misses means the widget didn't paint this
+# border this way (a different frame, a different host), so fall back.
+_RING_MATCH_MIN = 0.5
+
+
+def exact_ring(
+    raster: Raster, border_only: Raster
+) -> tuple[list[Pixel], list[Pixel]] | None:
+    """Split the snapshot's border pixels using a render of the border ALONE.
+
+    A snapshot pixel is ring only where it equals the border-only render;
+    any other lit pixel (text overlapping the ring, a background showing
+    through bulb gaps) is content and goes to the cards. Where content
+    covered the border, the border-only colour is returned as ``under`` so
+    the ring has no hole once the card moves away. ``None`` -> the render
+    can't be trusted (nothing lit, or too little of it matches)."""
+    ring: list[Pixel] = []
+    under: list[Pixel] = []
+    n_lit = 0
+    for y in range(raster.height):
+        for x in range(raster.width):
+            b = border_only.get(x, y)
+            if not is_lit(b) or b is None:
+                continue
+            n_lit += 1
+            px = raster.get(x, y)
+            if px == b:
+                ring.append((x, y, b))
+            elif is_lit(px):
+                under.append((x, y, b))
+    if n_lit == 0 or len(ring) < _RING_MATCH_MIN * n_lit:
+        return None
+    return ring, under
+
+
 def build_decks(
-    raster: Raster, widget: Any, canvas: Any, *, mirror: bool
-) -> tuple[list[Deck], list[Pixel]]:
-    depth = ring_depth(widget, raster)
-    ring = ring_pixels(raster, depth)
+    raster: Raster,
+    widget: Any,
+    canvas: Any,
+    *,
+    mirror: bool,
+    border_only: Raster | None = None,
+) -> Plan:
+    """Split a snapshot into decks + ring. ``border_only`` is the widget's
+    border painted alone (same frame, same wrapper) when the caller could
+    render it: it gives the exact ring. Without it, the depth-based ring
+    (``ring_depth``) is the fallback."""
     scale = canvas.scale if is_scaled(canvas) else 1
-    cols = range(depth, raster.width - depth)
+    w, h = raster.width, raster.height
+    if is_image_widget(widget):
+        # The picture slides as one deck; nothing in it is a ring or a row.
+        cards = segment_cards(raster, range(h), range(w), mirror=mirror)
+        return Plan([Deck(tuple(cards), effective_peek(cards, 2 * scale))], [], [])
+    exact = None
+    if border_only is not None and getattr(widget, "border", None) is not None:
+        exact = exact_ring(raster, border_only)
+    exclude: set[tuple[int, int]] | None = None
+    if exact is not None:
+        ring, under = exact
+        exclude = {(x, y) for x, y, _ in ring}
+        depth = 0  # content anywhere, including the ring zone, is a card
+    else:
+        depth = ring_depth(widget, raster)
+        ring, under = ring_pixels(raster, depth), []
+    cols = range(depth, w - depth)
     decks: list[Deck] = []
-    for rows in band_rows(widget, canvas, raster.height, depth):
-        cards = segment_cards(raster, rows, cols, mirror=mirror)
+    for rows in band_rows(widget, canvas, h, depth):
+        cards = segment_cards(raster, rows, cols, mirror=mirror, exclude=exclude)
         decks.append(Deck(cards=tuple(cards), peek=effective_peek(cards, 2 * scale)))
-    return decks, ring
+    return Plan(decks, ring, under)

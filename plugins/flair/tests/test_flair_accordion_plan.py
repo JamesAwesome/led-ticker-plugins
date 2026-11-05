@@ -13,6 +13,7 @@ from led_ticker_flair.flair.accordion_cards import (
     band_rows,
     build_decks,
     effective_peek,
+    exact_ring,
     ring_depth,
     ring_pixels,
     segment_cards,
@@ -133,7 +134,7 @@ def test_bordered_inset_splits():
     _cols(r, [5, 9], rows=range(2, 6))
     widget = SimpleNamespace(border=SimpleNamespace(thickness=1), bottom_text="")
     canvas = Raster(20, 8)
-    decks, ring = build_decks(r, widget, canvas, mirror=False)
+    decks, ring, _under = build_decks(r, widget, canvas, mirror=False)
     assert len(decks) == 1
     assert len(decks[0].cards) == 2
     assert len(ring) == 2 * 20 + 2 * 6
@@ -152,7 +153,7 @@ def test_two_row_bands_split_at_boundary():
     r.SetPixel(4, 12, *W)
     widget = SimpleNamespace(border=None, bottom_text="x", top_row_height=None)
     assert band_rows(widget, r, 16, 0) == [range(0, 8), range(8, 16)]
-    decks, ring = build_decks(r, widget, r, mirror=False)
+    decks, ring, _under = build_decks(r, widget, r, mirror=False)
     assert [len(d.cards) for d in decks] == [1, 1]
     assert ring == []
 
@@ -432,7 +433,7 @@ def test_core_border_no_inset_card_touches_ring(name, w, h):
     r = _bordered_raster(border, w, h, 0)
     _inset_content(r, d)
     widget = SimpleNamespace(border=border, bottom_text="")
-    decks, ring = build_decks(r, widget, Raster(w, h), mirror=False)
+    decks, ring, _under = build_decks(r, widget, Raster(w, h), mirror=False)
     cards = decks[0].cards
     assert len(cards) >= 3  # the inset content splits; the ring is no card
     for card in cards:
@@ -458,3 +459,32 @@ def test_lightbulb_measured_fallback_without_duck_type(mode, w, h):
     r = _bordered_raster(LightbulbBorder(mode=mode), w, h, 0)
     expected = 3 if h >= 32 else 1
     assert ring_depth(SimpleNamespace(border=object()), r) == expected
+
+
+def test_exact_ring_splits_content_from_border():
+    border_only = Raster(10, 4)
+    snap = Raster(10, 4)
+    for x in range(10):
+        border_only.SetPixel(x, 0, 0, 0, 255)
+        snap.SetPixel(x, 0, 0, 0, 255)
+    snap.SetPixel(0, 0, *W)  # content over the ring
+    snap.SetPixel(0, 1, *W)
+    ring, under = exact_ring(snap, border_only)
+    assert {(x, y) for x, y, _ in ring} == {(x, 0) for x in range(1, 10)}
+    assert under == [(0, 0, (0, 0, 255))]
+
+
+def test_exact_ring_untrusted_render_falls_back():
+    snap = Raster(10, 4)
+    _cols(snap, [0, 9])
+    assert exact_ring(snap, Raster(10, 4)) is None  # nothing lit alone
+    other = Raster(10, 4)
+    for x in range(10):
+        other.SetPixel(x, 0, 0, 0, 255)  # a ring the snapshot never had
+    assert exact_ring(snap, other) is None
+    # build_decks then uses the depth-based ring.
+    widget = SimpleNamespace(border=SimpleNamespace(thickness=1), bottom_text="")
+    decks, ring, under = build_decks(
+        snap, widget, snap, mirror=False, border_only=other
+    )
+    assert under == [] and {x for x, _, _ in ring} == {0, 9}

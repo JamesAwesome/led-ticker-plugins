@@ -86,8 +86,16 @@ None)` is not None), the border ring does NOT become part of any card.
   not a `thickness`, and fall back to measuring it from the snapshot if no
   attribute exists. Unknown border shapes are a builder call, documented
   in the plugin CLAUDE.md.
-- **Card scan.** Cards are segmented only from the inset region inside the
-  ring.
+- **Which pixels are ring (cycle-1 review fix).** Core paints the border
+  first and does not inset the text, so content can sit in the ring zone.
+  The border is repainted ALONE into a scratch raster (same frame counter,
+  same wrapper) and a snapshot pixel is ring only where it equals that
+  render. Every other lit pixel is content. Border pixels that content
+  covered are painted under the cards so the ring has no hole later. If
+  the border can't be rendered alone (or the render barely matches), the
+  ring falls back to the outer `d` px described above.
+- **Card scan.** Cards are segmented from the whole panel minus the ring
+  pixels (the inset region only in the depth fallback).
 - **Painting the ring.** The ring pixels are painted static, at their
   snapshot colours, every frame of that widget's phase: the outgoing ring
   during the outgoing phase and the incoming ring during the incoming
@@ -103,9 +111,9 @@ card that slides. Accepted. Document it in the README.
 ### Two-row content gets one deck per row (James: option a)
 
 When the widget is two-row, each row is its own deck. Two-row is
-duck-typed as a `two_row` widget, or an image or gif with a non-empty
-`bottom_text`; the builder picks the exact predicate, using only public
-attributes.
+duck-typed as a non-empty `bottom_text`. Image and gif widgets are the
+exception: core's `draw()` paints only their picture during transitions
+(no border, no text), so they always get one band and no ring.
 
 - **Band boundary.** The boundary comes from the widget's band heights:
   `resolve_band_heights(content_height, top_row_height)`, which is on the
@@ -114,7 +122,10 @@ attributes.
 - **Segmentation.** Cards are segmented per band, and occlusion is per
   band (a per-band owner array).
 - **Motion.** Both decks use the same anchor and spread progression, so
-  they move in sync. Each deck uses its own slots and peek.
+  they move in sync. Each deck uses its own slots and peek. The shared
+  trajectory comes from the union of the decks' extents (sweep: one hand
+  `g` / `h`; stretch: one anchor `a`, each deck offset by its first slot
+  from the union's), so a single deck is unchanged.
 
 Single-row widgets have one band covering the whole height.
 

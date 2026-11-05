@@ -564,6 +564,192 @@ class TestContent:
         assert len(right._out_plan[0]) == 2
 
 
+# --- real core widgets: ring-zone content and image widgets ---------------
+# (tests may import core internals; plugin SOURCE may not.)
+
+_GEOMS = [(160, 16, 1), (256, 64, 4)]  # smallsign, bigsign
+
+
+def _geom_canvas(w: int, h: int, scale: int) -> tuple[Any, Any]:
+    real = _StubCanvas(w, h)
+    if scale == 1:
+        return real, real
+    return real, ScaledCanvas(real, scale=scale, content_height=16)
+
+
+def _message(border: Any) -> Any:
+    from led_ticker.plugin import TickerMessage
+
+    # Left-aligned: the "H" starts at x=0, inside a 2-px ring.
+    return TickerMessage(
+        text="HELLO WORLD", center=False, font_color=RED, border=border
+    )
+
+
+class TestRingZoneContent:
+    """A bordered widget whose content overlaps the ring zone: core paints
+    the border first and does not inset the text, so glyph pixels sit
+    inside the ring columns. They are content and must move with their
+    card, never freeze as ring."""
+
+    @staticmethod
+    def _red(c: Any) -> set:
+        return {xy for xy, col in c._pixels.items() if col == RED}
+
+    @pytest.mark.parametrize("w,h,scale", _GEOMS)
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_plan_ring_holds_no_text(self, cls, w, h, scale):
+        from led_ticker.borders import ConstantBorder
+
+        real, canvas = _geom_canvas(w, h, scale)
+        p = cls()
+        p.frame_at(
+            0.0, canvas, _message(ConstantBorder(BLUE, thickness=2)), _message(None)
+        )
+        plan = p._out_plan
+        assert plan is not None
+        assert plan.ring and all(col == BLUE for _x, _y, col in plan.ring)
+        # Where the text overlapped the ring, the border's colour goes UNDER
+        # the card, so the ring has no hole once the card has gone.
+        assert plan.under
+        assert all(real._pixels[(x, y)] == RED for x, y, _c in plan.under)
+        assert all(col == BLUE for _x, _y, col in plan.under)
+        card_red = {
+            (card.slot + dx, y)
+            for deck in plan.decks
+            for card in deck.cards
+            for dx, y, col in card.pixels
+            if col == RED
+        }
+        assert {xy for xy, col in real._pixels.items() if col == RED} == card_red
+        assert any(x < 2 for x, _y in card_red)  # the fixture does hit the ring
+
+    @pytest.mark.parametrize("w,h,scale", _GEOMS)
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_text_moves_like_unbordered(self, cls, w, h, scale):
+        # Mid-phase, the bordered widget's text pixels are exactly the
+        # unbordered widget's: nothing is left frozen at the panel edge.
+        from led_ticker.borders import ConstantBorder
+
+        bordered, plain = cls(), cls()
+        b_out = _message(ConstantBorder(BLUE, thickness=2))
+        p_out = _message(None)
+        for t in (0.0, 0.15, 0.3, 0.4, 0.4749):
+            rb, cb = _geom_canvas(w, h, scale)
+            rp, cp = _geom_canvas(w, h, scale)
+            bordered.frame_at(t, cb, b_out, _message(None))
+            plain.frame_at(t, cp, p_out, _message(None))
+            ring_xy = {(x, y) for x, y, _c in bordered._out_plan.ring}
+            want = {xy for xy in self._red(rp) if xy not in ring_xy}
+            assert self._red(rb) == want, t
+        # End of the outgoing phase: no text anywhere, the full ring stays.
+        assert self._red(rb) == set()
+        assert {xy for xy, col in rb._pixels.items() if col == BLUE} >= {
+            (x, y) for x, y, _c in bordered._out_plan.ring + bordered._out_plan.under
+        }
+
+    @pytest.mark.parametrize("w,h,scale", _GEOMS)
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_incoming_text_not_on_panel_before_its_card(self, cls, w, h, scale):
+        from led_ticker.borders import ConstantBorder
+
+        p = cls()
+        inc = _message(ConstantBorder(BLUE, thickness=2))
+        real, canvas = _geom_canvas(w, h, scale)
+        p.frame_at(0.0, canvas, _message(None), inc)
+        real, canvas = _geom_canvas(w, h, scale)
+        p.frame_at(0.5, canvas, _message(None), inc)  # deck fully off-panel
+        assert self._red(real) == set()
+        assert any(col == BLUE for col in real._pixels.values())
+
+    @pytest.mark.parametrize("which", ["bulb", "rainbow"])
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_animated_border_exact_at_current_frame(self, cls, which):
+        # The border-only render uses the widget's own frame_for("border"),
+        # so an animated border mid-cycle still matches pixel for pixel.
+        from led_ticker.borders import LightbulbBorder, RainbowChaseBorder
+
+        border = (
+            LightbulbBorder(mode="chase")
+            if which == "bulb"
+            else RainbowChaseBorder(thickness=2)
+        )
+        msg = _message(border)
+        for _ in range(7):
+            msg.advance_frame()
+        real, canvas = _geom_canvas(160, 16, 1)
+        p = cls()
+        p.frame_at(0.0, canvas, msg, _message(None))
+        plan = p._out_plan
+        alone = Raster(160, 16)
+        border.paint(alone, msg.frame_for("border"))
+        lit = {
+            (x, y)
+            for y in range(16)
+            for x in range(160)
+            if alone.get(x, y) not in (None, (0, 0, 0))
+        }
+        ring_xy = {(x, y) for x, y, _c in plan.ring}
+        under_xy = {(x, y) for x, y, _c in plan.under}
+        assert ring_xy | under_xy == lit and not ring_xy & under_xy
+        assert all(real._pixels[xy] == RED for xy in under_xy)
+
+
+class TestImageWidget:
+    """Core image/gif draw() paints ONLY the picture during transitions (no
+    border, no text): no ring freeze and no row split — one deck."""
+
+    @staticmethod
+    def _still(tmp_path: Any, w: int, h: int) -> Any:
+        from led_ticker.borders import ConstantBorder
+        from led_ticker.widgets.still import StillImage
+
+        img = Image.new("RGB", (w, h), (0, 0, 0))
+        for x in range(w):
+            if x % 10 < 7:  # pixel-art stripes with blank columns
+                for y in range(h):
+                    img.putpixel((x, y), (200, 100 + (y * 50) // h, 50))
+        path = tmp_path / "pic.png"
+        img.save(path)
+        return StillImage(
+            path=str(path),
+            fit="stretch",
+            border=ConstantBorder(BLUE, thickness=2),
+            bottom_text="caption",
+        )
+
+    @pytest.mark.parametrize("w,h,scale", _GEOMS)
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_bordered_two_row_image_slides_as_one_deck(
+        self, cls, tmp_path, w, h, scale
+    ):
+        from led_ticker.render_breaker import guard_for_transition
+
+        still = self._still(tmp_path, w, h)
+        for out in (
+            still,
+            guard_for_transition(still, mock.Mock(is_disabled=lambda _w: False)),
+        ):
+            p = cls()
+            real, canvas = _geom_canvas(w, h, scale)
+            p.frame_at(0.0, canvas, out, _message(None))
+            plan = p._out_plan
+            assert plan is not None
+            assert len(plan.decks) == 1  # no row split
+            assert plan.ring == [] and plan.under == []  # no ring freeze
+            lit = {xy for xy, col in real._pixels.items() if col != (0, 0, 0)}
+            in_cards = {
+                (card.slot + dx, y)
+                for card in plan.decks[0].cards
+                for dx, y, _c in card.pixels
+            }
+            assert in_cards == lit
+            # By the end of the outgoing phase the whole picture is gone.
+            real, canvas = _geom_canvas(w, h, scale)
+            p.frame_at(0.4749, canvas, out, _message(None))
+            assert real.calls == []
+
+
 # Overpaint slack: 0. Each lit card pixel is painted at most once per frame
 # (the compositor's owner check) and the ring once, so painted SetPixels can
 # never exceed lit-snapshot pixels + ring pixels. Any slack would only hide
@@ -582,8 +768,9 @@ def _lit_bound(p: Any, t: float) -> int | None:
         plan = p._in_plan
     else:
         return _SLACK  # the beat: nothing painted
-    decks, ring = plan
-    return sum(len(c.pixels) for d in decks for c in d.cards) + len(ring) + _SLACK
+    decks, ring, under = plan
+    n_cards = sum(len(c.pixels) for d in decks for c in d.cards)
+    return n_cards + len(ring) + len(under) + _SLACK
 
 
 def _sweep(p: Any, canvas: Any, calls: list, out: Any, inc: Any, panel: int):
@@ -688,7 +875,7 @@ class TestPerfUniformity:
             before = len(real.calls)
             p.frame_at(t, sc, w, w)
             painted = len(real.calls) - before
-            (deck,), _ring = p._out_plan
+            (deck,), _ring, _under = p._out_plan
             xs = [round(x) for x in p._out([deck], 256, t / 0.475)[0]]
             covered = set()
             for x, card in zip(xs, deck.cards, strict=True):
