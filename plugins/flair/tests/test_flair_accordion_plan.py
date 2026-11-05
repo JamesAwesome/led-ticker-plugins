@@ -10,7 +10,6 @@ from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair.accordion_cards import (
     Card,
     Deck,
-    assign_bands,
     band_rows,
     build_decks,
     effective_peek,
@@ -18,6 +17,7 @@ from led_ticker_flair.flair.accordion_cards import (
     ring_depth,
     ring_pixels,
     segment_cards,
+    split_rows,
 )
 
 W = (255, 255, 255)
@@ -586,58 +586,41 @@ def test_two_row_descender_crossing_stays_in_one_deck_bigsign():
     _assert_rows_stay_whole(plan, 32)
 
 
-def _owned(r, boundary=8, small=2, pull=(0, 0)):
-    return assign_bands(r, range(r.height), range(r.width), boundary, small, pull=pull)
-
-
-def test_band_split_glyph_goes_whole_to_its_majority():
-    r = Raster(10, 16)
-    for y in range(3, 10):
-        r.SetPixel(3, y, *W)  # one glyph, rows 3..9: crosses row 8
-    top, bottom = _owned(r)
-    assert top == {(3, y) for y in range(3, 10)}
-    assert bottom == set()
-
-
-def test_band_split_touching_large_glyphs_keep_their_halves():
-    # A top glyph A (column 0 plus a foot on row 7) grazes a bottom capital
-    # B (column 4): two LARGE pieces touching across the boundary are two
-    # glyphs, so the nominal split stands between them. A's descender tip
-    # (6, 8) still rides with A.
-    r = Raster(10, 16)
-    a = {(0, y) for y in range(2, 8)} | {(x, 7) for x in range(0, 6)}
-    b = {(4, y) for y in range(8, 14)} | {(5, 13)}
-    for x, y in a | b | {(6, 8)}:
+def _solo(points, w=10, h=16):
+    r = Raster(w, h)
+    for x, y in points:
         r.SetPixel(x, y, *W)
-    top, bottom = _owned(r)
-    assert top == a | {(6, 8)}
-    assert bottom == b
+    return r
 
 
-def test_band_split_small_chain_between_two_rows_keeps_nominal():
-    # top A, bottom tip t, top tip s, bottom B, each touching the next
-    # diagonally: no single glyph owns the chain, so each piece keeps its
-    # own half (one merged group would hand all of it to one deck).
-    r = Raster(10, 16)
-    a = {(0, y) for y in range(2, 8)}
-    b = {(3, y) for y in range(8, 14)}
-    for x, y in a | b | {(1, 8), (2, 7)}:
-        r.SetPixel(x, y, *W)
-    top, bottom = _owned(r)
-    assert top == a | {(2, 7)}
-    assert bottom == b | {(1, 8)}
+def test_split_rows_follows_the_solo_renders():
+    # A top glyph crossing row 8 and a bottom dot above it: each goes to
+    # the row whose solo render lights it, whatever its position.
+    top_px = {(3, y) for y in range(3, 11)}
+    bot_px = {(6, 6)} | {(6, y) for y in range(9, 14)}
+    snap = _solo(top_px | bot_px)
+    top, bottom = split_rows(
+        snap, range(16), range(10), 8, solo=(_solo(top_px), _solo(bot_px))
+    )
+    assert top == top_px
+    assert bottom == bot_px
 
 
-def test_band_split_dot_inherits_its_stem_across_the_boundary():
-    # A bottom-row i nudged up: its dot (row 7) sits in the top half,
-    # 1 blank row over its stem (rows 9..13).
-    r = Raster(10, 16)
-    r.SetPixel(3, 7, *W)
-    for y in range(9, 14):
-        r.SetPixel(3, y, *W)
-    top, bottom = _owned(r)
-    assert top == set()
-    assert (3, 7) in bottom
+def test_split_rows_ambiguous_pixels_go_nominal():
+    # (2, 7) / (2, 9) lit in BOTH solo renders (overlapping rows) and
+    # (5, 7) / (5, 9) in neither (e.g. a band fill): nominal by position.
+    snap = _solo({(2, 7), (2, 9), (5, 7), (5, 9)})
+    both = _solo({(2, 7), (2, 9)})
+    top, bottom = split_rows(snap, range(16), range(10), 8, solo=(both, both))
+    assert top == {(2, 7), (5, 7)}
+    assert bottom == {(2, 9), (5, 9)}
+
+
+def test_split_rows_without_solo_is_the_nominal_split():
+    snap = _solo({(3, y) for y in range(3, 11)})
+    top, bottom = split_rows(snap, range(16), range(10), 8, exclude={(3, 3)})
+    assert top == {(3, y) for y in range(4, 8)}
+    assert bottom == {(3, 8), (3, 9), (3, 10)}
 
 
 def _assert_rows_separate(plan):
@@ -739,3 +722,98 @@ def test_background_two_row_is_one_card_rigid_under_sweep():
         for k in (0.25, 0.5, 0.75):
             (pos,) = p._out(decks, 256, k)
             assert len(pos) == 1  # one shared offset for the whole widget
+
+
+@pytest.mark.parametrize(
+    ("w", "h", "scale", "boundary"), [(160, 16, 1, 8), (256, 64, 4, 32)]
+)
+def test_two_row_overlapping_rows_split_by_owner(w, h, scale, boundary):
+    # Offsets +2 / -2 push the rows INTO each other. Top ink the bottom
+    # row didn't paint over (red) is top-only: always the top deck, even
+    # below the boundary. Ink both rows paint goes to its nominal band.
+    plan, _ = _two_row_plan(
+        w,
+        h,
+        scale,
+        top="jog by 9pm",
+        bot="WORLD",
+        top_text_y_offset=2,
+        bottom_text_y_offset=-2,
+    )
+    red, green = (255, 0, 0), (0, 255, 0)
+    top, bottom = plan.decks
+    assert all(rgb != red for c in bottom.cards for *_, rgb in c.pixels)
+    assert any(y >= boundary for c in top.cards for _dx, y, rgb in c.pixels)
+    assert any(rgb == green for c in bottom.cards for *_, rgb in c.pixels)
+    # Green in the top deck only where both rows lit it, above the boundary.
+    assert all(
+        y < boundary for c in top.cards for _dx, y, rgb in c.pixels if rgb == green
+    )
+
+
+def test_planning_leaves_the_live_widget_untouched():
+    import attrs
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.borders import RainbowChaseBorder
+    from led_ticker.color_providers import Rainbow
+    from led_ticker.widgets.message import TickerMessage
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair.accordion import AccordionSweep
+
+    widget = TwoRowMessage(
+        "jog by",
+        "WORLD",
+        top_color=Rainbow(),
+        bottom_color=Rainbow(),
+        border=RainbowChaseBorder(),
+    )
+    for _ in range(7):
+        widget.advance_frame()
+    widget.pause_frame()  # as run_transition does
+    canvas = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
+    widget.draw(canvas)  # warm the widget's own width caches, as a hold does
+    before = attrs.astuple(widget, recurse=False)
+    effect_frames = dict(widget._effect_frames)
+    p = AccordionSweep()
+    p.frame_at(0.0, canvas, widget, TickerMessage(text="X"))
+    assert len(p._out_plan.decks) == 2
+    after = attrs.astuple(widget, recurse=False)
+    assert all(a is b or a == b for a, b in zip(before, after, strict=True))
+    assert widget._effect_frames == effect_frames
+    assert widget._frame_count == 7
+    assert widget._frame_paused is True
+
+
+def test_solo_rows_unwraps_the_transition_guard():
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.render_breaker import RenderBreaker, guard_for_transition
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair.accordion import AccordionSweep
+
+    widget = TwoRowMessage("jog by", "WORLD")
+    guarded = guard_for_transition(widget, RenderBreaker())
+    solo = AccordionSweep()._solo_rows(HeadlessCanvas(160, 16), guarded, 0, 160, 16)
+    assert solo is not None
+    top_only, bottom_only = solo
+    assert any(top_only.get(x, y) for x in range(160) for y in range(8))
+    assert not any(top_only.get(x, y) for x in range(160) for y in range(9, 16))
+    assert any(bottom_only.get(x, y) for x in range(160) for y in range(9, 16))
+
+
+def test_solo_rows_falls_back_for_non_attrs_or_raising_widgets():
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.widgets.two_row import TwoRowMessage
+
+    from led_ticker_flair.flair.accordion import AccordionSweep
+
+    p = AccordionSweep()
+    canvas = HeadlessCanvas(160, 16)
+    duck = SimpleNamespace(top_text="a", bottom_text="b", draw=lambda *a, **k: None)
+    assert p._solo_rows(canvas, duck, 0, 160, 16) is None
+    # A hi-res font too tall for its band makes the widget's draw raise.
+    from led_ticker.fonts import resolve_font
+
+    tall = TwoRowMessage("A", "B", top_font=resolve_font("Inter-Bold", 28))
+    assert p._solo_rows(canvas, tall, 0, 160, 16) is None

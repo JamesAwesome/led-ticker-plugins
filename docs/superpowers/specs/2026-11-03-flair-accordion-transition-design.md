@@ -144,26 +144,16 @@ would grow while "squeezing" and sweep would race.
   single band over the whole content area (even a `two_row`) and merges it
   into ONE card, so it slides as one piece and its rows cannot shear.
 - **Two-row band split.** The nominal boundary is the top band's height.
-  Pixels are assigned per glyph, not per row, so no glyph is cut across
-  decks when it crosses the boundary (a `text_y_offset` nudge, a descender).
-  Ring pixels are never content. "Small" means at most a quarter of the
-  shorter band tall (at least 1 real row); "near" means at most half that
-  many blank rows apart in a shared column.
-  - A glyph is an 8-connected component of lit pixels. It goes whole to the
-    band that holds the majority of its pixels (the top band wins a tie).
-  - Two large pieces that touch across the boundary are two rows' glyphs,
-    and each keeps its own side (the nominal split). So does every piece of
-    a chain of small pieces bridging two such glyphs.
-  - A small piece near another piece on its own side (a dot over its stem,
-    a colon's other dot) stays on that side even where it touches a glyph
-    across the boundary. The exception is when the other row's text is
-    nudged further toward the boundary: then the piece is that row's
-    descender tip.
-  - A small detached component that is not near a piece on its own side
-    (an i/j dot pushed across the boundary) inherits the band of the
-    nearest large component sharing a column with it, searching up and
-    down within "near". With no such neighbour, or a tie between bands, it
-    keeps its own majority.
+  Each content pixel goes to the row that draws it, found by snapshotting
+  two copies of the widget, one with only the top row and one with only
+  the bottom row; a pixel both copies light (overlapping rows) or neither
+  lights goes to the nominal band by position.
+  - The copies are `attrs.evolve` copies (the other row's text set to
+    `" "`, border and band fills dropped, the live widget's frame state
+    copied), so the live widget is never touched.
+  - A widget that can't be copied that way (no attrs `top_text` /
+    `bottom_text` fields), or a copy whose draw raises, gets the plain
+    nominal split. Ring pixels are never content.
 
 ## Stack geometry
 
@@ -333,7 +323,8 @@ that.
   - Each core border class's ring depth is honoured.
 - **Two-row:**
   - Each band's cards hold only that band's pixels.
-  - No glyph is split across the two decks.
+  - Each pixel lands in the deck of the row that draws it; pixels both
+    rows draw go to the nominal band.
   - Both decks reach stacked or landed at the same `t`.
 - **Occlusion:** two overlapping cards paint only the top card in their
   shared columns, and the buried card's peek columns show its own pixels.

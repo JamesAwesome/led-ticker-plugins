@@ -3,7 +3,7 @@
 stays put. No canvas drawing here."""
 
 import inspect
-from collections.abc import Container, Sequence
+from collections.abc import Callable, Container, Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
@@ -235,208 +235,43 @@ def ring_pixels(raster: Raster, depth: int) -> list[Pixel]:
     return out
 
 
-def _components(
-    raster: Raster,
-    rows: range,
-    cols: range,
-    exclude: Container[tuple[int, int]] | None,
-) -> list[list[tuple[int, int]]]:
-    """8-connected components of the lit content pixels in ``rows`` x
-    ``cols`` (raster coords), skipping ``exclude`` (the exact border ring)."""
-    get = raster.get
-    lit: set[tuple[int, int]] = set()
-    for y in rows:
-        for x in cols:
-            if is_lit(get(x, y)) and (exclude is None or (x, y) not in exclude):
-                lit.add((x, y))
-    comps: list[list[tuple[int, int]]] = []
-    while lit:
-        seed = lit.pop()
-        comp = [seed]
-        stack = [seed]
-        while stack:
-            x, y = stack.pop()
-            for dy in (-1, 0, 1):
-                for dx in (-1, 0, 1):
-                    n = (x + dx, y + dy)
-                    if n in lit:
-                        lit.remove(n)
-                        comp.append(n)
-                        stack.append(n)
-        comps.append(comp)
-    return comps
-
-
-class _Piece:
-    """A connected run of content pixels: rows spanned, and each column's
-    top/bottom row."""
-
-    __slots__ = ("col_span", "pixels", "y0", "y1")
-
-    def __init__(self, pixels: list[tuple[int, int]]) -> None:
-        self.pixels = pixels
-        span: dict[int, tuple[int, int]] = {}
-        for x, y in pixels:
-            lo_hi = span.get(x)
-            span[x] = (y, y) if lo_hi is None else (min(lo_hi[0], y), max(lo_hi[1], y))
-        self.col_span = span
-        self.y0 = min(a for a, _b in span.values())
-        self.y1 = max(b for _a, b in span.values())
-
-    def height(self) -> int:
-        return self.y1 - self.y0 + 1
-
-    def gap_to(self, other: _Piece) -> int | None:
-        """Fewest blank rows between the two pieces within a column they
-        share (0 when they touch or interleave), else ``None``."""
-        best: int | None = None
-        a, b = self.col_span, other.col_span
-        if len(b) < len(a):
-            a, b = b, a
-        for x, (lo, hi) in a.items():
-            o = b.get(x)
-            if o is None:
-                continue
-            d = max(o[0] - hi, lo - o[1], 1) - 1
-            if best is None or d < best:
-                best = d
-        return best
-
-
-def assign_bands(
+def split_rows(
     raster: Raster,
     rows: range,
     cols: range,
     boundary: int,
-    small: int,
     exclude: Container[tuple[int, int]] | None = None,
-    pull: tuple[int, int] = (0, 0),
+    solo: tuple[Raster, Raster] | None = None,
 ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-    """Split a two-row snapshot's content pixels into (top, bottom) sets so
-    no glyph is cut across decks. ``exclude`` (the exact ring) is never
-    content. "Small" = at most ``small`` rows tall (``_small_height``);
-    "near" = at most ``max(1, small // 2)`` blank rows apart within a shared
-    column (an i dot sits 1 logical row over its stem).
+    """Split a two-row snapshot's content pixels into (top, bottom) sets.
 
-    A glyph is an 8-connected component of lit pixels. It goes WHOLE to the
-    band holding the majority of its pixels relative to the nominal
-    ``boundary`` (the upper band wins a tie), so a descender or a
-    ``text_y_offset`` nudge that crosses the boundary stays with its glyph.
-    Components are labelled per nominal half first, then joined where they
-    touch across the boundary, except:
-
-    - two LARGE pieces that touch are two rows' glyphs (a descender grazing
-      a capital): each keeps its own half, as the nominal split did, and so
-      does every piece of a chain of small pieces bridging two such glyphs;
-    - a small piece near another piece of its own half (a dot over its
-      stem, a colon's other dot, a "!" bar) is a mark of its own row even
-      where it touches a glyph across the boundary, unless the other row's
-      text is nudged further toward the boundary (``pull``, logical rows
-      toward it, top then bottom): then it is that row's descender tip.
-
-    A small DETACHED component (an i/j dot, an accent, a colon dot) has a
-    majority that says nothing about its glyph. When it is not near a piece
-    of its own half, it inherits the band of the nearest LARGE component
-    sharing a column with it, searching up and down within "near". No such
-    neighbour, or a tie between neighbours in different bands, leaves it to
-    its own majority."""
-    lo, hi = rows.start, rows.stop
-    near = max(1, small // 2)
-    halves = (range(lo, min(boundary, hi)), range(max(boundary, lo), hi))
-    pieces: list[_Piece] = []
-    side: list[int] = []
-    owner: dict[tuple[int, int], int] = {}
-    for half, half_rows in enumerate(halves):
-        for comp in _components(raster, half_rows, cols, exclude):
-            for p in comp:
-                owner[p] = len(pieces)
-            pieces.append(_Piece(comp))
-            side.append(half)
-    n = len(pieces)
-    large = [p.height() > small for p in pieces]
-
-    def has_own_neighbour(i: int) -> bool:
-        """Small piece ``i`` is near another piece of its own half."""
-        pi = pieces[i]
-        for j in range(n):
-            if j == i or side[j] != side[i]:
-                continue
-            d = pi.gap_to(pieces[j])
-            if d is not None and d <= near:
-                return True
-        return False
-
-    homed = [not large[i] and has_own_neighbour(i) for i in range(n)]
-    parent = list(range(n))
-
-    def find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def may_join(i: int) -> bool:
-        # A homed piece crosses only when the OTHER row pulls harder.
-        return not homed[i] or pull[1 - side[i]] > pull[side[i]]
-
-    for x in cols:
-        a = owner.get((x, boundary - 1))
-        if a is None:
-            continue
-        for dx in (-1, 0, 1):
-            b = owner.get((x + dx, boundary))
-            if (
-                b is not None
-                and not (large[a] and large[b])
-                and may_join(a)
-                and may_join(b)
-            ):
-                parent[find(a)] = find(b)
-    members: dict[int, list[int]] = {}
-    for i in range(n):
-        members.setdefault(find(i), []).append(i)
-
-    groups: list[tuple[_Piece, int, bool]] = []  # (piece, band, homed)
-    for ids in members.values():
-        if {side[i] for i in ids if large[i]} == {0, 1}:
-            # Small pieces chained between both rows' large glyphs: keep
-            # every piece in its own half (the nominal split) for this group.
-            groups.extend((pieces[i], side[i], homed[i]) for i in ids)
-            continue
-        g = (
-            pieces[ids[0]]
-            if len(ids) == 1
-            else _Piece([p for i in ids for p in pieces[i].pixels])
-        )
-        n_top = sum(1 for _x, y in g.pixels if y < boundary)
-        band = 0 if 2 * n_top >= len(g.pixels) else 1
-        groups.append((g, band, any(homed[i] for i in ids)))
-
+    ``solo`` is the widget drawn with only its top row and with only its
+    bottom row. A pixel goes to the row whose solo render lights it; one
+    lit in both (the rows physically overlap) or neither, or every pixel
+    when ``solo`` is ``None``, goes to the nominal band by position
+    (above ``boundary`` -> top). ``exclude`` (the exact ring) is never
+    content."""
+    get = raster.get
     top: set[tuple[int, int]] = set()
     bottom: set[tuple[int, int]] = set()
-    big = [(o, o_band) for o, o_band, _h in groups if o.height() > small]
-    for g, band, is_homed in groups:
-        if g.height() <= small and not is_homed:
-            best: int | None = None
-            bands: set[int] = set()
-            for o, o_band in big:
-                d = g.gap_to(o)
-                if d is None or d > near:
-                    continue
-                if best is None or d < best:
-                    best, bands = d, set()
-                if d == best:
-                    bands.add(o_band)
-            if len(bands) == 1:
-                band = bands.pop()
-        (top if band == 0 else bottom).update(g.pixels)
+    for y in rows:
+        nominal = top if y < boundary else bottom
+        for x in cols:
+            if not is_lit(get(x, y)) or (exclude is not None and (x, y) in exclude):
+                continue
+            dest = nominal
+            if solo is not None:
+                in_top = is_lit(solo[0].get(x, y))
+                if in_top != is_lit(solo[1].get(x, y)):
+                    dest = top if in_top else bottom
+            dest.add((x, y))
     return top, bottom
 
 
 def band_rows(widget: Any, canvas: Any, real_h: int, depth: int) -> list[range]:
     """The NOMINAL band rows: one band, or a two-row widget's two bands split
     at the top band's height. ``build_decks`` refines the two-row split per
-    component (``assign_bands``)."""
+    pixel from single-row renders (``split_rows``)."""
     if not getattr(widget, "bottom_text", ""):
         return [range(depth, real_h - depth)]
     scaled = is_scaled(canvas)
@@ -446,30 +281,6 @@ def band_rows(widget: Any, canvas: Any, real_h: int, depth: int) -> list[range]:
     top_h, _ = resolve_band_heights(content_h, getattr(widget, "top_row_height", None))
     boundary = y_off + top_h * scale
     return [range(depth, boundary), range(boundary, real_h - depth)]
-
-
-def _row_pull(widget: Any) -> tuple[int, int]:
-    """How far each row's text is nudged TOWARD the band boundary (logical
-    rows): ``top_text_y_offset`` down, ``bottom_text_y_offset`` up. Non-int
-    or missing -> 0."""
-
-    def off(name: str) -> int:
-        v = getattr(widget, name, 0)
-        return v if isinstance(v, int) and not isinstance(v, bool) else 0
-
-    return off("top_text_y_offset"), -off("bottom_text_y_offset")
-
-
-def _small_height(widget: Any, canvas: Any, real_h: int) -> int:
-    """Tallest component (real rows) that counts as a detached mark: a
-    quarter of the shorter band, at least 1. That is 2 rows on the smallsign
-    (an i dot or accent is 1) and 8 real rows on the bigsign (a scaled dot
-    is 4); a letter stem or a crossing descender's glyph is far taller."""
-    scaled = is_scaled(canvas)
-    content_h = canvas.content_height if scaled else real_h
-    scale = canvas.scale if scaled else 1
-    heights = resolve_band_heights(content_h, getattr(widget, "top_row_height", None))
-    return max(1, min(heights) * scale // 4)
 
 
 def is_image_widget(widget: Any) -> bool:
@@ -528,11 +339,14 @@ def build_decks(
     *,
     mirror: bool,
     border_only: Raster | None = None,
+    solo_rows: Callable[[], tuple[Raster, Raster] | None] | None = None,
 ) -> Plan:
     """Split a snapshot into decks + ring. ``border_only`` is the widget's
     border painted alone (same frame, same wrapper) when the caller could
     render it: it gives the exact ring. Without it, the depth-based ring
-    (``ring_depth``) is the fallback."""
+    (``ring_depth``) is the fallback. ``solo_rows`` renders the widget with
+    only its top row and with only its bottom row (``None`` when it can't);
+    it is called only for a two-row split."""
     scale = canvas.scale if is_scaled(canvas) else 1
     w, h = raster.width, raster.height
     if is_image_widget(widget):
@@ -560,16 +374,15 @@ def build_decks(
     else:
         bands = band_rows(widget, canvas, h, depth)
     if len(bands) == 2:
-        # Two rows split per glyph, not per pixel row: each band's cards are
-        # segmented from the pixels ``assign_bands`` gave it.
-        owned = assign_bands(
+        # Each content pixel goes to the row that paints it (``split_rows``);
+        # each band's cards are segmented from its own pixels.
+        owned = split_rows(
             raster,
             range(depth, h - depth),
             cols,
             bands[1].start,
-            _small_height(widget, canvas, h),
             exclude,
-            pull=_row_pull(widget),
+            solo_rows() if solo_rows is not None else None,
         )
         band_cards = [cards_from_pixels(raster, o, cols, mirror=mirror) for o in owned]
     else:
