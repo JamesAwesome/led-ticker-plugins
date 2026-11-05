@@ -422,8 +422,7 @@ class TestContent:
         for card in decks[1].cards:
             assert all(y >= boundary for _dx, y, _c in card.pixels)
         # Both decks are fully off-panel at outgoing k = 1 ...
-        for deck in decks:
-            pos = p._out(deck, 32, 1.0)
+        for deck, pos in zip(decks, p._out(decks, 32, 1.0), strict=True):
             assert all(
                 x + card.width <= 0 for x, card in zip(pos, deck.cards, strict=True)
             )
@@ -435,6 +434,57 @@ class TestContent:
             assert all(
                 y >= boundary for (x, y), col in c._pixels.items() if col == GREEN
             )
+
+    @pytest.mark.parametrize("phase", ["out", "in"])
+    @pytest.mark.parametrize("cls", BOTH)
+    def test_two_row_decks_lockstep_mid_phase(self, cls, phase):
+        # Rows that differ in width (a short centred top label over a
+        # full-width bottom row, the normal two_row shape) must share ONE
+        # anchor / hand trajectory, not just meet at the endpoints.
+        top = [px for x0 in (60, 66, 72, 78) for px in _glyph(x0, 3, 1, 7, RED)]
+        bottom = [px for x0 in range(2, 158, 8) for px in _glyph(x0, 3, 9, 15, GREEN)]
+        w = _text_widget(top + bottom, bottom_text="b")
+        p = cls()
+        if phase == "out":
+            _paint(p, 0.0, w, _text_widget([]), w=160, h=16)
+            decks = p._out_plan[0]
+            motion = p._out
+        else:
+            _paint(p, 0.0, _text_widget([]), w, w=160, h=16)
+            _paint(p, 0.5, _text_widget([]), w, w=160, h=16)
+            decks = p._in_plan[0]
+            motion = p._in
+        assert len(decks) == 2 and all(d.cards for d in decks)
+        assert decks[0].cards[0].slot != decks[1].cards[0].slot
+        for k in (0.25, 0.5, 0.75):
+            all_pos = motion(decks, 160, k)
+            if cls is AccordionStretch:
+                # One common translation: every deck's first card is
+                # displaced from its slot by the same amount.
+                disp = {
+                    round(pos[0] - d.cards[0].slot, 6)
+                    for d, pos in zip(decks, all_pos, strict=True)
+                }
+                assert len(disp) == 1, (phase, k, disp)
+                continue
+            # Sweep: one shared hand. Recover it from any card the hand is
+            # carrying, then every card of every deck must follow it.
+            hands = {
+                round(x - i * d.peek, 6)
+                for d, pos in zip(decks, all_pos, strict=True)
+                for i, (x, c) in enumerate(zip(pos, d.cards, strict=True))
+                if x != c.slot
+            }
+            assert len(hands) == 1, (phase, k, hands)
+            (hand,) = hands
+            pick = min if phase == "out" else max
+            for d, pos in zip(decks, all_pos, strict=True):
+                assert pos == pytest.approx(
+                    [
+                        pick(float(c.slot), hand + i * d.peek)
+                        for i, c in enumerate(d.cards)
+                    ]
+                ), (phase, k)
 
     @pytest.mark.parametrize("cls", BOTH)
     def test_direction_right_mirrors_left(self, cls):
@@ -639,7 +689,7 @@ class TestPerfUniformity:
             p.frame_at(t, sc, w, w)
             painted = len(real.calls) - before
             (deck,), _ring = p._out_plan
-            xs = [round(x) for x in p._out(deck, 256, t / 0.475)]
+            xs = [round(x) for x in p._out([deck], 256, t / 0.475)[0]]
             covered = set()
             for x, card in zip(xs, deck.cards, strict=True):
                 covered.update(range(max(x, 0), min(x + card.width, 256)))

@@ -29,10 +29,10 @@ from led_ticker_flair.flair._raster import Pixel, Raster, snapshot_into
 from led_ticker_flair.flair.accordion_cards import Deck, build_decks
 from led_ticker_flair.flair.accordion_compose import compose
 from led_ticker_flair.flair.accordion_motion import (
-    stretch_in,
-    stretch_out,
-    sweep_in,
-    sweep_out,
+    stretch_in_decks,
+    stretch_out_decks,
+    sweep_in_decks,
+    sweep_out_decks,
 )
 
 _DIRECTIONS = ("left", "right")
@@ -74,10 +74,13 @@ class _Accordion:
 
     # --- motion (bound by subclasses) ---------------------------------------
 
-    def _out(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
+    # Each takes ALL of a plan's decks and returns one position list per
+    # deck: the decks share one anchor trajectory, so they move in lockstep.
+
+    def _out(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
         raise NotImplementedError
 
-    def _in(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
+    def _in(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
         raise NotImplementedError
 
     # --- snapshot -------------------------------------------------------------
@@ -107,9 +110,9 @@ class _Accordion:
         decks, ring = plan
         w = real.width
         set_px = real.SetPixel
-        for deck in decks:
+        for deck, positions in zip(decks, motion(decks, w, k), strict=True):
             if deck.cards:
-                compose(deck, motion(deck, w, k), w, set_px, mirror=self._mirror)
+                compose(deck, positions, w, set_px, mirror=self._mirror)
         # The ring stays put, painted over the cards (cards pass under it).
         for x, y, (r, g, b) in ring:
             set_px(x, y, r, g, b)
@@ -154,11 +157,11 @@ class AccordionSweep(_Accordion):
     pushes the stack off; the incoming stack is laid down card by card,
     rightmost first."""
 
-    def _out(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
-        return sweep_out(deck, W, k)
+    def _out(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
+        return sweep_out_decks(decks, W, k)
 
-    def _in(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
-        return sweep_in(deck, W, k)
+    def _in(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
+        return sweep_in_decks(decks, W, k)
 
 
 class AccordionStretch(_Accordion):
@@ -166,8 +169,8 @@ class AccordionStretch(_Accordion):
     as it leaves and opening up as it lands, reaching full spacing exactly
     on arrival."""
 
-    def _out(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
-        return stretch_out(deck, W, k)
+    def _out(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
+        return stretch_out_decks(decks, W, k)
 
-    def _in(self, deck: Deck, W: int, k: float) -> list[float]:  # noqa: N803
-        return stretch_in(deck, W, k)
+    def _in(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
+        return stretch_in_decks(decks, W, k)
