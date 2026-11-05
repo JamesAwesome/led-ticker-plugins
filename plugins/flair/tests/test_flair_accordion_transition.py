@@ -75,6 +75,7 @@ def _text_widget(
     # A bare Mock attribute is truthy / non-None: pin the duck-typed
     # border + two-row probes explicitly.
     widget.border = border
+    widget.background = None
     widget.bottom_text = bottom_text
     widget.top_row_height = None
 
@@ -94,6 +95,7 @@ def _image_widget(img: Any, border: Any = None, bottom_text: str = "") -> Any:
     # A bare Mock attribute is truthy / non-None: pin the duck-typed
     # border + two-row probes explicitly.
     widget.border = border
+    widget.background = None
     widget.bottom_text = bottom_text
     widget.top_row_height = None
 

@@ -501,3 +501,27 @@ def test_sweep_out_hand_starts_at_right_edge():
     # ... and it does start moving eventually.
     assert am.sweep_out(d, _PW, 0.9) != pytest.approx(_slots(d))
 
+
+@pytest.mark.parametrize("mirror", [False, True])
+@pytest.mark.parametrize("frame", [10, 25, 40])
+def test_background_widget_is_one_card_per_band(mirror, frame):
+    from led_ticker.backends.headless import HeadlessCanvas
+    from led_ticker.widgets.message import TickerMessage
+
+    from led_ticker_flair.flair.accordion import AccordionStretch
+    from led_ticker_flair.flair.fireworks_background import FireworksBackground
+
+    msg = TickerMessage(
+        text="OPEN",
+        center=True,
+        font_color=(255, 255, 255),
+        background=FireworksBackground(seed=3),
+    )
+    for _ in range(frame):
+        msg.advance_frame()
+    canvas = ScaledCanvas(HeadlessCanvas(256, 64), scale=4, content_height=16)
+    p = AccordionStretch(direction="right" if mirror else "left")
+    p.frame_at(0.0, canvas, msg, TickerMessage(text="X"))
+    decks = p._out_plan.decks
+    assert [len(d.cards) for d in decks] == [1]
+    assert decks[0].cards[0].pixels

@@ -83,6 +83,19 @@ def segment_cards(
     return cards
 
 
+def merge_cards(cards: Sequence[Card]) -> list[Card]:
+    """Fuse a band's cards into ONE card spanning the band's lit extent
+    (gaps stay blank inside it). Empty in, empty out."""
+    if len(cards) < 2:
+        return list(cards)
+    first = cards[0]
+    end = max(c.slot + c.width for c in cards)
+    pixels = tuple(
+        (dx + c.slot - first.slot, y, rgb) for c in cards for dx, y, rgb in c.pixels
+    )
+    return [Card(slot=first.slot, width=end - first.slot, pixels=pixels)]
+
+
 def effective_peek(cards: Sequence[Card], peek: int) -> float:
     """Cap the peek to the average slot spacing so a dense deck never
     overlaps more than it spaces."""
@@ -268,8 +281,13 @@ def build_decks(
         depth = ring_depth(widget, raster)
         ring, under = ring_pixels(raster, depth), []
     cols = range(depth, w - depth)
+    # A background effect (sparse streaks/spokes bridging the glyphs) has no
+    # gaps worth fanning: each band slides as a single card.
+    has_background = getattr(widget, "background", None) is not None
     decks: list[Deck] = []
     for rows in band_rows(widget, canvas, h, depth):
         cards = segment_cards(raster, rows, cols, mirror=mirror, exclude=exclude)
+        if has_background:
+            cards = merge_cards(cards)
         decks.append(Deck(cards=tuple(cards), peek=effective_peek(cards, 2 * scale)))
     return Plan(decks, ring, under)
