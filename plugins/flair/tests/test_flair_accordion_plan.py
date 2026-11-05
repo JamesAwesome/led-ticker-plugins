@@ -681,6 +681,37 @@ def test_two_row_colon_and_bang_dots_stay_with_their_row(w, h, scale, top, bot):
     _assert_rows_separate(plan)
 
 
+@pytest.mark.parametrize("geometry", ["smallsign", "bigsign"])
+def test_two_row_crossing_glyph_stays_whole_with_border(geometry):
+    # The exact ring's left/right columns are lit on every row: the band
+    # split must not treat ring pixels as content.
+    from led_ticker.borders import ConstantBorder
+    from led_ticker.fonts import resolve_font
+
+    blue = (0, 0, 255)
+    border = ConstantBorder(color=blue)
+    if geometry == "smallsign":
+        plan, _ = _two_row_plan(
+            160,
+            16,
+            1,
+            top="jog by",
+            bot="WORLD",
+            border=border,
+            top_text_y_offset=1,
+            bottom_text_y_offset=1,
+        )
+        boundary = 8
+    else:
+        plan, _ = _two_row_plan(
+            256, 64, 4, font=resolve_font("spleen-16x32", 32), border=border
+        )
+        boundary = 32
+    assert plan.ring
+    assert all(rgb != blue for d in plan.decks for c in d.cards for *_, rgb in c.pixels)
+    _assert_rows_stay_whole(plan, boundary)
+
+
 def test_background_two_row_is_one_card_rigid_under_sweep():
     from led_ticker.backends.headless import HeadlessCanvas
     from led_ticker.widgets.message import TickerMessage
