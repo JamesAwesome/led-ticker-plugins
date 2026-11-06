@@ -1,0 +1,308 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST - flair.accordion.sweep / flair.accordion.stretch
+#
+# Prereqs on the sign: led-ticker-flair at the release that ships accordion.
+# Preflight: led-ticker validate <this file>  -> expect: No issues found.
+#
+# The outgoing content bunches into an occluding card-fan deck that slides
+# off; the incoming deck slides in and fans out. Every section uses
+# easing = "ease_in_out" and duration = 2.0.
+#
+# WHAT TO LOOK FOR (transitions fire between the widgets INSIDE each section,
+# and on each section's entry):
+#   1 EMPTY ENTRY - first section, nothing outgoing: only the incoming deck fans in.
+#   2 SWEEP LEFT / 3 SWEEP RIGHT - rigid deck sweeps off one edge, in from the other.
+#   4 STRETCH LEFT / 5 STRETCH RIGHT - deck stretches rather than slides.
+#   6 BG - teal then purple: no black flash, bg swaps cleanly.
+#   7 CROSS-SCALE - scale 2 section into scale 4 section.
+#   8 IMAGE - phoenix gif as the outgoing/incoming widget.
+#   9 BORDER - rainbow chase and lightbulb borders stay put on top of the deck.
+#  10 TWO ROW - each band forms its own deck.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 2.0
+easing = "ease_in_out"
+between_sections = "cut"
+
+# ---------------------------------------------------------------------------
+# 1 EMPTY ENTRY - nothing outgoing, deck fans in
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.accordion.sweep", direction = "left"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 ENTRY"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 2 SWEEP LEFT
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.accordion.sweep", direction = "left"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 SWEEP"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "LEFT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 3 SWEEP RIGHT
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.accordion.sweep", direction = "right"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 SWEEP"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "RIGHT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 4 STRETCH LEFT
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.accordion.stretch", direction = "left"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 STRETCH"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "LEFT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 5 STRETCH RIGHT
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = {type = "flair.accordion.stretch", direction = "right"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 STRETCH"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "RIGHT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 6 BG - teal then purple
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.sweep"
+bg_color = [0, 40, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 BG TEAL"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 6 BG - purple
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.sweep"
+bg_color = [40, 0, 60]
+
+[[playlist.section.widget]]
+type = "message"
+text = "BG PURPLE"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 7 CROSS-SCALE - scale 2 section
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.stretch"
+scale = 2
+content_height = 32
+
+[[playlist.section.widget]]
+type = "message"
+text = "7 SCALE 2"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 7 CROSS-SCALE - scale 4 section
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.stretch"
+
+[[playlist.section.widget]]
+type = "message"
+text = "SCALE 4"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 8 IMAGE - phoenix gif
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.sweep"
+
+[[playlist.section.widget]]
+type = "gif"
+path = "assets/phoenix.gif"
+play_count = 1
+
+[[playlist.section.widget]]
+type = "message"
+text = "8 AFTER GIF"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+# ---------------------------------------------------------------------------
+# 9 BORDER - rainbow chase
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.sweep"
+
+[[playlist.section.widget]]
+type = "message"
+text = "9 RAINBOW"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+[[playlist.section.widget]]
+type = "message"
+text = "BORDER"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+# ---------------------------------------------------------------------------
+# 9 BORDER - lightbulbs
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.stretch"
+
+[[playlist.section.widget]]
+type = "message"
+text = "9 BULBS"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "lightbulbs", mode = "alternate"}
+
+[[playlist.section.widget]]
+type = "message"
+text = "BORDER"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "lightbulbs", mode = "alternate"}
+
+# ---------------------------------------------------------------------------
+# 10 TWO ROW - each band forms its own deck
+# ---------------------------------------------------------------------------
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.accordion.sweep"
+scale = 2
+content_height = 32
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "10 TOP ROW"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 120, 40]
+bottom_text = "BOTTOM"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "SECOND TOP"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 215, 120]
+bottom_text = "SECOND BOT"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [130, 220, 150]

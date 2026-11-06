@@ -19,85 +19,17 @@ from typing import Any
 from led_ticker.plugin import (
     SNAP_THRESHOLD,
     Canvas,
-    ScaledCanvas,
     is_scaled,
     snap_reset,
     unwrap_to_real,
 )
 
-Pixel = tuple[int, int, tuple[int, int, int]]  # (x, y, (r, g, b))
+from ._raster import Pixel, Raster, is_lit, snapshot_into
+
+_Raster = Raster  # back-compat alias (tests import it)
+_is_lit = is_lit
 
 _ORIGINS = ("top", "bottom", "left", "right")
-_BLACK = (0, 0, 0)
-
-
-class _Raster:
-    """Minimal readable canvas with real-canvas write semantics.
-
-    Out-of-bounds writes are silently ignored (same as the hardware
-    canvas). Slots start as ``None`` (unset); ``Clear()`` resets them.
-    ``SetImage`` exists because `gif` / `image` / `still` widgets paint via
-    ``unwrap_to_real(canvas).SetImage(pil_image, x, y)`` — a snapshot
-    target without it raises inside the breaker-guarded draw and TRIPS
-    the widget. Alpha-0 pixels flatten to black, mirroring the production
-    ``SetImage`` path.
-    """
-
-    def __init__(self, width: int, height: int) -> None:
-        self.width = width
-        self.height = height
-        self._pixels: list[tuple[int, int, int] | None] = [None] * (width * height)
-
-    def SetPixel(self, x: int, y: int, r: int, g: int, b: int) -> None:  # noqa: N802 - canvas API
-        if 0 <= x < self.width and 0 <= y < self.height:
-            self._pixels[y * self.width + x] = (r, g, b)
-
-    def SubFill(  # noqa: N802 - canvas API
-        self, x: int, y: int, w: int, h: int, r: int, g: int, b: int
-    ) -> None:
-        x0 = max(0, x)
-        y0 = max(0, y)
-        x1 = min(self.width, x + w)
-        y1 = min(self.height, y + h)
-        if x0 >= x1 or y0 >= y1:
-            return
-        pixel = (r, g, b)
-        for yy in range(y0, y1):
-            row = yy * self.width
-            for xx in range(x0, x1):
-                self._pixels[row + xx] = pixel
-
-    def Clear(self) -> None:  # noqa: N802 - canvas API
-        self._pixels = [None] * (self.width * self.height)
-
-    def Fill(self, r: int, g: int, b: int) -> None:  # noqa: N802 - canvas API
-        self._pixels = [(r, g, b)] * (self.width * self.height)
-
-    def SetImage(  # noqa: N802 - canvas API
-        self, image: Any, offset_x: int = 0, offset_y: int = 0
-    ) -> None:
-        pixels = image.load()
-        w, h = image.size
-        for y in range(h):
-            for x in range(w):
-                px = pixels[x, y]
-                if len(px) == 4 and px[3] == 0:
-                    r, g, b = 0, 0, 0
-                else:
-                    r, g, b = px[0], px[1], px[2]
-                self.SetPixel(offset_x + x, offset_y + y, r, g, b)
-
-    def get(self, x: int, y: int) -> tuple[int, int, int] | None:
-        if 0 <= x < self.width and 0 <= y < self.height:
-            return self._pixels[y * self.width + x]
-        return None
-
-
-def _is_lit(px: tuple[int, int, int] | None) -> bool:
-    """Set and not pure black. The section ``bg_color`` is painted by the
-    ENGINE, never by the widget, so it never reaches a snapshot; black is
-    excluded so gif pillars / image letterbox fills aren't lasered."""
-    return px is not None and px != _BLACK
 
 
 def raster_order(
@@ -267,15 +199,9 @@ class Laser:
             self._raster_key = key
         raster = self._rasters[slot]
         if raster is None:
-            raster = _Raster(real.width, real.height)
+            raster = Raster(real.width, real.height)
             self._rasters[slot] = raster
-        raster.Clear()
-        target: Any = raster
-        if scaled:
-            target = ScaledCanvas(
-                raster, scale=canvas.scale, content_height=canvas.content_height
-            )
-        widget.draw(target, cursor_pos=cursor_pos)
+        snapshot_into(raster, canvas, widget, cursor_pos)
         return raster
 
     def _ensure_plan(self, canvas: Any, outgoing: Any, incoming: Any, pos: int) -> None:
