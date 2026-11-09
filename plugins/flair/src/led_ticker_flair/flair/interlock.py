@@ -16,11 +16,19 @@ appears right after — the cut-over frame is the only empty one.
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
-from led_ticker.plugin import SNAP_THRESHOLD
+from led_ticker.plugin import (
+    SNAP_THRESHOLD,
+    Canvas,
+    is_scaled,
+    snap_reset,
+    unwrap_to_real,
+)
 
 from ._raster import Pixel, Raster, is_lit
-from ._snapshot import Geometry
+from ._snapshot import Geometry, SnapshotCache, geometry_of
+from ._variants import Cycling, RandomNoRepeat
 
 AXES = ("horizontal", "vertical")
 _HALF = 0.5
@@ -99,3 +107,130 @@ def build_plan(raster: Raster, axis: str, geo: Geometry, strand: int) -> Interlo
     return InterlockPlan(
         axis, groups[0], groups[1], ext[0][0], ext[0][1], ext[1][0], ext[1][1], size
     )
+
+
+def _coerce_strand(strand: Any) -> int:
+    if isinstance(strand, bool) or not isinstance(strand, int) or strand < 1:
+        raise ValueError(f"strand must be a positive int; got {strand!r}")
+    return strand
+
+
+class Interlock:
+    """Horizontal interlock (the Alpha classic): even row-strands travel
+    left -> right, odd ones right -> left, in BOTH phases (conveyor).
+
+    Keeps the runner's default ``scale_switch_at`` (0.5): the split phase
+    empties the panel exactly at the cut-over, so the bg / scale switch is
+    invisible, and the incoming is snapshotted lazily from the first
+    ``t >= 0.5`` frame's (possibly re-wrapped) canvas.
+    """
+
+    min_frames = 24
+    _axis = "horizontal"
+    _even_positive = True
+
+    def __init__(self, strand: Any = 1) -> None:
+        self.strand: int = _coerce_strand(strand)
+        self._out_plan: InterlockPlan | None = None
+        self._in_plan: InterlockPlan | None = None
+        self._last_t = 1.0
+        self._cache = SnapshotCache()
+
+    def _plan(self, canvas: Any, widget: Any, pos: int, slot: int) -> InterlockPlan:
+        raster = self._cache.take(canvas, widget, pos, slot)
+        return build_plan(raster, self._axis, geometry_of(canvas), self.strand)
+
+    def frame_at(
+        self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
+    ) -> Canvas:
+        if t == 0.0 or t < self._last_t:  # new firing -> fresh snapshots
+            self._out_plan = None
+            self._in_plan = None
+        self._last_t = t
+
+        if t >= SNAP_THRESHOLD:
+            snap_reset(canvas, kwargs.get("incoming_bg_color"))
+            incoming.draw(canvas, cursor_pos=0)
+            return canvas
+
+        if self._out_plan is None:
+            pos = kwargs.get("outgoing_scroll_pos", 0)
+            self._out_plan = self._plan(canvas, outgoing, pos, 0)
+        # `real` is re-derived EVERY call, never cached (constraint #1).
+        real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
+
+        if t < _HALF:
+            self._paint(real, self._out_plan, t, split=True)
+        else:
+            if self._in_plan is None:  # lazy: this frame's (re-wrapped) canvas
+                self._in_plan = self._plan(canvas, incoming, 0, 1)
+            self._paint(real, self._in_plan, t, split=False)
+        return canvas
+
+    def _paint(self, real: Any, plan: InterlockPlan, t: float, split: bool) -> None:
+        horizontal = plan.axis == "horizontal"
+        limit = plan.size
+        set_px = real.SetPixel
+        groups = (
+            (0, plan.even, plan.even_lo, plan.even_hi),
+            (1, plan.odd, plan.odd_lo, plan.odd_hi),
+        )
+        for parity, pixels, lo, hi in groups:
+            if not pixels:
+                continue
+            sign = 1 if (parity == 0) == self._even_positive else -1
+            if split:
+                d = clear_distance(lo, hi, limit, toward_positive=sign > 0)
+                shift = sign * split_offset(t, d)
+            else:
+                d = clear_distance(lo, hi, limit, toward_positive=sign < 0)
+                shift = -sign * mesh_offset(t, d)
+            for x, y, (r, g, b) in pixels:
+                if horizontal:
+                    x += shift
+                    if 0 <= x < limit:
+                        set_px(x, y, r, g, b)
+                else:
+                    y += shift
+                    if 0 <= y < limit:
+                        set_px(x, y, r, g, b)
+
+
+class InterlockFlipped(Interlock):
+    """Horizontal, even strands right -> left (used by ``.random``)."""
+
+    _even_positive = False
+
+
+class InterlockVertical(Interlock):
+    """Column strands: even ones travel top -> bottom, odd bottom -> top."""
+
+    _axis = "vertical"
+
+
+class InterlockVerticalFlipped(InterlockVertical):
+    """Vertical, even strands bottom -> top (used by ``.random``)."""
+
+    _even_positive = False
+
+
+class InterlockAlternating(Cycling):
+    """Cycles horizontal -> vertical, one axis per firing."""
+
+    def __init__(self, strand: Any = 1) -> None:
+        super().__init__([Interlock(strand), InterlockVertical(strand)])
+
+
+class InterlockRandom(RandomNoRepeat):
+    """Picks per firing from axis x parity-flip (four choices), never the
+    same one back-to-back."""
+
+    def __init__(self, strand: Any = 1) -> None:
+        super().__init__(
+            [
+                Interlock(strand),
+                InterlockFlipped(strand),
+                InterlockVertical(strand),
+                InterlockVerticalFlipped(strand),
+            ]
+        )
