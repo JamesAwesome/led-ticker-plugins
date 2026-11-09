@@ -461,12 +461,14 @@ The erase direction is **not** a knob — pick the variant. The beam colour is a
 
 ![flair.accordion.sweep — the old message bunches into a deck and slides off left, the new one slides in and fans out](docs/transition-accordion.gif)
 
-Requires **led-ticker-core >= 4.32**. Two variants:
+Requires **led-ticker-core >= 4.32**. Two motions, each with an alternating variant:
 
 | Type | Motion |
 | --- | --- |
 | `flair.accordion.sweep` | Cards are scooped up one by one and the stack is pushed off; the incoming stack is laid down card by card. |
 | `flair.accordion.stretch` | The content moves as one piece, squeezing shut as it leaves and opening up as it lands. |
+| `flair.accordion.sweep.alternating` | Sweep, flipping sides each time it fires: left, then right, then left. |
+| `flair.accordion.stretch.alternating` | Stretch, flipping sides each time it fires. |
 
 ### Config
 
@@ -487,6 +489,8 @@ transition = {type = "flair.accordion.stretch", direction = "right"}
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `direction` | `"left"` / `"right"` | `"left"` | `"left"` exits left and enters from the right; `"right"` mirrors it. |
+
+The `.alternating` variants take no `direction`: the first firing goes left, the next right, and so on.
 
 Recommended: `duration = 2.0` with `easing = "ease_in_out"`.
 
