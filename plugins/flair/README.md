@@ -507,6 +507,96 @@ Recommended: `duration = 2.0` with `easing = "ease_in_out"`.
 - **Backgrounds.** The section `bg_color` is painted by the engine, never by the transition. The panel switches to the new section's background at the halfway point, on the same frame the incoming deck starts to slide in, with no black flash. The short empty beat just before it (which can be zero frames on a fast transition) still shows the outgoing background.
 - **Cross-scale sections.** The incoming content is snapshotted at its own scale, so it arrives at its native size.
 
+## Interlock transition
+
+`flair.interlock` is the BetaBrite / Alpha "Interlock" special mode. The panel is cut into thin strands. Alternate strands of the old message slide off toward opposite edges, then the new message's strands race in from opposite edges and mesh together. Each strand works like a conveyor belt and keeps one direction for the whole transition, so even strands move left to right and odd strands right to left. It works on every widget type, because the content is snapshotted as pixels, not as text.
+
+Requires **led-ticker-core >= 4.32**. Four variants:
+
+| Type | Strands | Even strands travel | Odd strands travel |
+| --- | --- | --- | --- |
+| `flair.interlock.horizontal` | rows (the Alpha classic) | left → right | right → left |
+| `flair.interlock.vertical` | columns | top → bottom | bottom → top |
+| `flair.interlock.alternating` | cycles horizontal → vertical | one axis per firing | |
+| `flair.interlock.random` | random axis and direction | never the same twice running | |
+
+### Config
+
+```toml
+[transitions]
+duration = 1.5        # the floor is 1.2 s (min_frames = 24)
+
+[[playlist.section]]
+transition = "flair.interlock.horizontal"
+```
+
+Chunkier strands, two logical rows each:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.interlock.horizontal", strand = 2}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `strand` | positive int | `1` | Strand thickness in logical rows (or columns). On a bigsign at `default_scale = 4`, one logical row is 4 LED rows. |
+
+`.alternating` and `.random` pass `strand` through to every variant.
+
+### Notes
+
+- **Travel is sized to the content.** The strands travel just far enough to clear the content off the panel. The old message has just gone at the halfway point and the new one starts arriving right after, so the halfway frame is the only blank one, even for short centred text.
+- **Backgrounds.** The panel switches to the new section's background at the halfway point, on that blank frame, so there's no visible cut.
+- **Cross-scale sections.** The incoming content is snapshotted at the halfway point at its own scale, so it meshes in at its native size.
+- **Borders move with the content.** A bordered widget's ring is cut into strands along with everything else.
+
+## Blinds transition
+
+`flair.blinds` is the venetian-blind (or "shutter") reveal found on modern LED sign controllers. The panel is cut into equal slats, and every slat opens at the same moment in the same direction, revealing the new message through the old one. There's no sweep line; that look belongs to core's `wipe_*`. It works on every widget type.
+
+Requires **led-ticker-core >= 4.32**. Six variants, named by the direction each slat opens:
+
+| Type | Slats | Each slat opens |
+| --- | --- | --- |
+| `flair.blinds.down` | horizontal | top → bottom |
+| `flair.blinds.up` | horizontal | bottom → top |
+| `flair.blinds.right` | vertical | left → right |
+| `flair.blinds.left` | vertical | right → left |
+| `flair.blinds.alternating` | cycles down → right → up → left | one direction per firing |
+| `flair.blinds.random` | a different direction each firing | never the same twice running |
+
+### Config
+
+```toml
+[transitions]
+duration = 1.0        # the floor is 0.8 s (min_frames = 16)
+
+[[playlist.section]]
+transition = "flair.blinds.down"
+```
+
+More, thinner slats:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.blinds.down", slats = 8}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `slats` | positive int | `4` horizontal / `8` vertical | Number of slats. Slats are whole logical pixels, the last one takes any remainder, and the count is capped so every slat is at least one logical pixel. |
+
+On `.alternating` and `.random`, an explicit `slats` applies to both orientations. If you omit it, each orientation keeps its own default.
+
+### Notes
+
+- **Backgrounds.** The opened part of each slat shows the new section's background, and the rest still shows the old one.
+- **Cross-scale sections.** The old and new messages share the panel for the whole transition, so incoming content renders at the outgoing scale and pops to its own size on the final frame. Laser, fairy and lightning have the same limitation.
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
