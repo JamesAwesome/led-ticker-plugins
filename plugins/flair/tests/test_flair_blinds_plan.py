@@ -86,3 +86,17 @@ def test_build_plan_only_lit_pixels():
     assert [(e[0], e[1]) for e in p.out_px] == [(1, 1)]
     assert [(e[0], e[1]) for e in p.in_px] == [(1, 1)]
     assert p.out_px[0][2:5] == (1, 2, 3)
+
+
+def test_build_plan_letterboxed_slats_anchor_at_content():
+    # 128x64 panel at scale 2, content 16 -> content rows 16..47. Slats split
+    # the CONTENT band; letterbox rows fold into the first / last slat.
+    geo = Geometry(4, 64, 2, 16, 32)
+    p = build_plan(Raster(4, 64), Raster(4, 64), "down", 4, geo)
+    assert p.bounds == [(0, 24), (24, 32), (32, 40), (40, 64)]
+
+
+def test_build_plan_vertical_slats_ignore_y_offset():
+    geo = Geometry(16, 64, 2, 16, 32)
+    p = build_plan(Raster(16, 64), Raster(16, 64), "right", 4, geo)
+    assert p.bounds == [(0, 4), (4, 8), (8, 12), (12, 16)]

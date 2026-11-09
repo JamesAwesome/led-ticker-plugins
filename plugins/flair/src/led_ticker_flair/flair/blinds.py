@@ -95,7 +95,19 @@ def build_plan(
     out_r: Raster, in_r: Raster, direction: str, slats: int, geo: Geometry
 ) -> BlindsPlan:
     rows = orientation(direction) == "horizontal"
-    bounds = slat_bounds(geo.height if rows else geo.width, slats, geo.scale)
+    if rows:
+        # Split the CONTENT band (anchored at y_offset_real, like interlock's
+        # strands) so "4 slats" means 4 visible slats on a letterboxed panel;
+        # letterbox rows fold into the first / last slat.
+        y0 = geo.y_offset_real
+        bounds = [
+            (lo + y0, hi + y0)
+            for lo, hi in slat_bounds(geo.content_h_real, slats, geo.scale)
+        ]
+        bounds[0] = (0, bounds[0][1])
+        bounds[-1] = (bounds[-1][0], geo.height)
+    else:
+        bounds = slat_bounds(geo.width, slats, geo.scale)
     return BlindsPlan(
         direction, bounds, _tag(out_r, direction, bounds), _tag(in_r, direction, bounds)
     )

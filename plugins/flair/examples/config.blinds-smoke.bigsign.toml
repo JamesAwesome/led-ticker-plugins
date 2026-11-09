@@ -6,7 +6,8 @@
 # `docker compose down -v && docker compose up -d`; copy to config/config.toml,
 # then `make restart`. Preflight: led-ticker validate config/config.toml.
 #
-# Sections: each fixed variant; alternating (watch two cycles); random (never
+# Sections: each fixed variant; alternating on a navy bg (watch two cycles;
+# the navy holds until each reveal/mesh lands); random (never
 # the same twice running); BG HOLD (teal then purple, no black flash); a
 # rainbow-bordered message; a two_row; a full-panel gif (perf worst case,
 # stock assets/phoenix.gif); and a knob section. Sections enter with the same
@@ -116,6 +117,7 @@ font_size = 30
 mode = "slideshow"
 hold_time = 1.0
 transition = "flair.blinds.alternating"
+bg_color = [0, 30, 50]
 
 [[playlist.section.widget]]
 type = "message"

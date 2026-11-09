@@ -24,6 +24,15 @@ class Cycling:
     def min_frames(self) -> int:
         return self._transitions[0].min_frames
 
+    @property
+    def scale_switch_at(self) -> float:
+        """Forwarded because the runner reads it on the WRAPPER
+        (``getattr(transition, "scale_switch_at", 0.5)``). A delegate without
+        one (interlock) raises AttributeError here, so ``getattr`` falls back
+        to the runner default and the wrapper keeps "no attribute"
+        semantics."""
+        return self._transitions[0].scale_switch_at
+
     def _next_index(self) -> int:
         return (self._index + 1) % len(self._transitions)
 

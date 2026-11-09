@@ -97,3 +97,14 @@ def test_snapshot_cache_reuses_raster_until_geometry_changes():
     other = cache.take(_StubCanvas(12, 4), _Widget(), 0, 0)
     assert other is not a
     assert other.width == 12
+
+
+def test_cycling_forwards_scale_switch_at():
+    from led_ticker_flair.flair.blinds import BlindsAlternating, BlindsRandom
+    from led_ticker_flair.flair.interlock import InterlockAlternating, InterlockRandom
+
+    # The runner reads scale_switch_at on the WRAPPER (getattr default 0.5).
+    assert BlindsAlternating().scale_switch_at == 1.0
+    assert BlindsRandom().scale_switch_at == 1.0
+    assert not hasattr(InterlockAlternating(), "scale_switch_at")
+    assert not hasattr(InterlockRandom(), "scale_switch_at")
