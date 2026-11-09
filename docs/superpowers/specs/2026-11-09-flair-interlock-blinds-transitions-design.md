@@ -106,10 +106,12 @@ would otherwise be identical to `.alternating` (my call).
   the panel size. Panel-size travel left centred text blank for ~1/3 of the
   transition. Per snapshot and per travel direction, `D` is the distance
   that just clears the lit content off the edge it moves toward. For
-  horizontal, with lit x-extent `[lo, hi]` over the whole snapshot,
+  horizontal, with lit x-extent `[lo, hi]` of that PARITY GROUP's pixels,
   `D_right = W − lo` and `D_left = hi + 1`. Vertical is the same with y and
   H. All strands moving the same way share one `D`, so they move in
-  lockstep (classic). An empty snapshot has nothing to move.
+  lockstep (classic). An empty snapshot has nothing to move. (Per-parity
+  rather than whole-snapshot is an implementation ruling: a whole-snapshot
+  extent lets one parity clear before t = 0.5.)
 - Offset is a pure function of `t`. In the split phase,
   `d = D · (t / 0.5)`, so the outgoing has just cleared at `t = 0.5`. In the
   mesh phase, `d = D · (1 − (t − 0.5) / (0.95 − 0.5))`, so the incoming
@@ -172,8 +174,13 @@ px per frame on bigsign dims, first firing and refire).
 
 ### What it does
 
-- The real panel is split into `slats` equal bands — horizontal bands for
-  `.down`/`.up`, vertical bands for `.left`/`.right`.
+- The panel is split into `slats` equal bands: horizontal bands for
+  `.down`/`.up`, vertical bands for `.left`/`.right`. Horizontal bands split
+  the CONTENT band, anchored at `y_offset_real` like interlock's strands,
+  and letterbox rows fold into the first and last slat. This changed after
+  the final review: a full-panel split showed only 2 of 4 slats over the
+  content on a letterboxed sign. Smallsign and bigsign have no letterbox, so
+  they're unaffected. Pending James's confirmation at the visual gate.
 - Every slat opens simultaneously from its leading edge: at progress `p`
   (`p = min(t, 0.95) / 0.95`) the first `round(p × slat_size)` real
   rows/columns of EACH slat show the incoming; the rest show the outgoing.

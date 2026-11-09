@@ -9,9 +9,10 @@
 # Sections: each fixed variant; alternating on a navy bg (watch two cycles;
 # the navy holds until each reveal/mesh lands); random (never
 # the same twice running); BG HOLD (teal then purple, no black flash); a
-# rainbow-bordered message; a two_row; a full-panel gif (perf worst case,
-# stock assets/phoenix.gif); and a knob section. Sections enter with the same
-# transition (between_sections), so every section boundary fires it too.
+# rainbow-bordered message; a two_row (scale 2, so also a cross-scale entry);
+# a full-panel gif (perf worst case, stock assets/phoenix.gif); and a knob
+# section. Each section's own `transition` also runs as its ENTRY (core
+# precedence), so every section boundary fires the transition too.
 
 [display]
 rows = 32
