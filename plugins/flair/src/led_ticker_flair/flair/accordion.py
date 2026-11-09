@@ -306,8 +306,9 @@ class AccordionStretch(_Accordion):
 
 
 class _AccordionAlternating:
-    """Flips direction each firing: left, right, left, ... (FairyAlternating
-    / LaserAlternating convention). Holds one instance per direction and
+    """Flips direction each firing (FairyAlternating / LaserAlternating
+    convention). ``direction`` picks the first firing's side (default
+    ``"left"``: left, right, left, ...). Holds one instance per direction and
     delegates, so each keeps its own plans and scratch rasters. A new
     firing is detected with the same rule as ``_Accordion.frame_at``
     (``t == 0.0`` or ``t`` went backwards), so the wrapper and the inner
@@ -315,11 +316,14 @@ class _AccordionAlternating:
 
     _motion: type[_Accordion]
 
-    def __init__(self) -> None:
-        self._transitions: list[_Accordion] = [
-            self._motion(direction="left"),
-            self._motion(direction="right"),
-        ]
+    def __init__(self, direction: Any = "left") -> None:
+        if direction not in _DIRECTIONS:
+            raise ValueError(
+                f"direction must be one of {_DIRECTIONS}; got {direction!r}"
+            )
+        start = _DIRECTIONS.index(direction)
+        order = _DIRECTIONS[start:] + _DIRECTIONS[:start]
+        self._transitions: list[_Accordion] = [self._motion(direction=d) for d in order]
         self._index: int = -1
         self._last_t: float = 1.0
 

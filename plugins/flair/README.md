@@ -490,7 +490,11 @@ transition = {type = "flair.accordion.stretch", direction = "right"}
 | --- | --- | --- | --- |
 | `direction` | `"left"` / `"right"` | `"left"` | `"left"` exits left and enters from the right; `"right"` mirrors it. |
 
-The `.alternating` variants take no `direction`: the first firing goes left, the next right, and so on.
+On the `.alternating` variants, `direction` picks the side of the **first** firing; after that it flips every time (`"left"` → left, right, left, …; `"right"` → right, left, right, …).
+
+```toml
+transition = {type = "flair.accordion.sweep.alternating", direction = "right"}
+```
 
 Recommended: `duration = 2.0` with `easing = "ease_in_out"`.
 

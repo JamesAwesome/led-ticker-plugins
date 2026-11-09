@@ -970,9 +970,9 @@ class TestAlternating:
         assert alt().min_frames == 30
 
     @pytest.mark.parametrize("alt, _single", ALTERNATING)
-    def test_no_direction_knob(self, alt, _single):
-        with pytest.raises(TypeError):
-            alt(direction="left")
+    def test_bad_direction_rejected(self, alt, _single):
+        with pytest.raises(ValueError, match="direction"):
+            alt(direction="up")
 
     @pytest.mark.parametrize("alt, single", ALTERNATING)
     def test_firings_go_left_right_left(self, alt, single):
@@ -984,6 +984,23 @@ class TestAlternating:
         assert _fire(p, out, inc) == left
         assert _fire(p, out, inc) == right
         assert _fire(p, out, inc) == left
+
+    @pytest.mark.parametrize("alt, single", ALTERNATING)
+    def test_direction_right_starts_right(self, alt, single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        left = _fire(single(direction="left"), out, inc)
+        right = _fire(single(direction="right"), out, inc)
+        p = alt(direction="right")
+        assert _fire(p, out, inc) == right
+        assert _fire(p, out, inc) == left
+        assert _fire(p, out, inc) == right
+
+    @pytest.mark.parametrize("alt, _single", ALTERNATING)
+    def test_explicit_left_matches_default(self, alt, _single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        a, b = alt(), alt(direction="left")
+        for _ in range(3):
+            assert _fire(a, out, inc) == _fire(b, out, inc)
 
     @pytest.mark.parametrize("alt, single", ALTERNATING)
     def test_refire_without_reaching_t1_still_flips(self, alt, single):
