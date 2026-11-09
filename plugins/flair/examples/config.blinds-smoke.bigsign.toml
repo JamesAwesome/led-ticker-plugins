@@ -1,0 +1,305 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST: flair.blinds transition (the flair release that ships it)
+#
+# Prereqs: led-ticker-core >= 4.32; led-ticker-flair at the release that ships
+# blinds (PyPI pin in config/requirements-plugins.txt), then
+# `docker compose down -v && docker compose up -d`; copy to config/config.toml,
+# then `make restart`. Preflight: led-ticker validate config/config.toml.
+#
+# Sections: each fixed variant; alternating (watch two cycles); random (never
+# the same twice running); BG HOLD (teal then purple, no black flash); a
+# rainbow-bordered message; a two_row; a full-panel gif (perf worst case,
+# stock assets/phoenix.gif); and a knob section. Sections enter with the same
+# transition (between_sections), so every section boundary fires it too.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 1.0
+between_sections = "flair.blinds.down"
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+
+[[playlist.section.widget]]
+type = "message"
+text = "1 DOWN"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SLATS OPEN"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.up"
+
+[[playlist.section.widget]]
+type = "message"
+text = "2 UP"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FROM BELOW"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.right"
+
+[[playlist.section.widget]]
+type = "message"
+text = "3 RIGHT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "LEFT TO RIGHT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.left"
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 LEFT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "RIGHT TO LEFT"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.alternating"
+
+[[playlist.section.widget]]
+type = "message"
+text = "5 ALT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SECOND"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "THIRD"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FOURTH"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FIFTH"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.random"
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 RANDOM"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SECOND"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "THIRD"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FOURTH"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+bg_color = [0, 40, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "7 TEAL"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+bg_color = [40, 0, 60]
+
+[[playlist.section.widget]]
+type = "message"
+text = "PURPLE"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+
+[[playlist.section.widget]]
+type = "message"
+text = "8 BORDER"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+[[playlist.section.widget]]
+type = "message"
+text = "RING"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+scale = 2
+content_height = 32
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "TOP ROW"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 120, 40]
+bottom_text = "BOTTOM"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "SECOND"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 215, 120]
+bottom_text = "PAIR"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [130, 220, 150]
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.blinds.down"
+
+[[playlist.section.widget]]
+type = "message"
+text = "10 GIF"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "gif"
+path = "assets/phoenix.gif"
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = {type = "flair.blinds.down", slats = 8}
+
+[[playlist.section.widget]]
+type = "message"
+text = "11 SLATS 8"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "THIN SLATS"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
