@@ -15,7 +15,12 @@ from PIL import Image
 
 from led_ticker_flair import flair as flair_pkg
 from led_ticker_flair.flair._raster import Raster
-from led_ticker_flair.flair.accordion import AccordionStretch, AccordionSweep
+from led_ticker_flair.flair.accordion import (
+    AccordionStretch,
+    AccordionStretchAlternating,
+    AccordionSweep,
+    AccordionSweepAlternating,
+)
 
 BOTH = [AccordionSweep, AccordionStretch]
 RED = (255, 0, 0)
@@ -934,3 +939,88 @@ class TestCycle2Gaps:
         assert p._in_plan is not None
         assert p._in_plan.under, "incoming fell back to the depth ring"
         assert not any(col == RED for col in c._pixels.values())
+
+
+ALTERNATING = [
+    (AccordionSweepAlternating, AccordionSweep),
+    (AccordionStretchAlternating, AccordionStretch),
+]
+_FIRING = [0.0, 0.1, 0.2, 0.3, 0.6, 0.8, 1.0]
+
+
+def _fire(p: Any, out: Any, inc: Any, ts: list[float] = _FIRING) -> list[set]:
+    return [_pset(_paint(p, t, out, inc)) for t in ts]
+
+
+class TestAlternating:
+    def test_registered(self):
+        api = mock.Mock()
+        reg: dict[str, Any] = {}
+        api.transition.side_effect = lambda name: (
+            lambda cls: reg.__setitem__(name, cls) or cls
+        )
+        api.animation.side_effect = lambda name: lambda cls: cls
+        api.widget.side_effect = lambda name: lambda cls: cls
+        flair_pkg.register(api)
+        assert reg["accordion.sweep.alternating"] is AccordionSweepAlternating
+        assert reg["accordion.stretch.alternating"] is AccordionStretchAlternating
+
+    @pytest.mark.parametrize("alt, _single", ALTERNATING)
+    def test_min_frames_matches_single(self, alt, _single):
+        assert alt().min_frames == 30
+
+    @pytest.mark.parametrize("alt, _single", ALTERNATING)
+    def test_bad_direction_rejected(self, alt, _single):
+        with pytest.raises(ValueError, match="direction"):
+            alt(direction="up")
+
+    @pytest.mark.parametrize("alt, single", ALTERNATING)
+    def test_firings_go_left_right_left(self, alt, single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        left = _fire(single(direction="left"), out, inc)
+        right = _fire(single(direction="right"), out, inc)
+        assert left != right  # the fixture actually distinguishes them
+        p = alt()
+        assert _fire(p, out, inc) == left
+        assert _fire(p, out, inc) == right
+        assert _fire(p, out, inc) == left
+
+    @pytest.mark.parametrize("alt, single", ALTERNATING)
+    def test_direction_right_starts_right(self, alt, single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        left = _fire(single(direction="left"), out, inc)
+        right = _fire(single(direction="right"), out, inc)
+        p = alt(direction="right")
+        assert _fire(p, out, inc) == right
+        assert _fire(p, out, inc) == left
+        assert _fire(p, out, inc) == right
+
+    @pytest.mark.parametrize("alt, _single", ALTERNATING)
+    def test_explicit_left_matches_default(self, alt, _single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        a, b = alt(), alt(direction="left")
+        for _ in range(3):
+            assert _fire(a, out, inc) == _fire(b, out, inc)
+
+    @pytest.mark.parametrize("alt, single", ALTERNATING)
+    def test_refire_without_reaching_t1_still_flips(self, alt, single):
+        # A firing cancelled mid-way (t went backwards) or right after its
+        # t=0 frame still counts as a firing.
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        right = _fire(single(direction="right"), out, inc)
+        left = _fire(single(direction="left"), out, inc)
+        p = alt()
+        _fire(p, out, inc, [0.0, 0.2])  # cancelled at 0.2 -> left
+        assert _fire(p, out, inc) == right
+        _fire(p, out, inc, [0.0])  # cancelled right after t=0 -> left
+        assert _fire(p, out, inc) == right
+        assert _fire(p, out, inc) == left
+
+    @pytest.mark.parametrize("alt, single", ALTERNATING)
+    def test_repeated_nonzero_t_is_not_a_refire(self, alt, single):
+        out, inc = _text_widget(TEXT), _text_widget(INC_TEXT)
+        left = _fire(single(direction="left"), out, inc, [0.0, 0.2, 0.3])
+        p = alt()
+        frames = _fire(p, out, inc, [0.0, 0.2, 0.2, 0.3])
+        assert [frames[0], frames[1], frames[3]] == left
+        assert frames[2] == frames[1]

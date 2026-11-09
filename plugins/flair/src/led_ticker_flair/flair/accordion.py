@@ -303,3 +303,52 @@ class AccordionStretch(_Accordion):
 
     def _in(self, decks: list[Deck], W: int, k: float) -> list[list[float]]:  # noqa: N803
         return stretch_in_decks(decks, W, k)
+
+
+class _AccordionAlternating:
+    """Flips direction each firing (FairyAlternating / LaserAlternating
+    convention). ``direction`` picks the first firing's side (default
+    ``"left"``: left, right, left, ...). Holds one instance per direction and
+    delegates, so each keeps its own plans and scratch rasters. A new
+    firing is detected with the same rule as ``_Accordion.frame_at``
+    (``t == 0.0`` or ``t`` went backwards), so the wrapper and the inner
+    instance always agree on where a firing starts."""
+
+    _motion: type[_Accordion]
+
+    def __init__(self, direction: Any = "left") -> None:
+        if direction not in _DIRECTIONS:
+            raise ValueError(
+                f"direction must be one of {_DIRECTIONS}; got {direction!r}"
+            )
+        start = _DIRECTIONS.index(direction)
+        order = _DIRECTIONS[start:] + _DIRECTIONS[:start]
+        self._transitions: list[_Accordion] = [self._motion(direction=d) for d in order]
+        self._index: int = -1
+        self._last_t: float = 1.0
+
+    @property
+    def min_frames(self) -> int:
+        return self._transitions[0].min_frames
+
+    def frame_at(
+        self, t: float, canvas: Canvas, outgoing: Any, incoming: Any, **kwargs: Any
+    ) -> Canvas:
+        if t == 0.0 or t < self._last_t:
+            self._index = (self._index + 1) % len(self._transitions)
+        self._last_t = t
+        return self._transitions[self._index].frame_at(
+            t, canvas, outgoing, incoming, **kwargs
+        )
+
+
+class AccordionSweepAlternating(_AccordionAlternating):
+    """``flair.accordion.sweep`` with the direction flipped every firing."""
+
+    _motion = AccordionSweep
+
+
+class AccordionStretchAlternating(_AccordionAlternating):
+    """``flair.accordion.stretch`` with the direction flipped every firing."""
+
+    _motion = AccordionStretch
