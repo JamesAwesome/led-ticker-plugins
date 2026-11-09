@@ -6,7 +6,8 @@ referenced in config.toml as ``animation = "flair.propeller"`` and
 transitions as ``transition = "flair.spinout"`` (or the six
 ``flair.laser.<origin>`` beam-write variants, or the
 ``flair.accordion.<motion>[.alternating]`` card-deck variants, or the
-``flair.interlock.<axis>`` strand-mesh variants).
+``flair.interlock.<axis>`` strand-mesh variants, or the
+``flair.blinds.<direction>`` venetian-blind variants).
 
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
@@ -61,6 +62,14 @@ def register(api):
         AccordionStretchAlternating,
         AccordionSweep,
         AccordionSweepAlternating,
+    )
+    from led_ticker_flair.flair.blinds import (  # noqa: PLC0415
+        Blinds,
+        BlindsAlternating,
+        BlindsLeft,
+        BlindsRandom,
+        BlindsRight,
+        BlindsUp,
     )
     from led_ticker_flair.flair.fairy import (  # noqa: PLC0415
         Fairy,
@@ -118,4 +127,10 @@ def register(api):
     api.transition("interlock.vertical")(InterlockVertical)
     api.transition("interlock.alternating")(InterlockAlternating)
     api.transition("interlock.random")(InterlockRandom)
+    api.transition("blinds.down")(Blinds)
+    api.transition("blinds.up")(BlindsUp)
+    api.transition("blinds.right")(BlindsRight)
+    api.transition("blinds.left")(BlindsLeft)
+    api.transition("blinds.alternating")(BlindsAlternating)
+    api.transition("blinds.random")(BlindsRandom)
     api.widget("lottery")(Lottery)
