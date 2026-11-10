@@ -290,7 +290,7 @@ path = "assets/phoenix.gif"
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 1.0
-transition = {type = "flair.blinds.down", slats = 8}
+transition = {type = "flair.blinds.down", slats = 4}
 
 [[playlist.section.widget]]
 type = "message"

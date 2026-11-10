@@ -202,8 +202,9 @@ px per frame on bigsign dims, first firing and refire).
 ### Slat geometry
 
 - Knob `slats` (positive int). Default depends on orientation (my call):
-  **4** horizontal slats (smallsign: 4 rows each; bigsign: 16 real rows =
-  4 logical rows each) and **8** vertical slats (smallsign 20 px, bigsign
+  **8** horizontal slats (smallsign: 2 rows each; bigsign: 8 real rows =
+  2 logical rows each; raised from 4 at the visual gate, where 4 read as
+  about 2 bands) and **8** vertical slats (smallsign 20 px, bigsign
   32 real px each). `.alternating`/`.random` with an explicit `slats` use it
   for both orientations; without it each orientation keeps its default.
 - Slat boundaries snap to multiples of `scale` real pixels so a slat edge

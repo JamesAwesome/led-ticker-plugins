@@ -577,20 +577,20 @@ duration = 1.0        # the floor is 0.8 s (min_frames = 16)
 transition = "flair.blinds.down"
 ```
 
-More, thinner slats:
+Fewer, wider slats:
 
 ```toml
 [[playlist.section]]
-transition = {type = "flair.blinds.down", slats = 8}
+transition = {type = "flair.blinds.down", slats = 4}
 ```
 
 ### Knobs
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `slats` | positive int | `4` horizontal / `8` vertical | Number of slats. Slats are whole logical pixels, the last one takes any remainder, and the count is capped so every slat is at least one logical pixel. |
+| `slats` | positive int | `8` | Number of slats. Slats are whole logical pixels, the last one takes any remainder, and the count is capped so every slat is at least one logical pixel. |
 
-On `.alternating` and `.random`, an explicit `slats` applies to both orientations. If you omit it, each orientation keeps its own default.
+On `.alternating` and `.random`, an explicit `slats` applies to every direction.
 
 ### Notes
 

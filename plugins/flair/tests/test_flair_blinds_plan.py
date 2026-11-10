@@ -12,7 +12,7 @@ from led_ticker_flair.flair.blinds import (
 
 
 def test_default_slats():
-    assert DEFAULT_SLATS == {"horizontal": 4, "vertical": 8}
+    assert DEFAULT_SLATS == {"horizontal": 8, "vertical": 8}
 
 
 def test_orientation_mapping():

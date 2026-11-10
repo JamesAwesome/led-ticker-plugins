@@ -141,7 +141,7 @@ class TestBlindsFrames:
     def test_mid_frame_down_reveals_top_of_each_slat(self):
         c = _StubCanvas(4, 16)
         o, i = _solid(4, 16, RED), _solid(4, 16, GREEN)
-        p = Blinds()  # 4 slats of 4 rows
+        p = Blinds(slats=4)  # 4 slats of 4 rows
         p.frame_at(0.0, c, o, i)
         px = _frame(p, 0.475, c, o, i)  # p = 0.5 -> 2 rows per slat
         assert _rows(px, 16) == [GREEN, GREEN, RED, RED] * 4
@@ -149,7 +149,7 @@ class TestBlindsFrames:
     def test_up_reveals_bottom_of_each_slat(self):
         c = _StubCanvas(4, 16)
         o, i = _solid(4, 16, RED), _solid(4, 16, GREEN)
-        p = BlindsUp()
+        p = BlindsUp(slats=4)
         p.frame_at(0.0, c, o, i)
         px = _frame(p, 0.475, c, o, i)
         assert _rows(px, 16) == [RED, RED, GREEN, GREEN] * 4
@@ -167,7 +167,7 @@ class TestBlindsFrames:
     def test_revealed_band_gets_incoming_bg(self):
         c = _StubCanvas(4, 16)
         blank = _make_widget(draw_pixel=False)
-        p = Blinds()
+        p = Blinds(slats=4)
         p.frame_at(0.0, c, blank, blank)
         px = _frame(p, 0.475, c, blank, blank, incoming_bg_color=(10, 20, 30))
         assert (0, 0, 4, 2, (10, 20, 30)) in c.subfills
@@ -248,7 +248,7 @@ class TestBlindsFrames:
             return w
 
         o, i = _real_solid(RED), _real_solid(GREEN)
-        p = Blinds()  # 4 slats of 16 real rows
+        p = Blinds(slats=4)  # 4 slats of 16 real rows
         p.frame_at(0.0, sc, o, i)
         real.Clear()
         p.frame_at(0.475, sc, o, i)  # 8 real rows revealed per slat
@@ -258,9 +258,10 @@ class TestBlindsFrames:
 
 class TestKnobsVariantsRegistration:
     def test_default_slats_by_orientation(self):
-        assert Blinds().slats == 4
+        assert Blinds().slats == 8
+        assert BlindsUp().slats == 8
         assert BlindsRight().slats == 8
-        assert [s.slats for s in BlindsAlternating()._transitions] == [4, 8, 4, 8]
+        assert [s.slats for s in BlindsAlternating()._transitions] == [8, 8, 8, 8]
         assert [s.slats for s in BlindsAlternating(slats=6)._transitions] == [6] * 4
         assert [s.slats for s in BlindsRandom(slats=6)._transitions] == [6] * 4
 

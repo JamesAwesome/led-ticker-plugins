@@ -29,7 +29,7 @@ from ._snapshot import Geometry, SnapshotCache, geometry_of
 from ._variants import Cycling, RandomNoRepeat
 
 DIRECTIONS = ("down", "up", "right", "left")
-DEFAULT_SLATS = {"horizontal": 4, "vertical": 8}
+DEFAULT_SLATS = {"horizontal": 8, "vertical": 8}
 
 # (x, y, r, g, b, slat, depth)
 SlatPixel = tuple[int, int, int, int, int, int, int]
@@ -97,7 +97,7 @@ def build_plan(
     rows = orientation(direction) == "horizontal"
     if rows:
         # Split the CONTENT band (anchored at y_offset_real, like interlock's
-        # strands) so "4 slats" means 4 visible slats on a letterboxed panel;
+        # strands) so "N slats" means N visible slats on a letterboxed panel;
         # letterbox rows fold into the first / last slat.
         y0 = geo.y_offset_real
         bounds = [
