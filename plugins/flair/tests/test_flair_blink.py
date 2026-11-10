@@ -68,48 +68,80 @@ def _lit(canvas: HeadlessCanvas) -> int:
     return sum(1 for rgb in canvas._pixels.values() if rgb != (0, 0, 0))
 
 
-def test_empty_slice_with_emoji_and_token() -> None:
-    msg = TickerMessage(text="HOT :sun: deal", animation=Blink())
-    canvas = HeadlessCanvas(width=160, height=16)
+@pytest.fixture
+def colored_token_registry():
+    """Register source `x` = "99" declaring a red `color`; reset afterwards."""
+    from led_ticker.color_providers import _ConstantColor
+    from led_ticker.plugin import make_color
+    from led_ticker.sources import DataRegistry, StaticSource, set_data_registry
+
+    src = StaticSource(id="x", value="99")
+    src.color = _ConstantColor(make_color(200, 0, 0))
+    src.refresh()
+    reg = DataRegistry()
+    reg.add(src)
+    set_data_registry(reg)
+    yield (200, 0, 0)
+    set_data_registry(DataRegistry())
+
+
+def _at_frame(msg: TickerMessage, frame: int) -> None:
+    msg._frame_count = frame
+    msg._effect_frames["animation"] = frame
+
+
+def test_empty_slice_with_emoji_and_token(colored_token_registry) -> None:
+    tok = colored_token_registry
+    msg = TickerMessage(
+        text="HOT :x: :sun:", animation=Blink(), font_color=(0, 200, 0), center=False
+    )
     on_canvas = HeadlessCanvas(width=160, height=16)
     msg.draw(on_canvas)  # frame 0: on
+    assert msg._has_emoji is True
+    assert tok in set(on_canvas._pixels.values()), "token color must render when on"
     assert _lit(on_canvas) > 0
-    msg._frame_count = 15
-    msg._effect_frames["animation"] = 15
-    msg.draw(canvas)
-    assert _lit(canvas) == 0
+
+    off_canvas = HeadlessCanvas(width=160, height=16)
+    _at_frame(msg, 15)
+    msg.draw(off_canvas)  # empty slice through the colored-token + emoji path
+    assert _lit(off_canvas) == 0
 
 
 def test_message_end_cursor_unchanged() -> None:
     msg = TickerMessage(text="HOT :sun: deal", animation=Blink())
     _, on_cursor = msg.draw(HeadlessCanvas(width=160, height=16))
-    msg._frame_count = 15
-    msg._effect_frames["animation"] = 15
+    _at_frame(msg, 15)
     _, off_cursor = msg.draw(HeadlessCanvas(width=160, height=16))
     assert off_cursor == on_cursor
 
 
 class _RecordingFrame:
-    """Frame whose swap rotates two canvases and records lit-pixel counts."""
+    """Frame whose swap rotates two canvases, recording per swap the blink
+    frame index (msg._effect_frames) and the lit-pixel count."""
 
     def __init__(self) -> None:
         self.a = HeadlessCanvas(width=160, height=16)
         self.b = HeadlessCanvas(width=160, height=16)
-        self.lit: list[int] = []
+        self.msg = None
+        self.log: list[tuple[int, int]] = []
 
     def get_clean_canvas(self):
         return self.a
 
     def swap(self, canvas):
-        self.lit.append(_lit(canvas))
+        idx = self.msg._effect_frames.get("animation", 0)
+        self.log.append((idx, _lit(canvas)))
         return self.b if canvas is self.a else self.a
 
 
 async def test_hold_ending_mid_off_settles_to_on(no_sleep_blink) -> None:
     frame = _RecordingFrame()
     msg = TickerMessage(text="NEWS", animation=Blink())
+    frame.msg = msg
     ticker = Ticker(monitors=[], frame=frame)
-    # 0.8 s hold = 16 ticks -> frame 16 (off); settle adds 4 -> frame 20 (on).
+    # 0.8 s hold = 16 ticks -> natural end at frame 16 (off); settle adds 4.
     await ticker._swap_and_scroll(frame.get_clean_canvas(), msg, hold_time=0.8)
-    assert frame.lit[-1] > 0, "hold ended on an off frame; settle did not run"
-    assert 0 in frame.lit, "expected off frames during the hold"
+    by_idx = dict(frame.log)
+    assert by_idx[16] == 0, "natural hold end must land in the off phase"
+    assert max(by_idx) == 20, "settle must extend the hold to the next on frame"
+    assert frame.log[-1][0] == 20 and frame.log[-1][1] > 0
