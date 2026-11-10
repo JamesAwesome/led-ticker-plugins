@@ -1,0 +1,141 @@
+"""flair.snow BACKGROUND effect — falling snow painted BEHIND a widget's
+content (``background = "flair.snow"``).
+
+Flakes are ``"dot"``, ``"plus"``, or an emoji slug's 8x8 low-res sprite,
+painted 1:1 at physical resolution (never block-expanded). Pure function of
+``(frame_count, real dims)`` per instance (``seed=None`` draws one
+OS-entropy seed at construction). Never paints black.
+"""
+
+import math
+import random
+from typing import Any
+
+from led_ticker.plugin import BackgroundEffectBase, emoji_slugs, unwrap_to_real
+
+from led_ticker_flair.flair._snow import (
+    flake_count,
+    flake_height,
+    flake_pixels,
+    flake_position,
+)
+from led_ticker_flair.flair.stickers import capture_sprite
+
+
+def _num(name: str, v: object, ok: bool, rng: str) -> None:
+    if isinstance(v, bool) or not isinstance(v, int | float) or math.isnan(v) or not ok:
+        raise ValueError(f"{name} must be a number {rng}; got {v!r}")
+
+
+class SnowBackground(BackgroundEffectBase):
+    frame_invariant = False
+    restart_on_visit = False
+
+    def __init__(
+        self,
+        flake: str = "dot",
+        density: float = 3.0,
+        speed: float = 1.0,
+        speed_variation: float = 0.4,
+        drift: float = 0.3,
+        wind: float = 0.0,
+        color: Any = (200, 220, 255),
+        seed: int | None = None,
+    ) -> None:
+        if not isinstance(flake, str):
+            raise ValueError(f"flake must be a string; got {flake!r}")
+        if flake not in ("dot", "plus") and (
+            flake not in emoji_slugs() or not capture_sprite(flake, 1, None)
+        ):
+            raise ValueError(
+                f'flake {flake!r} is not "dot", "plus" or an emoji slug with an '
+                '8x8 low-res form (pack-only slugs have none); use "dot"'
+            )
+        _num(
+            "density", density, isinstance(density, int | float) and density > 0, "> 0"
+        )
+        _num(
+            "speed",
+            speed,
+            isinstance(speed, int | float) and 0 < speed <= 5,
+            "in (0, 5]",
+        )
+        _num(
+            "speed_variation",
+            speed_variation,
+            isinstance(speed_variation, int | float) and 0 <= speed_variation < 1,
+            "in [0, 1)",
+        )
+        _num("drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0")
+        _num("wind", wind, True, "")
+        ok = (
+            isinstance(color, list | tuple)
+            and len(color) == 3
+            and all(
+                isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255
+                for v in color
+            )
+        )
+        if not ok:
+            raise ValueError(
+                f"color must be an [r, g, b] triple of ints 0-255; got {color!r}"
+            )
+        if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
+            raise ValueError(f"seed must be an int or None; got {seed!r}")
+        self.flake = flake
+        self.density = float(density)
+        self.speed = float(speed)
+        self.speed_variation = float(speed_variation)
+        self.drift = float(drift)
+        self.wind = float(wind)
+        self.color = (color[0], color[1], color[2])
+        self.seed = seed
+        self._seed = seed if seed is not None else random.SystemRandom().getrandbits(62)
+        self._is_emoji = flake not in ("dot", "plus")
+        self._sprite_h = flake_height(flake)
+        self._pixels = tuple(flake_pixels(flake, self.color).items())
+        # Per-intensity shaded pixel lists (dot/plus only), quantized to 16 steps.
+        self._shaded: dict[int, tuple[tuple[int, int, int, int, int], ...]] = {}
+
+    def _shade(self, q: int) -> tuple[tuple[int, int, int, int, int], ...]:
+        cached = self._shaded.get(q)
+        if cached is None:
+            k = q / 16
+            out = []
+            for (dx, dy), (r, g, b) in self._pixels:
+                r, g, b = round(r * k), round(g * k), round(b * k)
+                if r or g or b:
+                    out.append((dx, dy, r, g, b))
+            cached = self._shaded[q] = tuple(out)
+        return cached
+
+    def paint(self, canvas: Any, frame_count: int) -> None:
+        real = unwrap_to_real(canvas)
+        w, h = real.width, real.height
+        if w <= 0 or h <= 0:
+            return
+        set_pixel = real.SetPixel
+        emoji = self._is_emoji
+        full: tuple[tuple[int, int, int, int, int], ...] = ()
+        if emoji:
+            full = tuple(
+                (dx, dy, r, g, b) for (dx, dy), (r, g, b) in self._pixels if r or g or b
+            )
+        for i in range(flake_count(w, h, self.density)):
+            x, y, inten = flake_position(
+                i,
+                frame_count,
+                w,
+                h,
+                self._seed,
+                self.speed,
+                self.speed_variation,
+                self.drift,
+                self.wind,
+                self._sprite_h,
+            )
+            pix = full if emoji else self._shade(max(1, round(inten * 16)))
+            for dx, dy, r, g, b in pix:
+                px, py = x + dx, y + dy
+                if 0 <= px < w and 0 <= py < h:
+                    set_pixel(px, py, r, g, b)
