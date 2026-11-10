@@ -362,7 +362,6 @@ class TestPerf:
             t0 = time.perf_counter()
             s.frame_at(0.5, c, o, i)
             worst = max(worst, time.perf_counter() - t0)
-        print(f"snow worst frame {worst * 1000:.2f} ms")
         assert worst < 0.008, worst
 
 

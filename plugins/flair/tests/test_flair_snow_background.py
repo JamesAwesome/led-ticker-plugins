@@ -229,7 +229,6 @@ def test_perf_bigsign() -> None:
         fx.paint(c, f)
         samples.append(time.perf_counter() - t0)
     med = statistics.median(samples)
-    print(f"snow paint median {med * 1000:.3f} ms")
     assert med <= 0.003
 
 

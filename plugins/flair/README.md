@@ -51,7 +51,7 @@ animation = {style = "flair.propeller", revolutions = 3, spin_seconds = 1.5, dir
 
 ### Caveats
 
-- **Message widgets only.** `flair.propeller` works on `message` widgets (core rejects `animation` on other widget types at config load). GIF / image text-overlay widgets accept `animation` but ignore the rotation.
+- **Message widgets only.** `flair.propeller` works on `message` widgets (core rejects `animation` on other widget types at config load). On GIF / image widgets core refuses `flair.propeller` (a non-lens animation) with a scrolling `text_align` (`scroll` / `scroll_over`) and with the default `text_align = "auto"` on a centered image, which resolves to `scroll_over`; it is accepted only with an explicit `text_align = "left"` or `"right"`.
 - **Hi-res fonts spin on scaled displays (core >= 4.5).** Mid-spin renders at half detail and sharpens at settle; animated `font_color` providers (rainbow, color_cycle, shimmer) freeze during the spin and resume at settle. On scale-1 displays hi-res fonts still display unrotated — `led-ticker validate` warns (rule 63) for that case only.
 - **Short-hold warning.** If `spin_seconds` outlasts `hold_time` the spin is truncated and the text appears only briefly. `led-ticker validate` warns (rule 62). Either raise `hold_time` or lower `spin_seconds` / `revolutions`.
 - **Phase resets each visit.** The spin restarts from the beginning every time the widget enters the rotation — it does not continue mid-spin across section cycles.
@@ -731,7 +731,7 @@ animation = {style = "flair.blink", period_ms = 1500, duty = 0.6, count = 4}
 - **Long OFF phases are refused.** The OFF phase (`period_ms` x (1 - `duty`), in frames) may not exceed 20 frames (1 s), the most the engine will extend a hold to land a transition on visible text. Use a shorter period or a higher duty (for example `period_ms = 2000, duty = 0.5` is fine; `3000` at `0.5` is not).
 - Hold settling is `message`-only today: on `gif`/`image` widgets the hold is not extended to the next ON phase.
 - Emoji and colored value tokens blank with the text; borders and backgrounds stay lit.
-- Blink shares the ONE `animation` slot with twinkle, `typewriter` and `flair.fisheye`, so they cannot be combined. On `gif`/`image` widgets an animation needs a non-scroll `text_align`.
+- Blink shares the ONE `animation` slot with twinkle, `typewriter` and `flair.fisheye`, so they cannot be combined. On `gif`/`image` widgets set an explicit non-scroll `text_align` (`"left"` or `"right"`) — the default `"auto"` on a centered image resolves to `scroll_over`, which core refuses for blink/twinkle.
 - `allow_fast` must be a real boolean (`true`/`false`), not a string.
 
 ## Twinkle animation
@@ -769,7 +769,7 @@ animation = {style = "flair.twinkle", density = 0.8, speed = 1.5, min_brightness
 
 - **Twinkle speed follows the scroll cadence.** On scrolling text the animation counter advances once per scroll step, so the shimmer runs faster on fast-scroll sections. Twinkle never dims a pixel fully off, so it is not a WCAG flash and has no rate cap beyond `speed <= 2.0`.
 - **Twinkle is a hold effect.** The sparkle field is fixed to the panel, not to the text, so on scrolling text it reads as static noise rather than letters shimmering. Use it on text that holds still.
-- Twinkle, blink, `typewriter` and `flair.fisheye` all share the ONE `animation` slot of a widget, so they cannot be combined. On `gif`/`image` widgets an animation needs a non-scroll `text_align`.
+- Twinkle, blink, `typewriter` and `flair.fisheye` all share the ONE `animation` slot of a widget, so they cannot be combined. On `gif`/`image` widgets set an explicit non-scroll `text_align` (`"left"` or `"right"`) — the default `"auto"` on a centered image resolves to `scroll_over`, which core refuses for blink/twinkle.
 - Only the text twinkles; borders and backgrounds are untouched, so it composes with `background = "flair.twinkle"` or `"flair.snow"`.
 - BDF text on a scaled sign (bigsign) twinkles per logical pixel; hi-res fonts twinkle per real pixel. Animated image emoji do not twinkle.
 
