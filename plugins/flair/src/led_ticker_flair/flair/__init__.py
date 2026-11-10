@@ -5,7 +5,9 @@ The entry-point name ``flair`` is the plugin namespace, so animations are
 referenced in config.toml as ``animation = "flair.propeller"`` and
 transitions as ``transition = "flair.spinout"`` (or the six
 ``flair.laser.<origin>`` beam-write variants, or the
-``flair.accordion.<motion>[.alternating]`` card-deck variants).
+``flair.accordion.<motion>[.alternating]`` card-deck variants, or the
+``flair.interlock.<axis>`` strand-mesh variants, or the
+``flair.blinds.<direction>`` venetian-blind variants).
 
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
@@ -61,6 +63,14 @@ def register(api):
         AccordionSweep,
         AccordionSweepAlternating,
     )
+    from led_ticker_flair.flair.blinds import (  # noqa: PLC0415
+        Blinds,
+        BlindsAlternating,
+        BlindsLeft,
+        BlindsRandom,
+        BlindsRight,
+        BlindsUp,
+    )
     from led_ticker_flair.flair.fairy import (  # noqa: PLC0415
         Fairy,
         FairyAlternating,
@@ -71,6 +81,12 @@ def register(api):
         FireworksBackground,
     )
     from led_ticker_flair.flair.fisheye import Fisheye  # noqa: PLC0415
+    from led_ticker_flair.flair.interlock import (  # noqa: PLC0415
+        Interlock,
+        InterlockAlternating,
+        InterlockRandom,
+        InterlockVertical,
+    )
     from led_ticker_flair.flair.laser import (  # noqa: PLC0415
         Laser,
         LaserAlternating,
@@ -107,4 +123,14 @@ def register(api):
     api.transition("accordion.stretch")(AccordionStretch)
     api.transition("accordion.sweep.alternating")(AccordionSweepAlternating)
     api.transition("accordion.stretch.alternating")(AccordionStretchAlternating)
+    api.transition("interlock.horizontal")(Interlock)
+    api.transition("interlock.vertical")(InterlockVertical)
+    api.transition("interlock.alternating")(InterlockAlternating)
+    api.transition("interlock.random")(InterlockRandom)
+    api.transition("blinds.down")(Blinds)
+    api.transition("blinds.up")(BlindsUp)
+    api.transition("blinds.right")(BlindsRight)
+    api.transition("blinds.left")(BlindsLeft)
+    api.transition("blinds.alternating")(BlindsAlternating)
+    api.transition("blinds.random")(BlindsRandom)
     api.widget("lottery")(Lottery)
