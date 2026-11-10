@@ -43,8 +43,80 @@ def test_fast_rate_refused() -> None:
     with pytest.raises(ValueError, match="WCAG 2.3.1") as exc:
         Blink(period_ms=300)
     assert "allow_fast" in str(exc.value)
+    assert "20 ms" in str(exc.value)
     Blink(period_ms=300, allow_fast=True)
-    Blink(period_ms=350)
+
+
+def test_min_safe_period_boundary() -> None:
+    # 17 frames x 20 ms = 340 ms -> 2.94 Hz at the fastest engine cadence.
+    assert Blink(period_ms=850).period == 17
+    for bad in (800, 825, 350):
+        with pytest.raises(ValueError, match="WCAG 2.3.1"):
+            Blink(period_ms=bad)
+    assert Blink(period_ms=800, allow_fast=True).period == 16
+
+
+def test_off_phase_beyond_settle_cap_refused() -> None:
+    with pytest.raises(ValueError, match="settle limit"):
+        Blink(period_ms=3000, duty=0.5)  # 30 off frames
+    with pytest.raises(ValueError, match="settle limit"):
+        Blink(period_ms=4000, duty=0.5, allow_fast=True)
+    # Boundary: 20 off frames accepted, 21 refused.
+    assert (
+        Blink(period_ms=2000, duty=0.5).period - Blink(period_ms=2000, duty=0.5).on
+        == 20
+    )
+    with pytest.raises(ValueError, match="settle limit"):
+        Blink(period_ms=2100, duty=0.5)  # 42 frames, on 21, off 21
+    Blink(period_ms=3000, duty=0.75)  # 15 off frames, long period fine
+
+
+def test_locks_resolution_false() -> None:
+    from led_ticker_flair.flair.twinkle import Twinkle
+
+    assert Blink.locks_resolution is False
+    assert Twinkle.locks_resolution is False
+
+
+async def test_scroll_cadence_20ms_stays_under_3hz(monkeypatch) -> None:
+    """Regression: the counter advances once per scroll step, so the
+    minimum allowed period must hold <= 3 Hz even at scroll_step 20 ms."""
+    import asyncio
+
+    slept = [0.0]
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(d, *a, **k):
+        slept[0] += d
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    class _F:
+        def __init__(self) -> None:
+            self.a = HeadlessCanvas(width=160, height=16)
+            self.b = HeadlessCanvas(width=160, height=16)
+            self.log: list[bool] = []
+
+        def get_clean_canvas(self):
+            return self.a
+
+        def swap(self, canvas):
+            self.log.append(_lit(canvas) > 0)
+            return self.b if canvas is self.a else self.a
+
+    f = _F()
+    msg = TickerMessage(
+        text="LONG BLINKING HEADLINE THAT OVERFLOWS THE SMALLSIGN PANEL WIDTH FOR SURE",
+        animation=Blink(period_ms=850),
+    )
+    t = Ticker(monitors=[], frame=f)
+    t.scroll_speed = 0.02
+    await t._swap_and_scroll(f.get_clean_canvas(), msg, hold_time=0.05)
+    ons = sum(1 for a, b in zip(f.log, f.log[1:], strict=False) if b and not a)
+    assert ons >= 5, "need enough blink cycles for a meaningful rate"
+    assert slept[0] > 0
+    assert ons / slept[0] <= 3.0, f"{ons / slept[0]:.2f} Hz"
 
 
 @pytest.mark.parametrize(

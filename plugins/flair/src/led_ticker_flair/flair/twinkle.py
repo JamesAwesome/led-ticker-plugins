@@ -42,6 +42,8 @@ def validate_common(density: object, speed: object, seed: object) -> None:
 class Twinkle:
     restart_on_visit = False
     emits_rotation = False
+    # Gain is a function of position, not the text: keep live tokens live.
+    locks_resolution = False
 
     def __init__(
         self,
