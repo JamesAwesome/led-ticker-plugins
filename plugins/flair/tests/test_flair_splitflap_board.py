@@ -129,9 +129,9 @@ def test_small_pool_reduces_flips():
 
 def test_flap_centre_prefers_incoming():
     out = _plan([_card(0, 5, range(0, 8), RED)])
-    inc = _plan([_card(20, 5, range(0, 8), GREEN)])
+    inc = _plan([_card(2, 5, range(0, 8), GREEN)])
     (flap,) = build_board(out, inc, 0, random.Random(0)).flaps
-    assert flap.centre_x == 22
+    assert flap.centre_x == 4
     (flap,) = build_board(out, _plan(), 0, random.Random(0)).flaps
     assert flap.centre_x == 2
 
@@ -144,3 +144,24 @@ def test_ring_and_under_carried_from_plans():
     board = build_board(out, inc, 0, random.Random(0))
     assert board.ring_out == tuple(ring_o) and board.ring_in == tuple(ring_i)
     assert board.under_out == ((2, 2, RED),) and board.under_in == ()
+
+
+def test_shifted_layout_pairs_by_overlap_not_index():
+    # Centred messages of different lengths start at different x: pairing
+    # must follow position, so each new glyph flips over the old glyph it
+    # sits on, and the uncovered old glyph flips to blank where it is.
+    out = _plan([_card(x, 5, range(0, 8), RED) for x in (0, 8, 16)])
+    inc = _plan([_card(x, 5, range(0, 8), GREEN) for x in (10, 18)])
+    board = build_board(out, inc, 0, random.Random(0))
+    pairs = sorted(
+        (f.seq[0].slot if f.seq[0] else None, f.seq[-1].slot if f.seq[-1] else None)
+        for f in board.flaps
+    )
+    assert pairs == sorted([(0, None), (8, 10), (16, 18)])
+
+
+def test_flaps_ordered_by_centre():
+    out = _plan([_card(x, 5, range(0, 8), RED) for x in (0, 20)])
+    inc = _plan([_card(x, 5, range(0, 8), GREEN) for x in (40,)])
+    xs = [f.centre_x for f in build_board(out, inc, 0, random.Random(0)).flaps]
+    assert xs == sorted(xs)

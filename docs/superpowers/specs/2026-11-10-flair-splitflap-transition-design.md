@@ -120,8 +120,12 @@ after another. It is meant to be **watched** — a slow, deliberate clatter
   pair; the strip width and the in-between pool are likewise per band
   pair. (Rejected: one panel-wide band, which cuts two_row glyphs at the
   panel middle; splitting a single row's cells across both bands.)
-- Within a band pair, pair outgoing cell *i* with incoming cell *i* in
-  left-to-right order. Extra cells pair with an empty cell (blank).
+- Within a band pair, pair cells **by position** (revised at the visual
+  gate): greedily match the most-overlapping outgoing/incoming columns
+  first, each cell used once; unmatched cells flip to / from blank in
+  place. (Index pairing — cell *i* ↔ cell *i* — garbled centred messages
+  of different lengths: their layouts start at different x, so every new
+  glyph flipped over an old neighbour.)
 - A pair whose two cells are pixel-identical at the same position does not
   flip (real boards don't flip unchanged characters) but still holds its
   slot in the ripple.

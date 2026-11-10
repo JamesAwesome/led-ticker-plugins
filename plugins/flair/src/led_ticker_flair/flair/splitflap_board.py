@@ -140,6 +140,54 @@ def _sequence(
     return (a, *mid, b)
 
 
+def _overlap(a: FlapCell, b: FlapCell) -> int:
+    return min(a.slot + a.width, b.slot + b.width) - max(a.slot, b.slot)
+
+
+def _centre(c: FlapCell) -> int:
+    return c.slot + c.width // 2
+
+
+def match_cells(
+    outs: Sequence[FlapCell], ins: Sequence[FlapCell]
+) -> list[tuple[FlapCell | None, FlapCell | None]]:
+    """Pair cells by POSITION: greedily match the most-overlapping
+    (outgoing, incoming) columns first (ties: nearest centres), each cell
+    used once. Unmatched cells pair with blank, in place. Returned in
+    left-to-right order of the pair's home (incoming, else outgoing).
+
+    Index pairing (cell i <-> cell i) garbles centred messages of different
+    lengths: their layouts start at different x, so each new glyph would
+    flip over an old neighbour (visual gate, 2026-11-10)."""
+    cands = sorted(
+        (
+            (-_overlap(a, b), abs(_centre(a) - _centre(b)), i, j)
+            for i, a in enumerate(outs)
+            for j, b in enumerate(ins)
+            if _overlap(a, b) > 0
+        )
+    )
+    used_o: set[int] = set()
+    used_i: set[int] = set()
+    pairs: list[tuple[FlapCell | None, FlapCell | None]] = []
+    for _, _, i, j in cands:
+        if i in used_o or j in used_i:
+            continue
+        used_o.add(i)
+        used_i.add(j)
+        pairs.append((outs[i], ins[j]))
+    pairs += [(a, None) for i, a in enumerate(outs) if i not in used_o]
+    pairs += [(None, b) for j, b in enumerate(ins) if j not in used_i]
+
+    def key(p: tuple[FlapCell | None, FlapCell | None]) -> int:
+        home = p[1] if p[1] is not None else p[0]
+        assert home is not None
+        return _centre(home)
+
+    pairs.sort(key=key)
+    return pairs
+
+
 def build_board(out_plan: Plan, in_plan: Plan, flips: int, rng: random.Random) -> Board:
     bands: list[BandGeom] = []
     flaps: list[Flap] = []
@@ -159,9 +207,7 @@ def build_board(out_plan: Plan, in_plan: Plan, flips: int, rng: random.Random) -
             if k not in seen:
                 seen.add(k)
                 pool.append(c)
-        for k in range(max(len(outs), len(ins))):
-            a = outs[k] if k < len(outs) else None
-            b = ins[k] if k < len(ins) else None
+        for a, b in match_cells(outs, ins):
             home = b if b is not None else a
             assert home is not None
             centre = home.slot + home.width // 2
