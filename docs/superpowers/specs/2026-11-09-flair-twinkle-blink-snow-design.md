@@ -87,13 +87,13 @@ A flair-only variant of C (a `TickerMessage` subclass that rasters via `_raster.
 ### 2.5 Twinkle params (shared by B and C)
 | Knob | Default | Notes |
 |---|---|---|
-| `density` | `0.6` | fraction of pixels twinkling at any time (TwinkleFOX 5/8). |
-| `speed` | `1.0` | multiplier on base cycle (~1.2 s per twinkle at 1.0). |
+| `density` | C: `0.6`; B: `0.03` | C: fraction of text pixels twinkling (TwinkleFOX 5/8). B: fraction of real panel pixels that are stars. |
+| `speed` | `1.0` | multiplier on base cycle (~1.2 s per twinkle at 1.0); max `2.0`. |
 | `min_brightness` | `0.15` | trough of the dim (C only — never fully off; C must not read as blinking). |
 | `color` | none | C: optional tint toward a color at the peak; B: star color (default warm white). |
 | `seed` | none | reproducibility, same semantics as `flair.fireworks`. |
 
-**Mechanism (TwinkleFOX):** no per-pixel state — per pixel, hash `(x, y, seed)` to a clock offset and a speed in 8/8–23/8 of base; brightness is an asymmetric triangle (fast attack ⅓, slow decay ⅔) of `(frame*speed + offset)`. Pure function of `(x, y, frame)`. Twinkle on/off rates per pixel stay well under 3 Hz; it's dimming, not full-luminance flashing, and pixels are desynchronized, so WCAG 2.3.1 is not at risk at default/max `speed` (cap `speed ≤ 3`).
+**Mechanism (TwinkleFOX):** no per-pixel state — per pixel, hash `(x, y, seed)` to a clock offset and a speed in 8/8–23/8 of base; brightness is an asymmetric triangle (fast attack ⅓, slow decay ⅔) of `(frame*speed + offset)`. Pure function of `(x, y, frame)`. Twinkle on/off rates per pixel stay well under 3 Hz; it's dimming, not full-luminance flashing, and pixels are desynchronized, so WCAG 2.3.1 is not at risk at default/max `speed` (cap `speed ≤ 2`, keeping every pixel's cycle ≥ 6 frames). On scaled signs BDF text twinkles per logical pixel (one 4×4 block = one twinkler); hi-res glyphs per real pixel.
 
 ## 3. `flair.snow` — background
 
@@ -104,8 +104,8 @@ A flair-only variant of C (a `TickerMessage` subclass that rasters via `_raster.
 | Knob | Default | Notes |
 |---|---|---|
 | `flake` | `"dot"` | `"dot"` (1 real px), `"plus"` (3×3 +), or an emoji slug (`"snow"`, `"pumpkin"`, …). |
-| `density` | `0.5` | flakes per 1000 real px² (scales across 160×16 / 128×64 / 256×64). |
-| `speed` | `1.0` | fall speed multiplier; per-flake ±`speed_variation` (default 0.4). |
+| `density` | `3.0` | flakes per 1000 real px² (smallsign 8, longboi 25, bigsign 49). |
+| `speed` | `1.0` | fall speed multiplier, normalized to panel height (~5 s to cross at 1.0 on every sign); per-flake ±`speed_variation` (default 0.4). |
 | `drift` | `0.3` | horizontal wobble amplitude (sine, per-flake phase). |
 | `wind` | `0.0` | constant horizontal slant. |
 | `color` | `[200, 220, 255]` | dot/plus only; emoji keep their own colors. Per-flake random intensity 0.5–1.0. |

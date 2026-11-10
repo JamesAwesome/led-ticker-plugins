@@ -24,7 +24,7 @@
 - PRs are drafts; never merge without James's per-PR go-ahead; `gh pr create` needs his approval.
 - Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
-## Spec adjustments made while planning (my calls — update the spec in Task 9)
+## Spec adjustments made while planning (my calls — already applied to the spec)
 
 1. Twinkle-background `density` default is `0.03` (fraction of real pixels that are stars), not `0.6`. 0.6 is the text-twinkle default; 60% of a panel lit as stars is a wash.
 2. Twinkle `speed` cap is `2.0`, not `3.0` (keeps every pixel's cycle ≥ 6 frames ≈ ≤3.3 Hz).
@@ -52,14 +52,18 @@
 
 **Interfaces:**
 - Produces: `AnimationFrame.pixel_gain: Callable[[int, int], float] | None = None` (real-pixel coords → multiplier, clamped to `[0, 1]`).
-- Produces: `led_ticker.pixel_gain.with_pixel_gain(canvas: Canvas, gain: Callable[[int, int], float]) -> Canvas` — returns `GainCanvas(canvas, gain)` for a plain canvas; for a `ScaledCanvas` returns a NEW `ScaledCanvas(GainCanvas(canvas.real, gain), scale=canvas.scale, content_height=canvas.content_height)` so both the block-expanding `SetPixel` and the hi-res `unwrap_to_real(...)` path hit the proxy. `GainCanvas.SetPixel(x, y, r, g, b)` writes `round(c * clamp(gain(x, y)))` per channel; every other attribute forwards via `__getattr__`.
+- Produces: `led_ticker.pixel_gain.with_pixel_gain(canvas: Canvas, gain: Callable[[int, int], float]) -> Canvas` — puts `GainCanvas(unwrap_to_real(canvas), gain)` at the BOTTOM of the chain and rebuilds every `ScaledCanvas` layer above it with fresh wrappers (same `scale`/`content_height` per layer; nested wrappers exist during cross-scale dissolves). A plain canvas → just the `GainCanvas`. Both the block-expanding path and the hi-res `unwrap_to_real(...)` path then hit the proxy. The caller's wrapper is never mutated.
+- `GainCanvas` overrides **`SetPixel`** (`round(c * clamp(gain(x, y)))` per channel) **and `SubFill`** — `ScaledCanvas.SetPixel` routes through `real.SubFill`, so a forwarded `SubFill` would skip the gain and BDF text on the bigsign would never twinkle. `SubFill(x, y, w, h, ...)` samples `gain(x, y)` ONCE (block top-left) and issues one gained `SubFill` — **my call: BDF blocks twinkle as a unit (one logical pixel = one twinkler, same look as the smallsign, no 16× SetPixel blow-up); hi-res glyphs twinkle per real pixel.** Everything else forwards via `__getattr__`.
+- Known limit (document): inline ANIMATED image emoji paint via `SetImage` and don't twinkle; static sprites do.
 
 - [ ] **Step 1: Write failing tests** in `tests/test_pixel_gain.py`:
   - `test_default_is_none`: `AnimationFrame(visible_text="x").pixel_gain is None`.
   - `test_gain_scales_setpixel`: `with_pixel_gain(HeadlessCanvas(8,8), lambda x,y: 0.5).SetPixel(1,1,200,100,0)` → underlying pixel `(100, 50, 0)`.
   - `test_gain_clamped`: gain `2.0` → unchanged; gain `-1` → `(0,0,0)`.
-  - `test_gain_reaches_bdf_scaled_path`: `ScaledCanvas(scale=4)` wrapped; one logical `SetPixel` → 16 real writes each scaled, gain called with REAL coords.
+  - `test_gain_reaches_bdf_scaled_path`: `ScaledCanvas(scale=4)` wrapped; one logical `SetPixel` → one gained 4×4 block on the real canvas; gain called once with the block's REAL top-left coords.
+  - `test_subfill_is_gained`: `GainCanvas.SubFill(0,0,2,2,200,0,0)` with gain 0.5 → four `(100,0,0)` pixels.
   - `test_gain_reaches_hires_path`: `unwrap_to_real(with_pixel_gain(scaled, g))` is the `GainCanvas`.
+  - `test_nested_wrapper`: `ScaledCanvas(ScaledCanvas(real, scale=2), scale=2)` → proxy sits under BOTH layers; one logical `SetPixel` gains the right real block; the caller's wrappers' `.real` unchanged.
   - `test_message_text_twinkles_border_does_not`: a `TickerMessage` with a constant border and an animation stub returning `pixel_gain=lambda x,y: 0.0` → no text pixels lit, all border pixels at full color.
   - `test_message_byte_identical_without_gain`: draw with `pixel_gain=None` equals draw with no animation (pixel dict equality).
   - `test_image_overlay_text_twinkles`: `StillImage` single-row overlay text with gain `0.0` → text absent, image pixels intact.
@@ -106,6 +110,7 @@
   - `test_bad_args`: `duty` ∉ (0,1), `count < 0`, `count` bool, `period_ms <= 0` → `ValueError`.
   - `test_empty_slice_with_emoji_and_token`: a real `TickerMessage(text="HOT :sun: deal")` with `animation=Blink()` drawn at frame 15 on `HeadlessCanvas` → no exception, no lit pixels outside the border.
   - `test_message_end_cursor_unchanged`: off-phase `draw()` returns the same cursor as on-phase (scroll math stable).
+  - `test_hold_ending_mid_off_settles_to_on` (integration; Review Focus #1): a real `Ticker` slideshow with a `TickerMessage(animation=Blink())`, `hold_time` chosen so the hold ends at frame 16 (off), `transition = "cut"`, `swapping_frame`-style recording canvas → the frame drawn as the transition's outgoing has lit text pixels. (Core's settle seam `FrameAwareBase.frames_to_transition_ready` duck-types `frames_to_rest` on every effect incl. `animation` — verified.)
 - [ ] **Step 2: Run** `uv run pytest plugins/flair/tests/test_flair_blink.py -v` → FAIL.
 - [ ] **Step 3: Implement** `Blink` per Interfaces; error text: `"flair.blink: period_ms={p} blinks faster than 3 Hz (WCAG 2.3.1 photosensitivity limit); set allow_fast = true to opt in"`.
 - [ ] **Step 4: Run** → PASS.
@@ -134,11 +139,12 @@
 **Interfaces:**
 - Consumes: `_twinkle.level`, `_twinkle.is_twinkler`, `_twinkle.hash32` (Task 4); core `AnimationFrame.pixel_gain` (Task 1).
 - Produces: `class Twinkle(density=0.6, speed=1.0, min_brightness=0.15, seed=None)`; `restart_on_visit = False`; `frame_for` returns `AnimationFrame(visible_text=full_text, pixel_gain=g)` with `g(x, y) = 1.0` for non-twinklers else `min_brightness + (1 - min_brightness) * level(...)`; `frames_to_rest` → 0.
+- Perf shape: the closure must NOT hash per call. `Twinkle` lazily builds per-`(real_w, real_h)` tables once (flat lists indexed `y * w + x`: twinkler flag, `factor`, `offset` — from `_twinkle.hash32`), cached on the instance; `g(x, y)` is an index lookup + the triangle function. Add `_twinkle.tables(w, h, seed, density) -> tuple[list[bool], list[float], list[float]]` to Task 4 for this, and keep `level()` for the background and tests. `frame_for` doesn't see real dims, so `g` builds/looks up the tables on its first call using the coords it receives — store tables keyed by dims and size them from the canvas the gain proxy is attached to (pass `w, h` into the closure via a tiny `gain_for(frame) -> Callable` that reads dims from `GainCanvas` — simplest: `pixel_gain` closures receive coords only, so the tables are grown on demand to cover `max(x)+1, max(y)+1`; document whichever is chosen).
 - Produces: `class TwinkleBackground(BackgroundEffectBase)(density=0.03, speed=1.0, color=(255, 230, 180), seed=None)`; `frame_invariant = False`; `restart_on_visit = False`; `paint(canvas, frame_count)`: star positions = a list built once per `(real.width, real.height)` (every pixel with `is_twinkler(x, y, seed, density)`, cached on the instance — derived data, not sim state); per star paint `color * level`, skipping writes that round to black.
 - Validation (both): `density` in `(0, 1]`; `speed` in `(0, 2.0]`; `min_brightness` in `[0, 1)`; `color` an `[r,g,b]` of ints 0–255; `seed` int or None. `seed=None` → one OS-entropy seed at construction.
 
 - [ ] **Step 1: Write failing tests:**
-  - animation: `test_gain_is_one_for_non_twinklers`, `test_gain_floor` (never below `min_brightness`), `test_pure_function_of_frame`, `test_speed_cap` (`speed=2.5` raises), `test_bigsign_hires_message_twinkles` (real `TickerMessage` with a hires font on `ScaledCanvas(scale=4)` over a 256×64 `HeadlessCanvas`: some lit text pixels dimmer than the font color at frame 7), `test_perf_bigsign` (≤ 8 ms per `draw()` for a 20-char hires message at 256×64).
+  - animation: `test_gain_is_one_for_non_twinklers`, `test_gain_floor` (never below `min_brightness`), `test_pure_function_of_frame`, `test_speed_cap` (`speed=2.5` raises), `test_bigsign_hires_message_twinkles` (real `TickerMessage` with a hires font on `ScaledCanvas(scale=4)` over a 256×64 `HeadlessCanvas`: some lit text pixels dimmer than the font color at frame 7), `test_bigsign_bdf_message_twinkles` (same with the default BDF font — guards the `SubFill` path), `test_perf_bigsign` (20-char hires message at 256×64: `draw()` with twinkle ≤ 5 ms total AND ≤ 2.5 ms more than the same draw without an animation — the dev→Pi 5 factor measured in flair is ~7×).
   - background: `test_never_paints_black`, `test_pure_function_of_frame`, `test_unseeded_instance_is_still_frame_pure`, `test_star_count_scales_with_area` (smallsign vs bigsign within ±30% of `0.03 * area`), `TestScaledCanvas` (patch `ScaledCanvas.SetPixel` at the class to fail — paints only on real), `test_perf_bigsign` (≤ 2 ms per `paint`).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS.
 - [ ] **Step 5: Commit** `feat(flair): flair.twinkle text animation and starfield background`.
@@ -151,7 +157,7 @@
 
 **Interfaces:**
 - Consumes: `stickers.capture_sprite(slug, 1, None)` for 8×8 sprite pixels (bbox-normalized `{(x, y): (r, g, b)}`); `emoji_slugs()`; `_twinkle.hash32`.
-- Produces (`_snow.py`): `flake_pixels(flake: str, color: tuple[int,int,int]) -> dict[tuple[int,int], tuple[int,int,int]]` (`"dot"` → 1 px, `"plus"` → 5-px +, slug → captured 8×8, cached via `functools.cache`); `flake_count(width, height, density) -> int` (`max(1, round(density * w * h / 1000))`); `flake_position(i, frame, w, h, seed, speed, speed_variation, drift, wind, sprite_h) -> tuple[int, int, float]` → `(x, y, intensity)`: per-flake `x0`, `y0`, `v` (fall px/frame = `h / 100 * speed * (1 ± speed_variation)`), wobble phase and intensity ∈ [0.5, 1] all from `hash32(i, epoch, seed, salt)` where `epoch` increments each time the flake wraps past the bottom (so it re-enters at a new x); `x = (x0 + wind*frame + drift * 3 * sin(frame/10 + phase)) % w`.
+- Produces (`_snow.py`): `flake_pixels(flake: str, color: tuple[int,int,int]) -> dict[tuple[int,int], tuple[int,int,int]]` (`"dot"` → 1 px, `"plus"` → 5-px +, slug → captured 8×8, cached via `functools.cache`); `flake_count(width, height, density) -> int` (`max(1, round(density * w * h / 1000))`); `flake_position(i, frame, w, h, seed, speed, speed_variation, drift, wind, sprite_h) -> tuple[int, int, float]` → `(x, y, intensity)`. Derivation order (no circularity): (1) from `hash32(i, 0, seed, salt)` only: `v` (fall px/frame = `h / 100 * speed * (1 ± speed_variation)`), `y0`, wobble `phase`; (2) `travel = y0 + v * frame`, `span = h + sprite_h`, `epoch = floor(travel / span)`, `y = int(travel % span) - sprite_h`; (3) from `hash32(i, epoch, seed, salt)`: `x0` and `intensity` ∈ [0.5, 1] — so a wrapped flake re-enters at a new x; `x = int(x0 + wind * frame + drift * 3 * sin(frame / 10 + phase)) % w`.
 - Produces: `class SnowBackground(BackgroundEffectBase)(flake="dot", density=3.0, speed=1.0, speed_variation=0.4, drift=0.3, wind=0.0, color=(200, 220, 255), seed=None)`; `frame_invariant = False`; `restart_on_visit = False`.
 - Validation: `flake` ∈ `{"dot","plus"}` or a slug in `emoji_slugs()` that has an 8×8 form (`capture_sprite(slug, 1, None)` non-empty) — else `ValueError` naming the slug and suggesting `"dot"`; numeric ranges `density > 0`, `speed` in `(0, 5]`, `speed_variation` in `[0, 1)`, `drift >= 0`.
 
@@ -169,6 +175,7 @@
 - Consumes: `_raster.Raster`, `_raster.snapshot_into`, `_raster.is_lit`; `_snow.flake_pixels`/`flake_count`/`flake_position` (Task 6).
 - Produces: `class Snow(flake="dot", density=6.0, drift=0.3, wind=0.0, color=(230, 240, 255), seed=None, mode="flurry")`; `min_frames = 24`; `scale_switch_at = 1.0`; `frame_at(t, canvas, outgoing, incoming, **kwargs)`.
 - Algorithm: on refire, snapshot outgoing AND incoming once into two `Raster`s (physical res; laser pattern) and collect lit pixel lists. Front per real column: `J = max(2, h // 4)`; `jit(x) = hash32(x, 0, seed, 9) % (J + 1)`; `front(x, t) = (t / SNAP_THRESHOLD) * (h + J) - J + jit(x)`. Paint incoming lit pixels with `y < front(x)`, outgoing lit pixels with `y >= front(x)`. Flakes (count `flake_count(w, h, density) * sin(pi * t)`) paint on top, each falling 1.5× faster than the front so the flurry leads it. `mode` accepts only `"flurry"` in v1 (`"build"` → `ValueError` "planned, not yet available").
+- Known limit (document): with `scale_switch_at = 1.0` the runner fills `outgoing_bg_color` until the snap, so sections with different `bg_color` pop at the snap rather than following the front — same accepted limitation as laser/fairy.
 
 - [ ] **Step 1: Write failing tests:** `test_t0_shows_only_outgoing`; `test_snap_shows_only_incoming` (t=0.95); `test_no_outgoing_pixels_after_snap`; `test_front_monotone` (a column's incoming-pixel count never decreases with t); `test_outgoing_not_drawn_live_after_snapshot` (spy on `outgoing.draw` call count = 1 per firing); `test_refire_resnapshots` (`t` goes 0.9 → 0.1); `test_t0_always_refires`; `test_empty_outgoing` (completes; incoming fully shown at snap); `test_bordered_incoming_no_flash` (`incoming_bg_color` forwarded to `snap_reset`); `test_scaled_physical_resolution`; `test_build_mode_refused`; `test_perf_bigsign` (≤ 8 ms per frame at 256×64, density 6, worst t=0.5).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS.
@@ -189,7 +196,7 @@
 ### Task 9: docs, examples, gifs
 
 **Files:**
-- Modify: `plugins/flair/CLAUDE.md` (one invariants section per new module, tripwires named from Tasks 3–7), `plugins/flair/README.md`, the spec (apply "Spec adjustments" 1–4).
+- Modify: `plugins/flair/CLAUDE.md` (one invariants section per new module, tripwires named from Tasks 3–7), `plugins/flair/README.md`.
 - Create: `plugins/flair/examples/config.{blink,twinkle,snow}-smoke.{smallsign,bigsign,longboi}.toml`; demo gifs in `plugins/flair/docs/` via the `making-a-gif` skill (bigsign needs the rows=64/cols=256/chain=1 render copy; render via `uv run --project ../led-ticker-plugins`).
 - Core docs-site catalogue entries (animations, backgrounds, transitions pages) — a small follow-up core docs PR, snippets verbatim from the demo TOMLs.
 
