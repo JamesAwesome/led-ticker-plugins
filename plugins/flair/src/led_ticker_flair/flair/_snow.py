@@ -10,6 +10,8 @@ column and brightness, so it re-enters somewhere new.
 import functools
 import math
 
+from led_ticker.plugin import emoji_slugs
+
 from led_ticker_flair.flair._twinkle import hash32
 from led_ticker_flair.flair.stickers import capture_sprite
 
@@ -22,6 +24,35 @@ SALT_INTENSITY = 15
 
 _PLUS = ((1, 0), (0, 1), (1, 1), (2, 1), (1, 2))
 _U32 = 2**32
+
+
+def validate_flake(flake: object) -> None:
+    """Raise ``ValueError`` unless ``flake`` is "dot", "plus" or an emoji slug
+    with an 8x8 low-res form (shared by the background and the transition)."""
+    if not isinstance(flake, str):
+        raise ValueError(f"flake must be a string; got {flake!r}")
+    if flake not in ("dot", "plus") and (
+        flake not in emoji_slugs() or not capture_sprite(flake, 1, None)
+    ):
+        raise ValueError(
+            f'flake {flake!r} is not "dot", "plus" or an emoji slug with an '
+            '8x8 low-res form (pack-only slugs have none); use "dot"'
+        )
+
+
+def validate_color(color: object) -> None:
+    ok = (
+        isinstance(color, list | tuple)
+        and len(color) == 3
+        and all(
+            isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255
+            for v in color
+        )
+    )
+    if not ok:
+        raise ValueError(
+            f"color must be an [r, g, b] triple of ints 0-255; got {color!r}"
+        )
 
 
 def flake_height(flake: str) -> int:

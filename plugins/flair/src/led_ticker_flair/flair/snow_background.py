@@ -11,15 +11,16 @@ import math
 import random
 from typing import Any
 
-from led_ticker.plugin import BackgroundEffectBase, emoji_slugs, unwrap_to_real
+from led_ticker.plugin import BackgroundEffectBase, unwrap_to_real
 
 from led_ticker_flair.flair._snow import (
     flake_count,
     flake_height,
     flake_pixels,
     flake_position,
+    validate_color,
+    validate_flake,
 )
-from led_ticker_flair.flair.stickers import capture_sprite
 
 
 def _num(name: str, v: object, ok: bool, rng: str) -> None:
@@ -42,15 +43,7 @@ class SnowBackground(BackgroundEffectBase):
         color: Any = (200, 220, 255),
         seed: int | None = None,
     ) -> None:
-        if not isinstance(flake, str):
-            raise ValueError(f"flake must be a string; got {flake!r}")
-        if flake not in ("dot", "plus") and (
-            flake not in emoji_slugs() or not capture_sprite(flake, 1, None)
-        ):
-            raise ValueError(
-                f'flake {flake!r} is not "dot", "plus" or an emoji slug with an '
-                '8x8 low-res form (pack-only slugs have none); use "dot"'
-            )
+        validate_flake(flake)
         _num(
             "density", density, isinstance(density, int | float) and density > 0, "> 0"
         )
@@ -68,18 +61,7 @@ class SnowBackground(BackgroundEffectBase):
         )
         _num("drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0")
         _num("wind", wind, True, "")
-        ok = (
-            isinstance(color, list | tuple)
-            and len(color) == 3
-            and all(
-                isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255
-                for v in color
-            )
-        )
-        if not ok:
-            raise ValueError(
-                f"color must be an [r, g, b] triple of ints 0-255; got {color!r}"
-            )
+        validate_color(color)
         if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
             raise ValueError(f"seed must be an int or None; got {seed!r}")
         self.flake = flake
