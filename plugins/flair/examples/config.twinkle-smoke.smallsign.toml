@@ -1,0 +1,49 @@
+# Smallsign SMOKE TEST — flair.twinkle animation + background
+#
+# Purpose: headless render-demo smoke fixture on a 160x16 (default_scale = 1) canvas.
+# rows=16/cols=160/chain_length=1 gives the headless backend the final
+# logical canvas directly (see config.fireworks-smoke.smallsign.toml). This is a
+# render-demo fixture, not a hardware wiring config; real deploys use
+# config/config.example.toml in the core repo.
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.twinkle-smoke.smallsign.toml
+#   -> expect: no errors.
+#
+# WHAT TO LOOK FOR:
+#   "TWINKLE" — a share of the LETTER pixels dim and brighten on their
+#     own phases (text shimmers, stays readable).
+#   "STARS" — fine single-LED stars twinkle behind steady text; the
+#     stars never paint black, so nothing is erased.
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+
+[transitions]
+between_sections = "cut"
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+# Text animation: per-pixel twinkle of the letters themselves.
+[[playlist.section.widget]]
+type = "message"
+text = "TWINKLE"
+center = true
+font_color = [255, 220, 120]
+animation = "flair.twinkle"
+
+# Background: a twinkling starfield behind the text.
+[[playlist.section.widget]]
+type = "message"
+text = "STARS"
+center = true
+font_color = [150, 190, 255]
+background = "flair.twinkle"

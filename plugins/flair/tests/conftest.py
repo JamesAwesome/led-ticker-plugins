@@ -32,3 +32,16 @@ def _prewarm_poker_geometry():
     poker._warm_worker(list(poker.SUITS), yield_s=0)
     poker._warm_dispatched.update(poker.SUITS)
     yield
+
+
+@pytest.fixture
+def no_sleep_blink(monkeypatch):
+    """Make asyncio.sleep return immediately (yielding to the loop)."""
+    import asyncio
+
+    real_sleep = asyncio.sleep
+
+    async def _fast(_delay, *a, **k):
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", _fast)
