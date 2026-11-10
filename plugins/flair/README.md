@@ -601,6 +601,56 @@ On a smallsign (16 rows), the default 8 slats are 2 rows each, so each slat has 
 - **Cross-scale sections.** The old and new messages share the panel for the whole transition, so incoming content renders at the outgoing scale and pops to its own size on the final frame. Laser, fairy and lightning have the same limitation.
 - **Letterboxed sections** (for example `scale = 2, content_height = 16` on a 64-row panel). Horizontal slats split the content rows, so they're all the same size. The blank band on the side a slat opens from opens with that slat's first row; the band on the far side opens when its slat finishes.
 
+## Split-flap transition
+
+`flair.splitflap` is the Solari split-flap departure board. Every character of the old message is a flap hinged across its middle: the top half falls over to reveal the next character, then the bottom half folds down after it. Each character clatters through a few in-between characters before landing on the new one, and the characters settle one after another in a ripple. The flaps flip in place, in your widget's own font, size and colour, on the normal panel background (no tiles). It's meant to be watched, so give it about three seconds.
+
+Requires **led-ticker-core >= 4.32**. Four variants, named by the ripple:
+
+| Type | Characters settle |
+| --- | --- |
+| `flair.splitflap.forward` | left → right |
+| `flair.splitflap.reverse` | right → left |
+| `flair.splitflap.alternating` | forward, then reverse, one per firing |
+| `flair.splitflap.random` | in a random order, fresh each firing |
+
+### Config
+
+```toml
+[transitions]
+duration = 3.0        # floor: min_frames = 36, i.e. 1.8 s at the default 20 fps
+
+[[playlist.section]]
+transition = "flair.splitflap.forward"
+```
+
+A single flap per character, rippling more slowly across the message:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `flips` | int >= 0 | `3` | In-between characters each position clatters through before it lands. `0` flips straight from the old character to the new one. |
+| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent rippling across the message. `0` flips every character together; higher values spread them out (and make each flap quicker). |
+
+`.alternating` passes both knobs to each direction.
+
+### Notes
+
+- **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
+- **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't flip.
+- **Different lengths.** Extra positions flip from blank, or to blank.
+- **Two-row widgets** flip each row on its own hinge. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row flips from or to blank.
+- **Images, gifs and background effects** have no characters to find, so they're cut into character-width strips that flip the same way.
+- **Borders stay put.** A bordered widget's ring doesn't flip.
+- **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background and scale arrive on the final frame. Laser and blinds have the same limitation.
+- **Smallsign.** At 16 rows each half-flap is only a few LEDs tall. It works, but it reads best on the bigsign.
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
