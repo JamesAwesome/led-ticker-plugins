@@ -61,8 +61,15 @@ def revealed(p: float, lo: int, hi: int) -> int:
 
 @dataclass(frozen=True)
 class BlindsPlan:
+    """``bounds`` are the slats (they cover the content band only);
+    ``extent`` is the panel span on the slat axis. Letterbox strips outside
+    the bounds belong to the first / last slat: the strip on a slat's
+    LEADING side opens with its first row, the one on its TRAILING side with
+    its last, so every slat opens at the same rate."""
+
     direction: str
     bounds: list[tuple[int, int]]
+    extent: tuple[int, int]
     out_px: list[SlatPixel]
     in_px: list[SlatPixel]
 
@@ -72,12 +79,15 @@ def _tag(
 ) -> list[SlatPixel]:
     rows = orientation(direction) == "horizontal"
     size = raster.height if rows else raster.width
-    # coord -> (slat, depth from that slat's leading edge)
-    lookup: list[tuple[int, int]] = [(0, 0)] * size
+    first, last = bounds[0][0], bounds[-1][1] - 1
+    # coord -> (slat, depth from that slat's leading edge). A letterbox
+    # coord takes its nearest content row's tag (see BlindsPlan).
+    by_coord: dict[int, tuple[int, int]] = {}
     for s, (lo, hi) in enumerate(bounds):
-        for c in range(lo, min(hi, size)):
+        for c in range(lo, hi):
             depth = c - lo if direction in ("down", "right") else hi - 1 - c
-            lookup[c] = (s, depth)
+            by_coord[c] = (s, depth)
+    lookup = [by_coord[min(last, max(first, c))] for c in range(size)]
     out: list[SlatPixel] = []
     get = raster.get
     for y in range(raster.height):
@@ -97,19 +107,23 @@ def build_plan(
     rows = orientation(direction) == "horizontal"
     if rows:
         # Split the CONTENT band (anchored at y_offset_real, like interlock's
-        # strands) so "N slats" means N visible slats on a letterboxed panel;
-        # letterbox rows fold into the first / last slat.
+        # strands) so "N slats" means N visible, equal slats on a letterboxed
+        # panel; the letterbox strips ride the edge slats (see BlindsPlan).
         y0 = geo.y_offset_real
         bounds = [
             (lo + y0, hi + y0)
             for lo, hi in slat_bounds(geo.content_h_real, slats, geo.scale)
         ]
-        bounds[0] = (0, bounds[0][1])
-        bounds[-1] = (bounds[-1][0], geo.height)
+        extent = (0, geo.height)
     else:
         bounds = slat_bounds(geo.width, slats, geo.scale)
+        extent = (0, geo.width)
     return BlindsPlan(
-        direction, bounds, _tag(out_r, direction, bounds), _tag(in_r, direction, bounds)
+        direction,
+        bounds,
+        extent,
+        _tag(out_r, direction, bounds),
+        _tag(in_r, direction, bounds),
     )
 
 
@@ -172,17 +186,20 @@ class Blinds:
         open_n = [revealed(p, lo, hi) for lo, hi in plan.bounds]
         w, h = real.width, real.height
         br, bgc, bb = bg
-        for (lo, hi), n in zip(plan.bounds, open_n, strict=True):
+        positive = d in ("down", "right")
+        last = len(plan.bounds) - 1
+        for s, ((lo, hi), n) in enumerate(zip(plan.bounds, open_n, strict=True)):
             if n <= 0:
                 continue
-            if d == "down":
-                real.SubFill(0, lo, w, n, br, bgc, bb)
-            elif d == "up":
-                real.SubFill(0, hi - n, w, n, br, bgc, bb)
-            elif d == "right":
-                real.SubFill(lo, 0, n, h, br, bgc, bb)
+            a, b = (lo, lo + n) if positive else (hi - n, hi)
+            if s == 0 and a == lo:  # the leading / fully-open slat edge
+                a = plan.extent[0]
+            if s == last and b == hi:
+                b = plan.extent[1]
+            if d in ("down", "up"):
+                real.SubFill(0, a, w, b - a, br, bgc, bb)
             else:
-                real.SubFill(hi - n, 0, n, h, br, bgc, bb)
+                real.SubFill(a, 0, b - a, h, br, bgc, bb)
         set_px = real.SetPixel
         for x, y, r, g, b, s, depth in plan.in_px:
             if depth < open_n[s]:

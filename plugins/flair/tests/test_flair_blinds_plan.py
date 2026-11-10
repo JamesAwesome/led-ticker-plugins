@@ -4,6 +4,7 @@ from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair._snapshot import Geometry
 from led_ticker_flair.flair.blinds import (
     DEFAULT_SLATS,
+    Blinds,
     build_plan,
     orientation,
     revealed,
@@ -90,10 +91,65 @@ def test_build_plan_only_lit_pixels():
 
 def test_build_plan_letterboxed_slats_anchor_at_content():
     # 128x64 panel at scale 2, content 16 -> content rows 16..47. Slats split
-    # the CONTENT band; letterbox rows fold into the first / last slat.
+    # the CONTENT band only; the letterbox is carried as the plan's extent.
     geo = Geometry(4, 64, 2, 16, 32)
     p = build_plan(Raster(4, 64), Raster(4, 64), "down", 4, geo)
-    assert p.bounds == [(0, 24), (24, 32), (32, 40), (40, 64)]
+    assert p.bounds == [(16, 24), (24, 32), (32, 40), (40, 48)]
+    assert p.extent == (0, 64)
+
+
+class _Real:
+    def __init__(self, w: int, h: int) -> None:
+        self.width, self.height = w, h
+        self.px: dict[tuple[int, int], tuple[int, int, int]] = {}
+
+    def SetPixel(self, x, y, r, g, b):  # noqa: N802
+        self.px[(x, y)] = (r, g, b)
+
+    def SubFill(self, x, y, w, h, r, g, b):  # noqa: N802
+        for yy in range(y, y + h):
+            for xx in range(x, x + w):
+                self.px[(xx, yy)] = (r, g, b)
+
+
+RED, GREEN, BG = (200, 0, 0), (0, 200, 0), (0, 0, 9)
+
+
+def _letterboxed_rows(direction: str, p: float) -> list[tuple[int, int, int] | None]:
+    geo = Geometry(1, 64, 2, 16, 32)
+    out_r, in_r = Raster(1, 64), Raster(1, 64)
+    for y in range(64):  # lit everywhere, letterbox included (e.g. a border)
+        out_r.SetPixel(0, y, *RED)
+        in_r.SetPixel(0, y, *GREEN)
+    plan = build_plan(out_r, in_r, direction, 4, geo)
+    real = _Real(1, 64)
+    Blinds._paint(real, plan, p, BG)
+    return [real.px.get((0, y)) for y in range(64)]
+
+
+def test_letterboxed_down_every_slat_opens_at_the_same_rate():
+    rows = _letterboxed_rows("down", 0.5)
+    # Leading letterbox opens with slat 0's first row; trailing waits for the
+    # last slat to finish. Every content slat shows 4 of its 8 rows.
+    assert rows[:16] == [GREEN] * 16
+    assert rows[16:48] == ([GREEN] * 4 + [RED] * 4) * 4
+    assert rows[48:] == [RED] * 16
+
+
+def test_letterboxed_up_mirrors_down():
+    rows = _letterboxed_rows("up", 0.5)
+    assert rows[:16] == [RED] * 16
+    assert rows[16:48] == ([RED] * 4 + [GREEN] * 4) * 4
+    assert rows[48:] == [GREEN] * 16
+
+
+def test_letterboxed_fully_open_reveals_everything():
+    assert _letterboxed_rows("down", 1.0) == [GREEN] * 64
+    assert _letterboxed_rows("up", 1.0) == [GREEN] * 64
+
+
+def test_letterboxed_t0_shows_only_outgoing():
+    assert _letterboxed_rows("down", 0.0) == [RED] * 64
 
 
 def test_build_plan_vertical_slats_ignore_y_offset():

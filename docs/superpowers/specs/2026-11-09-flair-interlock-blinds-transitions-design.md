@@ -177,10 +177,12 @@ px per frame on bigsign dims, first firing and refire).
 - The panel is split into `slats` equal bands: horizontal bands for
   `.down`/`.up`, vertical bands for `.left`/`.right`. Horizontal bands split
   the CONTENT band, anchored at `y_offset_real` like interlock's strands,
-  and letterbox rows fold into the first and last slat. This changed after
-  the final review: a full-panel split showed only 2 of 4 slats over the
-  content on a letterboxed sign. Smallsign and bigsign have no letterbox, so
-  they're unaffected. Pending James's confirmation at the visual gate.
+  so every slat is the same size. A letterbox strip rides its edge slat:
+  the strip on that slat's leading side opens with its first row, the strip
+  on its trailing side with its last, so every slat opens at the same rate.
+  (A full-panel split showed only 2 of 4 slats over the content on a
+  letterboxed sign; folding the strips INTO the edge slats made those open
+  late and then fast. Confirmed by James at the visual gate.)
 - Every slat opens simultaneously from its leading edge: at progress `p`
   (`p = min(t, 0.95) / 0.95`) the first `round(p × slat_size)` real
   rows/columns of EACH slat show the incoming; the rest show the outgoing.
