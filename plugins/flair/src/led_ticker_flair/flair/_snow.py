@@ -23,19 +23,24 @@ SALT_X0 = 14
 SALT_INTENSITY = 15
 
 _PLUS = ((1, 0), (0, 1), (1, 1), (2, 1), (1, 2))
+# 5x5 asterisk: center, four arm tips at distance 2, four diagonal tips (9 px).
+_FLAKE = ((2, 2), (2, 0), (0, 2), (4, 2), (2, 4), (1, 1), (3, 1), (1, 3), (3, 3))
+BUILTIN_FLAKES = ("dot", "plus", "flake")
+MAX_DENSITY = 50.0
 _U32 = 2**32
 
 
 def validate_flake(flake: object) -> None:
-    """Raise ``ValueError`` unless ``flake`` is "dot", "plus" or an emoji slug
-    with an 8x8 low-res form (shared by the background and the transition)."""
+    """Raise ``ValueError`` unless ``flake`` is "dot", "plus", "flake" (the
+    built-in 5x5 snowflake) or an emoji slug with an 8x8 low-res form (shared
+    by the background and the transition)."""
     if not isinstance(flake, str):
         raise ValueError(f"flake must be a string; got {flake!r}")
-    if flake not in ("dot", "plus") and (
+    if flake not in BUILTIN_FLAKES and (
         flake not in emoji_slugs() or not capture_sprite(flake, 1, None)
     ):
         raise ValueError(
-            f'flake {flake!r} is not "dot", "plus" or an emoji slug with an '
+            f'flake {flake!r} is not "dot", "plus", "flake" or an emoji slug with an '
             '8x8 low-res form (pack-only slugs have none); use "dot"'
         )
 
@@ -50,6 +55,16 @@ def validate_number(name: str, v: object, ok: bool, rng: str) -> None:
         or not ok
     ):
         raise ValueError(f"{name} must be a finite number {rng}; got {v!r}")
+
+
+def validate_density(density: object) -> None:
+    """``density`` in ``(0, MAX_DENSITY]`` flakes per 1000 panel pixels."""
+    validate_number(
+        "density",
+        density,
+        isinstance(density, int | float) and 0 < density <= MAX_DENSITY,
+        f"in (0, {MAX_DENSITY:g}] (max {MAX_DENSITY:g})",
+    )
 
 
 def validate_color(color: object) -> None:
@@ -73,6 +88,8 @@ def flake_height(flake: str) -> int:
         return 1
     if flake == "plus":
         return 3
+    if flake == "flake":
+        return 5
     return max((y for (_x, y), _c in _sprite(flake)), default=-1) + 1
 
 
@@ -87,6 +104,8 @@ def _pixels(flake: str, color: tuple[int, int, int]) -> dict:
         return {(0, 0): color}
     if flake == "plus":
         return {p: color for p in _PLUS}
+    if flake == "flake":
+        return {p: color for p in _FLAKE}
     return dict(_sprite(flake))
 
 
@@ -94,7 +113,8 @@ def flake_pixels(
     flake: str, color: tuple[int, int, int]
 ) -> dict[tuple[int, int], tuple[int, int, int]]:
     """Bbox-normalized ``{(x, y): rgb}`` for a flake: ``"dot"`` (1 px),
-    ``"plus"`` (5-px +), or an emoji slug's 8x8 low-res sprite."""
+    ``"plus"`` (5-px +), ``"flake"`` (9-px 5x5 asterisk), or an emoji slug's
+    8x8 low-res sprite."""
     return dict(_pixels(flake, tuple(color)))  # type: ignore[arg-type]
 
 

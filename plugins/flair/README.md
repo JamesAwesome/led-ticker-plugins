@@ -635,6 +635,8 @@ animation = {style = "flair.blink", period_ms = 1500, duty = 0.6, count = 4}
 
 - **Photosensitivity guard.** Blinking faster than 3 Hz (`period_ms` below ~333) is refused at config-load (WCAG 2.3.1) unless you set `allow_fast = true`. Think before you do.
 - Emoji and colored value tokens blank with the text; borders and backgrounds stay lit.
+- Blink shares the ONE `animation` slot with twinkle, `typewriter` and `flair.fisheye`, so they cannot be combined. On `gif`/`image` widgets an animation needs a non-scroll `text_align`.
+- `allow_fast` must be a real boolean (`true`/`false`), not a string.
 
 ## Twinkle animation
 
@@ -669,6 +671,8 @@ animation = {style = "flair.twinkle", density = 0.8, speed = 1.5, min_brightness
 
 ### Notes
 
+- **Twinkle is a hold effect.** The sparkle field is fixed to the panel, not to the text, so on scrolling text it reads as static noise rather than letters shimmering. Use it on text that holds still.
+- Twinkle, blink, `typewriter` and `flair.fisheye` all share the ONE `animation` slot of a widget, so they cannot be combined. On `gif`/`image` widgets an animation needs a non-scroll `text_align`.
 - Only the text twinkles; borders and backgrounds are untouched, so it composes with `background = "flair.twinkle"` or `"flair.snow"`.
 - BDF text on a scaled sign (bigsign) twinkles per logical pixel; hi-res fonts twinkle per real pixel. Animated image emoji do not twinkle.
 
@@ -709,7 +713,7 @@ background = {style = "flair.twinkle", density = 0.05, speed = 1.2, color = [255
 
 ## Snow background
 
-`flair.snow` is a **background** effect: `background = "flair.snow"` drops snow BEHIND a widget's content. Each flake falls at its own speed, drifts a little sideways and re-enters at a new column when it wraps. Flakes are `"dot"` (one LED), `"plus"` (a 5-LED cross) or an 8x8 emoji sprite such as `flake = "snow"`; emoji flakes are painted 1:1 on the real panel, so on a bigsign they are 8 LEDs wide, not block-expanded.
+`flair.snow` is a **background** effect: `background = "flair.snow"` drops snow BEHIND a widget's content. Each flake falls at its own speed, drifts a little sideways and re-enters at a new column when it wraps. Flakes are `"dot"` (one LED), `"plus"` (a 5-LED cross), `"flake"` (a hand-drawn 5x5 snowflake, 9 LEDs) or an 8x8 emoji sprite; emoji flakes are painted 1:1 on the real panel, so on a bigsign they are 8 LEDs wide, not block-expanded. Emoji slugs use their 8x8 low-res form, which is not always a snowflake: `:snow:` is a grey rain-cloud weather icon, so use `flake = "flake"` for snow.
 
 Requires **led-ticker-core >= 4.32**.
 
@@ -726,20 +730,20 @@ background = "flair.snow"
 With emoji flakes and knobs:
 
 ```toml
-background = {style = "flair.snow", flake = "snow", density = 1.0, wind = 0.1}
+background = {style = "flair.snow", flake = "flake", density = 1.0, wind = 0.1}
 ```
 
 ### Knobs
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
-| `flake` | `"dot"` | `"dot"`, `"plus"`, or an emoji slug with an 8x8 low-res form. Hires-only / pack-only slugs are refused. |
-| `density` | `3.0` | Flakes per 1000 panel pixels, `> 0`. |
+| `flake` | `"dot"` | `"dot"`, `"plus"`, `"flake"` (5x5 snowflake), or an emoji slug with an 8x8 low-res form. Hires-only / pack-only slugs are refused. |
+| `density` | `3.0` | Flakes per 1000 panel pixels, in `(0, 50]`. |
 | `speed` | `1.0` | Fall speed in `(0, 5]`. |
 | `speed_variation` | `0.4` | Per-flake speed spread in `[0, 1)`. |
 | `drift` | `0.3` | Sideways sway amplitude, `>= 0`. |
 | `wind` | `0.0` | Constant sideways push (negative blows left). |
-| `color` | `[200, 220, 255]` | Flake color for `dot`/`plus` (emoji keep their own colors). |
+| `color` | `[200, 220, 255]` | Flake color for `dot`/`plus`/`flake` (emoji keep their own colors). |
 | `seed` | `None` (OS entropy) | Fixes the pattern for reproducible demo GIFs. |
 
 ### Notes
@@ -764,22 +768,23 @@ transition = "flair.snow"
 With knobs:
 
 ```toml
-transition = {type = "flair.snow", flake = "snow", density = 8.0, wind = 0.2}
+transition = {type = "flair.snow", flake = "flake", density = 8.0, wind = 0.2}
 ```
 
 ### Knobs
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
-| `flake` | `"dot"` | `"dot"`, `"plus"` or an 8x8 emoji slug (same rules as the background). |
-| `density` | `6.0` | Flakes per 1000 panel pixels at the peak. |
+| `flake` | `"dot"` | `"dot"`, `"plus"`, `"flake"` or an 8x8 emoji slug (same rules as the background). |
+| `density` | `6.0` | Flakes per 1000 panel pixels at the peak, in `(0, 50]`. |
 | `drift` / `wind` | `0.3` / `0.0` | Sideways sway / constant push. |
-| `color` | `[230, 240, 255]` | Flake color for `dot`/`plus`. |
+| `color` | `[230, 240, 255]` | Flake color for `dot`/`plus`/`flake`. |
 | `seed` | `None` (OS entropy) | Unset, every firing draws a new pattern; set it for reproducible GIFs. |
 | `mode` | `"flurry"` | Only `"flurry"` today; `"build"` is reserved. |
 
 ### Notes
 
+- Known limit: a cross-scale incoming widget renders at the outgoing scale until the snap (the scale switch is deferred to the final cut, same as `flair.laser`).
 - Cross-scale sections: the scale switch is deferred to the final snap, so adjacent sections with different `bg_color` pop at the snap rather than following the front (same limitation as `flair.laser` / `flair.fairy`).
 
 ## Install

@@ -145,3 +145,9 @@ async def test_hold_ending_mid_off_settles_to_on(no_sleep_blink) -> None:
     assert by_idx[16] == 0, "natural hold end must land in the off phase"
     assert max(by_idx) == 20, "settle must extend the hold to the next on frame"
     assert frame.log[-1][0] == 20 and frame.log[-1][1] > 0
+
+
+@pytest.mark.parametrize("bad", ["false", "true", 1, 0, None, "no"])
+def test_allow_fast_must_be_bool(bad) -> None:
+    with pytest.raises(ValueError, match="allow_fast must be a bool"):
+        Blink(period_ms=100, allow_fast=bad)

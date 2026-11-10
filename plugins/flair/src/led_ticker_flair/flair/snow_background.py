@@ -1,8 +1,9 @@
 """flair.snow BACKGROUND effect — falling snow painted BEHIND a widget's
 content (``background = "flair.snow"``).
 
-Flakes are ``"dot"``, ``"plus"``, or an emoji slug's 8x8 low-res sprite,
-painted 1:1 at physical resolution (never block-expanded). Pure function of
+Flakes are ``"dot"``, ``"plus"``, ``"flake"`` (built-in 5x5 snowflake), or an
+emoji slug's 8x8 low-res sprite, painted 1:1 at physical resolution (never
+block-expanded). Pure function of
 ``(frame_count, real dims)`` per instance (``seed=None`` draws one
 OS-entropy seed at construction). Never paints black.
 """
@@ -13,11 +14,13 @@ from typing import Any
 from led_ticker.plugin import BackgroundEffectBase, unwrap_to_real
 
 from led_ticker_flair.flair._snow import (
+    BUILTIN_FLAKES,
     flake_count,
     flake_height,
     flake_pixels,
     flake_position,
     validate_color,
+    validate_density,
     validate_flake,
     validate_number,
 )
@@ -39,9 +42,7 @@ class SnowBackground(BackgroundEffectBase):
         seed: int | None = None,
     ) -> None:
         validate_flake(flake)
-        validate_number(
-            "density", density, isinstance(density, int | float) and density > 0, "> 0"
-        )
+        validate_density(density)
         validate_number(
             "speed",
             speed,
@@ -70,7 +71,7 @@ class SnowBackground(BackgroundEffectBase):
         self.color = (color[0], color[1], color[2])
         self.seed = seed
         self._seed = seed if seed is not None else random.SystemRandom().getrandbits(62)
-        self._is_emoji = flake not in ("dot", "plus")
+        self._is_emoji = flake not in BUILTIN_FLAKES
         self._sprite_h = flake_height(flake)
         self._pixels = tuple(flake_pixels(flake, self.color).items())
         # Per-intensity shaded pixel lists (dot/plus only), quantized to 16 steps.

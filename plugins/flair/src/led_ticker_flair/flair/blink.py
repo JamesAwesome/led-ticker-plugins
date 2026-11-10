@@ -35,6 +35,8 @@ class Blink:
             raise ValueError(f"duty must be in (0, 1); got {duty!r}")
         if not isinstance(count, int) or isinstance(count, bool) or count < 0:
             raise ValueError(f"count must be an int >= 0; got {count!r}")
+        if not isinstance(allow_fast, bool):
+            raise ValueError(f"allow_fast must be a bool; got {allow_fast!r}")
         if period_ms < _MAX_FAST_PERIOD_MS and not allow_fast:
             raise ValueError(
                 f"flair.blink: period_ms={period_ms} blinks faster than 3 Hz "

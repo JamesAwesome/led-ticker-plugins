@@ -204,3 +204,39 @@ def test_perf_bigsign() -> None:
 def test_non_finite_numbers_rejected(kw):
     with pytest.raises(ValueError, match="finite"):
         SnowBackground(**kw)
+
+
+def test_builtin_flake_shape() -> None:
+    px = flake_pixels("flake", (200, 220, 255))
+    assert set(px) == {
+        (2, 2),
+        (2, 0),
+        (0, 2),
+        (4, 2),
+        (2, 4),
+        (1, 1),
+        (3, 1),
+        (1, 3),
+        (3, 3),
+    }
+    assert flake_height("flake") == 5
+    # symmetric under both mirrors
+    assert {(4 - x, y) for x, y in px} == set(px)
+    assert {(x, 4 - y) for x, y in px} == set(px)
+
+
+def test_builtin_flake_paints_never_black() -> None:
+    fx = SnowBackground(flake="flake", density=10, seed=1)
+    assert fx._is_emoji is False
+    for f in range(0, 80, 7):
+        c = _paint(fx, f, 160, 16)
+        assert c._pixels
+        assert all(v != (0, 0, 0) for v in c._pixels.values())
+
+
+def test_density_cap() -> None:
+    SnowBackground(density=50)
+    with pytest.raises(ValueError, match=r"max 50"):
+        SnowBackground(density=50.5)
+    with pytest.raises(ValueError, match="density"):
+        SnowBackground(density=1000)

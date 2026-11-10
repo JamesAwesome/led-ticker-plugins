@@ -93,6 +93,8 @@ A flair-only variant of C (a `TickerMessage` subclass that rasters via `_raster.
 | `color` | none | C: optional tint toward a color at the peak; B: star color (default warm white). |
 | `seed` | none | reproducibility, same semantics as `flair.fireworks`. |
 
+Note: the text-twinkle `color` tint knob was dropped from v1 (the background keeps its star `color`).
+
 **Mechanism (TwinkleFOX):** no per-pixel state — per pixel, hash `(x, y, seed)` to a clock offset and a speed in 8/8–23/8 of base; brightness is an asymmetric triangle (fast attack ⅓, slow decay ⅔) of `(frame*speed + offset)`. Pure function of `(x, y, frame)`. Twinkle on/off rates per pixel stay well under 3 Hz; it's dimming, not full-luminance flashing, and pixels are desynchronized, so WCAG 2.3.1 is not at risk at default/max `speed` (cap `speed ≤ 2`, keeping every pixel's cycle ≥ 6 frames). On scaled signs BDF text twinkles per logical pixel (one 4×4 block = one twinkler); hi-res glyphs per real pixel.
 
 ## 3. `flair.snow` — background

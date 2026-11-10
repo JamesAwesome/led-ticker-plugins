@@ -34,11 +34,13 @@ from led_ticker.plugin import (
 
 from ._raster import Raster, is_lit, snapshot_into
 from ._snow import (
+    BUILTIN_FLAKES,
     flake_count,
     flake_height,
     flake_pixels,
     flake_position,
     validate_color,
+    validate_density,
     validate_flake,
     validate_number,
 )
@@ -75,9 +77,7 @@ class Snow:
         if mode != "flurry":
             raise ValueError(f'mode must be "flurry"; got {mode!r}')
         validate_flake(flake)
-        validate_number(
-            "density", density, isinstance(density, int | float) and density > 0, "> 0"
-        )
+        validate_density(density)
         validate_number(
             "drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0"
         )
@@ -93,7 +93,7 @@ class Snow:
         self.mode = mode
         self.seed = seed
         self._seed = seed if seed is not None else random.SystemRandom().getrandbits(62)
-        self._is_emoji = flake not in ("dot", "plus")
+        self._is_emoji = flake not in BUILTIN_FLAKES
         self._sprite_h = flake_height(flake)
         self._pixels = tuple(flake_pixels(flake, self.color).items())
         self._shaded: dict[int, tuple[tuple[int, int, int, int, int], ...]] = {}

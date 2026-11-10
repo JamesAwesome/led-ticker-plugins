@@ -164,3 +164,36 @@ def test_perf_bigsign() -> None:
     tw = timed(twinkle_msg)
     assert tw <= 0.005, f"twinkle draw {tw * 1000:.2f} ms"
     assert tw - plain <= 0.0025, f"overhead {(tw - plain) * 1000:.2f} ms"
+
+
+async def test_real_twinkle_on_still_image_overlay(tmp_path) -> None:
+    """End-to-end: the real Twinkle through a StillImage single-row overlay —
+    some text pixels dim below the font colour, image pixels stay untouched."""
+    from unittest import mock
+
+    from led_ticker.widgets.still import StillImage
+    from PIL import Image
+
+    img = tmp_path / "x.png"
+    Image.new("RGB", (4, 4), (255, 0, 0)).save(img)
+    w = StillImage(
+        path=img,
+        text="TWINKLE TEXT",
+        text_align="right",
+        image_align="left",
+        animation=Twinkle(density=1.0, min_brightness=0.1, seed=3),
+        font_color=(255, 255, 255),
+    )
+    real = HeadlessCanvas(width=96, height=16)
+    w._load(96, 16)
+    frame = mock.Mock()
+    frame.swap.return_value = real
+    with mock.patch("asyncio.sleep", new=mock.AsyncMock()):
+        await w._play_with_text(real, frame, n_ticks=3)
+    vals = [v for v in real._pixels.values() if v != (0, 0, 0)]
+    whites = [v for v in vals if v[0] == v[1] == v[2]]
+    assert whites, "overlay text drew nothing"
+    assert any(v[0] < 255 for v in whites), "no text pixel dimmer than font colour"
+    # image pixels (left 4x4 block) untouched pure red
+    assert real._pixels.get((0, 0)) == (255, 0, 0)
+    assert real._pixels.get((3, 3)) == (255, 0, 0)

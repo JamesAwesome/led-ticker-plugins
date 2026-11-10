@@ -46,7 +46,7 @@ center = true
 font_color = [200, 230, 255]
 background = "flair.snow"
 
-# --- Section 2: emoji (flake = "snow") flakes ---------------------------------
+# --- Section 2: emoji (flake = "flake") flakes ---------------------------------
 
 [[playlist.section]]
 mode = "slideshow"
@@ -57,4 +57,4 @@ type = "message"
 text = "WINTER"
 center = true
 font_color = [255, 200, 120]
-background = {style = "flair.snow", flake = "snow", density = 1.0}
+background = {style = "flair.snow", flake = "flake", density = 1.0}

@@ -8,7 +8,7 @@ transitions as ``transition = "flair.spinout"`` (or the six
 ``flair.accordion.<motion>[.alternating]`` card-deck variants).
 
 The twinkle/blink/snow family adds ``animation = "flair.blink"`` and
-``animation = "flair.twinkle"`` (per-character pixel gain), the
+``animation = "flair.twinkle"`` (per-pixel gain), the
 ``background = "flair.twinkle"`` and ``background = "flair.snow"``
 backgrounds, and the ``transition = "flair.snow"`` flurry transition.
 
@@ -34,7 +34,7 @@ def _import_seam():
     import time (its knob validation enumerates the drawable slug set).
 
     Also probes ``AnimationFrame.pixel_gain`` — the 4.33 field
-    ``flair.twinkle`` / ``flair.blink`` deliver their per-character
+    ``flair.twinkle`` / ``flair.blink`` deliver their per-pixel
     brightness through.
     """
     try:
