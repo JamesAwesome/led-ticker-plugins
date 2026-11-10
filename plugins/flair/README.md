@@ -696,7 +696,7 @@ Same physical-resolution requirement as inline hi-res emoji — see the requirem
 
 ## Blink animation
 
-`flair.blink` flashes a message widget's text hard on and off: the text is visible for the "on" fraction of each period and blank for the rest. Frame 0 is always ON, so a visit opens on readable text; when a hold would end mid-blank, the hold is extended to the next ON phase so the transition leaves from visible text (up to the engine's 1 s settle limit, which is why an OFF phase longer than 20 frames is refused).
+`flair.blink` flashes a message widget's text hard on and off: the text is visible for the "on" fraction of each period and blank for the rest. Frame 0 is always ON, so a visit opens on readable text; on `message` widgets, when a hold would end mid-blank, the hold is extended to the next ON phase so the transition leaves from visible text (up to the engine's 1 s settle limit, which is why an OFF phase longer than 20 frames is refused). `gif`/`image` widgets (which run their own `play()` loop) do not honor that extension yet, so a hold there can end on a blank frame and the transition then starts from blank text; see the core issue linked from the CLAUDE.md.
 
 Requires **led-ticker-core >= 4.33**.
 
@@ -720,15 +720,16 @@ animation = {style = "flair.blink", period_ms = 1500, duty = 0.6, count = 4}
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
-| `period_ms` | `1000` | One on+off cycle, counted in animation frames (`period_ms / 50`, rounded). Minimum `850` without `allow_fast`; the OFF phase (`period - on`) may be at most 20 frames (1 s). |
+| `period_ms` | `1000` | One on+off cycle, counted in animation frames (`period_ms / 50`, rounded). Minimum about `850` (17 frames; `826`+ rounds to 17) without `allow_fast`; the OFF phase (`period - on`) may be at most 20 frames (1 s). |
 | `duty` | `0.75` | Fraction of the period the text is visible, in `(0, 1)`. |
 | `count` | `0` | Number of blinks, then stay on. `0` = blink forever. |
 | `allow_fast` | `false` | Opt in to periods shorter than 850 ms (on/off rates above 3 Hz). |
 
 ### Notes
 
-- **Photosensitivity guard.** The period counts animation frames, and on scrolling text the engine advances a frame once per scroll step (as fast as 20 ms), not every 50 ms. So that blinking never exceeds 3 Hz (WCAG 2.3.1) even at a 20 ms scroll cadence, the minimum `period_ms` is `850` (17 frames x 20 ms = 340 ms per cycle). Faster on/off rates are refused at config-load unless you set `allow_fast = true`. Think before you do.
+- **Photosensitivity guard.** The period counts animation frames, and on scrolling text the engine advances a frame once per scroll step (as fast as 20 ms), not every 50 ms. So that blinking never exceeds 3 Hz (WCAG 2.3.1) even at a 20 ms scroll cadence, the minimum is 17 frames, about `period_ms = 850` (17 frames x 20 ms = 340 ms per cycle; `826` and up round to 17 frames). Faster on/off rates are refused at config-load unless you set `allow_fast = true`. Think before you do.
 - **Long OFF phases are refused.** The OFF phase (`period_ms` x (1 - `duty`), in frames) may not exceed 20 frames (1 s), the most the engine will extend a hold to land a transition on visible text. Use a shorter period or a higher duty (for example `period_ms = 2000, duty = 0.5` is fine; `3000` at `0.5` is not).
+- Hold settling is `message`-only today: on `gif`/`image` widgets the hold is not extended to the next ON phase.
 - Emoji and colored value tokens blank with the text; borders and backgrounds stay lit.
 - Blink shares the ONE `animation` slot with twinkle, `typewriter` and `flair.fisheye`, so they cannot be combined. On `gif`/`image` widgets an animation needs a non-scroll `text_align`.
 - `allow_fast` must be a real boolean (`true`/`false`), not a string.
@@ -823,7 +824,7 @@ font_color = [200, 230, 255]
 background = "flair.snow"
 ```
 
-With emoji flakes and knobs:
+With the built-in snowflake and knobs:
 
 ```toml
 background = {style = "flair.snow", flake = "flake", density = 1.0, wind = 0.1}

@@ -43,7 +43,7 @@ center = true
 font_color = [200, 230, 255]
 background = "flair.snow"
 
-# --- Section 2: emoji (flake = "flake") flakes ---------------------------------
+# --- Section 2: built-in snowflake (flake = "flake") ---------------------------------
 
 [[playlist.section]]
 mode = "slideshow"

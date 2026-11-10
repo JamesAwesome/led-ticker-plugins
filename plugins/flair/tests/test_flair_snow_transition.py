@@ -149,6 +149,78 @@ class TestFrames:
         assert set(c._pixels.values()) == {GREEN}
 
 
+class TestFrontGeometry:
+    """The front is per-column: incoming paints ONLY above it, outgoing ONLY
+    at/below it. Empty counterpart widgets make each side observable (a solid
+    counterpart would overwrite a wrongly-painted pixel)."""
+
+    @staticmethod
+    def _front(s: Snow, h: int, t: float) -> list[float]:
+        j = max(2, h // 4)
+        base = (t / 0.95) * (h + j) - j
+        return [base + jit for jit in s._jit]
+
+    @pytest.mark.parametrize("t", [0.0, 0.2, 0.5, 0.8])
+    def test_incoming_paints_only_above_front(self, t):
+        c = _StubCanvas(16, 16)
+        s = _snow()
+        s._paint_flakes = lambda real, t: None
+        _, i = _scene()
+        s.frame_at(0.0, c, _empty_widget(), i)
+        c.Clear()
+        s.frame_at(t, c, _empty_widget(), i)
+        fronts = self._front(s, 16, t)
+        for (x, y), v in c._pixels.items():
+            assert v == GREEN
+            assert y < fronts[x], (t, x, y, fronts[x])
+        # ... and everything above the front IS painted.
+        for x, f in enumerate(fronts):
+            for y in range(16):
+                assert ((x, y) in c._pixels) == (y < f), (t, x, y)
+
+    @pytest.mark.parametrize("t", [0.0, 0.2, 0.5, 0.8])
+    def test_outgoing_paints_only_at_or_below_front(self, t):
+        c = _StubCanvas(16, 16)
+        s = _snow()
+        s._paint_flakes = lambda real, t: None
+        o, _ = _scene()
+        s.frame_at(0.0, c, o, _empty_widget())
+        c.Clear()
+        s.frame_at(t, c, o, _empty_widget())
+        fronts = self._front(s, 16, t)
+        for x, f in enumerate(fronts):
+            for y in range(16):
+                assert ((x, y) in c._pixels) == (y >= f), (t, x, y)
+
+    def test_front_is_ragged_per_column(self):
+        c = _StubCanvas(32, 16)
+        s = _snow()
+        s._paint_flakes = lambda real, t: None
+        _, i = _scene(32, 16)
+        s.frame_at(0.0, c, _empty_widget(), i)
+        c.Clear()
+        s.frame_at(0.5, c, _empty_widget(), i)
+        heights = {sum(1 for y in range(16) if (x, y) in c._pixels) for x in range(32)}
+        assert len(heights) > 1  # a flat front would give one height
+
+
+class TestFlakeKnobs:
+    def test_color_tints_flakes(self):
+        c = _StubCanvas(64, 32)
+        s = _snow(density=40, color=(0, 255, 0))
+        s.frame_at(0.0, c, _empty_widget(), _empty_widget())
+        c.Clear()
+        s.frame_at(0.5, c, _empty_widget(), _empty_widget())
+        assert c._pixels
+        assert all(r == 0 and b == 0 and g > 0 for r, g, b in c._pixels.values())
+
+    def test_dim_color_never_paints_black(self):
+        s = _snow(color=(1, 1, 1))
+        assert s._shade(8) == ()  # 1 * 0.5 rounds to 0: skipped, not black
+        assert s._shade(16) != ()
+        assert all((r, g, b) != (0, 0, 0) for *_p, r, g, b in s._shade(9))
+
+
 class TestSeeding:
     @staticmethod
     def _firing(s: Snow) -> dict:

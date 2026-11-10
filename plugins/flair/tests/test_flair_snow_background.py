@@ -100,6 +100,47 @@ def test_intensity_range() -> None:
             assert 0.5 <= inten <= 1.0
 
 
+def _differs(frame=30, **kw) -> bool:
+    a = _paint(SnowBackground(density=8, seed=1), frame)._pixels
+    b = _paint(SnowBackground(density=8, seed=1, **kw), frame)._pixels
+    return a != b
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"drift": 3.0},
+        {"wind": 1.0},
+        {"speed_variation": 0.9},
+        {"speed": 2.0},
+    ],
+    ids=["drift", "wind", "speed_variation", "speed"],
+)
+def test_knob_changes_the_field(kw) -> None:
+    assert _differs(**kw)
+
+
+def test_zero_knobs_are_stable() -> None:
+    assert not _differs()  # same args -> same field (guards the helper itself)
+
+
+def test_emoji_flakes_keep_sprite_colors() -> None:
+    sprite = set(flake_pixels("snow", (200, 220, 255)).values())
+    fx = SnowBackground(flake="snow", density=10, seed=2)
+    seen = set()
+    for f in range(0, 120, 9):
+        seen |= set(_paint(fx, f, 64, 32)._pixels.values())
+    assert seen and seen <= sprite  # never intensity-shaded
+
+
+def test_dim_color_never_paints_black() -> None:
+    fx = SnowBackground(color=(1, 1, 1))
+    assert fx._shade(8) == ()  # 1 * 0.5 rounds to 0: skipped, not black
+    assert fx._shade(16) != ()
+    for f in range(0, 80, 5):
+        assert (0, 0, 0) not in _paint(fx, f, 64, 32)._pixels.values()
+
+
 @pytest.mark.parametrize("w,h,n", [(160, 16, 8), (128, 64, 25), (256, 64, 49)])
 def test_count_by_geometry(w, h, n) -> None:
     assert flake_count(w, h, 3.0) == n

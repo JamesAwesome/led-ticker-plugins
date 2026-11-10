@@ -47,12 +47,12 @@ Confidence note: the one-line Alpha SNOW/TWINKLE semantics come from a brochure 
 | `period_ms` | `1000` | one on+off cycle. Rounded to ENGINE_TICK_MS (50 ms) frames. |
 | `duty` | `0.75` | fraction ON (Firefox `<blink>`). `(0, 1)` exclusive. |
 | `count` | `0` | blinks then stays ON; 0 = blink for the whole hold. Alpha "flash then move on" / WCAG 2.2.2. |
-| `allow_fast` | `false` | photosensitivity opt-in; required for `period_ms < 334` (>3 Hz). |
+| `allow_fast` | `false` | photosensitivity opt-in; required below about 850 ms (17 frames), judged at the fastest 20 ms engine cadence (>3 Hz otherwise). |
 
 **Invariants:**
 - Frame 0 is ON (every visit opens readable; `restart_on_visit = True`).
 - `frames_to_rest(frame, n)` returns frames until the next ON frame (0 when on). A hold ending mid-off would otherwise freeze a blank outgoing frame through the whole transition (`pause_frame`).
-- Rate guard at construction: `period_ms < 334 and not allow_fast` → `ValueError` naming WCAG 2.3.1 and the opt-in.
+- Rate guard at construction: `period < 17 frames (about 850 ms) and not allow_fast` → `ValueError` naming WCAG 2.3.1 and the opt-in.
 - `emits_rotation = False`, no lens.
 
 **Known limits (call out in docs):**
@@ -90,7 +90,7 @@ A flair-only variant of C (a `TickerMessage` subclass that rasters via `_raster.
 | `density` | C: `0.6`; B: `0.03` | C: fraction of text pixels twinkling (TwinkleFOX 5/8). B: fraction of real panel pixels that are stars. |
 | `speed` | `1.0` | multiplier on base cycle (~1.2 s per twinkle at 1.0); max `2.0`. |
 | `min_brightness` | `0.15` | trough of the dim (C only — never fully off; C must not read as blinking). |
-| `color` | none | C: optional tint toward a color at the peak; B: star color (default warm white). |
+| `color` | warm white | B (background) only: star color. The C (animation) variant has no tint knob (not built). |
 | `seed` | none | reproducibility, same semantics as `flair.fireworks`. |
 
 Note: the text-twinkle `color` tint knob was dropped from v1 (the background keeps its star `color`).
@@ -105,7 +105,7 @@ Note: the text-twinkle `color` tint knob was dropped from v1 (the background kee
 
 | Knob | Default | Notes |
 |---|---|---|
-| `flake` | `"dot"` | `"dot"` (1 real px), `"plus"` (3×3 +), or an emoji slug (`"snow"`, `"pumpkin"`, …). |
+| `flake` | `"dot"` | `"dot"` (1 real px), `"plus"` (3×3 +), `"flake"` (built-in 5×5 snowflake), or an emoji slug (`"snow"`, `"pumpkin"`, …). |
 | `density` | `3.0` | flakes per 1000 real px² (smallsign 8, longboi 25, bigsign 49). |
 | `speed` | `1.0` | fall speed multiplier, normalized to panel height (~5 s to cross at 1.0 on every sign); per-flake ±`speed_variation` (default 0.4). |
 | `drift` | `0.3` | horizontal wobble amplitude (sine, per-flake phase). |
@@ -157,7 +157,7 @@ Name collision note: if C lands, `flair.twinkle` exists in both the animation an
 ## 7. Calls I made (check these)
 
 1. Blink "off" blanks text only; border/background keep painting.
-2. Blink defaults 1 Hz / 0.75 duty; >3 Hz refused without `allow_fast`.
+2. Blink defaults 1 Hz / 0.75 duty; >3 Hz (under 17 frames, about 850 ms) refused without `allow_fast`.
 3. No blink-on-scroll for image widgets and no two-row blink in v1 — closed in §8 right after merge.
 4. Twinkle C + B (decided by James).
 5. Emoji snow flakes paint the 8×8 low-res sprite 1:1 at physical res; hires-only pack slugs refused.

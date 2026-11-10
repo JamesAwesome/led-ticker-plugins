@@ -53,6 +53,12 @@ def test_unseeded_instance_is_still_frame_pure() -> None:
     assert fx._seed != other._seed
 
 
+def test_speed_changes_the_field() -> None:
+    a = _paint(TwinkleBackground(density=0.05, seed=3), 7)._pixels
+    b = _paint(TwinkleBackground(density=0.05, seed=3, speed=2.0), 7)._pixels
+    assert a != b
+
+
 def test_star_count_scales_with_area() -> None:
     fx = TwinkleBackground(density=0.03, seed=2)
     for w, h in ((160, 16), (256, 64)):

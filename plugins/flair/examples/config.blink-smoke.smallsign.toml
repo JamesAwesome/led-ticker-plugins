@@ -11,8 +11,9 @@
 #
 # WHAT TO LOOK FOR:
 #   "SALE TODAY" blinks at the default 1 s period (75% on) and always opens
-#     on visible text; the hold is extended so it never leaves while blank.
-#   "FIVE BLINKS" blinks five times at 800 ms / 50% duty, then stays lit.
+#     on visible text; the hold is extended so it never leaves while blank
+#     (message widgets only; gif/image widgets do not settle yet).
+#   "FIVE BLINKS" blinks five times at 900 ms / 50% duty, then stays lit.
 #   The text should blank CLEANLY (no ghost pixels, no border/bg flicker).
 
 [display]
@@ -46,4 +47,4 @@ type = "message"
 text = "FIVE BLINKS"
 center = true
 font_color = [255, 200, 0]
-animation = {style = "flair.blink", period_ms = 800, duty = 0.5, count = 5}
+animation = {style = "flair.blink", period_ms = 900, duty = 0.5, count = 5}

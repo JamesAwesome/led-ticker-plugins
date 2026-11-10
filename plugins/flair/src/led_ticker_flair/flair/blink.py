@@ -10,17 +10,22 @@ end mid-off so the transition lands on visible text.
 
 from led_ticker.plugin import ENGINE_TICK_MS, AnimationFrame
 
+from ._snow import validate_number
+
 # The animation counter advances once per scroll step on scrolling text
 # (``scroll_step_ms`` in ticker mode, ``scroll_speed_ms`` on image overlays,
 # floor 20 ms), NOT once per ENGINE_TICK_MS. To stay under 3 flashes/s
 # whatever the cadence, the cycle must span >= 17 frames: 17 x 20 ms =
-# 340 ms -> 2.94 Hz. (Without opt-in this makes 850 ms the minimum period.)
+# 340 ms -> 2.94 Hz. (Without opt-in this makes ~850 ms the minimum period; the frame
+# count is round(period_ms / 50), so 826-849 ms also round to 17 frames.)
 _FASTEST_TICK_MS = 20
 _MIN_SAFE_FRAMES = 17
 # Core's settle seam extends a hold by at most MAX_SETTLE_TICKS (1 s of
 # engine ticks = 20 frames); an OFF phase longer than that can't be waited
 # out, so the transition would start on blank text.
 _MAX_OFF_FRAMES = 20
+# Sanity cap on period_ms (one minute); anything longer is a typo.
+_MAX_PERIOD_MS = 60_000
 
 
 class Blink:
@@ -36,11 +41,12 @@ class Blink:
         count: int = 0,
         allow_fast: bool = False,
     ) -> None:
-        bad_period = isinstance(period_ms, bool) or not isinstance(
-            period_ms, (int, float)
+        validate_number(
+            "period_ms",
+            period_ms,
+            isinstance(period_ms, int | float) and 0 < period_ms <= _MAX_PERIOD_MS,
+            f"in (0, {_MAX_PERIOD_MS}]",
         )
-        if bad_period or period_ms <= 0:
-            raise ValueError(f"period_ms must be a number > 0; got {period_ms!r}")
         if isinstance(duty, bool) or not isinstance(duty, (int, float)):
             raise ValueError(f"duty must be a number in (0, 1); got {duty!r}")
         if not 0 < duty < 1:
@@ -55,8 +61,8 @@ class Blink:
             raise ValueError(
                 f"flair.blink: period_ms={period_ms} blinks faster than 3 Hz "
                 "(WCAG 2.3.1 photosensitivity limit), which must hold even at "
-                f"a {_FASTEST_TICK_MS} ms scroll cadence (minimum period_ms "
-                f"{_MIN_SAFE_FRAMES * ENGINE_TICK_MS}); "
+                f"a {_FASTEST_TICK_MS} ms scroll cadence (minimum {_MIN_SAFE_FRAMES} "
+                f"frames, i.e. about period_ms {_MIN_SAFE_FRAMES * ENGINE_TICK_MS}); "
                 "set allow_fast = true to opt in"
             )
         if period - on > _MAX_OFF_FRAMES:

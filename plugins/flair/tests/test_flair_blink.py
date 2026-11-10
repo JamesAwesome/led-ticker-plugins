@@ -129,11 +129,21 @@ async def test_scroll_cadence_20ms_stays_under_3hz(monkeypatch) -> None:
         {"count": True},
         {"period_ms": 0},
         {"period_ms": -100},
+        {"period_ms": float("inf")},
+        {"period_ms": float("nan")},
+        {"period_ms": True},
     ],
 )
 def test_bad_args(kwargs) -> None:
     with pytest.raises(ValueError):
         Blink(**kwargs)
+
+
+def test_period_ms_non_finite_or_huge_refused() -> None:
+    for bad in (float("inf"), float("-inf"), float("nan"), 1e300, 60_001, "900"):
+        with pytest.raises(ValueError, match="period_ms must be a finite number"):
+            Blink(period_ms=bad, allow_fast=True)
+    assert Blink(period_ms=60_000, duty=0.99).period == 1200
 
 
 def _lit(canvas: HeadlessCanvas) -> int:
