@@ -10,8 +10,9 @@
 # the navy holds until each reveal/mesh lands); random (never
 # the same twice running); BG HOLD (teal then purple, no black flash); a
 # rainbow-bordered message; a two_row (scale 2, so also a cross-scale entry);
-# a full-panel gif (perf worst case, stock assets/phoenix.gif); and a knob
-# section. Each section's own `transition` also runs as its ENTRY (core
+# a full-panel gif (perf worst case, stock assets/phoenix.gif); a knob
+# section; and a letterboxed section (scale 2, content 16). Each section's own
+# `transition` also runs as its ENTRY (core
 # precedence), so every section boundary fires the transition too.
 
 [display]
@@ -306,3 +307,24 @@ font_color = [80, 200, 255]
 font = "Inter-Bold"
 font_size = 30
 
+
+# Letterboxed: scale 2 / content 16 leaves a 16-row blank band above and
+# below the content on the 64-row panel; the border lights those bands.
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+scale = 2
+content_height = 16
+transition = "flair.blinds.down"
+
+[[playlist.section.widget]]
+type = "message"
+text = "10 LETTERBOX"
+font_color = [255, 200, 60]
+border = "rainbow"
+
+[[playlist.section.widget]]
+type = "message"
+text = "BANDS"
+font_color = [120, 255, 160]
+border = "rainbow"

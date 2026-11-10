@@ -256,6 +256,25 @@ class TestBlindsFrames:
         assert col == ([GREEN] * 8 + [RED] * 8) * 4
 
 
+class TestKwargs:
+    def test_outgoing_snapshot_uses_outgoing_scroll_pos(self):
+        c = _StubCanvas(4, 16)
+        o = _make_widget()
+        Blinds().frame_at(0.0, c, o, _make_widget(), outgoing_scroll_pos=-37)
+        assert o.draw.call_args.kwargs["cursor_pos"] == -37
+
+    def test_color_object_bg_is_accepted(self):
+        class _Color:  # graphics.Color shape: .red/.green/.blue
+            red, green, blue = 10, 20, 30
+
+        c = _StubCanvas(4, 16)
+        blank = _make_widget(draw_pixel=False)
+        p = Blinds(slats=4)
+        p.frame_at(0.0, c, blank, blank)
+        p.frame_at(0.475, c, blank, blank, incoming_bg_color=_Color())
+        assert (0, 0, 4, 2, (10, 20, 30)) in c.subfills
+
+
 class TestKnobsVariantsRegistration:
     def test_default_slats_by_orientation(self):
         assert Blinds().slats == 8
@@ -380,3 +399,17 @@ class TestRealCoreWidgets:
         real = _StubCanvas(256, 64)
         sc = ScaledCanvas(real, scale=4, content_height=16)
         self._revealed_vs_snap(Blinds(), sc, real, TickerMessage(text="BLINDS"))
+
+    def test_gif_widget_through_setimage(self, tmp_path):
+        from led_ticker.widgets.gif import GifPlayer
+
+        frame = Image.new("RGB", (32, 16), (0, 0, 0))
+        for x in range(8, 24):
+            frame.putpixel((x, 8), (200, 40, 40))
+        path = tmp_path / "bar.gif"
+        frame.save(path, save_all=True, append_images=[frame], duration=100)
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        self._revealed_vs_snap(
+            Blinds(), sc, real, GifPlayer(path=str(path), fit="stretch")
+        )

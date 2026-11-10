@@ -164,9 +164,18 @@ class TestInterlockFrames:
         p = Interlock()
         o, i = _text_widget(CENTRED), _text_widget(CENTRED)
         p.frame_at(0.0, c, o, i)
-        assert _frame(p, 0.48, c, o, i)
+        # Both parity groups (even and odd rows) are still on screen just
+        # before and just after the cut-over; only t = 0.5 is empty.
+        for t in (0.48, 0.52):
+            rows = {y for (_, y) in _frame(p, t, c, o, i)}
+            assert rows == set(range(16)), t
         assert _frame(p, 0.5, c, o, i) == {}
-        assert _frame(p, 0.52, c, o, i)
+
+    def test_outgoing_snapshot_uses_outgoing_scroll_pos(self):
+        c = _StubCanvas(160, 16)
+        o = _make_widget()
+        Interlock().frame_at(0.0, c, o, _text_widget([]), outgoing_scroll_pos=-37)
+        assert o.draw.call_args.kwargs["cursor_pos"] == -37
 
     def test_vertical_moves_along_y(self):
         c = _StubCanvas(4, 20)
@@ -395,3 +404,17 @@ class TestRealCoreWidgets:
         real = _StubCanvas(256, 64)
         sc = ScaledCanvas(real, scale=4, content_height=16)
         self._landed_vs_snap(Interlock(), sc, real, TickerMessage(text="INTERLOCK"))
+
+    def test_gif_widget_through_setimage(self, tmp_path):
+        from led_ticker.widgets.gif import GifPlayer
+
+        frame = Image.new("RGB", (32, 16), (0, 0, 0))
+        for x in range(8, 24):
+            frame.putpixel((x, 8), (200, 40, 40))
+        path = tmp_path / "bar.gif"
+        frame.save(path, save_all=True, append_images=[frame], duration=100)
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        self._landed_vs_snap(
+            Interlock(), sc, real, GifPlayer(path=str(path), fit="stretch")
+        )

@@ -524,7 +524,7 @@ Requires **led-ticker-core >= 4.32**. Four variants:
 
 ```toml
 [transitions]
-duration = 1.5        # the floor is 1.2 s (min_frames = 24)
+duration = 1.5        # floor: min_frames = 24, i.e. 1.2 s at the default 20 fps
 
 [[playlist.section]]
 transition = "flair.interlock.horizontal"
@@ -551,6 +551,7 @@ transition = {type = "flair.interlock.horizontal", strand = 2}
 - **Backgrounds.** The panel switches to the new section's background at the halfway point, on that blank frame, so there's no visible cut.
 - **Cross-scale sections.** The incoming content is snapshotted at the halfway point at its own scale, so it meshes in at its native size.
 - **Borders move with the content.** A bordered widget's ring is cut into strands along with everything else.
+- **Letterboxed sections** (for example `scale = 2, content_height = 16` on a 64-row panel). Strands are cut from the content rows; any lit rows in the blank bands above and below travel with the nearest edge strand.
 
 ## Blinds transition
 
@@ -571,7 +572,7 @@ Requires **led-ticker-core >= 4.32**. Six variants, named by the direction each 
 
 ```toml
 [transitions]
-duration = 1.0        # the floor is 0.8 s (min_frames = 16)
+duration = 1.0        # floor: min_frames = 16, i.e. 0.8 s at the default 20 fps
 
 [[playlist.section]]
 transition = "flair.blinds.down"
@@ -592,10 +593,13 @@ transition = {type = "flair.blinds.down", slats = 4}
 
 On `.alternating` and `.random`, an explicit `slats` applies to every direction.
 
+On a smallsign (16 rows), the default 8 slats are 2 rows each, so each slat has only one in-between step. Use `slats = 4` there for a smoother open.
+
 ### Notes
 
 - **Backgrounds.** The opened part of each slat shows the new section's background, and the rest still shows the old one.
 - **Cross-scale sections.** The old and new messages share the panel for the whole transition, so incoming content renders at the outgoing scale and pops to its own size on the final frame. Laser, fairy and lightning have the same limitation.
+- **Letterboxed sections** (for example `scale = 2, content_height = 16` on a 64-row panel). Horizontal slats split the content rows, so they're all the same size. The blank band on the side a slat opens from opens with that slat's first row; the band on the far side opens when its slat finishes.
 
 ## Fisheye animation
 

@@ -127,6 +127,18 @@ def build_plan(
     )
 
 
+def _rgb(bg: Any) -> tuple[int, int, int]:
+    """``incoming_bg_color`` as an (r, g, b) tuple. The runner passes a
+    tuple or None; a ``graphics.Color`` (which ``snap_reset`` also accepts)
+    is unpacked from ``.red/.green/.blue``."""
+    if bg is None:
+        return (0, 0, 0)
+    if hasattr(bg, "red"):
+        return (bg.red, bg.green, bg.blue)
+    r, g, b = bg
+    return (r, g, b)
+
+
 def _coerce_slats(slats: Any) -> int:
     if isinstance(slats, bool) or not isinstance(slats, int) or slats < 1:
         raise ValueError(f"slats must be a positive int; got {slats!r}")
@@ -177,7 +189,7 @@ class Blinds:
             )
         # `real` is re-derived EVERY call, never cached (constraint #1).
         real = unwrap_to_real(canvas) if is_scaled(canvas) else canvas
-        self._paint(real, self._plan, t / SNAP_THRESHOLD, bg or (0, 0, 0))
+        self._paint(real, self._plan, t / SNAP_THRESHOLD, _rgb(bg))
         return canvas
 
     @staticmethod
