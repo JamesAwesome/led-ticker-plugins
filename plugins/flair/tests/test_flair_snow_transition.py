@@ -133,10 +133,9 @@ class TestFrames:
         s.frame_at(0.5, c, o, i)
         assert c._pixels  # flakes only (both widgets empty)
         assert (0, 0, 0) not in c._pixels.values()
-        mid = len(c._pixels)
         c.Clear()
-        s.frame_at(0.9499, c, o, i)
-        assert len(c._pixels) < mid / 2  # sin(pi t) fades toward the snap
+        s.frame_at(0.949, c, o, i)
+        assert not c._pixels  # flake count reaches 0 just before the snap
 
     def test_empty_outgoing(self):
         c = _StubCanvas()
@@ -148,6 +147,28 @@ class TestFrames:
         c.Clear()
         s.frame_at(0.95, c, _empty_widget(), i)
         assert set(c._pixels.values()) == {GREEN}
+
+
+class TestSeeding:
+    @staticmethod
+    def _firing(s: Snow) -> dict:
+        c = _StubCanvas(64, 32)
+        o, i = _scene(64, 32)
+        s.frame_at(0.0, c, o, i)
+        c.Clear()
+        s.frame_at(0.5, c, o, i)
+        return dict(c._pixels)
+
+    def test_unseeded_instance_differs_per_firing(self):
+        s = Snow(density=20)
+        assert self._firing(s) != self._firing(s)
+
+    def test_explicit_seed_reproducible(self):
+        a = self._firing(Snow(seed=5, density=20))
+        b = self._firing(Snow(seed=5, density=20))
+        assert a == b
+        s = Snow(seed=5, density=20)
+        assert self._firing(s) == self._firing(s)
 
 
 class TestSnapshots:
@@ -197,25 +218,24 @@ class TestSnapshots:
 
 class TestScaled:
     def test_scaled_physical_resolution(self):
-        real = _StubCanvas(64, 32)
-        sc = ScaledCanvas(real, scale=2, content_height=16)
+        real = _StubCanvas(128, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
         o = _fill_widget(RED, 32, 16)
         i = _fill_widget(GREEN, 32, 16)
         s = _snow(density=0.001)
+        s._paint_flakes = lambda r, t: None  # isolate the front
         s.frame_at(0.0, sc, o, i)
         real.Clear()
         s.frame_at(0.5, sc, o, i)
-        # incoming is painted per real pixel: at some column the boundary
-        # falls between two real rows of a single logical block
-        by_col: dict[int, list[tuple[int, tuple[int, int, int]]]] = {}
-        for (x, y), v in real._pixels.items():
-            by_col.setdefault(x, []).append((y, v))
-        odd = [
-            x
-            for x, col in by_col.items()
-            if any(v == GREEN for _y, v in col) and any(v == RED for _y, v in col)
-        ]
-        assert odd
+        # first RED row per column = the front; at logical resolution it
+        # would always be a multiple of the scale (4)
+        firsts = []
+        for x in range(128):
+            reds = [y for y in range(64) if real._pixels.get((x, y)) == RED]
+            greens = [y for y in range(64) if real._pixels.get((x, y)) == GREEN]
+            if reds and greens:
+                firsts.append(min(reds))
+        assert firsts and any(y % 4 != 0 for y in firsts)
         assert sc.real is real
 
 
@@ -237,6 +257,20 @@ class TestValidation:
             Snow(color=(1, 2))
         with pytest.raises(ValueError, match="density"):
             Snow(density=0)
+
+    @pytest.mark.parametrize(
+        "kw",
+        [
+            {"density": float("inf")},
+            {"density": float("nan")},
+            {"wind": float("inf")},
+            {"wind": float("nan")},
+            {"drift": float("inf")},
+        ],
+    )
+    def test_non_finite_rejected(self, kw):
+        with pytest.raises(ValueError, match="finite"):
+            Snow(**kw)
 
     def test_attrs(self):
         assert Snow.min_frames == 24

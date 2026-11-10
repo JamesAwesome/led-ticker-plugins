@@ -40,6 +40,18 @@ def validate_flake(flake: object) -> None:
         )
 
 
+def validate_number(name: str, v: object, ok: bool, rng: str) -> None:
+    """Raise ``ValueError`` unless ``v`` is a finite real number and ``ok``
+    (a precomputed range check). Rejects bool, nan and +-inf."""
+    if (
+        isinstance(v, bool)
+        or not isinstance(v, int | float)
+        or not math.isfinite(v)
+        or not ok
+    ):
+        raise ValueError(f"{name} must be a finite number {rng}; got {v!r}")
+
+
 def validate_color(color: object) -> None:
     ok = (
         isinstance(color, list | tuple)

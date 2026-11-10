@@ -190,3 +190,17 @@ def test_perf_bigsign() -> None:
     med = statistics.median(samples)
     print(f"snow paint median {med * 1000:.3f} ms")
     assert med <= 0.003
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"density": float("inf")},
+        {"density": float("nan")},
+        {"wind": float("inf")},
+        {"speed": float("inf")},
+    ],
+)
+def test_non_finite_numbers_rejected(kw):
+    with pytest.raises(ValueError, match="finite"):
+        SnowBackground(**kw)

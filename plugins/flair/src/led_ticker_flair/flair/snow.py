@@ -9,7 +9,8 @@ per-column: ``front(x, t) = (t / SNAP_THRESHOLD) * (h + J) - J + jit(x)``
 with ``J = max(2, h // 4)`` and ``jit(x)`` a hash in ``[0, J]``. Incoming
 lit pixels with ``y < front(x)`` and outgoing lit pixels with
 ``y >= front(x)`` are painted; flakes (the shared ``_snow`` model, scaled by
-``sin(pi * t)`` so they build up and die away) paint on top, never black.
+``sin(pi * t / SNAP_THRESHOLD)`` so they build up and die away) paint on
+top, never black.
 Flakes are driven by a pseudo-frame ``int(t * FRAMES_PER_T)`` at
 ``FLAKE_SPEED`` so they fall ~1.5x faster than the front and lead it.
 
@@ -39,22 +40,20 @@ from ._snow import (
     flake_position,
     validate_color,
     validate_flake,
+    validate_number,
 )
 from ._twinkle import hash32
 
 SALT_JITTER = 9
-# t in [0, 1] -> pseudo-frame fed to flake_position; with FLAKE_SPEED the
-# flakes cover ~1.5x the front's per-t distance (front ~ 1.3 * h / 0.95-ish).
+# t in [0, 1] -> pseudo-frame int(t * FRAMES_PER_T) fed to flake_position.
+# A flake moves h/100 * FLAKE_SPEED per frame, so over the ~95 frames before
+# the snap it travels ~1.9h, versus (h + J) = ~1.25h for the front (J = h//4):
+# flakes cover ~1.5x the front's distance and lead it.
 FRAMES_PER_T = 100
 FLAKE_SPEED = 2.0
 FLAKE_SPEED_VARIATION = 0.4
 
 _Column = list[tuple[int, tuple[int, int, int]]]
-
-
-def _num(name: str, v: object, ok: bool, rng: str) -> None:
-    if isinstance(v, bool) or not isinstance(v, int | float) or math.isnan(v) or not ok:
-        raise ValueError(f"{name} must be a number {rng}; got {v!r}")
 
 
 class Snow:
@@ -76,11 +75,13 @@ class Snow:
         if mode != "flurry":
             raise ValueError(f'mode must be "flurry"; got {mode!r}')
         validate_flake(flake)
-        _num(
+        validate_number(
             "density", density, isinstance(density, int | float) and density > 0, "> 0"
         )
-        _num("drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0")
-        _num("wind", wind, True, "")
+        validate_number(
+            "drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0"
+        )
+        validate_number("wind", wind, True, "")
         validate_color(color)
         if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
             raise ValueError(f"seed must be an int or None; got {seed!r}")
@@ -162,7 +163,10 @@ class Snow:
 
     def _paint_flakes(self, real: Any, t: float) -> None:
         w, h = real.width, real.height
-        n = int(flake_count(w, h, self.density) * math.sin(math.pi * t))
+        n = int(
+            flake_count(w, h, self.density)
+            * math.sin(math.pi * min(1.0, t / SNAP_THRESHOLD))
+        )
         if n <= 0:
             return
         frame = int(t * FRAMES_PER_T)
@@ -199,6 +203,8 @@ class Snow:
     ) -> Canvas:
         if t == 0.0 or t < self._last_t:  # new firing -> fresh snapshots
             self._cols = None
+            if self.seed is None:  # unseeded: each firing gets a new pattern
+                self._seed = random.SystemRandom().getrandbits(62)
         self._last_t = t
 
         if t >= SNAP_THRESHOLD:

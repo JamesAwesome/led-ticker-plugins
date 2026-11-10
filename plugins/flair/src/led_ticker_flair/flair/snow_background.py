@@ -7,7 +7,6 @@ painted 1:1 at physical resolution (never block-expanded). Pure function of
 OS-entropy seed at construction). Never paints black.
 """
 
-import math
 import random
 from typing import Any
 
@@ -20,12 +19,8 @@ from led_ticker_flair.flair._snow import (
     flake_position,
     validate_color,
     validate_flake,
+    validate_number,
 )
-
-
-def _num(name: str, v: object, ok: bool, rng: str) -> None:
-    if isinstance(v, bool) or not isinstance(v, int | float) or math.isnan(v) or not ok:
-        raise ValueError(f"{name} must be a number {rng}; got {v!r}")
 
 
 class SnowBackground(BackgroundEffectBase):
@@ -44,23 +39,25 @@ class SnowBackground(BackgroundEffectBase):
         seed: int | None = None,
     ) -> None:
         validate_flake(flake)
-        _num(
+        validate_number(
             "density", density, isinstance(density, int | float) and density > 0, "> 0"
         )
-        _num(
+        validate_number(
             "speed",
             speed,
             isinstance(speed, int | float) and 0 < speed <= 5,
             "in (0, 5]",
         )
-        _num(
+        validate_number(
             "speed_variation",
             speed_variation,
             isinstance(speed_variation, int | float) and 0 <= speed_variation < 1,
             "in [0, 1)",
         )
-        _num("drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0")
-        _num("wind", wind, True, "")
+        validate_number(
+            "drift", drift, isinstance(drift, int | float) and drift >= 0, ">= 0"
+        )
+        validate_number("wind", wind, True, "")
         validate_color(color)
         if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
             raise ValueError(f"seed must be an int or None; got {seed!r}")
