@@ -90,3 +90,22 @@ def test_seed_changes_pattern() -> None:
     a = [level(x, y, frame, seed=1, speed=1.0) for x in range(16) for y in range(8)]
     b = [level(x, y, frame, seed=2, speed=1.0) for x in range(16) for y in range(8)]
     assert a != b
+
+
+def test_row_params_agrees_with_is_twinkler_and_level() -> None:
+    from led_ticker_flair.flair._twinkle import row_params
+
+    seed, density, speed = 11, 0.4, 1.0
+    cycle = 24 / speed
+    for y in (0, 5, 63):
+        factors, offsets = row_params(y, 3, 83, seed, density)
+        assert len(factors) == len(offsets) == 80
+        for i, x in enumerate(range(3, 83)):
+            if not is_twinkler(x, y, seed, density):
+                assert factors[i] == 0.0
+                continue
+            assert factors[i] >= 1.0
+            for frame in (0, 7, 31):
+                p = (frame * factors[i] / cycle + offsets[i]) % 1
+                lvl = 3 * p if p < 1 / 3 else 1.5 * (1 - p)
+                assert lvl == level(x, y, frame, seed, speed)

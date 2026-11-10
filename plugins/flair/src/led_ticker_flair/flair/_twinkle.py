@@ -42,3 +42,25 @@ def level(x: int, y: int, frame: int, seed: int, speed: float) -> float:
     offset = hash32(x, y, seed, 3) / 2**32
     p = (frame * factor / cycle + offset) % 1
     return 3 * p if p < 1 / 3 else 1.5 * (1 - p)
+
+
+def row_params(
+    y: int, x_from: int, x_to: int, seed: int, density: float
+) -> tuple[list[float], list[float]]:
+    """Per-pixel twinkle parameters for row ``y``, ``x`` in ``[x_from, x_to)``.
+
+    Returns ``(factors, offsets)``. ``factors[i]`` is the pixel's period
+    factor (the one :func:`level` derives), or ``0.0`` for a non-twinkler;
+    ``offsets[i]`` is its phase offset. Lets a hot per-pixel closure hash a
+    row once and then only do arithmetic per frame.
+    """
+    factors: list[float] = []
+    offsets: list[float] = []
+    for x in range(x_from, x_to):
+        if is_twinkler(x, y, seed, density):
+            factors.append(1 + (hash32(x, y, seed, 2) % 8) / 8)
+            offsets.append(hash32(x, y, seed, 3) / 2**32)
+        else:
+            factors.append(0.0)
+            offsets.append(0.0)
+    return factors, offsets
