@@ -104,7 +104,9 @@ after another. It is meant to be **watched** — a slow, deliberate clatter
 - **Strips:** any cell wider than twice the typical character width is cut
   into equal strips of about that width. Typical width = median width of
   the "character-like" cells (no wider than the band is tall) across both
-  snapshots in that band; with none, fall back to half the band height.
+  snapshots in that band; with none, fall back to half the band height;
+  never below a quarter of the band height (so a few 1-px specks in a
+  picture can't shred it into hairlines).
 - **Hinge:** per band, the vertical middle of the lit rows of that band
   across both snapshots (so it splits glyphs at their visual middle, not at
   the band's nominal middle).
@@ -162,10 +164,12 @@ hinge row:
 - The animated part runs over `p = t / SNAP_THRESHOLD`; at
   `t >= SNAP_THRESHOLD` snap (`snap_reset` + real incoming draw), exactly
   like blinds.
-- Each pair does `flips + 1` flaps of equal length `f`. Pairs start in
-  ripple order; `stagger` is the fraction of the timeline spent rippling,
-  so with `n` ranked positions: `start_k = k · stagger / max(n − 1, 1)`,
-  `f = (1 − stagger) / (flips + 1)`. Every pair has landed at `p = 1`.
+- Each pair does up to `flips + 1` flaps of equal length
+  `f = (1 − stagger) / (flips + 1)`. `stagger` is the fraction of the
+  timeline spent rippling; a flap starts at `stagger × (its centre x −
+  leftmost) / (rightmost − leftmost)` (as built: spaced by POSITION, so a
+  word gap is a slightly longer pause, rather than by rank). Every pair has
+  landed by `p = LAND = 0.9` and holds until the snap.
 - Ripple rank: by the pair's x (incoming cell, else outgoing) across
   ALL bands together — a two-row widget's columns ripple together.
   `.reverse` reverses the rank; `.random` shuffles it per firing.
@@ -174,7 +178,7 @@ hinge row:
 
 ### Knobs and validation
 
-- `flips`: int, `>= 0`, default `3`. `0` = single old → new flap.
+- `flips`: int in `[0, 12]`, default `3` (cap added after review: past ~9 each flap is under a frame, and an unbounded value blocks the loop at board build). `0` = single old → new flap.
 - `stagger`: float in `[0.0, 0.9]`, default `0.5`. bool rejected for both,
   same `ValueError` style as `strand` / `slats`.
 - `min_frames`: enough that a default flap gets ~4 frames (≈ 36). README

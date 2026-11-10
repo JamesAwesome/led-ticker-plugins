@@ -165,3 +165,30 @@ def test_flaps_ordered_by_centre():
     inc = _plan([_card(x, 5, range(0, 8), GREEN) for x in (40,)])
     xs = [f.centre_x for f in build_board(out, inc, 0, random.Random(0)).flaps]
     assert xs == sorted(xs)
+
+
+def test_strip_width_floored_against_specks():
+    # A picture with a few 1-px specks must not shred into hairlines: the
+    # strip width is floored at a quarter of the band height.
+    specks = [_card(x, 1, range(30, 31)) for x in (2, 6, 250)]
+    assert typical_width(specks, 64) == 16
+    sprite = _card(10, 236, range(0, 64))
+    out = _plan([*specks[:2], sprite, specks[2]])
+    board = build_board(out, _plan(), 3, random.Random(0))
+    widths = {f.seq[0].width for f in board.flaps if f.seq[0] and f.seq[0].width > 1}
+    assert min(widths) >= 15
+
+
+def test_build_board_many_distinct_cells_is_fast():
+    import time
+
+    # 120 distinct full-height (64-row) strips per side, flips 8 — the
+    # shape a big gif produces. The pool scan must not rebuild glyph keys
+    # per candidate (review finding: ~1-2 s on a Mac, far worse on a Pi).
+    def strips(colour_base: int) -> list[Card]:
+        return [_card(i * 2, 2, range(64), (colour_base, i, 0)) for i in range(120)]
+
+    out, inc = _plan(strips(200)), _plan(strips(100))
+    t0 = time.perf_counter()
+    build_board(out, inc, 8, random.Random(0))
+    assert time.perf_counter() - t0 < 0.2

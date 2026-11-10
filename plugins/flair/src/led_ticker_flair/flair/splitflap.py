@@ -33,11 +33,18 @@ from .splitflap_paint import paint_cell, paint_flap
 ORDERS = ("forward", "reverse", "random")
 LAND = 0.9  # every flap has landed by this share of the pre-snap timeline
 MAX_STAGGER = 0.9
+# Past ~9 in-between flips each flap is shorter than a frame at the 36-frame
+# floor; the cap keeps a config typo from blocking the loop at board build.
+MAX_FLIPS = 12
 
 
 def _coerce_flips(flips: Any) -> int:
-    if isinstance(flips, bool) or not isinstance(flips, int) or flips < 0:
-        raise ValueError(f"flips must be an int >= 0; got {flips!r}")
+    if (
+        isinstance(flips, bool)
+        or not isinstance(flips, int)
+        or not 0 <= flips <= MAX_FLIPS
+    ):
+        raise ValueError(f"flips must be an int in [0, {MAX_FLIPS}]; got {flips!r}")
     return flips
 
 

@@ -635,7 +635,7 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `flips` | int >= 0 | `3` | In-between characters each position clatters through before it lands. `0` flips straight from the old character to the new one. |
+| `flips` | int, 0 to 12 | `3` | In-between characters each position clatters through before it lands. `0` flips straight from the old character to the new one. |
 | `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent rippling across the message. `0` flips every character together; higher values spread them out (and make each flap quicker). |
 
 `.alternating` passes both knobs to each direction.

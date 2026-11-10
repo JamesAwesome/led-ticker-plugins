@@ -9,7 +9,7 @@ import math
 import random
 import statistics
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from led_ticker_flair.flair._raster import Pixel
 from led_ticker_flair.flair.accordion_cards import Card, Deck, Plan
@@ -18,28 +18,42 @@ RGB = tuple[int, int, int]
 Row = tuple[tuple[int, RGB], ...]  # ((dx, rgb), ...) for one real row
 
 
+GlyphKey = tuple[int, tuple[tuple[int, Row], ...]]
+
+
+def _glyph_key(width: int, rows: dict[int, Row]) -> GlyphKey:
+    return (width, tuple(sorted(rows.items())))
+
+
 @dataclass(frozen=True)
 class FlapCell:
     """One character (or strip) at its home column ``slot``: its lit pixels
-    grouped by real row, ``y -> ((dx, rgb), ...)``."""
+    grouped by real row, ``y -> ((dx, rgb), ...)``. ``key`` is the glyph
+    identity (position-free), computed ONCE: the pool scan compares it for
+    every candidate, and rebuilding it there made the board build
+    quadratic in deep-tuple work (seconds on a full-panel gif)."""
 
     slot: int
     width: int
     rows: dict[int, Row]
+    key: GlyphKey = field(compare=False, repr=False)
+
+    @classmethod
+    def make(cls, slot: int, width: int, rows: dict[int, Row]) -> FlapCell:
+        return cls(slot, width, rows, _glyph_key(width, rows))
 
     @classmethod
     def from_card(cls, card: Card) -> FlapCell:
         by_row: dict[int, list[tuple[int, RGB]]] = {}
         for dx, y, rgb in card.pixels:
             by_row.setdefault(y, []).append((dx, rgb))
-        return cls(card.slot, card.width, {y: tuple(v) for y, v in by_row.items()})
+        return cls.make(card.slot, card.width, {y: tuple(v) for y, v in by_row.items()})
 
-    def rows_key(self) -> tuple[int, tuple[tuple[int, Row], ...]]:
-        """Glyph identity independent of position."""
-        return (self.width, tuple(sorted(self.rows.items())))
+    def rows_key(self) -> GlyphKey:
+        return self.key
 
     def centred_on(self, centre_x: int) -> FlapCell:
-        return FlapCell(centre_x - self.width // 2, self.width, self.rows)
+        return FlapCell(centre_x - self.width // 2, self.width, self.rows, self.key)
 
 
 @dataclass(frozen=True)
@@ -72,11 +86,12 @@ class Board:
 
 def typical_width(cards: Sequence[Card], band_h: int) -> int:
     """Median width of the character-like cards (no wider than the band is
-    tall); with none, half the band height."""
+    tall); with none, half the band height. Floored at a quarter of the
+    band height, so a picture with a few 1-px specks doesn't shred into
+    hairline strips."""
     widths = [c.width for c in cards if c.width <= band_h]
-    if widths:
-        return max(1, statistics.median_low(widths))
-    return max(1, band_h // 2)
+    base = statistics.median_low(widths) if widths else band_h // 2
+    return max(1, base, band_h // 4)
 
 
 def split_wide(cards: Sequence[Card], cell_w: int) -> list[Card]:

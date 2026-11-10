@@ -107,6 +107,7 @@ class TestKnobs:
             {"flips": True},
             {"flips": 1.5},
             {"flips": "3"},
+            {"flips": 13},
             {"stagger": 0.95},
             {"stagger": -0.1},
             {"stagger": True},
@@ -121,6 +122,7 @@ class TestKnobs:
         p = SplitFlap(flips=0, stagger=0.0)
         assert p.flips == 0 and p.stagger == 0.0
         assert SplitFlap(stagger=0.9).stagger == 0.9
+        assert SplitFlap(flips=12).flips == 12
 
     def test_int_stagger_accepted_as_float(self):
         assert SplitFlap(stagger=0).stagger == 0.0

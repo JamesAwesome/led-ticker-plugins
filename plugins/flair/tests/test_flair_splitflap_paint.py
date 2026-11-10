@@ -19,7 +19,7 @@ W, H = 32, 16
 def _cell(colour, rows=None, slot=2, width=3) -> FlapCell:
     rows = range(16) if rows is None else rows
     row = tuple((dx, colour) for dx in range(width))
-    return FlapCell(slot, width, dict.fromkeys(rows, row))
+    return FlapCell.make(slot, width, dict.fromkeys(rows, row))
 
 
 def _record():
@@ -95,7 +95,7 @@ def test_flap_second_half_unfolds_b_bottom():
 def test_flap_samples_source_rows_not_repeats_one_row():
     # a's top half has a distinct colour per row; squashed to half height,
     # the flap shows every other source row.
-    a = FlapCell(0, 1, {y: ((0, (y * 10, 0, 0)),) for y in range(16)})
+    a = FlapCell.make(0, 1, {y: ((0, (y * 10, 0, 0)),) for y in range(16)})
     got, set_px = _record()
     paint_flap(set_px, a, None, BAND, 0.25, W, H)
     f = flap_shade(0.25)
@@ -123,7 +123,8 @@ def test_flap_tiny_half_heights_stay_in_band():
 
 def test_writes_clipped_to_panel():
     got, set_px = _record()
-    edge = FlapCell(30, 4, {y: tuple((dx, RED) for dx in range(4)) for y in range(16)})
+    row = tuple((dx, RED) for dx in range(4))
+    edge = FlapCell.make(30, 4, dict.fromkeys(range(16), row))
     for q in (0.0, 0.3, 0.7, 1.0):
         paint_flap(set_px, edge, edge, BAND, q, W, H)
     assert all(0 <= x < W and 0 <= y < H for x, y in got)
