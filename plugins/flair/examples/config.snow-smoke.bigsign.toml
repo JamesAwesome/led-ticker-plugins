@@ -11,7 +11,7 @@
 #
 # WHAT TO LOOK FOR:
 #   Section 1 — dot snowflakes fall behind "SNOWFALL".
-#   Section 2 — 8x8 snowflake emoji sprites (painted 1:1, so 8 LEDs wide on
+#   Section 2 — built-in 5x5 snowflake sprites (painted 1:1, 5 LEDs wide on
 #     the scaled signs) fall behind "WINTER".
 #   Between them the snow transition sweeps a ragged front of flakes down the
 #     panel, swapping content behind the flurry; flakes thin out by the snap.
