@@ -600,6 +600,188 @@ There is no `ball_size` / `diameter` field: ball diameter, slot spacing, and fon
 
 Same physical-resolution requirement as inline hi-res emoji — see the requirement note above. `border` composes normally: it paints the panel perimeter before the balls (same order as every other bordered widget), and the smoke config in `examples/config.lottery-smoke.bigsign.toml` demonstrates a `rainbow` border alongside classic-style balls.
 
+## Blink animation
+
+`flair.blink` flashes a message widget's text hard on and off: the text is visible for the "on" fraction of each period and blank for the rest. Frame 0 is always ON, so a visit opens on readable text; when a hold would end mid-blank, the hold is extended to the next ON phase so the transition leaves from visible text.
+
+Requires **led-ticker-core >= 4.33**.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "SALE TODAY"
+font_color = [255, 80, 80]
+animation = "flair.blink"
+```
+
+With knobs:
+
+```toml
+animation = {style = "flair.blink", period_ms = 1500, duty = 0.6, count = 4}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `period_ms` | `1000` | One on+off cycle, quantized to the 50 ms engine tick. |
+| `duty` | `0.75` | Fraction of the period the text is visible, in `(0, 1)`. |
+| `count` | `0` | Number of blinks, then stay on. `0` = blink forever. |
+| `allow_fast` | `false` | Opt in to periods shorter than ~333 ms. |
+
+### Notes
+
+- **Photosensitivity guard.** Blinking faster than 3 Hz (`period_ms` below ~333) is refused at config-load (WCAG 2.3.1) unless you set `allow_fast = true`. Think before you do.
+- Emoji and colored value tokens blank with the text; borders and backgrounds stay lit.
+
+## Twinkle animation
+
+`flair.twinkle` makes a message widget's text sparkle TwinkleFOX-style: a share of the text's pixels each cycle between dim and full brightness on their own phase, so the letters shimmer while staying readable.
+
+Requires **led-ticker-core >= 4.33** (the per-pixel `pixel_gain` seam).
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "MAKE A WISH"
+font_color = [255, 220, 120]
+animation = "flair.twinkle"
+```
+
+With knobs:
+
+```toml
+animation = {style = "flair.twinkle", density = 0.8, speed = 1.5, min_brightness = 0.1}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `density` | `0.6` | Fraction of text pixels that twinkle, in `(0, 1]`; the rest hold full brightness. |
+| `speed` | `1.0` | Twinkle rate in `(0, 2.0]` (capped to stay photosensitivity-safe). |
+| `min_brightness` | `0.15` | Dimmest a twinkler gets, in `[0, 1)`. |
+| `seed` | `None` (OS entropy) | Fixes the pattern for reproducible demo GIFs. |
+
+### Notes
+
+- Only the text twinkles; borders and backgrounds are untouched, so it composes with `background = "flair.twinkle"` or `"flair.snow"`.
+- BDF text on a scaled sign (bigsign) twinkles per logical pixel; hi-res fonts twinkle per real pixel. Animated image emoji do not twinkle.
+
+## Twinkle background
+
+`flair.twinkle` is ALSO a **background** effect: `background = "flair.twinkle"` paints a twinkling starfield BEHIND a `message`, `countdown`/`countup`, `two_row`, `gif`, `image`, or `clock` widget. Stars are single physical LEDs, so the field looks like fine glitter on every sign. It never paints black, so it can't erase a `bg_color` or an image.
+
+Requires **led-ticker-core >= 4.32**.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "STARRY NIGHT"
+font_color = [180, 200, 255]
+background = "flair.twinkle"
+```
+
+With knobs:
+
+```toml
+background = {style = "flair.twinkle", density = 0.05, speed = 1.2, color = [255, 200, 120]}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `density` | `0.03` | Fraction of panel pixels that are stars, in `(0, 1]`. |
+| `speed` | `1.0` | Twinkle rate in `(0, 2.0]`. |
+| `color` | `[255, 230, 180]` | Peak star color; each star scales it by its brightness. |
+| `seed` | `None` (OS entropy) | Fixes the starfield for reproducible demo GIFs. |
+
+### Notes
+
+- Frame-pure and physical-resolution, like every flair background; `restart_on_visit = False` so the field keeps twinkling across repeat visits.
+
+## Snow background
+
+`flair.snow` is a **background** effect: `background = "flair.snow"` drops snow BEHIND a widget's content. Each flake falls at its own speed, drifts a little sideways and re-enters at a new column when it wraps. Flakes are `"dot"` (one LED), `"plus"` (a 5-LED cross) or an 8x8 emoji sprite such as `flake = "snow"`; emoji flakes are painted 1:1 on the real panel, so on a bigsign they are 8 LEDs wide, not block-expanded.
+
+Requires **led-ticker-core >= 4.32**.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "LET IT SNOW"
+font_color = [200, 230, 255]
+background = "flair.snow"
+```
+
+With emoji flakes and knobs:
+
+```toml
+background = {style = "flair.snow", flake = "snow", density = 1.0, wind = 0.1}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `flake` | `"dot"` | `"dot"`, `"plus"`, or an emoji slug with an 8x8 low-res form. Hires-only / pack-only slugs are refused. |
+| `density` | `3.0` | Flakes per 1000 panel pixels, `> 0`. |
+| `speed` | `1.0` | Fall speed in `(0, 5]`. |
+| `speed_variation` | `0.4` | Per-flake speed spread in `[0, 1)`. |
+| `drift` | `0.3` | Sideways sway amplitude, `>= 0`. |
+| `wind` | `0.0` | Constant sideways push (negative blows left). |
+| `color` | `[200, 220, 255]` | Flake color for `dot`/`plus` (emoji keep their own colors). |
+| `seed` | `None` (OS entropy) | Fixes the pattern for reproducible demo GIFs. |
+
+### Notes
+
+- Never paints black and is a pure function of the host's frame counter, so transitions re-rendering the widget see identical pixels.
+
+## Snow transition
+
+`flair.snow` swaps content behind a flurry: a ragged front of snow sweeps down the panel, and flakes lead it, revealing the incoming widget above the front while the outgoing content is still visible below. The flurry builds in the middle and thins to nothing before the final cut. Works on every widget type (content is snapshotted as pixels).
+
+Requires **led-ticker-core >= 4.32**.
+
+### Config
+
+```toml
+[[playlist.section.widget]]
+type = "message"
+text = "WINTER"
+transition = "flair.snow"
+```
+
+With knobs:
+
+```toml
+transition = {type = "flair.snow", flake = "snow", density = 8.0, wind = 0.2}
+```
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `flake` | `"dot"` | `"dot"`, `"plus"` or an 8x8 emoji slug (same rules as the background). |
+| `density` | `6.0` | Flakes per 1000 panel pixels at the peak. |
+| `drift` / `wind` | `0.3` / `0.0` | Sideways sway / constant push. |
+| `color` | `[230, 240, 255]` | Flake color for `dot`/`plus`. |
+| `seed` | `None` (OS entropy) | Unset, every firing draws a new pattern; set it for reproducible GIFs. |
+| `mode` | `"flurry"` | Only `"flurry"` today; `"build"` is reserved. |
+
+### Notes
+
+- Cross-scale sections: the scale switch is deferred to the final snap, so adjacent sections with different `bg_color` pop at the snap rather than following the front (same limitation as `flair.laser` / `flair.fairy`).
+
 ## Install
 
 Part of the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Install:

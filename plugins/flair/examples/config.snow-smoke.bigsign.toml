@@ -1,0 +1,60 @@
+# Bigsign SMOKE TEST — flair.snow background + transition
+#
+# Purpose: headless render-demo smoke fixture on a 256x64 (default_scale = 4) canvas.
+# rows=64/cols=256/chain_length=1 gives the headless backend the final
+# logical canvas directly (see config.fireworks-smoke.bigsign.toml). This is a
+# render-demo fixture, not a hardware wiring config; real deploys use
+# config/config.bigsign.example.toml in the core repo.
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.snow-smoke.bigsign.toml
+#   -> expect: no errors.
+#
+# WHAT TO LOOK FOR:
+#   Section 1 — dot snowflakes fall behind "SNOWFALL".
+#   Section 2 — 8x8 snowflake emoji sprites (painted 1:1, so 8 LEDs wide on
+#     the scaled signs) fall behind "WINTER".
+#   Between them the snow transition sweeps a ragged front of flakes down the
+#     panel, swapping content behind the flurry; flakes thin out by the snap.
+
+[display]
+rows = 64
+cols = 256
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+
+gpio_slowdown = 3
+pwm_bits = 8
+
+[transitions]
+between_sections = "flair.snow"
+duration = 1.6
+
+# --- Section 1: dot flakes behind steady text --------------------------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 4
+
+[[playlist.section.widget]]
+type = "message"
+text = "SNOWFALL"
+center = true
+font_color = [200, 230, 255]
+background = "flair.snow"
+
+# --- Section 2: emoji (flake = "snow") flakes ---------------------------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 4
+
+[[playlist.section.widget]]
+type = "message"
+text = "WINTER"
+center = true
+font_color = [255, 200, 120]
+background = {style = "flair.snow", flake = "snow", density = 1.0}

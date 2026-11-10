@@ -1,0 +1,49 @@
+# Smallsign SMOKE TEST — flair.blink animation
+#
+# Purpose: headless render-demo smoke fixture on a 160x16 (default_scale = 1) canvas.
+# rows=16/cols=160/chain_length=1 gives the headless backend the final
+# logical canvas directly (see config.fireworks-smoke.smallsign.toml). This is a
+# render-demo fixture, not a hardware wiring config; real deploys use
+# config/config.example.toml in the core repo.
+#
+# Preflight: led-ticker validate plugins/flair/examples/config.blink-smoke.smallsign.toml
+#   -> expect: no errors.
+#
+# WHAT TO LOOK FOR:
+#   "SALE TODAY" blinks at the default 1 s period (75% on) and always opens
+#     on visible text; the hold is extended so it never leaves while blank.
+#   "FIVE BLINKS" blinks five times at 800 ms / 50% duty, then stays lit.
+#   The text should blank CLEANLY (no ghost pixels, no border/bg flicker).
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+
+[transitions]
+between_sections = "cut"
+
+# --- one section: blinking message, then a steady one ------------------------
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 6
+
+[[playlist.section.widget]]
+type = "message"
+text = "SALE TODAY"
+center = true
+font_color = [255, 90, 90]
+animation = "flair.blink"
+
+[[playlist.section.widget]]
+type = "message"
+text = "FIVE BLINKS"
+center = true
+font_color = [255, 200, 0]
+animation = {style = "flair.blink", period_ms = 800, duty = 0.5, count = 5}
