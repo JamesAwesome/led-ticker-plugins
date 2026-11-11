@@ -3,6 +3,8 @@
 import math
 import random
 
+import pytest
+
 from led_ticker_flair.flair._raster import Raster
 from led_ticker_flair.flair._sand import (
     crumble_grains,
@@ -127,3 +129,25 @@ def test_pour_starts_from_the_contents_own_bottom_row():
     grains = pour_grains(r, random.Random(12))
     assert any(pour_pos(g, 0.45, 64) == g[1] for g in grains)
     assert all(pour_pos(g, 0.9999, 64) == g[1] for g in grains)
+
+
+def _band(w: int, h: int, y0: int, y1: int) -> Raster:
+    r = Raster(w, h)
+    for y in range(y0, y1):
+        for x in range(w):
+            r.SetPixel(x, y, 200, 150, 50)
+    return r
+
+
+# The runner never samples q = 1: the last pour frame is q ~ 0.963 (30
+# frames, linear) and can be ~0.944 at other frame counts / easings.
+LAST_SAMPLED_Q = 0.93
+
+
+@pytest.mark.parametrize(
+    ("w", "h", "y0", "y1"),
+    [(256, 64, 16, 48), (256, 64, 56, 64), (160, 16, 8, 16), (256, 64, 0, 64)],
+)
+def test_pour_landed_by_last_sampled_frame(w, h, y0, y1):
+    grains = pour_grains(_band(w, h, y0, y1), random.Random(14))
+    assert all(pour_pos(g, LAST_SAMPLED_Q, h) == g[1] for g in grains)

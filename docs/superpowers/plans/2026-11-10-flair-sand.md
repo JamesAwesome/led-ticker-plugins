@@ -143,8 +143,9 @@ pytest. No new dependencies.
   span, so letterboxed content doesn't wait on empty panel rows.
 - Gravity: `Gp = 2·(h + H0) / POUR_FALL_MAX²`.
 - Fall time: `T = sqrt(2·dist / Gp)`.
-- Clamp the start so every grain lands in time:
-  `start = min(start, 1 - T - 1e-6)`.
+- Clamp the start so every grain lands by the last sampled pour frame:
+  `start = min(start, POUR_LAND_BY - T - 1e-6)` with `POUR_LAND_BY = 0.92`
+  (the runner's last pour frame is q ~0.944-0.963, never 1).
 - Position:
   - If `q < start`, return None.
   - Otherwise `yy = (y - dist) + 0.5·Gp·(q - start)²`, capped at `y`.

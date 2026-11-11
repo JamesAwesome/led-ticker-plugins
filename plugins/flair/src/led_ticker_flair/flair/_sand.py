@@ -11,7 +11,8 @@ Design in one breath:
   own column, stopping dead on its target row. Lower rows start earlier,
   ranked within the content's own rows (``(y_hi-y)/span · POUR_ROW_SPAN``),
   plus up to ``POUR_JITTER`` of jitter.
-  Start times are clamped so every grain lands before the phase ends.
+  Start times are clamped so every grain lands by ``POUR_LAND_BY``, before
+  the last sampled pour frame.
 
 Spec: docs/superpowers/specs/2026-11-10-flair-sand-transition-design.md
 """
@@ -30,6 +31,9 @@ DRIFT_FRAC = 0.02
 # never samples p = 1: at min_frames = 30 the last crumble frame is p ~ 0.93
 # (linear) or ~0.87 (ease_in_out).
 CRUMBLE_CLEAR = 0.85
+# Pour progress by which every grain must have landed. The last sampled pour
+# frame is q ~ 0.963 (30 frames, linear) and can be ~0.944 elsewhere.
+POUR_LAND_BY = 0.92
 
 # (x0, y0, r, g, b, release, vx)
 CrumbleGrain = tuple[int, int, int, int, int, float, float]
@@ -87,7 +91,7 @@ def pour_grains(raster: Raster, rng: random.Random) -> list[PourGrain]:
         dist = y + h0
         fall = math.sqrt(2 * dist / gp)
         start = (y_hi - y) / span * POUR_ROW_SPAN + uni() * POUR_JITTER
-        start = max(0.0, min(start, 1 - fall - 1e-6))
+        start = max(0.0, min(start, POUR_LAND_BY - fall - 1e-6))
         out.append((x, y, r, g, b, start, dist))
     return out
 

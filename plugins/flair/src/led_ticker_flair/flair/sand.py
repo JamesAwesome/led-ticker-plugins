@@ -88,6 +88,7 @@ class Sand:
             self._paint_crumble(real, self._crumble, t / CRUMBLE_END)
         else:
             if self._pour is None:
+                self._crumble = None  # done with it; free ~16k tuples now
                 raster = self._cache.take(canvas, incoming, 0, 1)
                 self._pour = pour_grains(raster, self._rng)
             q = (t - CRUMBLE_END) / (SNAP_THRESHOLD - CRUMBLE_END)
