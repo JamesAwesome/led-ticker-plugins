@@ -6,8 +6,9 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from led_ticker.plugin import ScaledCanvas
+from led_ticker.plugin import SNAP_THRESHOLD, ScaledCanvas
 
+from led_ticker_flair.flair._sand import crumble_pos, pour_pos
 from led_ticker_flair.flair.sand import Sand
 
 RED = (255, 0, 0)
@@ -196,6 +197,33 @@ class TestFrames:
             buf.Clear()
             s.frame_at(t, sc, o, i)
             assert buf._pixels, t
+
+    @pytest.mark.parametrize("t", [0.1, 0.3, 0.45, 0.55, 0.7, 0.9])
+    def test_painters_match_reference_math(self, t):
+        # sand.py inlines the _sand position math for speed; pin it to the
+        # reference functions so the two can't drift apart
+        c = _StubCanvas(64, 32)
+        o = _block_widget(RED, 48, 20, y0=4, x0=8)
+        i = _block_widget(GREEN, 40, 12, y0=10, x0=4)
+        s = Sand(seed=13)
+        _frame(s, 0.0, c, o, i)
+        if t >= 0.5:
+            _frame(s, 0.5, c, o, i)
+        px = _frame(s, t, c, o, i)
+        want: dict = {}
+        if t < 0.5:
+            assert s._crumble is not None
+            for g in s._crumble:
+                pos = crumble_pos(g, t / 0.5, 64, 32)
+                if pos is not None:
+                    want[pos] = g[2:5]
+        else:
+            assert s._pour is not None
+            for g in s._pour:
+                y = pour_pos(g, (t - 0.5) / (SNAP_THRESHOLD - 0.5), 32)
+                if y is not None:
+                    want[(g[0], y)] = g[2:5]
+        assert px == want
 
     def test_first_frame_in_pour_skips_crumble(self):
         c = _StubCanvas()

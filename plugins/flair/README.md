@@ -967,6 +967,7 @@ The engine's default transition `duration` is 0.5 s, which is too fast to read a
 
 ### Notes
 
+- **Black content does not turn to sand.** Like the other snapshot transitions, only non-black pixels become grains, so black text on a coloured section `bg_color` disappears at the start and the incoming content cuts in at the end. Use a non-black ink, or a widget-level background (e.g. `top_bg_color` on `two_row`), which does turn to sand.
 - The first half of the transition crumbles the outgoing content over its own `bg_color`; the second half pours the incoming content over the incoming `bg_color`, at the incoming scale.
 
 ## Install

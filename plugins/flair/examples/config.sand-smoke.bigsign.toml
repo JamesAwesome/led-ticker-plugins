@@ -10,7 +10,9 @@
 # the bottom; the incoming letters pour in from the top, straight down, and
 # build from the bottom row up. Grains are single LEDs, never 4x4 blocks.
 # Sections: rainbow text, a bordered message (the border turns to sand too),
-# and a twinkle background (full-panel perf worst case).
+# a twinkle background, and a two_row with both band backgrounds set: every
+# one of the 16,384 LEDs is lit, so that section is the PERF WORST CASE
+# (time it; an overrun only stretches the transition).
 
 [display]
 rows = 32
@@ -74,3 +76,21 @@ font_color = [255, 255, 255]
 background = "flair.twinkle"
 font = "Inter-Bold"
 font_size = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+scale = 2
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FULL"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 255, 255]
+top_bg_color = [120, 40, 160]
+bottom_text = "PANEL"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [255, 255, 255]
+bottom_bg_color = [30, 110, 160]

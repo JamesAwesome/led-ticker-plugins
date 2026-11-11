@@ -8,8 +8,9 @@ Design in one breath:
   drifting sideways by at most ``DRIFT_FRAC`` of the panel width.
 - **Pour.** Every lit pixel of the incoming snapshot becomes one grain
   dropped at rest from ``H0`` pixels above the top edge, straight down its
-  own column, stopping dead on its target row. Lower rows start earlier, by
-  ``(h-1-y)/h · POUR_ROW_SPAN``, plus up to ``POUR_JITTER`` of jitter.
+  own column, stopping dead on its target row. Lower rows start earlier,
+  ranked within the content's own rows (``(y_hi-y)/span · POUR_ROW_SPAN``),
+  plus up to ``POUR_JITTER`` of jitter.
   Start times are clamped so every grain lands before the phase ends.
 
 Spec: docs/superpowers/specs/2026-11-10-flair-sand-transition-design.md
@@ -73,11 +74,19 @@ def pour_grains(raster: Raster, rng: random.Random) -> list[PourGrain]:
     h0 = drop_height(h)
     gp = pour_gravity(h)
     uni = rng.random
+    lit = list(_lit_pixels(raster))
+    if not lit:
+        return []
+    # Rows are ranked within the CONTENT, not the panel, so letterboxed or
+    # short content starts landing at once instead of waiting on empty rows.
+    y_lo = lit[0][1]
+    y_hi = lit[-1][1]
+    span = y_hi - y_lo + 1
     out: list[PourGrain] = []
-    for x, y, (r, g, b) in _lit_pixels(raster):  # type: ignore[misc]
+    for x, y, (r, g, b) in lit:  # type: ignore[misc]
         dist = y + h0
         fall = math.sqrt(2 * dist / gp)
-        start = (h - 1 - y) / h * POUR_ROW_SPAN + uni() * POUR_JITTER
+        start = (y_hi - y) / span * POUR_ROW_SPAN + uni() * POUR_JITTER
         start = max(0.0, min(start, 1 - fall - 1e-6))
         out.append((x, y, r, g, b, start, dist))
     return out

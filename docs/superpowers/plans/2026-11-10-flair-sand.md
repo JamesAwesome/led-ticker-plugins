@@ -114,7 +114,9 @@ pytest. No new dependencies.
     the current y of a grain, or None if the grain hasn't started or is
     above the panel. `q` is pour progress in `[0, 1)`.
   - Constants: `RELEASE_MAX = 0.35`, `POUR_ROW_SPAN = 0.55`,
-    `POUR_JITTER = 0.25`, `POUR_FALL_MAX = 0.65`, `DRIFT_FRAC = 0.02`.
+    `POUR_JITTER = 0.25`, `POUR_FALL_MAX = 0.45` (was 0.65 in the first draft;
+    0.45 matches the approved mockup), `DRIFT_FRAC = 0.02`,
+    `CRUMBLE_CLEAR = 0.85`.
 
 **Algorithm (pinned by the spec; not determined by the signatures):**
 
@@ -126,15 +128,19 @@ pytest. No new dependencies.
 - After release:
   - `x = x0 + vx·dt`
   - `y = y0 + 0.5·G·dt²`
-  - `G = 2.1·h / (1 - RELEASE_MAX)²`, which carries a 5% margin, so the
-    last-released top-row grain has left the panel by `p → 1`.
+  - `G = 2.1·h / (CRUMBLE_CLEAR - RELEASE_MAX)²`, which carries a 5%
+    margin, so the last-released top-row grain has left the panel by
+    `p = CRUMBLE_CLEAR`. (The runner never samples `p = 1`: at 30 frames
+    the last crumble frame is about 0.93, or 0.87 under `ease_in_out`.)
 - Round x and y. Return None if either is outside the panel.
 
 **Pour.**
 
 - Drop height is `H0 = max(1, round(h / 16))`, so 4 on a 64-tall panel and
   1 on a 16-tall panel. Each grain's fall distance is `dist = y + H0`.
-- Start time: `start = (h-1-y)/h · POUR_ROW_SPAN + U(0, POUR_JITTER)`.
+- Start time: `start = (y_hi-y)/span · POUR_ROW_SPAN + U(0, POUR_JITTER)`,
+  where `y_hi` and `span` are the content's own lowest lit row and row
+  span, so letterboxed content doesn't wait on empty panel rows.
 - Gravity: `Gp = 2·(h + H0) / POUR_FALL_MAX²`.
 - Fall time: `T = sqrt(2·dist / Gp)`.
 - Clamp the start so every grain lands in time:

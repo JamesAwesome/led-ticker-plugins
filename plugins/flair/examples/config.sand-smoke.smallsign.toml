@@ -15,6 +15,7 @@ parallel = 1
 brightness = 60
 default_scale = 1
 hardware_mapping = "adafruit-hat"
+gpio_slowdown = 2
 
 [transitions]
 between_sections = "flair.sand"

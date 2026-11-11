@@ -115,3 +115,15 @@ def test_crumble_grains_drift_sideways():
         if pos is not None and pos[0] != g[0]:
             moved += 1
     assert moved > len(grains) // 10
+
+
+def test_pour_starts_from_the_contents_own_bottom_row():
+    # letterboxed content (rows 24..39 of 64) must not wait for empty panel
+    # rows below it before its first grains land
+    r = Raster(256, 64)
+    for y in range(24, 40):
+        for x in range(256):
+            r.SetPixel(x, y, 200, 150, 50)
+    grains = pour_grains(r, random.Random(12))
+    assert any(pour_pos(g, 0.45, 64) == g[1] for g in grains)
+    assert all(pour_pos(g, 0.9999, 64) == g[1] for g in grains)
