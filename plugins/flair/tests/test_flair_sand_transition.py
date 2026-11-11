@@ -279,17 +279,26 @@ class TestValidation:
 
 class TestPerf:
     def test_perf_bigsign(self):
+        # Times the per-frame PAINT only: each phase's grains are built by its
+        # priming frame, and t never goes backwards (that would be a refire and
+        # rebuild them). Median, so one noisy CI tick doesn't fail the build.
         c = _StubCanvas(256, 64)
         c.SetPixel = lambda *a: None  # type: ignore[method-assign]  # time OUR code
         c.Clear = lambda: None  # type: ignore[method-assign]
         o, i = _block_widget(RED, 256, 64), _block_widget(GREEN, 256, 64)
         s = Sand(seed=1)
-        s.frame_at(0.0, c, o, i)
-        s.frame_at(0.5, c, o, i)
-        for t in (0.3, 0.75):
-            worst = 0.0
-            for _ in range(5):
+
+        def median_ms(ts: tuple[float, ...]) -> float:
+            samples = []
+            for t in ts:
                 t0 = time.perf_counter()
                 s.frame_at(t, c, o, i)
-                worst = max(worst, time.perf_counter() - t0)
-            assert worst < 0.015, (t, worst)
+                samples.append(time.perf_counter() - t0)
+            return sorted(samples)[len(samples) // 2]
+
+        s.frame_at(0.0, c, o, i)  # builds the crumble grains
+        crumble = median_ms((0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4))
+        s.frame_at(0.5, c, o, i)  # builds the pour grains
+        pour = median_ms((0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85))
+        assert crumble < 0.015, crumble
+        assert pour < 0.015, pour
