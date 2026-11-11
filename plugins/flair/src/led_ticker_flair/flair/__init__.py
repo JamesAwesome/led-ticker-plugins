@@ -14,6 +14,8 @@ The twinkle/blink/snow family adds ``animation = "flair.blink"`` and
 ``animation = "flair.twinkle"`` (per-pixel gain), the
 ``background = "flair.twinkle"`` and ``background = "flair.snow"``
 backgrounds, and the ``transition = "flair.snow"`` flurry transition.
+``transition = "flair.sand"`` crumbles the outgoing content into falling
+sand and pours the incoming content in from the top.
 
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
@@ -118,6 +120,7 @@ def register(api):
     from led_ticker_flair.flair.lottery import Lottery  # noqa: PLC0415
     from led_ticker_flair.flair.poker import Poker  # noqa: PLC0415
     from led_ticker_flair.flair.propeller import Propeller  # noqa: PLC0415
+    from led_ticker_flair.flair.sand import Sand  # noqa: PLC0415
     from led_ticker_flair.flair.snow import Snow  # noqa: PLC0415
     from led_ticker_flair.flair.snow_background import (  # noqa: PLC0415
         SnowBackground,
@@ -142,6 +145,7 @@ def register(api):
     api.background("twinkle")(TwinkleBackground)
     api.background("snow")(SnowBackground)
     api.transition("snow")(Snow)
+    api.transition("sand")(Sand)
     api.transition("spinout")(Spinout)
     api.transition("fireworks")(Fireworks)
     api.background("fireworks")(FireworksBackground)

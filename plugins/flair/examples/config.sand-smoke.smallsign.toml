@@ -1,0 +1,48 @@
+# requires-plugins: led-ticker-flair
+# Smallsign SMOKE TEST: flair.sand transition (the flair release that ships it)
+#
+# Prereqs: led-ticker-core >= 4.32; led-ticker-flair at the release that ships
+# sand; copy to config/config.toml, then `make restart`.
+# Watch: the old word crumbles unevenly and falls off the bottom; the new one
+# pours in from the top, straight down, bottom row first.
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+
+brightness = 60
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 2
+
+[transitions]
+between_sections = "flair.sand"
+duration = 3.0
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.sand"
+
+[[playlist.section.widget]]
+type = "message"
+text = "TWINKLE"
+font_color = "rainbow"
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAND"
+font_color = [255, 190, 60]
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+
+[[playlist.section.widget]]
+type = "message"
+text = "STARS"
+font_color = [255, 255, 255]
+background = "flair.twinkle"
+border = "rainbow"

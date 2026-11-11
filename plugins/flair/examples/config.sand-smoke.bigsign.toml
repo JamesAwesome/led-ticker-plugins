@@ -1,0 +1,97 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST: flair.sand transition (the flair release that ships it)
+#
+# Prereqs: led-ticker-core >= 4.32; led-ticker-flair at the release that ships
+# sand (PyPI pin in config/requirements-plugins.txt); copy to
+# config/config.toml, then `make restart`. Preflight: led-ticker validate
+# config/config.toml.
+#
+# Watch: the outgoing word crumbles unevenly (not row by row) and leaves through
+# the bottom; the incoming letters pour in from the top, straight down, and
+# build from the bottom row up. Grains are single LEDs, never 4x4 blocks.
+# Sections: rainbow text, a bordered message (the border turns to sand too),
+# a twinkle background, and a two_row with both band backgrounds set: every
+# one of the 16,384 LEDs is lit, so that section is the PERF WORST CASE
+# (time it; an overrun only stretches the transition).
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 3.0
+between_sections = "flair.sand"
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+transition = "flair.sand"
+
+[[playlist.section.widget]]
+type = "message"
+text = "TWINKLE"
+font_color = "rainbow"
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAND"
+font_color = [255, 190, 60]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+
+[[playlist.section.widget]]
+type = "message"
+text = "BORDER"
+font_color = [80, 200, 255]
+border = "rainbow"
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+
+[[playlist.section.widget]]
+type = "message"
+text = "STARS"
+font_color = [255, 255, 255]
+background = "flair.twinkle"
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.5
+scale = 2
+content_height = 32
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FULL"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 255, 255]
+top_bg_color = [120, 40, 160]
+bottom_text = "PANEL"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [255, 255, 255]
+bottom_bg_color = [30, 110, 160]

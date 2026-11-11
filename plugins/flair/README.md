@@ -906,10 +906,13 @@ Requires **led-ticker-core >= 4.32**.
 ### Config
 
 ```toml
+[[playlist.section]]
+mode = "slideshow"
+transition = "flair.snow"
+
 [[playlist.section.widget]]
 type = "message"
 text = "WINTER"
-transition = "flair.snow"
 ```
 
 With knobs:
@@ -933,6 +936,39 @@ transition = {type = "flair.snow", flake = "flake", density = 8.0, wind = 0.2}
 
 - Known limit: a cross-scale incoming widget renders at the outgoing scale until the snap (the scale switch is deferred to the final cut, same as `flair.laser`).
 - Cross-scale sections: the scale switch is deferred to the final snap, so adjacent sections with different `bg_color` pop at the snap rather than following the front (same limitation as `flair.laser` / `flair.fairy`).
+
+## Sand transition
+
+`flair.sand` turns the outgoing content into sand. Every lit pixel becomes a grain that lets go at its own slightly random moment and falls off the bottom of the panel. Then the incoming content pours in from the top: each of its grains drops straight down and stops on its own pixel, the bottom rows landing first, until the new content is built. Text, borders and backgrounds all turn to sand (content is snapshotted as pixels, so it works on every widget type; an animated background is captured as one still frame). On a scaled sign every real LED is its own grain.
+
+Requires **led-ticker-core >= 4.32**.
+
+### Config
+
+```toml
+[[playlist.section]]
+mode = "slideshow"
+transition = {type = "flair.sand", duration = 3}
+
+[[playlist.section.widget]]
+type = "message"
+text = "SAND"
+```
+
+`transition` is a **section** field: it runs between that section's widgets and as its entry (or set `[transitions] between_sections = "flair.sand"` with `duration = 3`).
+
+The engine's default transition `duration` is 0.5 s, which is too fast to read as sand; use about `duration = 3`.
+
+### Knobs
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `seed` | none | An int makes the crumble and pour identical on every run; unset gives a fresh pattern each time. |
+
+### Notes
+
+- **Black content does not turn to sand.** Like the other snapshot transitions, only non-black pixels become grains, so black text on a coloured section `bg_color` disappears at the start and the incoming content cuts in at the end. Use a non-black ink, or a widget-level background (e.g. `top_bg_color` on `two_row`), which does turn to sand.
+- The first half of the transition crumbles the outgoing content over its own `bg_color`; the second half pours the incoming content over the incoming `bg_color`, at the incoming scale.
 
 ## Install
 
