@@ -191,6 +191,32 @@ def test_provider_cells_are_logical_on_scaled_canvas() -> None:
     assert real._pixels
 
 
+def test_provider_cells_on_unwrapped_real_canvas_match_wrapper() -> None:
+    """Image hosts (gif / image) paint backgrounds on the UNWRAPPED real
+    canvas; cells must still be 6 LOGICAL px, i.e. match the wrapper."""
+    via_wrapper, via_real = _ByCell(), _ByCell()
+    real = HeadlessCanvas(width=256, height=64)
+    TwinkleBackground(density=0.05, color=via_wrapper, seed=1).paint(
+        ScaledCanvas(real, scale=4, content_height=16), 3
+    )
+    TwinkleBackground(density=0.05, color=via_real, seed=1).paint(
+        HeadlessCanvas(width=256, height=64), 3
+    )
+    assert {t for _f, _i, t in via_real.calls} == {11}
+    assert sorted(via_real.calls) == sorted(via_wrapper.calls)
+
+
+def test_provider_cell_count_on_evenly_divisible_width() -> None:
+    """192 px / 6 px = exactly 32 cells (no spare cell, so a gradient's
+    rightmost column reaches its `to` color)."""
+    prov = _ByCell()
+    TwinkleBackground(density=0.05, color=prov, seed=1).paint(
+        HeadlessCanvas(width=192, height=16), 0
+    )
+    assert {t for _f, _i, t in prov.calls} == {32}
+    assert max(i for _f, i, _t in prov.calls) == 31
+
+
 def test_gradient_runs_left_to_right() -> None:
     fx = TwinkleBackground(
         density=0.3,
