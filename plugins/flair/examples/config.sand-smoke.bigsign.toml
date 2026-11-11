@@ -81,6 +81,7 @@ font_size = 30
 mode = "slideshow"
 hold_time = 1.5
 scale = 2
+content_height = 32
 
 [[playlist.section.widget]]
 type = "two_row"
