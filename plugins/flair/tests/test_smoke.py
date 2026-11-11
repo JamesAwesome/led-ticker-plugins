@@ -97,6 +97,7 @@ def test_flair_register_adds_blink_twinkle_snow():
     assert "twinkle" in api.backgrounds
     assert "snow" in api.backgrounds
     assert "snow" in api.transitions
+    assert "sand" in api.transitions
 
 
 def test_import_seam_requires_pixel_gain(monkeypatch):
