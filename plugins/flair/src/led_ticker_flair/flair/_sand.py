@@ -29,7 +29,7 @@ POUR_FALL_MAX = 0.45
 DRIFT_FRAC = 0.02
 # Crumble progress by which every grain must be off the panel. The runner
 # never samples p = 1: at min_frames = 30 the last crumble frame is p ~ 0.93
-# (linear) or ~0.87 (ease_in_out).
+# (linear) or ~0.90 (ease_in_out).
 CRUMBLE_CLEAR = 0.85
 # Pour progress by which every grain must have landed. The last sampled pour
 # frame is q ~ 0.963 (30 frames, linear) and can be ~0.944 elsewhere.

@@ -43,7 +43,7 @@ def test_crumble_before_release_is_in_place():
 
 def test_crumble_all_off_panel_by_end():
     # the runner never samples p = 1: with 30 frames the last crumble frame
-    # is t = 14/30 (p = 0.933), and ~0.87 under ease_in_out
+    # is t = 14/30 (p = 0.933), and ~0.90 under ease_in_out
     grains = crumble_grains(_lit(256, 64), random.Random(1))
     assert all(crumble_pos(g, 0.85, 256, 64) is None for g in grains)
 

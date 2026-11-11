@@ -131,7 +131,7 @@ pytest. No new dependencies.
   - `G = 2.1·h / (CRUMBLE_CLEAR - RELEASE_MAX)²`, which carries a 5%
     margin, so the last-released top-row grain has left the panel by
     `p = CRUMBLE_CLEAR`. (The runner never samples `p = 1`: at 30 frames
-    the last crumble frame is about 0.93, or 0.87 under `ease_in_out`.)
+    the last crumble frame is about 0.93, or 0.90 under `ease_in_out`.)
 - Round x and y. Return None if either is outside the panel.
 
 **Pour.**

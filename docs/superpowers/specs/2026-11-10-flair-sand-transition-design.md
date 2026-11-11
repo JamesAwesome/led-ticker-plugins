@@ -113,6 +113,13 @@ should read as sand, not as a dissolve or a wipe.
 
 ## Settled after the builder check
 
+> **Superseded in part during review (PR #144).** The shipped constants are in
+> the plan's Constants section and `_sand.py`. Pour start is ranked within the
+> content's own rows (`(y_hi-y)/span`), not the panel's (`(h-1-y)/h`). Grains
+> land by `POUR_LAND_BY = 0.92` of the pour, not by `SNAP_THRESHOLD`. Crumble
+> gravity clears the panel by `CRUMBLE_CLEAR = 0.85`, not by the end of the
+> crumble. The runner never draws the last instant of either phase.
+
 The approved mockup settled the first two of these. The rest are my calls.
 
 - **Every real LED is its own grain.** Release time, drift and pour start
