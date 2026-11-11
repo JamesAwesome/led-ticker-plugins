@@ -85,7 +85,8 @@ def test_brightness_dims_every_star() -> None:
 def test_brightness_default_is_unchanged() -> None:
     a = _paint(TwinkleBackground(density=0.1, seed=5), 9)._pixels
     b = _paint(TwinkleBackground(density=0.1, seed=5, brightness=1.0), 9)._pixels
-    assert a == b
+    c = _paint(TwinkleBackground(density=0.1, seed=5, brightness=1), 9)._pixels
+    assert a == b == c
 
 
 class TestScaledCanvas:

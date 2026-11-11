@@ -4,8 +4,8 @@ widget's content (``background = "flair.twinkle"``).
 Stars are the pixels of the real panel that ``is_twinkler`` selects at
 ``density``; each paints ``color * level * brightness`` at physical
 resolution. Pure function of ``(frame_count, real dims)`` per instance
-(``seed=None`` draws one OS-entropy seed at construction). Never paints black, so it can't erase
-a host's ``bg_color`` or image.
+(``seed=None`` draws one OS-entropy seed at construction). Never paints
+black, so it can't erase a host's ``bg_color`` or image.
 """
 
 import math

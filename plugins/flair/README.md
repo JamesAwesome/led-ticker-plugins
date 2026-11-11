@@ -851,8 +851,8 @@ background = {style = "flair.twinkle", density = 0.05, speed = 1.2, color = [255
 | --- | --- | --- |
 | `density` | `0.03` | Fraction of panel pixels that are stars, in `(0, 1]`. |
 | `speed` | `1.0` | Twinkle rate in `(0, 2.0]`. |
-| `color` | `[255, 230, 180]` | Peak star color; each star scales it by its brightness. |
-| `brightness` | `1.0` | Dims the whole starfield, in `(0, 1]`; `0.3` keeps the stars subtle behind text. Very low values on dim colors can round some stars to off. |
+| `color` | `[255, 230, 180]` | Peak star color; each star scales it by its twinkle level. |
+| `brightness` | `1.0` | Dims the whole starfield, in `(0, 1]`; `0.3` keeps the stars subtle behind text. Lower values make stars spend longer fully dark; if `max(color) × brightness < 0.5` the field never lights. |
 | `seed` | `None` (OS entropy) | Fixes the starfield for reproducible demo GIFs. |
 
 ### Notes
