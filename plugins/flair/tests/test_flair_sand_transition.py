@@ -37,14 +37,17 @@ class _StubCanvas:
                 self.SetPixel(x, y, r, g, b)
 
 
-def _block_widget(color: tuple[int, int, int], w: int, h: int, y0: int = 0) -> Any:
-    """Widget painting a solid logical rectangle of `color` at rows y0..y0+h."""
+def _block_widget(
+    color: tuple[int, int, int], w: int, h: int, y0: int = 0, x0: int = 0, step: int = 1
+) -> Any:
+    """Widget painting a logical rectangle of `color` at rows y0..y0+h,
+    columns x0..x0+w (every `step`-th column)."""
     widget = mock.Mock()
     widget.hold_time = 0.0
 
     def _draw(canvas: Any, cursor_pos: int = 0, **kw: Any) -> tuple[Any, int]:
         for y in range(y0, y0 + h):
-            for x in range(w):
+            for x in range(x0, x0 + w, step):
                 canvas.SetPixel(x, y, *color)
         return (canvas, cursor_pos)
 
@@ -114,14 +117,16 @@ class TestFrames:
     @pytest.mark.parametrize("t", [0.65, 0.75, 0.85])
     def test_pour_only_incoming_colors_and_straight_drop(self, t):
         c = _StubCanvas()
-        o, i = _block_widget(RED, 16, 16), _block_widget(GREEN, 8, 4, y0=8)
+        # every other column only, so a grain that shifts even one column
+        # lands in an empty one
+        o, i = _block_widget(RED, 16, 16), _block_widget(GREEN, 8, 4, y0=8, step=2)
         s = Sand(seed=4)
         _frame(s, 0.0, c, o, i)
         px = _frame(s, t, c, o, i)
         assert px
         assert set(px.values()) <= {GREEN}
         for x, y in px:
-            assert 0 <= x < 8  # only target columns: no sideways motion
+            assert x in (0, 2, 4, 6)  # its own target column: no sideways motion
             assert y <= 11  # never below the lowest target row
 
     def test_pour_complete_before_snap(self):
@@ -167,6 +172,31 @@ class TestFrames:
         px = _frame(s, 1.0, c, o, i)
         assert px == {(x, y): GREEN for x in range(8) for y in range(8)}
 
+    @pytest.mark.parametrize("t", [0.926, 14 / 15])
+    def test_pour_landed_by_last_sampled_frame_bigsign(self, t):
+        # last sampled pour frame: ~0.926 under ease_in_out, 28/30 linear
+        c = _StubCanvas(256, 64)
+        o, i = _block_widget(RED, 256, 64), _block_widget(GREEN, 256, 64)
+        s = Sand(seed=9)
+        _frame(s, 0.0, c, o, i)
+        _frame(s, 0.5, c, o, i)
+        px = _frame(s, t, c, o, i)
+        assert px == {(x, y): GREEN for x in range(256) for y in range(64)}
+
+    def test_real_rederived_every_frame(self):
+        # the runner hands a different back buffer each frame (constraint #1);
+        # a ScaledCanvas wrapper has its .real swapped in place
+        a, b = _StubCanvas(64, 16), _StubCanvas(64, 16)
+        sc = ScaledCanvas(a, scale=4, content_height=4)
+        o, i = _block_widget(RED, 16, 4), _block_widget(GREEN, 16, 4)
+        s = Sand(seed=1)
+        for k, t in enumerate((0.0, 0.1, 0.2, 0.6, 0.7, 0.8)):
+            buf = a if k % 2 == 0 else b
+            sc.real = buf
+            buf.Clear()
+            s.frame_at(t, sc, o, i)
+            assert buf._pixels, t
+
     def test_first_frame_in_pour_skips_crumble(self):
         c = _StubCanvas()
         o, i = _block_widget(RED, 16, 16), _block_widget(GREEN, 16, 16)
@@ -210,18 +240,23 @@ class TestFiring:
 
 
 class TestScaled:
-    def test_scaled_physical_resolution(self):
+    @pytest.mark.parametrize("seed", [1, 2, 3, 4, 5])
+    def test_scaled_physical_resolution(self, seed):
         real = _StubCanvas(64, 16)
         sc = ScaledCanvas(real, scale=4, content_height=4)
-        o, i = _block_widget(RED, 1, 1), _block_widget(GREEN, 1, 1)
-        s = Sand(seed=3)
+        # one logical pixel away from the edges -> one 4x4 real block
+        o, i = _block_widget(RED, 1, 1, x0=4, y0=0), _block_widget(GREEN, 1, 1)
+        s = Sand(seed=seed)
         s.frame_at(0.0, sc, o, i)
+        grains = s._crumble
+        assert grains is not None and len(grains) == 16
+        # every real LED is its own grain with its own timing and drift
+        assert len({(g[0], g[1]) for g in grains}) == 16
+        assert len({g[5] for g in grains}) == 16
+        assert len({g[6] for g in grains}) == 16
         real.Clear()
         s.frame_at(0.25, sc, o, i)
         painted = set(real._pixels)
-        assert painted
-        # a translated copy of the 4x4 source block would mean grains moved
-        # per logical pixel, not per real LED
         xs = {x for x, _ in painted}
         ys = {y for _, y in painted}
         is_block = (

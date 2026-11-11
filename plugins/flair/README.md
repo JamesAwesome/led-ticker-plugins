@@ -906,10 +906,13 @@ Requires **led-ticker-core >= 4.32**.
 ### Config
 
 ```toml
+[[playlist.section]]
+mode = "slideshow"
+transition = "flair.snow"
+
 [[playlist.section.widget]]
 type = "message"
 text = "WINTER"
-transition = "flair.snow"
 ```
 
 With knobs:
@@ -943,11 +946,16 @@ Requires **led-ticker-core >= 4.32**.
 ### Config
 
 ```toml
+[[playlist.section]]
+mode = "slideshow"
+transition = {type = "flair.sand", duration = 3}
+
 [[playlist.section.widget]]
 type = "message"
 text = "SAND"
-transition = {type = "flair.sand", duration = 3}
 ```
+
+`transition` is a **section** field: it runs between that section's widgets and as its entry (or set `[transitions] between_sections = "flair.sand"` with `duration = 3`).
 
 The engine's default transition `duration` is 0.5 s, which is too fast to read as sand; use about `duration = 3`.
 

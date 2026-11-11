@@ -94,3 +94,24 @@ def test_same_seed_same_grains():
     r = _lit(32, 16)
     assert crumble_grains(r, random.Random(7)) == crumble_grains(r, random.Random(7))
     assert pour_grains(r, random.Random(7)) == pour_grains(r, random.Random(7))
+
+
+def test_crumble_release_uneven_within_a_row():
+    # "whole-wordish, a little random": not all at once, not row by row
+    grains = crumble_grains(_lit(256, 64), random.Random(10))
+    for row in (0, 31, 63):
+        rel = [g[5] for g in grains if g[1] == row]
+        assert max(rel) - min(rel) > 0.25
+    top = [g[5] for g in grains if g[1] < 8]
+    bottom = [g[5] for g in grains if g[1] >= 56]
+    assert abs(sum(top) / len(top) - sum(bottom) / len(bottom)) < 0.03
+
+
+def test_crumble_grains_drift_sideways():
+    grains = crumble_grains(_lit(256, 64), random.Random(11))
+    moved = 0
+    for g in grains:
+        pos = crumble_pos(g, 0.45, 256, 64)
+        if pos is not None and pos[0] != g[0]:
+            moved += 1
+    assert moved > len(grains) // 10
