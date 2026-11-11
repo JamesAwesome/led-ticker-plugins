@@ -1,6 +1,6 @@
 # led-ticker-flair
 
-Homage sprite-trail transitions and text animations for [led-ticker](https://github.com/JamesAwesome/led-ticker) — four sprite families plus text-effect transitions and animations, all in one wheel.
+Homage sprite-trail transitions and flair effects for [led-ticker](https://github.com/JamesAwesome/led-ticker) — four sprite families plus `flair.*` transitions, text animations, background effects, and the `flair.lottery` widget, all in one wheel.
 
 ## Sprite-trail transitions
 
