@@ -143,6 +143,15 @@ def _sequence(
 ) -> tuple[FlapCell | None, ...]:
     own = {c.rows_key() for c in (a, b) if c is not None}
     candidates = [c for c in pool if c.rows_key() not in own]
+    # In-betweens must fit the slot: a wide borrowed glyph (a "W" through an
+    # "I") would spill onto the neighbours mid-clatter. Allow ~1.5x the
+    # slot's own width; when nothing fits, the narrowest available.
+    slot_w = max(c.width for c in (a, b) if c is not None)
+    fit = [c for c in candidates if c.width <= slot_w + max(1, slot_w // 2)]
+    if not fit and candidates:
+        narrowest = min(c.width for c in candidates)
+        fit = [c for c in candidates if c.width == narrowest]
+    candidates = fit
     mid: list[FlapCell] = []
     prev = a.rows_key() if a is not None else None
     for _ in range(flips):

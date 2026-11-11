@@ -635,7 +635,7 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `flips` | int, 0 to 12 | `3` | In-between characters each position clatters through before it lands. `0` flips straight from the old character to the new one. |
+| `flips` | int, 0 to 12 | `3` | In-between characters each position clatters through before it lands. They're picked from characters about as wide as that position, so a wide letter never spills onto its neighbours. `0` flips straight from the old character to the new one. |
 | `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent rippling across the message. `0` flips every character together; higher values spread them out (and make each flap quicker). |
 
 `.alternating` passes both knobs to each direction.
@@ -647,8 +647,8 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 - **Different lengths.** Extra positions flip from blank, or to blank.
 - **Two-row widgets** flip each row on its own hinge. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row flips from or to blank.
 - **Images, gifs and background effects** have no characters to find, so they're cut into character-width strips that flip the same way.
-- **Borders stay put.** A bordered widget's ring doesn't flip.
-- **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background and scale arrive on the final frame. Laser and blinds have the same limitation.
+- **Borders stay put.** A bordered widget's ring doesn't flip. The new section's border takes over halfway through, while the characters are still clattering.
+- **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background arrives at the closing snap and its scale on the final frame. Laser and blinds have the same limitation.
 - **Smallsign.** At 16 rows each half-flap is only a few LEDs tall. It works, but it reads best on the bigsign.
 
 ## Fisheye animation

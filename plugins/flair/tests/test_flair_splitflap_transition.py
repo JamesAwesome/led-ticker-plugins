@@ -376,3 +376,64 @@ class TestRealCoreWidgets:
             TickerMessage(text="GIF"),
             GifPlayer(path=str(path), fit="stretch"),
         )
+
+
+class TestPerf:
+    """One full firing at bigsign / longboi size. Mac timings: board build
+    (first frame) ~27 ms at 256x64 and ~65 ms at 512x64 for a full-panel
+    noise picture, ~1-2 ms per frame after. Bounds are ~10x headroom so CI
+    noise doesn't flake, while a quadratic regression (seconds) trips."""
+
+    @staticmethod
+    def _noise_widget(w: int, h: int, seed: int) -> Any:
+        rng = random.Random(seed)
+        img = Image.new("RGB", (w, h))
+        img.putdata(
+            [(rng.randrange(1, 256), rng.randrange(256), 0) for _ in range(w * h)]
+        )
+        widget = mock.Mock()
+        widget.hold_time = 0.0
+        widget.border = None
+        widget.background = None
+        widget.bottom_text = ""
+
+        def _draw(canvas: Any, cursor_pos: int = 0, **kw: Any) -> tuple[Any, int]:
+            unwrap_to_real(canvas).SetImage(img, 0, 0)
+            return (canvas, cursor_pos)
+
+        widget.draw.side_effect = _draw
+        return widget
+
+    @pytest.mark.parametrize("w", [256, 512])
+    def test_perf_full_panel_picture_firing(self, w):
+        import time
+
+        real = _StubCanvas(w, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        o, i = self._noise_widget(w, 64, 1), self._noise_widget(w, 64, 2)
+        p = SplitFlap()
+        t0 = time.perf_counter()
+        p.frame_at(0.0, sc, o, i)
+        first = time.perf_counter() - t0
+        worst = 0.0
+        for k in range(1, 36):
+            t0 = time.perf_counter()
+            p.frame_at(k / 36 * SNAP_THRESHOLD, sc, o, i)
+            worst = max(worst, time.perf_counter() - t0)
+        assert first < 0.6
+        assert worst < 0.05
+
+    def test_perf_text_firing(self):
+        import time
+
+        from led_ticker.plugin import TickerMessage
+
+        real = _StubCanvas(256, 64)
+        sc = ScaledCanvas(real, scale=4, content_height=16)
+        o = TickerMessage(text="NOW BOARDING")
+        i = TickerMessage(text="GATE 12 ON TIME")
+        p = SplitFlap(flips=12)
+        t0 = time.perf_counter()
+        for k in range(36):
+            p.frame_at(k / 36 * SNAP_THRESHOLD, sc, o, i)
+        assert time.perf_counter() - t0 < 0.5

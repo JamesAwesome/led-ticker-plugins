@@ -192,3 +192,21 @@ def test_build_board_many_distinct_cells_is_fast():
     t0 = time.perf_counter()
     build_board(out, inc, 8, random.Random(0))
     assert time.perf_counter() - t0 < 0.2
+
+
+def test_in_betweens_fit_the_slot_width():
+    # A wide borrowed glyph (a "W") must not clatter through a narrow slot
+    # (an "I") and spill onto its neighbours.
+    narrow_o = _card(20, 2, range(0, 32), RED)
+    narrow_i = _card(20, 2, range(0, 32), GREEN)
+    wide = [_card(x, 7, range(0, 32), (0, 0, x)) for x in (0, 40, 60)]
+    mids = [_card(x, 2, range(0, 31), (x, x, 0)) for x in (80, 90, 100)]
+    out = _plan([*wide[:1], narrow_o, *wide[1:], *mids])
+    inc = _plan([*wide[:1], narrow_i, *wide[1:], *mids])
+    for seed in range(20):
+        board = build_board(out, inc, 3, random.Random(seed))
+        (flap,) = [
+            f for f in board.flaps if f.seq[0] is not None and f.seq[0].slot == 20
+        ]
+        assert len(flap.seq) == 5
+        assert all(c is not None and c.width <= 3 for c in flap.seq[1:-1])
