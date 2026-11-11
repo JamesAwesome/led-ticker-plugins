@@ -858,6 +858,7 @@ background = {style = "flair.twinkle", density = 0.05, speed = 1.2, color = [255
 ### Notes
 
 - Frame-pure and physical-resolution, like every flair background; `restart_on_visit = False` so the field keeps twinkling across repeat visits.
+- `brightness` scales the whole starfield; it is not the twinkle **animation**'s `min_brightness` (how dim a twinkling text pixel gets). Each knob is refused on the other slot.
 
 ## Snow background
 
