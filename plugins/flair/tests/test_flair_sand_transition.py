@@ -101,6 +101,16 @@ class TestFrames:
         _frame(s, 0.0, c, o, i)
         assert _frame(s, 0.499, c, o, i) == {}
 
+    @pytest.mark.parametrize("size", [(160, 16), (256, 64)])
+    def test_crumble_empty_at_last_sampled_frame(self, size):
+        # run_transition at min_frames = 30: the last crumble frame is t = 14/30
+        w, h = size
+        c = _StubCanvas(w, h)
+        o, i = _block_widget(RED, w, h), _block_widget(GREEN, w, h)
+        s = Sand(seed=8)
+        _frame(s, 0.0, c, o, i)
+        assert _frame(s, 14 / 30, c, o, i) == {}
+
     @pytest.mark.parametrize("t", [0.65, 0.75, 0.85])
     def test_pour_only_incoming_colors_and_straight_drop(self, t):
         c = _StubCanvas()

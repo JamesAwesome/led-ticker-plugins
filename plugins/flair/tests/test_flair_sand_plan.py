@@ -40,8 +40,10 @@ def test_crumble_before_release_is_in_place():
 
 
 def test_crumble_all_off_panel_by_end():
+    # the runner never samples p = 1: with 30 frames the last crumble frame
+    # is t = 14/30 (p = 0.933), and ~0.87 under ease_in_out
     grains = crumble_grains(_lit(256, 64), random.Random(1))
-    assert all(crumble_pos(g, 0.999, 256, 64) is None for g in grains)
+    assert all(crumble_pos(g, 0.85, 256, 64) is None for g in grains)
 
 
 def test_crumble_only_moves_down_and_drift_bounded():
@@ -84,7 +86,7 @@ def test_physics_holds_on_small_panel():
     r = _lit(160, 16)
     cg = crumble_grains(r, random.Random(6))
     pg = pour_grains(r, random.Random(6))
-    assert all(crumble_pos(g, 0.999, 160, 16) is None for g in cg)
+    assert all(crumble_pos(g, 0.85, 160, 16) is None for g in cg)
     assert all(pour_pos(g, 0.9999, 16) == g[1] for g in pg)
 
 

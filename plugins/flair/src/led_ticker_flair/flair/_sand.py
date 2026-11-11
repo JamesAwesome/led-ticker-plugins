@@ -4,8 +4,8 @@ Design in one breath:
 - **Crumble.** Every lit snapshot pixel becomes one grain with a random
   release time in ``[0, RELEASE_MAX)`` of the crumble phase. After release
   it falls under a gravity sized so the last-released top-row grain has
-  left the panel by the phase end, drifting sideways by at most
-  ``DRIFT_FRAC`` of the panel width.
+  left the panel by ``CRUMBLE_CLEAR`` (before the last sampled frame),
+  drifting sideways by at most ``DRIFT_FRAC`` of the panel width.
 - **Pour.** Every lit pixel of the incoming snapshot becomes one grain
   dropped at rest from ``H0`` pixels above the top edge, straight down its
   own column, stopping dead on its target row. Lower rows start earlier, by
@@ -25,6 +25,10 @@ POUR_ROW_SPAN = 0.55
 POUR_JITTER = 0.25
 POUR_FALL_MAX = 0.45
 DRIFT_FRAC = 0.02
+# Crumble progress by which every grain must be off the panel. The runner
+# never samples p = 1: at min_frames = 30 the last crumble frame is p ~ 0.93
+# (linear) or ~0.87 (ease_in_out).
+CRUMBLE_CLEAR = 0.85
 
 # (x0, y0, r, g, b, release, vx)
 CrumbleGrain = tuple[int, int, int, int, int, float, float]
@@ -33,7 +37,7 @@ PourGrain = tuple[int, int, int, int, int, float, int]
 
 
 def crumble_gravity(h: int) -> float:
-    return 2.1 * h / (1 - RELEASE_MAX) ** 2
+    return 2.1 * h / (CRUMBLE_CLEAR - RELEASE_MAX) ** 2
 
 
 def drop_height(h: int) -> int:
