@@ -1,0 +1,219 @@
+# requires-plugins: led-ticker-flair
+# Smallsign SMOKE TEST: flair.splitflap transition (160x16, scale 1).
+# Render-demo / hardware fixture: rows=16/cols=160/chain_length=1 is the
+# headless logical canvas (see config.fireworks-smoke.smallsign.toml).
+#
+# Sections: forward (different lengths), reverse, alternating on navy, random,
+# BG HOLD, rainbow border, two_row (per-row hinges), gif in and out, and a
+# knob section (flips = 0, stagger = 0.8). At 16 rows each half-flap is only a
+# few LEDs tall: this file is the visual gate for whether that reads.
+
+[display]
+rows = 16
+cols = 160
+chain_length = 1
+parallel = 1
+brightness = 60
+default_scale = 1
+hardware_mapping = "adafruit-hat"
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 3.0
+between_sections = "flair.splitflap.forward"
+
+# 1. forward, different lengths
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "NOW BOARDING"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "GATE 12"
+font_color = [80, 200, 255]
+
+
+
+# 2. reverse
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.reverse"
+
+[[playlist.section.widget]]
+type = "message"
+text = "ON TIME"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "DELAYED"
+font_color = [80, 200, 255]
+
+
+
+# 3. alternating on navy (watch two firings)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.alternating"
+bg_color = [0, 30, 50]
+[[playlist.section.widget]]
+type = "message"
+text = "3 ALT"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "SECOND"
+font_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "message"
+text = "THIRD"
+font_color = [255, 215, 120]
+
+[[playlist.section.widget]]
+type = "message"
+text = "FOURTH"
+font_color = [130, 220, 150]
+
+
+
+# 4. random settle order
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.random"
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 RANDOM"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "SHUFFLE"
+font_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "message"
+text = "ORDER"
+font_color = [255, 215, 120]
+
+
+
+# 5. bg hold: teal then purple (bg lands at the snap)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+bg_color = [0, 40, 40]
+[[playlist.section.widget]]
+type = "message"
+text = "5 TEAL"
+font_color = [255, 244, 214]
+
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+bg_color = [40, 0, 60]
+[[playlist.section.widget]]
+type = "message"
+text = "PURPLE"
+font_color = [255, 244, 214]
+
+
+
+# 6. rainbow border stays put
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 BORDER"
+font_color = [255, 120, 40]
+border = {style = "rainbow", speed = 4}
+
+[[playlist.section.widget]]
+type = "message"
+text = "RING"
+font_color = [80, 200, 255]
+border = {style = "rainbow", speed = 4}
+
+
+
+# 7. two_row, per-row hinges (entry = message -> two_row)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FRESH"
+top_color = [255, 215, 120]
+bottom_text = "COFFEE"
+bottom_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "WALK INS"
+top_color = [130, 220, 150]
+bottom_text = "WELCOME"
+bottom_color = [255, 120, 40]
+
+
+
+# 8. gif in and out (strips)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "8 GIF"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "gif"
+path = "assets/phoenix.gif"
+
+[[playlist.section.widget]]
+type = "message"
+text = "AFTER"
+font_color = [80, 200, 255]
+
+
+
+# 9. knobs: one flap each, slow ripple
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
+
+[[playlist.section.widget]]
+type = "message"
+text = "9 KNOBS"
+font_color = [255, 120, 40]
+
+[[playlist.section.widget]]
+type = "message"
+text = "ONE FLAP"
+font_color = [80, 200, 255]
+

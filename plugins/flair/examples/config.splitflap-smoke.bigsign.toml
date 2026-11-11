@@ -1,0 +1,294 @@
+# requires-plugins: led-ticker-flair
+# Bigsign SMOKE TEST: flair.splitflap transition (the flair release that ships it)
+#
+# Prereqs: led-ticker-core >= 4.32; led-ticker-flair at the release that ships
+# splitflap. Copy to config/config.toml, then `make restart`.
+# Preflight: led-ticker validate config/config.toml.
+#
+# Sections: forward (different lengths), reverse, alternating on navy, random,
+# BG HOLD (teal then purple; the bg lands at the snap), a rainbow-bordered
+# message (the ring stays put), two_row (scale 2: per-row hinges, and the
+# message -> two_row entry), a gif in and out (cut into strips), a knob
+# section (flips = 0, stagger = 0.8) and a letterboxed section (scale 2,
+# content 16). Each section's own `transition` also runs as its ENTRY.
+
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "cut"
+duration = 3.0
+between_sections = "flair.splitflap.forward"
+
+# 1. forward, different lengths
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "NOW BOARDING"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "GATE 12"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 2. reverse
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.reverse"
+
+[[playlist.section.widget]]
+type = "message"
+text = "ON TIME"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "DELAYED"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 3. alternating on navy (watch two firings)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.alternating"
+bg_color = [0, 30, 50]
+[[playlist.section.widget]]
+type = "message"
+text = "3 ALT"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SECOND"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "THIRD"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "FOURTH"
+font_color = [130, 220, 150]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 4. random settle order
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.random"
+
+[[playlist.section.widget]]
+type = "message"
+text = "4 RANDOM"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "SHUFFLE"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "ORDER"
+font_color = [255, 215, 120]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 5. bg hold: teal then purple (bg lands at the snap)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+bg_color = [0, 40, 40]
+[[playlist.section.widget]]
+type = "message"
+text = "5 TEAL"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+bg_color = [40, 0, 60]
+[[playlist.section.widget]]
+type = "message"
+text = "PURPLE"
+font_color = [255, 244, 214]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 6. rainbow border stays put
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "6 BORDER"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+[[playlist.section.widget]]
+type = "message"
+text = "RING"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+border = {style = "rainbow", speed = 4}
+
+
+
+# 7. two_row, per-row hinges (entry = message -> two_row)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+scale = 2
+content_height = 32
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "FRESH"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [255, 215, 120]
+bottom_text = "COFFEE"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [80, 200, 255]
+
+[[playlist.section.widget]]
+type = "two_row"
+top_text = "WALK INS"
+top_font = "Inter-Bold"
+top_font_size = 14
+top_color = [130, 220, 150]
+bottom_text = "WELCOME"
+bottom_font = "Inter-Bold"
+bottom_font_size = 14
+bottom_color = [255, 120, 40]
+
+
+
+# 8. gif in and out (strips)
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+
+[[playlist.section.widget]]
+type = "message"
+text = "8 GIF"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "gif"
+path = "assets/phoenix.gif"
+
+[[playlist.section.widget]]
+type = "message"
+text = "AFTER"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 9. knobs: one flap each, slow ripple
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
+
+[[playlist.section.widget]]
+type = "message"
+text = "9 KNOBS"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "ONE FLAP"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+
+# 10. letterboxed: scale 2 / content 16; border lights the bands
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = "flair.splitflap.forward"
+scale = 2
+content_height = 16
+[[playlist.section.widget]]
+type = "message"
+text = "10 LETTERBOX"
+font_color = [255, 200, 60]
+border = "rainbow"
+
+[[playlist.section.widget]]
+type = "message"
+text = "BANDS"
+font_color = [120, 255, 160]
+border = "rainbow"
+

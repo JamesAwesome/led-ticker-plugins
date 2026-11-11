@@ -7,7 +7,8 @@ transitions as ``transition = "flair.spinout"`` (or the six
 ``flair.laser.<origin>`` beam-write variants, or the
 ``flair.accordion.<motion>[.alternating]`` card-deck variants, or the
 ``flair.interlock.<axis>`` strand-mesh variants, or the
-``flair.blinds.<direction>`` venetian-blind variants).
+``flair.blinds.<direction>`` venetian-blind variants, or the
+``flair.splitflap.<order>`` departure-board variants).
 
 The twinkle/blink/snow family adds ``animation = "flair.blink"`` and
 ``animation = "flair.twinkle"`` (per-pixel gain), the
@@ -122,6 +123,12 @@ def register(api):
         SnowBackground,
     )
     from led_ticker_flair.flair.spinout import Spinout  # noqa: PLC0415
+    from led_ticker_flair.flair.splitflap import (  # noqa: PLC0415
+        SplitFlap,
+        SplitFlapAlternating,
+        SplitFlapRandom,
+        SplitFlapReverse,
+    )
     from led_ticker_flair.flair.stickers import Stickers  # noqa: PLC0415
     from led_ticker_flair.flair.twinkle import Twinkle  # noqa: PLC0415
     from led_ticker_flair.flair.twinkle_background import (  # noqa: PLC0415
@@ -164,4 +171,8 @@ def register(api):
     api.transition("blinds.left")(BlindsLeft)
     api.transition("blinds.alternating")(BlindsAlternating)
     api.transition("blinds.random")(BlindsRandom)
+    api.transition("splitflap.forward")(SplitFlap)
+    api.transition("splitflap.reverse")(SplitFlapReverse)
+    api.transition("splitflap.alternating")(SplitFlapAlternating)
+    api.transition("splitflap.random")(SplitFlapRandom)
     api.widget("lottery")(Lottery)
