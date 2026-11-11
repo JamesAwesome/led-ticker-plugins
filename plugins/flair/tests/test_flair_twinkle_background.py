@@ -217,6 +217,26 @@ def test_provider_cell_count_on_evenly_divisible_width() -> None:
     assert max(i for _f, i, _t in prov.calls) == 31
 
 
+def test_wrapper_scale_wins_over_height_fallback() -> None:
+    """A scale=2 section on a 64-row panel: the wrapper's scale (12 px
+    cells), not the real_h // 16 guess (24 px)."""
+    prov = _ByCell()
+    real = HeadlessCanvas(width=256, height=64)
+    TwinkleBackground(density=0.05, color=prov, seed=1).paint(
+        ScaledCanvas(real, scale=2, content_height=32), 0
+    )
+    assert {t for _f, _i, t in prov.calls} == {22}  # ceil(256 / 12)
+
+
+def test_short_unwrapped_canvas_does_not_divide_by_zero() -> None:
+    """real_h < 16 on an image host: the scale clamps to 1 (6 px cells)."""
+    prov = _ByCell()
+    TwinkleBackground(density=0.2, color=prov, seed=1).paint(
+        HeadlessCanvas(width=64, height=8), 0
+    )
+    assert {t for _f, _i, t in prov.calls} == {11}  # ceil(64 / 6)
+
+
 def test_gradient_runs_left_to_right() -> None:
     fx = TwinkleBackground(
         density=0.3,

@@ -865,7 +865,7 @@ background = {style = "flair.twinkle", color = {style = "gradient", from = [255,
 ### Notes
 
 - Frame-pure and physical-resolution, like every flair background; `restart_on_visit = False` so the field keeps twinkling across repeat visits.
-- A color provider is sampled **by position**: the panel is cut into columns about one character wide (6 logical px), and every star takes its column's color. A gradient runs left to right across the panel, and a rainbow sweeps across it like rainbow text. `brightness` still applies on top. On `gif`/`image` widgets the column width is derived from the panel height (16 rows of content), so it matches `message` widgets on the standard smallsign/bigsign layouts. A live-data provider (e.g. `stocks.trend`) recolors the stars when its data updates.
+- A color provider is sampled **by position**: the panel is cut into columns about one character wide (6 logical px), and every star takes its column's color. A gradient runs left to right across the panel, and a rainbow sweeps across it like rainbow text. `brightness` still applies on top. On `gif`/`image` widgets the column width is derived from the panel height (16 rows of content), so it matches `message` widgets at the sign's default scale; in a section with a non-default `scale` the image widget's columns come out wider or narrower than the message widget's. A live-data provider (e.g. `stocks.trend`) recolors the stars when its data updates.
 - `brightness` scales the whole starfield; it is not the twinkle **animation**'s `min_brightness` (how dim a twinkling text pixel gets). Each knob is refused on the other slot.
 
 ## Snow background
