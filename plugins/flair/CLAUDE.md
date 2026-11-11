@@ -138,7 +138,7 @@ One wheel, five plugin namespaces: four sprite-trail families (`nyancat`, `pokeb
 
 - **Same name as the animation, different registry.** `api.background("twinkle")` beside `api.animation("twinkle")`; core resolves each by slot. Subclass of `BackgroundEffectBase` (tripwire `test_is_background_effect`) with `frame_invariant = False`, `restart_on_visit = False`.
 - **Stars are `is_twinkler` pixels of the REAL panel at `density` (default 0.03), painted at physical resolution.** `paint` unwraps with `unwrap_to_real` and never writes through the `ScaledCanvas` wrapper (tripwire `TestScaledCanvas::test_paints_only_on_real`); star count scales with real area (`test_star_count_scales_with_area`).
-- **Pure function of `(frame_count, real dims)`; never black.** Each star paints `color * level` and a zero-after-scaling pixel is skipped, so the effect never erases a host's `bg_color` or an image beneath it. Tripwires: `test_pure_function_of_frame`, `test_unseeded_instance_is_still_frame_pure`, `test_never_paints_black`, `test_colors_scale_from_base`, `test_perf_bigsign`.
+- **Pure function of `(frame_count, real dims)`; never black.** Each star paints `color * brightness * level` (`brightness` in (0, 1], default 1.0 — tripwires `test_brightness_dims_every_star`, `test_brightness_default_is_unchanged`) and a zero-after-scaling pixel is skipped, so the effect never erases a host's `bg_color` or an image beneath it. Tripwires: `test_pure_function_of_frame`, `test_unseeded_instance_is_still_frame_pure`, `test_never_paints_black`, `test_colors_scale_from_base`, `test_perf_bigsign`.
 
 ## `flair.snow` background invariants (`src/led_ticker_flair/flair/snow_background.py`, `_snow.py`)
 

@@ -72,6 +72,22 @@ def test_colors_scale_from_base() -> None:
         assert rgb[1] == 0 and rgb[2] == 0 and rgb[0] > 0
 
 
+def test_brightness_dims_every_star() -> None:
+    full = _paint(TwinkleBackground(density=0.2, seed=3), 4)._pixels
+    dim = _paint(TwinkleBackground(density=0.2, seed=3, brightness=0.25), 4)._pixels
+    assert dim and set(dim) <= set(full)
+    for xy, rgb in dim.items():
+        assert all(d <= f for d, f in zip(rgb, full[xy], strict=True))
+        assert all(abs(d - f * 0.25) <= 1 for d, f in zip(rgb, full[xy], strict=True))
+    assert max(map(max, dim.values())) < max(map(max, full.values()))
+
+
+def test_brightness_default_is_unchanged() -> None:
+    a = _paint(TwinkleBackground(density=0.1, seed=5), 9)._pixels
+    b = _paint(TwinkleBackground(density=0.1, seed=5, brightness=1.0), 9)._pixels
+    assert a == b
+
+
 class TestScaledCanvas:
     def test_paints_only_on_real(self) -> None:
         real = HeadlessCanvas(width=256, height=64)
@@ -96,6 +112,11 @@ class TestScaledCanvas:
         {"color": [1, 2, 300]},
         {"color": [1, 2, True]},
         {"seed": "x"},
+        {"brightness": 0},
+        {"brightness": 1.5},
+        {"brightness": True},
+        {"brightness": float("nan")},
+        {"brightness": "dim"},
     ],
 )
 def test_bad_args(kwargs) -> None:
