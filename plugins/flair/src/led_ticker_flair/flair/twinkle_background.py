@@ -2,12 +2,13 @@
 widget's content (``background = "flair.twinkle"``).
 
 Stars are the pixels of the real panel that ``is_twinkler`` selects at
-``density``; each paints ``color * level`` at physical resolution. Pure
-function of ``(frame_count, real dims)`` per instance (``seed=None`` draws
-one OS-entropy seed at construction). Never paints black, so it can't erase
-a host's ``bg_color`` or image.
+``density``; each paints ``color * level * brightness`` at physical
+resolution. Pure function of ``(frame_count, real dims)`` per instance
+(``seed=None`` draws one OS-entropy seed at construction). Never paints
+black, so it can't erase a host's ``bg_color`` or image.
 """
 
+import math
 import random
 from typing import Any
 
@@ -27,8 +28,18 @@ class TwinkleBackground(BackgroundEffectBase):
         speed: float = 1.0,
         color: Any = (255, 230, 180),
         seed: int | None = None,
+        brightness: float = 1.0,
     ) -> None:
         validate_common(density, speed, seed)
+        if (
+            isinstance(brightness, bool)
+            or not isinstance(brightness, int | float)
+            or math.isnan(brightness)
+            or not 0 < brightness <= 1
+        ):
+            raise ValueError(
+                f"brightness must be a number in (0, 1]; got {brightness!r}"
+            )
         ok = (
             isinstance(color, list | tuple)
             and len(color) == 3
@@ -44,6 +55,7 @@ class TwinkleBackground(BackgroundEffectBase):
         self.density = float(density)
         self.speed = float(speed)
         self.color = (color[0], color[1], color[2])
+        self.brightness = float(brightness)
         self.seed = seed
         self._seed = seed if seed is not None else random.SystemRandom().getrandbits(62)
         self._cycle = 24 / self.speed
@@ -74,7 +86,8 @@ class TwinkleBackground(BackgroundEffectBase):
         w, h = real.width, real.height
         if w <= 0 or h <= 0:
             return
-        cr, cg, cb = self.color
+        k = self.brightness
+        cr, cg, cb = (v * k for v in self.color)
         cycle = self._cycle
         set_pixel = real.SetPixel
         for x, y, factor, offset in self._stars_for(w, h):
