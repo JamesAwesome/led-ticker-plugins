@@ -28,6 +28,14 @@ This package split out of `led-ticker-feeds` (was `feeds.rss`); history is prese
 - **Deps:** `aiohttp` (fetch) and `feedparser>=6.0` (parse). `feedparser` is rss-only — it is
   NOT a weather dep.
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
+- **`description = "append"` is opt-in and title-only is the byte-identical default.**
+  `fold_description(title, html, skip_patterns=...)` is the ONE place description HTML
+  becomes headline text (stdlib `HTMLParser`, block tags split paragraphs, images drop);
+  it dedups against the title by alphanumeric-normalized containment so a feed that
+  restates the date/subject in the body doesn't double it. The feed `<title>`
+  (`feed_title`) is never folded. `validate_config` rejects unknown `description` values,
+  non-list / invalid-regex `description_skip`, and `description_skip` without `append`.
+  Tripwires: `tests/test_description.py`.
 
 ## Commands
 
@@ -49,9 +57,11 @@ Python **3.14+** only.
 ```
 src/led_ticker_rss/
   __init__.py   # register(api) → api.widget("feed")(RSSFeedMonitor)
-  rss.py        # RSSFeedMonitor (Container): update() pulls + parses the feed
+  rss.py        # RSSFeedMonitor (Container): update() pulls + parses the feed;
+                #   fold_description() for the `description = "append"` knob
 tests/
   test_rss.py            # widget behavior
+  test_description.py    # description knob + fold_description + validate_config
   test_import_purity.py  # AST: only led_ticker.plugin imports
   test_smoke.py          # entry-point registers rss.feed
   conftest.py            # shared canvas / make_widget fixtures

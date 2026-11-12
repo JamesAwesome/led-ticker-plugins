@@ -43,6 +43,43 @@ url = "https://feeds.bbci.co.uk/news/rss.xml"
 
 The widget is a Container: it pulls the feed in the background and expands each story into its own scrolling `TickerMessage`, so live updates surface within one display cycle.
 
+### Options
+
+| Field | Default | Meaning |
+|---|---|---|
+| `feed_url` | required | RSS/Atom URL to poll. |
+| `update_interval` | `1800` | Seconds between polls. |
+| `max_stories` | `5` | How many items to show per pass. |
+| `font_color` | legacy 3-color cycle | Any core color provider; applied to every story. |
+| `bg_color` | none | Background color for every story. |
+| `font` | core default | Font name for every story. |
+| `description` | `"off"` | `"append"` folds each item's description onto its headline (below). |
+| `description_skip` | `[]` | Regexes; description paragraphs matching any (case-insensitive search) are dropped. |
+
+### Showing an item's description / notes
+
+By default each story is the item's `<title>` only. Set `description = "append"` and the
+item's `<description>` is flattened to plain-text paragraphs (block tags split, inline
+tags and images are dropped, entities unescaped) and the survivors are appended to the
+headline with ` · ` separators:
+
+```toml
+[[playlist.section.widget]]
+type = "rss.feed"
+feed_url = "https://example.com/feed.xml"
+description = "append"
+description_skip = ["^Posted by", "^Read more"]
+```
+
+Two filters run before the join, so the result stays a one-line headline:
+
+- A paragraph whose alphanumeric content already appears in the title is dropped (feeds that
+  restate the date or subject in the body).
+- Any paragraph matching a `description_skip` regex is dropped.
+
+Items whose description has nothing left render exactly as before. `description_skip`
+without `description = "append"` is a config error.
+
 ## Development
 
 This package lives in the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Run tooling from the repo root:
