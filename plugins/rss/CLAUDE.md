@@ -28,14 +28,23 @@ This package split out of `led-ticker-feeds` (was `feeds.rss`); history is prese
 - **Deps:** `aiohttp` (fetch) and `feedparser>=6.0` (parse). `feedparser` is rss-only — it is
   NOT a weather dep.
 - **No `from __future__ import annotations`** (Python 3.14 / PEP 649 rule, same as core).
-- **`description = "append"` is opt-in and title-only is the byte-identical default.**
-  `fold_description(title, html, skip_patterns=...)` is the ONE place description HTML
-  becomes headline text (stdlib `HTMLParser`, block tags split paragraphs, images drop);
-  it dedups against the title by alphanumeric-normalized containment so a feed that
-  restates the date/subject in the body doesn't double it. The feed `<title>`
-  (`feed_title`) is never folded. `validate_config` rejects unknown `description` values,
-  non-list / invalid-regex `description_skip`, and `description_skip` without `append`.
-  Tripwires: `tests/test_description.py`.
+- **`description = "append"` is opt-in and title-only is the default.**
+  `fold_description(title, html, skip_patterns=..., max_chars=...)` is the ONE place
+  description HTML becomes headline text (stdlib `HTMLParser`; block tags split paragraphs;
+  `<script>`/`<style>`/`<textarea>` contents and `<img>` contribute nothing; a literal
+  `<![CDATA[` is kept as text). Title dedup is deliberately NOT bare substring containment:
+  a paragraph is dropped only when its alnum-normalized form EQUALS the title's or is a
+  substring ≥ `_DEDUP_MIN_ALNUM` (8) chars — a one-word note echoing a title word must
+  survive (pinned). The source field is feedparser `summary`, which falls back to
+  `content:encoded` / Atom `<content>` (full body) — hence `description_max_chars`
+  (default 200, 0 = uncapped) on the folded part only. A title-less item renders its
+  folded text alone; any item whose text resolves to `""` is skipped (the old
+  `item["title"]` KeyError'd the whole update). The feed `<title>` (`feed_title`) is never
+  folded. `validate_config` rejects unknown `description` values, non-list / invalid-regex
+  `description_skip`, and non-int / negative `description_max_chars` (bool excluded);
+  `description_skip` without `append` is ADVISORY via `validate_config_warnings`, not an
+  error. Tripwires: `tests/test_description.py` (incl. an engine-path test through core's
+  `validate_widget_cfg`).
 
 ## Commands
 

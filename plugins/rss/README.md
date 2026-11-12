@@ -55,13 +55,14 @@ The widget is a Container: it pulls the feed in the background and expands each 
 | `font` | core default | Font name for every story. |
 | `description` | `"off"` | `"append"` folds each item's description onto its headline (below). |
 | `description_skip` | `[]` | Regexes; description paragraphs matching any (case-insensitive search) are dropped. |
+| `description_max_chars` | `200` | Cap on the folded description text (characters, word boundary + `…`). `0` = no cap. |
 
 ### Showing an item's description / notes
 
 By default each story is the item's `<title>` only. Set `description = "append"` and the
-item's `<description>` is flattened to plain-text paragraphs (block tags split, inline
-tags and images are dropped, entities unescaped) and the survivors are appended to the
-headline with ` · ` separators:
+item's description is flattened to plain-text paragraphs (block tags split, inline tags
+drop, `<img>` has no text, `<script>`/`<style>` contents drop, entities unescape) and the
+survivors are appended to the headline with ` · ` separators:
 
 ```toml
 [[playlist.section.widget]]
@@ -71,14 +72,22 @@ description = "append"
 description_skip = ["^Posted by", "^Read more"]
 ```
 
-Two filters run before the join, so the result stays a one-line headline:
+Filters run before the join, so the result stays a one-line headline:
 
-- A paragraph whose alphanumeric content already appears in the title is dropped (feeds that
-  restate the date or subject in the body).
+- A paragraph that restates the title is dropped: its alphanumeric content equals the
+  title's, or is a substring of it at least 8 characters long (feeds that repeat the
+  headline's date or subject in the body). Short notes that merely share a word with the
+  title are kept.
 - Any paragraph matching a `description_skip` regex is dropped.
+- The folded text (not the title) is capped at `description_max_chars`, cut at a word
+  boundary with `…`.
 
-Items whose description has nothing left render exactly as before. `description_skip`
-without `description = "append"` is a config error.
+Which field: feedparser's `summary`, i.e. RSS `<description>` / Atom `<summary>`; when an
+item has neither, feedparser falls back to `content:encoded` / Atom `<content>` (the full
+body), which is what the cap is for. Items whose description has nothing left render
+exactly as before. An item with no `<title>` shows its folded description alone; with
+`description = "off"` a title-less item is skipped. `description_skip` without
+`description = "append"` is reported as a warning by `led-ticker validate`.
 
 ## Development
 
