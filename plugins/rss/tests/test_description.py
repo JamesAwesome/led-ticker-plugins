@@ -169,8 +169,17 @@ class TestFoldDescription:
         assert out == "Hunting season opens · season Hunting"
 
     def test_truncation_never_leaves_a_dangling_separator(self):
-        out = fold_description("T", "<p>alpha</p><p>beta gamma</p>", max_chars=8)
-        assert out == "T · alpha…"
+        # max_chars=9: cut = "alpha · " → word boundary → "alpha ·" → the
+        # separator must be stripped before the ellipsis.
+        for n in (8, 9, 10):
+            out = fold_description("T", "<p>alpha</p><p>beta gamma</p>", max_chars=n)
+            assert out == "T · alpha…", n
+
+    def test_truncation_does_not_double_an_existing_ellipsis(self):
+        out = fold_description(
+            "T", "<p>Lorem ipsum dolor sit… Read more at the site</p>", max_chars=24
+        )
+        assert out == "T · Lorem ipsum dolor sit…"
 
     def test_truncation_result_never_exceeds_max_chars(self):
         for n in range(1, 30):
@@ -307,6 +316,22 @@ class TestDescriptionKnob:
         await feed.update()
         assert feed.feed_stories[0].text == "E · 5 < 6 and <y> z"
 
+    async def test_atom_plain_text_content_fallback_is_not_html_parsed(self):
+        """No <summary>: feedparser copies <content> into `summary` but
+        leaves `summary_detail` unset — the type must come from `content`."""
+        feed_xml = """<?xml version="1.0"?>
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>t</title>
+          <entry><title>E</title>
+            <content type="text">Use &lt;br&gt; tags; 5 &lt; 6</content></entry>
+        </feed>"""
+        feed = RSSFeedMonitor(
+            session=_session_for(feed_xml),
+            feed_url="https://x/feed",
+            description="append",
+        )
+        await feed.update()
+        assert feed.feed_stories[0].text == "E · Use <br> tags; 5 < 6"
+
     async def test_title_is_never_folded(self, critter_session):
         feed = RSSFeedMonitor(
             session=critter_session, feed_url="https://x/feed", description="append"
@@ -333,6 +358,12 @@ class TestValidateConfig:
         msgs = RSSFeedMonitor.validate_config({"description": "yes"})
         assert len(msgs) == 1
         assert "description" in msgs[0] and "append" in msgs[0]
+
+    def test_non_string_description_value_gets_the_friendly_message(self):
+        for bad in (["append"], {"style": "append"}, 1):
+            msgs = RSSFeedMonitor.validate_config({"description": bad})
+            assert len(msgs) == 1, bad
+            assert "append" in msgs[0] and "must be one of" in msgs[0], msgs
 
     def test_description_skip_must_be_list_of_str(self):
         assert RSSFeedMonitor.validate_config({"description_skip": "^a$"})

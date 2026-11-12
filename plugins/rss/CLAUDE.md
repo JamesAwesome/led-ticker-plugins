@@ -32,8 +32,9 @@ This package split out of `led-ticker-feeds` (was `feeds.rss`); history is prese
   `fold_description(title, html, skip_patterns=..., max_chars=...)` is the ONE place
   description HTML becomes headline text (stdlib `HTMLParser`; block tags split paragraphs;
   `<script>`/`<style>`/`<textarea>` contents and `<img>` contribute nothing; a literal
-  `<![CDATA[` is kept as text; a summary whose `summary_detail.type` is `text/plain`
-  bypasses the parser as one paragraph). Title dedup is TOKEN-based, deliberately NOT
+  `<![CDATA[` is kept as text; a `text/plain` declared type — from `summary_detail`, or
+  from `content[0]` when feedparser filled `summary` from `<content>` and left
+  `summary_detail` unset — bypasses the parser as one paragraph). Title dedup is TOKEN-based, deliberately NOT
   substring containment and NOT a char-length floor (both were tried and failed review:
   substring ate one-word notes, an 8-char floor leaked "Nov 11"): `_restates_title` drops
   a paragraph only when its alnum words are a CONTIGUOUS run of ≥ `_DEDUP_MIN_TOKENS` (2)

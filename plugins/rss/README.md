@@ -49,6 +49,7 @@ The widget is a Container: it pulls the feed in the background and expands each 
 |---|---|---|
 | `feed_url` | required | RSS/Atom URL to poll. |
 | `update_interval` | `1800` | Seconds between polls. |
+| `padding` | `6` | Trailing padding (px) after each story in `ticker` mode. |
 | `max_stories` | `5` | How many items to show per pass. |
 | `font_color` | legacy 3-color cycle | Any core color provider; applied to every story. |
 | `bg_color` | none | Background color for every story. |
@@ -81,8 +82,9 @@ Filters run before the join, so the result stays a one-line headline:
 - Any paragraph matching a `description_skip` regex is dropped.
 - The folded text (not the title) is capped at `description_max_chars`, cut at a word
   boundary with `…`.
-- A summary the feed declares as plain text (Atom `type="text"`) is used verbatim; only
-  HTML summaries go through the tag flattener.
+- A summary or content the feed declares as plain text (Atom `type="text"`) skips the tag
+  flattener and is treated as one paragraph (`<` and `&` literal, whitespace collapsed);
+  dedup, `description_skip` and the cap still apply.
 
 Which field: feedparser's `summary`, i.e. RSS `<description>` / Atom `<summary>`; when an
 item has neither, feedparser falls back to `content:encoded` / Atom `<content>` (the full

@@ -121,7 +121,7 @@ def _truncate(text: str, max_chars: int) -> str:
     cut = text[: max_chars - 1]
     if " " in cut:
         cut = cut[: cut.rindex(" ")]
-    return cut.rstrip(" " + _DESCRIPTION_SEPARATOR.strip()) + "…"
+    return cut.rstrip(" …" + _DESCRIPTION_SEPARATOR.strip()) + "…"
 
 
 def fold_description(
@@ -242,7 +242,7 @@ class RSSFeedMonitor:
         """
         msgs: list[str] = []
         mode = cfg.get("description", "off")
-        if mode not in _DESCRIPTION_MODES:
+        if not isinstance(mode, str) or mode not in _DESCRIPTION_MODES:
             msgs.append(
                 f"rss.feed description={mode!r} must be one of "
                 f'{sorted(_DESCRIPTION_MODES)} ("append" folds each item\'s '
@@ -294,7 +294,10 @@ class RSSFeedMonitor:
         ``summary``; a missing <title> is simply absent."""
         title: str = item.get("title") or ""
         if self.description == "append":
-            detail = item.get("summary_detail") or {}
+            # feedparser fills `summary` from <content> when an item has no
+            # <summary>/<description> but then leaves `summary_detail` unset,
+            # so the declared type has to come from the content entry.
+            detail = item.get("summary_detail") or (item.get("content") or [{}])[0]
             return fold_description(
                 title,
                 item.get("summary"),
