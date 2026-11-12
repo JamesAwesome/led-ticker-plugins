@@ -32,14 +32,20 @@ This package split out of `led-ticker-feeds` (was `feeds.rss`); history is prese
   `fold_description(title, html, skip_patterns=..., max_chars=...)` is the ONE place
   description HTML becomes headline text (stdlib `HTMLParser`; block tags split paragraphs;
   `<script>`/`<style>`/`<textarea>` contents and `<img>` contribute nothing; a literal
-  `<![CDATA[` is kept as text). Title dedup is deliberately NOT bare substring containment:
-  a paragraph is dropped only when its alnum-normalized form EQUALS the title's or is a
-  substring ≥ `_DEDUP_MIN_ALNUM` (8) chars — a one-word note echoing a title word must
-  survive (pinned). The source field is feedparser `summary`, which falls back to
-  `content:encoded` / Atom `<content>` (full body) — hence `description_max_chars`
-  (default 200, 0 = uncapped) on the folded part only. A title-less item renders its
-  folded text alone; any item whose text resolves to `""` is skipped (the old
-  `item["title"]` KeyError'd the whole update). The feed `<title>` (`feed_title`) is never
+  `<![CDATA[` is kept as text; a summary whose `summary_detail.type` is `text/plain`
+  bypasses the parser as one paragraph). Title dedup is TOKEN-based, deliberately NOT
+  substring containment and NOT a char-length floor (both were tried and failed review:
+  substring ate one-word notes, an 8-char floor leaked "Nov 11"): `_restates_title` drops
+  a paragraph only when its alnum words are a CONTIGUOUS run of ≥ `_DEDUP_MIN_TOKENS` (2)
+  title words, or equal the whole title — both sides of that boundary are pinned
+  (`test_short_restated_date_is_dropped`, `test_short_paragraph_echoing_a_title_word_is_kept`,
+  `test_title_words_out_of_order_are_not_a_restatement`). The source field is feedparser
+  `summary`, which falls back to `content:encoded` / Atom `<content>` (full body) — hence
+  `description_max_chars` (default 200, 0 = uncapped; the cap INCLUDES the ellipsis and
+  never ends on a dangling `·`) on the folded part only. A title-less item renders its
+  folded text alone; any item whose text resolves to `""` is skipped BEFORE the
+  `max_stories` islice (the old `item["title"]` KeyError'd the whole update).
+  `_LIST_FIELD_HINTS` carries the three knobs for `--list-fields rss.feed`. The feed `<title>` (`feed_title`) is never
   folded. `validate_config` rejects unknown `description` values, non-list / invalid-regex
   `description_skip`, and non-int / negative `description_max_chars` (bool excluded);
   `description_skip` without `append` is ADVISORY via `validate_config_warnings`, not an

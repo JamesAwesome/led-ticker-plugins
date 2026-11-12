@@ -5,7 +5,7 @@ import itertools
 import logging
 import re
 from html.parser import HTMLParser
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import aiohttp
 import attrs
@@ -27,10 +27,13 @@ logger: logging.Logger = logging.getLogger(__name__)
 _DESCRIPTION_MODES: frozenset[str] = frozenset({"off", "append"})
 _DESCRIPTION_SEPARATOR = " · "
 DEFAULT_DESCRIPTION_MAX_CHARS = 200
-# A paragraph is a "restated title" (and dropped) only when its alphanumeric
-# form is a substring of the title's AND is at least this long — otherwise a
-# one-word note that happens to echo a title word ("Hunting") would vanish.
-_DEDUP_MIN_ALNUM = 8
+# Dedup is TOKEN-based: a paragraph restates the title (and is dropped) when
+# its words, in order, are a contiguous run of the title's words AND it has at
+# least this many words (or equals the whole title). Two short words ("Nov
+# 11", "9:17 PM") are a restatement; one word echoing a title word ("Hunting")
+# is a note and survives.
+_DEDUP_MIN_TOKENS = 2
+_TOKEN_RE = re.compile(r"[^\W_]+")
 # Tags that end one paragraph and start the next when flattening the
 # description's HTML. Everything else (b/i/a/span/img/...) is inline.
 _BLOCK_TAGS: frozenset[str] = frozenset(
@@ -78,7 +81,10 @@ class _ParagraphSplitter(HTMLParser):
             self._buf.append(data)
 
     def unknown_decl(self, data: str) -> None:
-        if data.startswith("CDATA[") and not self._skip_depth:
+        # A literal `<![CDATA[..]]>` (feed double-wrapped its HTML) is text.
+        # (Inside <script>/<style> the stdlib treats it as raw text and never
+        # routes it here, so no skip-depth check is needed.)
+        if data.startswith("CDATA["):
             self._buf.append(data[len("CDATA[") :])
 
     def close(self) -> None:
@@ -86,21 +92,36 @@ class _ParagraphSplitter(HTMLParser):
         self._flush()
 
 
-def _normalize(text: str) -> str:
-    """Lowercase alphanumerics only — for "is this paragraph the title
-    restated?" so a leading emoji / punctuation drift doesn't defeat the check."""
-    return "".join(ch for ch in text.lower() if ch.isalnum())
+def _tokens(text: str) -> list[str]:
+    """Lowercased alphanumeric words — the unit title-dedup compares on, so a
+    leading emoji / punctuation drift ("📅", "—", ":") doesn't defeat it."""
+    return _TOKEN_RE.findall(text.lower())
+
+
+def _is_contiguous_run(needle: list[str], hay: list[str]) -> bool:
+    n = len(needle)
+    return any(hay[i : i + n] == needle for i in range(len(hay) - n + 1))
+
+
+def _restates_title(para: str, title_tokens: list[str]) -> bool:
+    toks = _tokens(para)
+    if not toks or not title_tokens:
+        return False
+    if toks == title_tokens:
+        return True
+    return len(toks) >= _DEDUP_MIN_TOKENS and _is_contiguous_run(toks, title_tokens)
 
 
 def _truncate(text: str, max_chars: int) -> str:
-    """Cut ``text`` to at most ``max_chars`` characters at a word boundary and
-    mark the cut with an ellipsis. ``max_chars <= 0`` → no cap."""
+    """Cut ``text`` to at most ``max_chars`` characters INCLUDING the ellipsis
+    that marks the cut, at a word boundary when there is one, and never ending
+    on a dangling separator. ``max_chars <= 0`` → no cap."""
     if max_chars <= 0 or len(text) <= max_chars:
         return text
-    cut = text[:max_chars]
+    cut = text[: max_chars - 1]
     if " " in cut:
         cut = cut[: cut.rindex(" ")]
-    return cut.rstrip() + "…"
+    return cut.rstrip(" " + _DESCRIPTION_SEPARATOR.strip()) + "…"
 
 
 def fold_description(
@@ -109,35 +130,40 @@ def fold_description(
     *,
     skip_patterns: list[str] | None = None,
     max_chars: int = DEFAULT_DESCRIPTION_MAX_CHARS,
+    is_html: bool = True,
 ) -> str:
     """Append an item's description paragraphs to its ``title``.
 
-    The description is flattened to plain-text paragraphs; a paragraph is
-    dropped when it is blank, when it restates the title (its alphanumeric
-    content equals the title's, or is a substring of it at least
-    ``_DEDUP_MIN_ALNUM`` characters long — feeds that repeat the headline's
-    date/subject in the body), or when any ``skip_patterns`` regex matches it
-    (case-insensitive ``re.search``). Survivors are joined with ``" · "``,
-    capped at ``max_chars`` characters (word boundary + ellipsis; ``0`` = no
-    cap — the cap applies to the folded part only, never the title), then
-    appended to the title. No survivors → the title unchanged. An empty title
-    (RSS 2.0 allows description-only items) → the folded text alone.
+    The description is flattened to plain-text paragraphs (``is_html=False``
+    for a feed that declares a plain-text summary: the whole string is one
+    paragraph and ``<``/``&`` are literal). A paragraph is dropped when it is
+    blank, when it restates the title (see ``_restates_title``: its words are
+    a contiguous run of 2+ title words, or all of them — feeds that repeat the
+    headline's date/subject in the body), or when any ``skip_patterns`` regex
+    matches it (case-insensitive ``re.search``). Survivors are joined with
+    ``" · "``, capped at ``max_chars`` characters including the ellipsis
+    (word boundary; ``0`` = no cap — the cap applies to the folded part only,
+    never the title), then appended to the title. No survivors → the title
+    unchanged. An empty title (RSS 2.0 allows description-only items) → the
+    folded text alone.
     """
     if not description_html:
         return title
-    splitter = _ParagraphSplitter()
-    splitter.feed(description_html)
-    splitter.close()
-    title_norm = _normalize(title)
+    if is_html:
+        splitter = _ParagraphSplitter()
+        splitter.feed(description_html)
+        splitter.close()
+        paragraphs = splitter.paragraphs
+    else:
+        paragraphs = [" ".join(description_html.split())]
+    title_tokens = _tokens(title)
     skips = [re.compile(pat, re.IGNORECASE) for pat in (skip_patterns or [])]
     kept: list[str] = []
-    for para in splitter.paragraphs:
-        norm = _normalize(para)
-        if norm and title_norm:
-            if norm == title_norm:
-                continue
-            if len(norm) >= _DEDUP_MIN_ALNUM and norm in title_norm:
-                continue
+    for para in paragraphs:
+        if not para:
+            continue
+        if _restates_title(para, title_tokens):
+            continue
         if any(rx.search(para) for rx in skips):
             continue
         kept.append(para)
@@ -152,6 +178,24 @@ def fold_description(
 @attrs.define
 class RSSFeedMonitor:
     """Fetches and displays headlines from an RSS feed."""
+
+    _LIST_FIELD_HINTS: ClassVar[dict] = {
+        "description": (
+            '"off" | "append"',
+            "append = fold each item's description paragraphs onto its headline",
+            '"off"',
+        ),
+        "description_skip": (
+            "list of regex strings",
+            "description paragraphs matching any (case-insensitive search) are dropped",
+            "[]",
+        ),
+        "description_max_chars": (
+            "int",
+            "cap on the folded description text (chars incl. the ellipsis); 0 = no cap",
+            str(DEFAULT_DESCRIPTION_MAX_CHARS),
+        ),
+    }
 
     session: aiohttp.ClientSession
     feed_url: str
@@ -250,11 +294,13 @@ class RSSFeedMonitor:
         ``summary``; a missing <title> is simply absent."""
         title: str = item.get("title") or ""
         if self.description == "append":
+            detail = item.get("summary_detail") or {}
             return fold_description(
                 title,
                 item.get("summary"),
                 skip_patterns=self.description_skip,
                 max_chars=self.description_max_chars,
+                is_html=detail.get("type") != "text/plain",
             )
         return title
 
@@ -282,10 +328,9 @@ class RSSFeedMonitor:
                 font_color=self._story_color(),
                 bg_color=self.bg_color,
             )
-            texts = (
-                self._story_text(item)
-                for item in itertools.islice(feed["items"], self.max_stories)  # type: ignore[index]
-            )
+            # Filter BEFORE capping so a skipped item (nothing to show)
+            # doesn't eat one of the `max_stories` panel slots.
+            texts = (t for t in map(self._story_text, feed["items"]) if t)  # type: ignore[index]
             self.feed_stories = [
                 TickerMessage(
                     text,
@@ -293,8 +338,7 @@ class RSSFeedMonitor:
                     font_color=self._story_color(),
                     bg_color=self.bg_color,
                 )
-                for text in texts
-                if text
+                for text in itertools.islice(texts, self.max_stories)
             ]
         logger.info(
             "RSS %s updated: %d stories",

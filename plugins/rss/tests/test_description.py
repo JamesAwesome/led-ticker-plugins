@@ -38,15 +38,19 @@ CRITTER_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-@pytest.fixture
-def critter_session():
+def _session_for(feed_xml: str) -> mock.MagicMock:
     session = mock.MagicMock()
     response = mock.AsyncMock()
-    response.text.return_value = CRITTER_RSS
+    response.text.return_value = feed_xml
     ctx = mock.AsyncMock()
     ctx.__aenter__.return_value = response
     session.get.return_value = ctx
     return session
+
+
+@pytest.fixture
+def critter_session():
+    return _session_for(CRITTER_RSS)
 
 
 class TestFoldDescription:
@@ -140,6 +144,53 @@ class TestFoldDescription:
         out = fold_description("a very long title indeed", "<p>short</p>", max_chars=5)
         assert out == "a very long title indeed · short"
 
+    def test_short_restated_date_is_dropped(self):
+        """Dedup is token-based: a run of 2+ title words (in order) is a
+        restatement no matter how short — "Nov 11", "9:17 PM", "11/11/26"."""
+        assert fold_description("Saw a Deer — Nov 11", "<p>📅 Nov 11</p>") == (
+            "Saw a Deer — Nov 11"
+        )
+        assert fold_description("Saw a Deer — 9:17 PM", "<p>🕘 9:17 PM</p>") == (
+            "Saw a Deer — 9:17 PM"
+        )
+        assert fold_description("Deer — 11/11/26", "<p>📅 11/11/26</p>") == (
+            "Deer — 11/11/26"
+        )
+
+    def test_dedup_is_consistent_within_one_item(self):
+        out = fold_description(
+            "New York City Marathon results",
+            "<p>New York</p><p>Marathon results</p><p>York City Marathon</p>",
+        )
+        assert out == "New York City Marathon results"
+
+    def test_title_words_out_of_order_are_not_a_restatement(self):
+        out = fold_description("Hunting season opens", "<p>season Hunting</p>")
+        assert out == "Hunting season opens · season Hunting"
+
+    def test_truncation_never_leaves_a_dangling_separator(self):
+        out = fold_description("T", "<p>alpha</p><p>beta gamma</p>", max_chars=8)
+        assert out == "T · alpha…"
+
+    def test_truncation_result_never_exceeds_max_chars(self):
+        for n in range(1, 30):
+            out = fold_description(
+                "T", "<p>supercalifragilistic ok then</p>", max_chars=n
+            )
+            folded = out.removeprefix("T · ")
+            assert len(folded) <= n, (n, folded)
+
+    def test_plain_text_summary_bypasses_the_html_parser(self):
+        out = fold_description("E", "5 < 6 and <y> z &amp; w", is_html=False)
+        assert out == "E · 5 < 6 and <y> z &amp; w"
+
+    def test_text_outside_any_block_tag_is_its_own_paragraph(self):
+        assert fold_description("T", "lead<p>para") == "T · lead · para"
+        assert fold_description("T", "<p>one</p>tail") == "T · one · tail"
+
+    def test_stray_closing_script_tag_does_not_swallow_following_text(self):
+        assert fold_description("T", "</script><p>after</p>") == "T · after"
+
     def test_whitespace_only_paragraphs_dropped(self):
         out = fold_description("T", "<p>  </p><p>\n</p><p>real</p>")
         assert out == "T · real"
@@ -228,6 +279,34 @@ class TestDescriptionKnob:
         finally:
             L.reset_plugins()
 
+    async def test_max_stories_counts_displayable_stories(self):
+        """`max_stories` caps what reaches the panel, so a skipped
+        (title-less, `"off"`) item must not eat a slot."""
+        feed_xml = """<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>
+          <item><description>no title</description></item>
+          <item><title>Second</title></item>
+          <item><title>Third</title></item>
+        </channel></rss>"""
+        feed = RSSFeedMonitor(
+            session=_session_for(feed_xml), feed_url="https://x/feed", max_stories=1
+        )
+        await feed.update()
+        assert [s.text for s in feed.feed_stories] == ["Second"]
+
+    async def test_atom_plain_text_summary_is_not_html_parsed(self):
+        feed_xml = """<?xml version="1.0"?>
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>t</title>
+          <entry><title>E</title>
+            <summary type="text">5 &lt; 6 and &lt;y&gt; z</summary></entry>
+        </feed>"""
+        feed = RSSFeedMonitor(
+            session=_session_for(feed_xml),
+            feed_url="https://x/feed",
+            description="append",
+        )
+        await feed.update()
+        assert feed.feed_stories[0].text == "E · 5 < 6 and <y> z"
+
     async def test_title_is_never_folded(self, critter_session):
         feed = RSSFeedMonitor(
             session=critter_session, feed_url="https://x/feed", description="append"
@@ -287,3 +366,11 @@ class TestValidateConfig:
         assert RSSFeedMonitor.validate_config({"description_max_chars": -1})
         assert RSSFeedMonitor.validate_config({"description_max_chars": True})
         assert RSSFeedMonitor.validate_config({"description_max_chars": "80"})
+
+
+class TestListFieldHints:
+    def test_new_knobs_have_list_field_hints(self):
+        hints = RSSFeedMonitor._LIST_FIELD_HINTS
+        for name in ("description", "description_skip", "description_max_chars"):
+            assert name in hints, name
+            assert len(hints[name]) == 3
