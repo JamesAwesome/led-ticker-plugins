@@ -845,19 +845,27 @@ With knobs:
 background = {style = "flair.twinkle", density = 0.05, speed = 1.2, color = [255, 200, 120], brightness = 0.4}
 ```
 
+Rainbow or gradient stars:
+
+```toml
+background = {style = "flair.twinkle", color = "rainbow"}
+background = {style = "flair.twinkle", color = {style = "gradient", from = [255, 190, 40], to = [200, 30, 70]}}
+```
+
 ### Knobs
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
 | `density` | `0.03` | Fraction of panel pixels that are stars, in `(0, 1]`. |
 | `speed` | `1.0` | Twinkle rate in `(0, 2.0]`. |
-| `color` | `[255, 230, 180]` | Peak star color; each star scales it by its twinkle level. |
+| `color` | `[255, 230, 180]` | Peak star color, as `[r, g, b]` or any `font_color`-style color provider (`"rainbow"`, `"color_cycle"`, `{style = "gradient", from = [...], to = [...]}`, ...). Each star scales it by its twinkle level. |
 | `brightness` | `1.0` | Dims the whole starfield, in `(0, 1]`; `0.3` keeps the stars subtle behind text. Lower values make stars spend longer fully dark; if `max(color) × brightness < 0.5` the field never lights. |
 | `seed` | `None` (OS entropy) | Fixes the starfield for reproducible demo GIFs. |
 
 ### Notes
 
 - Frame-pure and physical-resolution, like every flair background; `restart_on_visit = False` so the field keeps twinkling across repeat visits.
+- A color provider is sampled **by position**: the panel is cut into columns about one character wide (6 logical px), and every star takes its column's color. A gradient runs left to right across the panel, and a rainbow sweeps across it like rainbow text. `brightness` still applies on top. On `gif`/`image` widgets the column width is derived from the panel height (16 rows of content), so it matches `message` widgets at the sign's default scale; in a section with a non-default `scale` the image widget's columns come out wider or narrower than the message widget's. A live-data provider (e.g. `stocks.trend`) recolors the stars when its data updates.
 - `brightness` scales the whole starfield; it is not the twinkle **animation**'s `min_brightness` (how dim a twinkling text pixel gets). Each knob is refused on the other slot.
 
 ## Snow background
