@@ -38,7 +38,7 @@ _CELL_LOGICAL_PX = 6
 def _logical_scale(canvas: Any) -> int:
     """Logical-to-real scale for sizing provider cells.
 
-    Core guarantees (core >= 4.34, led-ticker#535) that the canvas handed to
+    Core guarantees (core >= 4.34.1, led-ticker#535) that the canvas handed to
     a background's ``paint`` carries the section's logical scale on EVERY
     host: text hosts draw on the ``ScaledCanvas`` from ``_maybe_wrap``, and
     ``paint_background`` re-wraps the raw real canvas image hosts (gif /
