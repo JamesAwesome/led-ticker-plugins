@@ -191,19 +191,57 @@ def test_provider_cells_are_logical_on_scaled_canvas() -> None:
     assert real._pixels
 
 
-def test_provider_cells_on_unwrapped_real_canvas_match_wrapper() -> None:
+class _ImageHost:
+    """Stand-in for a gif / image widget: core's `paint_background` reads
+    `_logical_scale` (stashed by the engine before `play()`) and wraps the
+    raw real canvas at that scale before the effect sees it."""
+
+    def __init__(self, scale: int, background: TwinkleBackground) -> None:
+        self._logical_scale = scale
+        self.background = background
+
+    def frame_for(self, attr_name: str) -> int:
+        return 3
+
+
+def test_provider_cells_on_image_host_match_wrapper() -> None:
     """Image hosts (gif / image) paint backgrounds on the UNWRAPPED real
-    canvas; cells must still be 6 LOGICAL px, i.e. match the wrapper."""
-    via_wrapper, via_real = _ByCell(), _ByCell()
+    canvas; through core's `paint_background` the cells are still 6
+    LOGICAL px, i.e. match a text host's wrapper at the same scale."""
+    from led_ticker.widgets._effects import paint_background
+
+    via_wrapper, via_host = _ByCell(), _ByCell()
     real = HeadlessCanvas(width=256, height=64)
     TwinkleBackground(density=0.05, color=via_wrapper, seed=1).paint(
         ScaledCanvas(real, scale=4, content_height=16), 3
     )
-    TwinkleBackground(density=0.05, color=via_real, seed=1).paint(
-        HeadlessCanvas(width=256, height=64), 3
+    host = _ImageHost(4, TwinkleBackground(density=0.05, color=via_host, seed=1))
+    paint_background(host, HeadlessCanvas(width=256, height=64))
+    assert {t for _f, _i, t in via_host.calls} == {11}
+    assert sorted(via_host.calls) == sorted(via_wrapper.calls)
+
+
+def test_image_host_at_scale_two_on_tall_panel_gets_twelve_px_cells() -> None:
+    """The #535 case: a bigsign `scale = 2, content_height = 32` section.
+    A gif in it must get the same 12 px cells as a message beside it, not
+    the 24 px a `real_h // 16` guess would give."""
+    from led_ticker.widgets._effects import paint_background
+
+    prov = _ByCell()
+    host = _ImageHost(2, TwinkleBackground(density=0.05, color=prov, seed=1))
+    paint_background(host, HeadlessCanvas(width=256, height=64))
+    assert {t for _f, _i, t in prov.calls} == {22}  # ceil(256 / 12)
+
+
+def test_raw_canvas_without_scale_is_scale_one() -> None:
+    """A text host handed a raw tall canvas (`scale = 1, content_height =
+    64` on a 64-row panel — core's `_maybe_wrap` doesn't wrap there) is
+    logically scale 1: 6 px cells, never a panel-height guess."""
+    prov = _ByCell()
+    TwinkleBackground(density=0.05, color=prov, seed=1).paint(
+        HeadlessCanvas(width=256, height=64), 0
     )
-    assert {t for _f, _i, t in via_real.calls} == {11}
-    assert sorted(via_real.calls) == sorted(via_wrapper.calls)
+    assert {t for _f, _i, t in prov.calls} == {43}  # ceil(256 / 6)
 
 
 def test_provider_cell_count_on_evenly_divisible_width() -> None:
@@ -228,8 +266,8 @@ def test_wrapper_scale_wins_over_height_fallback() -> None:
     assert {t for _f, _i, t in prov.calls} == {22}  # ceil(256 / 12)
 
 
-def test_short_unwrapped_canvas_does_not_divide_by_zero() -> None:
-    """real_h < 16 on an image host: the scale clamps to 1 (6 px cells)."""
+def test_short_unwrapped_canvas_is_scale_one() -> None:
+    """A raw 8-row canvas: scale 1 (6 px cells)."""
     prov = _ByCell()
     TwinkleBackground(density=0.2, color=prov, seed=1).paint(
         HeadlessCanvas(width=64, height=8), 0

@@ -33,24 +33,22 @@ from led_ticker_flair.flair.twinkle import validate_common
 # roughly one BDF character, so a rainbow background's hue steps match
 # rainbow text drawn over it.
 _CELL_LOGICAL_PX = 6
-# Logical content height assumed when the canvas carries no ``scale``
-# (image hosts paint on the unwrapped real canvas).
-_LOGICAL_CONTENT_H = 16
 
 
-def _logical_scale(canvas: Any, real_h: int) -> int:
+def _logical_scale(canvas: Any) -> int:
     """Logical-to-real scale for sizing provider cells.
 
-    Text hosts hand ``paint`` the ``ScaledCanvas`` wrapper, which carries
-    ``scale``. Image hosts (gif / image) hand it the UNWRAPPED real canvas,
-    which doesn't, so fall back to the sign's standard 16-row logical
-    content height (smallsign 16 rows -> 1, bigsign 64 rows -> 4). Without
-    this fallback, image hosts on a bigsign got cells 4x too narrow.
+    Core guarantees (core >= 4.34.1, led-ticker#535) that the canvas handed to
+    a background's ``paint`` carries the section's logical scale on EVERY
+    host: text hosts draw on the ``ScaledCanvas`` from ``_maybe_wrap``, and
+    ``paint_background`` re-wraps the raw real canvas image hosts (gif /
+    image) paint on at the widget's ``_logical_scale``. A canvas with no
+    ``scale`` is therefore genuinely scale 1 — e.g. a ``scale = 1,
+    content_height = 64`` section on a 64-row panel, where core doesn't
+    wrap at all. Never infer the scale from the panel height: that guess was
+    wrong for exactly those sections.
     """
-    scale = getattr(canvas, "scale", None)
-    if scale is None:
-        scale = real_h // _LOGICAL_CONTENT_H
-    return max(1, int(scale))
+    return max(1, int(getattr(canvas, "scale", 1)))
 
 
 def _parse_color(color: Any) -> tuple[int, int, int] | ColorProvider:
@@ -148,7 +146,7 @@ class TwinkleBackground(BackgroundEffectBase):
                     set_pixel(x, y, r, g, b)
             return
         # Provider: one color_for per cell per paint, then a table lookup.
-        cell = _CELL_LOGICAL_PX * _logical_scale(canvas, h)
+        cell = _CELL_LOGICAL_PX * _logical_scale(canvas)
         n = -(-w // cell)
         provider = self.color
         cells = []

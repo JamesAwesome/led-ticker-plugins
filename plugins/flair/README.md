@@ -827,7 +827,7 @@ animation = {style = "flair.twinkle", density = 0.8, speed = 1.5, min_brightness
 
 `flair.twinkle` is ALSO a **background** effect: `background = "flair.twinkle"` paints a twinkling starfield BEHIND a `message`, `countdown`/`countup`, `two_row`, `gif`, `image`, or `clock` widget. Stars are single physical LEDs, so the field looks like fine glitter on every sign. It never paints black, so it can't erase a `bg_color` or an image.
 
-Requires **led-ticker-core >= 4.32**.
+Requires **led-ticker-core >= 4.34.1** (rainbow / gradient star cells line up with the text on `gif` / `image` hosts at any section `scale`).
 
 ### Config
 
