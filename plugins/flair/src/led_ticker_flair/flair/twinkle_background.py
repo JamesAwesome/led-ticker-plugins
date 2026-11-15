@@ -23,6 +23,7 @@ from led_ticker.plugin import (
     BackgroundEffectBase,
     ColorProvider,
     coerce_color_provider,
+    is_scaled,
     unwrap_to_real,
 )
 
@@ -38,17 +39,19 @@ _CELL_LOGICAL_PX = 6
 def _logical_scale(canvas: Any) -> int:
     """Logical-to-real scale for sizing provider cells.
 
-    Core guarantees (core >= 4.34.1, led-ticker#535) that the canvas handed to
-    a background's ``paint`` carries the section's logical scale on EVERY
-    host: text hosts draw on the ``ScaledCanvas`` from ``_maybe_wrap``, and
-    ``paint_background`` re-wraps the raw real canvas image hosts (gif /
-    image) paint on at the widget's ``_logical_scale``. A canvas with no
-    ``scale`` is therefore genuinely scale 1 — e.g. a ``scale = 1,
+    Core guarantees (core >= 4.34.1 / plugin API (1, 2), led-ticker#535)
+    that the canvas handed to a background's ``paint`` carries the section's
+    logical scale on EVERY host: text hosts draw on the ``ScaledCanvas`` from
+    ``_maybe_wrap``, and ``paint_background`` re-wraps the raw real canvas
+    image hosts (gif / image) paint on at the widget's ``_logical_scale``.
+    An unscaled canvas is therefore genuinely scale 1 — e.g. a ``scale = 1,
     content_height = 64`` section on a 64-row panel, where core doesn't
     wrap at all. Never infer the scale from the panel height: that guess was
-    wrong for exactly those sections.
+    wrong for exactly those sections. ``is_scaled`` is the public gate every
+    other flair paint site uses (a bare Mock canvas would make a duck-typed
+    ``getattr(canvas, "scale")`` blow up in ``int()``).
     """
-    return max(1, int(getattr(canvas, "scale", 1)))
+    return max(1, canvas.scale) if is_scaled(canvas) else 1
 
 
 def _parse_color(color: Any) -> tuple[int, int, int] | ColorProvider:

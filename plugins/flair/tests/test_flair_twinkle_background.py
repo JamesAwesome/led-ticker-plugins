@@ -223,8 +223,8 @@ def test_provider_cells_on_image_host_match_wrapper() -> None:
 
 def test_image_host_at_scale_two_on_tall_panel_gets_twelve_px_cells() -> None:
     """The #535 case: a bigsign `scale = 2, content_height = 32` section.
-    A gif in it must get the same 12 px cells as a message beside it, not
-    the 24 px a `real_h // 16` guess would give."""
+    A gif in it must get the same 12 px cells as a message beside it (a
+    panel-height guess would have given 24 px)."""
     from led_ticker.widgets._effects import paint_background
 
     prov = _ByCell()
@@ -255,9 +255,9 @@ def test_provider_cell_count_on_evenly_divisible_width() -> None:
     assert max(i for _f, i, _t in prov.calls) == 31
 
 
-def test_wrapper_scale_wins_over_height_fallback() -> None:
-    """A scale=2 section on a 64-row panel: the wrapper's scale (12 px
-    cells), not the real_h // 16 guess (24 px)."""
+def test_wrapper_scale_sizes_cells() -> None:
+    """A scale=2 wrapper on a 64-row panel: 12 px cells (6 logical px),
+    regardless of the panel height."""
     prov = _ByCell()
     real = HeadlessCanvas(width=256, height=64)
     TwinkleBackground(density=0.05, color=prov, seed=1).paint(
