@@ -42,12 +42,24 @@ def _import_seam():
     ``flair.twinkle`` / ``flair.blink`` deliver their per-pixel
     brightness through.
 
-    Also probes ``API_VERSION >= (1, 2)`` — the 4.34.1 guarantee that a
+    Probes ``API_VERSION >= (1, 2)`` FIRST — the 4.34.1 guarantee that a
     background's ``paint`` receives a canvas carrying the section's logical
     scale on image hosts (led-ticker#535). It adds no export, so the API
     minor is the only probe; without it a rolled-back core image would run
     this flair silently with 6 px twinkle color cells on a bigsign gif.
     """
+    # API_VERSION has been exported since core 2.0, so this probe can run
+    # FIRST: a 4.32 core then gets the final floor (4.34.1) in one hop
+    # instead of a 4.33 message followed by a second refusal.
+    from led_ticker.plugin import API_VERSION  # noqa: PLC0415
+
+    if API_VERSION < (1, 2):
+        raise ImportError(
+            "flair requires led-ticker-core >= 4.34.1 (plugin API 1.2: backgrounds "
+            "receive a scale-carrying canvas on gif/image hosts, which the "
+            "flair.twinkle background's color cells rely on); update the core "
+            "image, not the flair plugin."
+        )
     try:
         from led_ticker.plugin import LensSpec  # noqa: F401, PLC0415
     except ImportError as exc:
@@ -78,15 +90,6 @@ def _import_seam():
             "flair requires led-ticker-core >= 4.33 (the AnimationFrame.pixel_gain "
             "seam flair.twinkle needs); update the core image, not the flair "
             "plugin."
-        )
-    from led_ticker.plugin import API_VERSION  # noqa: PLC0415
-
-    if API_VERSION < (1, 2):
-        raise ImportError(
-            "flair requires led-ticker-core >= 4.34.1 (plugin API 1.2: backgrounds "
-            "receive a scale-carrying canvas on gif/image hosts, which the "
-            "flair.twinkle background's color cells rely on); update the core "
-            "image, not the flair plugin."
         )
 
 
