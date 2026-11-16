@@ -100,6 +100,35 @@ def test_flair_register_adds_blink_twinkle_snow():
     assert "sand" in api.transitions
 
 
+def test_import_seam_requires_api_1_2(monkeypatch):
+    """Core API (1, 2) is the ONLY signal that `paint_background` hands
+    image hosts a scale-carrying canvas (#535) — the pip floor can't see a
+    rolled-back image. On an older core flair must refuse loudly rather
+    than render 6 px twinkle cells on a bigsign gif."""
+    import led_ticker.plugin as plugin  # noqa: PLC0415
+
+    from led_ticker_flair.flair import register  # noqa: PLC0415
+
+    monkeypatch.setattr(plugin, "API_VERSION", (1, 1))
+    with pytest.raises(ImportError, match="4.34.1"):
+        register(_RecordingAPI())
+
+
+@pytest.mark.parametrize("version", [(1, 2), (1, 3), (2, 0)])
+def test_import_seam_accepts_api_1_2_and_newer(monkeypatch, version):
+    """The probe is a LOWER bound (`< (1, 2)`), never equality: a newer
+    core minor or major must still load flair (a `!=` regression would
+    refuse every future core)."""
+    import led_ticker.plugin as plugin  # noqa: PLC0415
+
+    from led_ticker_flair.flair import register  # noqa: PLC0415
+
+    monkeypatch.setattr(plugin, "API_VERSION", version)
+    api = _RecordingAPI()
+    register(api)
+    assert "twinkle" in api.backgrounds
+
+
 def test_import_seam_requires_pixel_gain(monkeypatch):
     import dataclasses  # noqa: PLC0415
 

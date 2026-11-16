@@ -37,8 +37,11 @@ dependencies = [
     # 4.26 ships pixel_native_size on led_ticker.plugin (lottery pixel-grid
     # snap for auto_font_size — crisp Spleen ball faces). 4.27 honors
     # RESOLVES_OWN_FONT (lottery.Lottery sets it so a config-set `font`
-    # stays a raw name instead of being coerced to a Font object).
-    "led-ticker-core>=4.33",
+    # stays a raw name instead of being coerced to a Font object). 4.34.1
+    # (plugin API 1.2) hands image-host backgrounds a scale-carrying canvas
+    # (led-ticker#535) — the flair.twinkle background's color cells rely on
+    # it; `_import_seam` probes API_VERSION >= (1, 2) too.
+    "led-ticker-core>=4.34.1",
 ]
 
 [project.urls]

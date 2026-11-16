@@ -87,6 +87,9 @@ def test_register_guard_message_when_seam_missing(monkeypatch) -> None:
     # ever regresses to a pre-4.7 symbol like ENGINE_TICK_MS or
     # make_rotation_surface (the reviewer-flagged no-op-guard mutation).
     stub.ENGINE_TICK_MS = 50
+    # API_VERSION has been exported since core 2.0; the seam probes it
+    # FIRST, so a stub that withholds only LensSpec must carry it.
+    stub.API_VERSION = (1, 2)
     from led_ticker.plugin import (  # real symbols  # noqa: PLC0415
         Animation,
         AnimationFrame,

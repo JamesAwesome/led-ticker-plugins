@@ -111,6 +111,9 @@ class TestGuardProbe:
         # PROVIDE the pre-4.7 symbols (a real 4.6 core has these) and
         # withhold ONLY LensSpec.
         stub.ENGINE_TICK_MS = 50
+        # API_VERSION has been exported since core 2.0; the seam probes it
+        # FIRST, so a stub that withholds only LensSpec must carry it.
+        stub.API_VERSION = (1, 2)
         from led_ticker.plugin import (  # noqa: PLC0415
             Animation,
             AnimationFrame,
