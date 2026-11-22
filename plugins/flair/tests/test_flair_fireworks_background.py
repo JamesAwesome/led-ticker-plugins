@@ -83,6 +83,9 @@ class _RecordingAPI:
     def transition(self, name: str):
         return self._deco(self.transitions, name)
 
+    def font(self, name: str, path: str, threshold: int | None = None) -> None:
+        pass  # register() ships display fonts; this stub records nothing
+
     def widget(self, name: str):
         return self._deco(self.widgets, name)
 

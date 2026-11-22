@@ -1,0 +1,75 @@
+# Display fonts bundled with led-ticker-flair, on the bigsign (256x64, scale 4).
+# Bungee Shade, Bungee Outline, Londrina Shadow, Londrina Outline: SIL-OFL fonts
+# whose outline / drop-shade style is baked into the glyphs, so a plain
+# `message` gets styled text. No `font_threshold` lines: the plugin declares
+# 45 for each font (core >= 4.35), which keeps the hairlines continuous at
+# 36-54 px. Bigsign only; on a 16-row sign these strokes are unreadable.
+[display]
+rows = 32
+cols = 64
+chain_length = 8
+parallel = 1
+pixel_mapper_config = "Remap:256,64|192,32n|192,0n|128,32n|128,0n|64,32n|64,0n|0,32n|0,0n"
+brightness = 60
+default_scale = 4
+hardware_mapping = "adafruit-hat"
+gpio_slowdown = 3
+pwm_bits = 8
+
+[title]
+delay = 0
+
+[transitions]
+default = "dissolve"
+between_sections = "random"
+transition_duration = 0.8
+
+[[playlist.section]]
+loop_count = 1
+hold_time = 6
+[[playlist.section.widget]]
+type = "message"
+text = "OPEN 9-5"
+font = "flair.BungeeShade"
+font_size = 46
+font_color = {style = "shimmer", base = "gold", shimmer = "white"}
+
+[[playlist.section]]
+loop_count = 1
+hold_time = 6
+[[playlist.section.widget]]
+type = "message"
+text = "HELLO 123"
+font = "flair.BungeeOutline"
+font_size = 44
+font_color = "rainbow"
+
+[[playlist.section]]
+loop_count = 1
+hold_time = 6
+[[playlist.section.widget]]
+type = "message"
+text = "Fresh Donuts"
+font = "flair.LondrinaShadow"
+font_size = 48
+font_color = [255, 80, 160]
+
+[[playlist.section]]
+loop_count = 1
+hold_time = 6
+[[playlist.section.widget]]
+type = "message"
+text = "Hello 123"
+font = "flair.LondrinaOutline"
+font_size = 48
+font_color = {style = "gradient", from = [120, 255, 120], to = [0, 200, 255]}
+
+[[playlist.section]]
+loop_count = 1
+hold_time = 8
+[[playlist.section.widget]]
+type = "message"
+text = "Open fonts, style baked in"
+font = "flair.BungeeShade"
+font_size = 44
+font_color = [255, 200, 0]
