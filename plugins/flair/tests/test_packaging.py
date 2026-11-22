@@ -30,10 +30,10 @@ import hashlib  # noqa: E402
 import led_ticker_flair.flair  # noqa: E402
 
 _FONT_SHA256 = {
-    "BungeeShade-Regular.ttf": "665c626082682b462f4e696308eafa7071c114da8f8ff3fb73a289c7ff7df482",
-    "BungeeOutline-Regular.ttf": "9232000ff85fdbb68987007305f2de877486d63d31450f81b403461bbe721f1f",
-    "LondrinaShadow-Regular.ttf": "bdc4a66213c2bed3a0e58912bb2e47f7b0ea51b07d291a43896eed5c87e01a21",
-    "LondrinaOutline-Regular.ttf": "773c655bc6a2e9b699cfa8c4a5f615c6348686d018281bb8e6cdc470b2f05f4d",
+    "BungeeShade-Regular.ttf": "665c626082682b462f4e696308eafa7071c114da8f8ff3fb73a289c7ff7df482",  # noqa: E501
+    "BungeeOutline-Regular.ttf": "9232000ff85fdbb68987007305f2de877486d63d31450f81b403461bbe721f1f",  # noqa: E501
+    "LondrinaShadow-Regular.ttf": "bdc4a66213c2bed3a0e58912bb2e47f7b0ea51b07d291a43896eed5c87e01a21",  # noqa: E501
+    "LondrinaOutline-Regular.ttf": "773c655bc6a2e9b699cfa8c4a5f615c6348686d018281bb8e6cdc470b2f05f4d",  # noqa: E501
 }
 
 

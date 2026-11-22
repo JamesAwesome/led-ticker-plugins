@@ -17,6 +17,10 @@ backgrounds, and the ``transition = "flair.snow"`` flurry transition.
 ``transition = "flair.sand"`` crumbles the outgoing content into falling
 sand and pours the incoming content in from the top.
 
+The namespace also ships four OFL display fonts, ``font = "flair.BungeeShade"``
+(``BungeeOutline``, ``LondrinaShadow``, ``LondrinaOutline``), each with a
+plugin-declared default ``font_threshold`` of 45 (see ``display_fonts.py``).
+
 Unlike the four sprite families, this namespace is named after the wheel
 itself (documented exception to the namespace-per-sprite-family pattern).
 """
@@ -92,6 +96,9 @@ def register(api):
         BlindsUp,
     )
     from led_ticker_flair.flair.blink import Blink  # noqa: PLC0415
+    from led_ticker_flair.flair.display_fonts import (  # noqa: PLC0415
+        register_display_fonts,
+    )
     from led_ticker_flair.flair.fairy import (  # noqa: PLC0415
         Fairy,
         FairyAlternating,
@@ -180,3 +187,4 @@ def register(api):
     api.transition("splitflap.alternating")(SplitFlapAlternating)
     api.transition("splitflap.random")(SplitFlapRandom)
     api.widget("lottery")(Lottery)
+    register_display_fonts(api)

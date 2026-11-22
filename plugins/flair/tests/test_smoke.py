@@ -62,6 +62,7 @@ class _RecordingAPI:
         self.widgets: dict[str, type] = {}
         self.borders: dict[str, type] = {}
         self.backgrounds: dict[str, type] = {}
+        self.fonts: dict[str, tuple[str, int | None]] = {}
 
     @staticmethod
     def _deco(bucket: dict[str, type], name: str):
@@ -79,6 +80,9 @@ class _RecordingAPI:
 
     def widget(self, name: str):
         return self._deco(self.widgets, name)
+
+    def font(self, name: str, path: str, threshold: int | None = None) -> None:
+        self.fonts[name] = (path, threshold)
 
     def border(self, name: str):
         return self._deco(self.borders, name)
