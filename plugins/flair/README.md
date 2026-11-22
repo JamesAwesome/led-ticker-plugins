@@ -1008,12 +1008,12 @@ The full demo is `examples/config.display-fonts.bigsign.toml` (one section per f
 
 | Font | Look | `font_size` (real px) | Default `font_threshold` |
 | --- | --- | --- | --- |
-| `flair.BungeeShade` | solid face with a hard drop shade | 40-56 | 45 |
+| `flair.BungeeShade` | solid face with a hard drop shade | 40-54 | 45 |
 | `flair.BungeeOutline` | single-stroke outline | 36-52 | 45 |
 | `flair.LondrinaShadow` | rounded face with an offset shadow | 44-54 | 45 |
-
-At 56 px Londrina Shadow's descenders (g, p, q) reach past the bottom row, so its range stops at 54.
 | `flair.LondrinaOutline` | rounded single-stroke outline | 36-52 | 45 |
+
+The upper bounds are where the 64-row panel runs out: at 56 px Londrina Shadow's descenders (g, p, q) reach past the bottom row, and Bungee Shade's accented capitals (É, Å, Ç) lose their accents and cedilla.
 
 ### Notes
 

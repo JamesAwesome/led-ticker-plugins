@@ -3,7 +3,7 @@
 # whose outline / drop-shade style is baked into the glyphs, so a plain
 # `message` gets styled text. No `font_threshold` lines: the plugin declares
 # 45 for each font (core >= 4.35), which keeps the hairlines continuous at
-# 36-56 px. Bigsign only; on a 16-row sign these strokes are unreadable.
+# 36-54 px. Bigsign only; on a 16-row sign these strokes are unreadable.
 [display]
 rows = 32
 cols = 64

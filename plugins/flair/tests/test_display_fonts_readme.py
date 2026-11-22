@@ -42,6 +42,21 @@ def test_readme_table_lists_every_font_once():
         assert section.count(f"`{name}`") >= 1, name
 
 
+def test_readme_fonts_table_is_one_contiguous_block():
+    """A blank or prose line between rows ends a markdown table; the rows
+    after it render as literal pipe text. All four font rows must sit in
+    one unbroken run of pipe lines."""
+    lines = _section().splitlines()
+    row_idx = [
+        i
+        for i, ln in enumerate(lines)
+        if any(f"`{n}`" in ln for n in _NAMES) and ln.startswith("|")
+    ]
+    assert len(row_idx) == 4, row_idx
+    for i in range(row_idx[0], row_idx[-1] + 1):
+        assert lines[i].startswith("|"), f"table broken at line: {lines[i]!r}"
+
+
 def test_example_without_font_size_fails_rule_5(tmp_path):
     broken = tmp_path / "c.toml"
     broken.write_text(_EXAMPLE.replace("font_size = 46\n", "", 1))
