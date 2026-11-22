@@ -41,7 +41,7 @@ hold_time = 6
 type = "message"
 text = "HELLO 123"
 font = "flair.BungeeOutline"
-font_size = 48
+font_size = 44
 font_color = "rainbow"
 
 [[playlist.section]]
@@ -51,7 +51,7 @@ hold_time = 6
 type = "message"
 text = "Fresh Donuts"
 font = "flair.LondrinaShadow"
-font_size = 52
+font_size = 48
 font_color = [255, 80, 160]
 
 [[playlist.section]]

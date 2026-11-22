@@ -22,7 +22,10 @@ def loaded():
     L.reset_plugins()
     try:
         result = L.load_plugins(None, entry_points_enabled=True)
-        assert not result.failed, result.failed
+        # Only flair's own load matters here; an unrelated workspace plugin
+        # failing to import must not turn these tests red.
+        failed = {getattr(f, "namespace", f) for f in result.failed}
+        assert "flair" not in failed, result.failed
         yield
     finally:
         L.reset_plugins()
@@ -44,10 +47,28 @@ def test_registered_paths_exist(loaded):
         assert Path(hires_loader._PLUGIN_FONTS[f"flair.{name}"]).is_file()
 
 
-def test_plugin_names_are_namespaced_and_do_not_shadow_user_stems(loaded):
-    # A sign may also carry config/fonts/BungeeShade-Regular.ttf (threshold 128).
-    assert "flair.BungeeShade" in list_available_hires_fonts()
-    assert default_threshold("BungeeShade-Regular") == 128
+def test_plugin_names_are_namespaced_and_do_not_shadow_user_stems(loaded, tmp_path):
+    """A sign may also carry config/fonts/BungeeShade-Regular.ttf (moonbunny
+    does): the user stem resolves at the loader default and the plugin name
+    at 45, from the plugin's own file."""
+    from led_ticker.app.factories import _configure_user_font_dir
+    from led_ticker.fonts import hires_loader
+
+    user_dir = tmp_path / "fonts"
+    user_dir.mkdir()
+    src = Path(hires_loader._PLUGIN_FONTS["flair.BungeeShade"])
+    (user_dir / "BungeeShade-Regular.ttf").write_bytes(src.read_bytes())
+    prev_user_dir = hires_loader.USER_FONT_DIR
+    _configure_user_font_dir(tmp_path)
+    try:
+        names = list_available_hires_fonts()
+        assert "flair.BungeeShade" in names and "BungeeShade-Regular" in names
+        assert resolve_font("BungeeShade-Regular", size=48).threshold == 128
+        assert resolve_font("flair.BungeeShade", size=48).threshold == 45
+        assert Path(hires_loader._PLUGIN_FONTS["flair.BungeeShade"]) == src
+    finally:
+        hires_loader.USER_FONT_DIR = prev_user_dir
+        hires_loader.load_hires_font.cache_clear()
 
 
 def test_new_core_registers_three_arg_no_warning(caplog):
