@@ -316,6 +316,9 @@ class _RecordingAPI:
 
         return deco
 
+    def font(self, name: str, path: str, threshold: int | None = None) -> None:
+        pass  # register() ships display fonts; this stub records nothing
+
     def widget(self, name: str):
         def deco(cls):
             self.widgets[name] = cls
