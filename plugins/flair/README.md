@@ -980,6 +980,45 @@ The engine's default transition `duration` is 0.5 s, which is too fast to read a
 - **Black content does not turn to sand.** Like the other snapshot transitions, only non-black pixels become grains, so black text on a coloured section `bg_color` disappears at the start and the incoming content cuts in at the end. Use a non-black ink, or a widget-level background (e.g. `top_bg_color` on `two_row`), which does turn to sand.
 - The first half of the transition crumbles the outgoing content over its own `bg_color`; the second half pours the incoming content over the incoming `bg_color`, at the incoming scale.
 
+## Display fonts
+
+Four SIL-OFL display fonts ship inside the flair wheel, with the outline or drop-shade style baked into the glyphs: a plain `message` gets styled text, no effect code involved. Use them as `font = "flair.<Name>"` with an explicit `font_size` (they are hi-res fonts). The plugin declares a default `font_threshold` of 45 for each, which keeps the thin outline strokes continuous; you do not need to set the knob.
+
+**Bigsign only** (scale 4): the strokes are one or two real pixels wide and are unreadable on a 16-row sign. Use them on `message` at the sizes below; a `two_row` band is 32 real pixels tall and cannot hold these glyph heights.
+
+![flair display fonts — Bungee Shade, Bungee Outline, Londrina Shadow, Londrina Outline on the bigsign](docs/display-fonts.gif)
+
+### Config
+
+```toml
+[[playlist.section]]
+loop_count = 1
+hold_time = 6
+[[playlist.section.widget]]
+type = "message"
+text = "OPEN 9-5"
+font = "flair.BungeeShade"
+font_size = 46
+font_color = {style = "shimmer", base = "gold", shimmer = "white"}
+```
+
+The full demo is `examples/config.display-fonts.bigsign.toml` (one section per font plus a scrolling line).
+
+### Fonts
+
+| Font | Look | `font_size` (real px) | Default `font_threshold` |
+| --- | --- | --- | --- |
+| `flair.BungeeShade` | solid face with a hard drop shade | 40-56 | 45 |
+| `flair.BungeeOutline` | single-stroke outline | 36-52 | 45 |
+| `flair.LondrinaShadow` | rounded face with an offset shadow | 44-56 | 45 |
+| `flair.LondrinaOutline` | rounded single-stroke outline | 36-52 | 45 |
+
+### Notes
+
+- Requires **led-ticker-core >= 4.35** (plugin API `(1, 3)`). On an older core the fonts still register, but at the loader default of 128, where the hairlines rasterize dashed; the log carries one warning, and setting `font_threshold = 45` on each widget restores the look.
+- The files are unmodified google/fonts TTFs under `src/led_ticker_flair/flair/fonts/`, each with its `OFL-<Family>.txt`; `SOURCES.md` beside them records the commits and sha256 hashes.
+- A font you dropped into `config/fonts/` yourself, such as `BungeeShade-Regular.ttf`, is a different name (`BungeeShade-Regular`, threshold 128) and does not clash with `flair.BungeeShade`.
+
 ## Install
 
 Part of the [led-ticker-plugins](https://github.com/JamesAwesome/led-ticker-plugins) monorepo. Install:
