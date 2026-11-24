@@ -145,7 +145,7 @@ class TestFrames:
     def test_snap_draws_incoming(self, monkeypatch):
         calls: list[Any] = []
         monkeypatch.setattr(
-            "led_ticker_flair.flair.splitflap.snap_reset",
+            "led_ticker_flair.flair._board_transition.snap_reset",
             lambda cv, bg: calls.append(bg),
         )
         c = _StubCanvas(16, 8)
