@@ -381,16 +381,36 @@ class TestReelWindows:
         frames = self._walk(monkeypatch)
 
         def disjoint(calls):
-            # a reel whose symbol is blank at the endpoint paints nothing there,
-            # so only reels that actually write pixels can visibly collide
-            spans = sorted((wl, wl + ww) for (wl, ww), xs in calls if xs)
+            spans = sorted((wl, wl + ww) for (wl, ww), _ in calls)
             return all(a[1] <= b[0] for a, b in zip(spans, spans[1:], strict=False))
 
         assert frames[0] and disjoint(frames[0])
         assert disjoint(frames[-1])
-        # Not asserted for every frame: on this fixture reels whose start (or
-        # end) is blank keep the incoming (outgoing) column, which overlaps a
-        # neighbouring reel's window mid-flight (see the task report).
+        assert all(disjoint(f) for f in frames)
+
+    def test_blank_start_reel_paints_nothing_on_frame_zero(self, monkeypatch):
+        from led_ticker_flair.flair import slots as slots_module
+
+        starts: list[tuple[bool, int]] = []
+        real_paint = slots_module.paint_reel
+
+        def spy(set_px, strip, band, d, shade, w, h, window):
+            n: list[int] = []
+            real_paint(lambda *a: n.append(1), strip, band, d, shade, w, h, window)
+            starts.append((strip[0] is None, len(n)))
+            real_paint(set_px, strip, band, d, shade, w, h, window)
+
+        from led_ticker.plugin import TickerMessage
+
+        monkeypatch.setattr(slots_module, "paint_reel", spy)
+        Slots().frame_at(
+            0.0,
+            _StubCanvas(160, 16),
+            TickerMessage(text="WIN"),
+            TickerMessage(text="PULL LEVER"),
+        )
+        blank = [n for is_blank, n in starts if is_blank]
+        assert blank and all(n == 0 for n in blank)
 
 
 class TestVariantsRegistration:

@@ -158,9 +158,17 @@ class Slots(BoardTransition):
                 continue
             k = reel_advances(self.spins, stop, self.stagger)
             first, last = flap.seq[0], flap.seq[-1]
-            end0, end1 = first or last, last or first
-            assert end0 is not None and end1 is not None  # a flap has a real end
-            x0, w0, x1, w1 = end0.slot, end0.width, end1.slot, end1.width
+            # a blank end is a zero-width slit centred on the other end's column
+            if first is not None:
+                x0, w0 = first.slot, first.width
+            else:
+                assert last is not None  # a flap has a real end
+                x0, w0 = last.slot + last.width // 2, 0
+            if last is not None:
+                x1, w1 = last.slot, last.width
+            else:
+                assert first is not None
+                x1, w1 = first.slot + first.width // 2, 0
             reels.append(Reel(stop, k, strip_symbols(flap.seq, k), x0, w0, x1, w1))
         self._reels = reels
         return stops

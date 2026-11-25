@@ -112,7 +112,15 @@ def test_glide_endpoints():
 
 
 @pytest.mark.parametrize(
-    "geo", [(10, 7, 30, 24), (30, 24, 10, 7), (5, 8, 5, 8), (0, 3, 100, 4)]
+    "geo",
+    [
+        (10, 7, 30, 24),
+        (30, 24, 10, 7),
+        (5, 8, 5, 8),
+        (0, 3, 100, 4),
+        (40, 0, 30, 24),
+        (30, 24, 40, 0),
+    ],
 )
 def test_reel_window_endpoints(geo):
     x0, w0, x1, w1 = geo

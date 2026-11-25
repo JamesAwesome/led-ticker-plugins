@@ -278,7 +278,9 @@ from the outgoing glyph's column `(x0, w0)` to the incoming glyph's
 rounded so `g = 0` gives exactly `(x0, w0)` and `g = 1` exactly
 `(x1, w1)`. Every strip symbol is painted **centred in the window and
 clipped to its columns** (and, as before, to the band's rows and the
-panel). A blank end takes the other end's column.
+panel). A blank end is a **zero-width window** centred on the other
+end's column (a new letter's reel opens from a slit, a vanishing one's
+closes to one), so it paints nothing there and never overlaps a neighbour.
 
 Why (bigsign observation, 2026-11-25): the board gives the outgoing
 cell its own slot but centres the in-betweens and the incoming cell on
