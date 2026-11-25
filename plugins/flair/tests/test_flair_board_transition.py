@@ -29,3 +29,11 @@ def test_splitflap_keeps_its_cap_and_message():
     with pytest.raises(ValueError, match=r"flips must be an int in \[0, 12\]"):
         SplitFlap(flips=13)
     assert SplitFlap(flips=12).flips == 12 and SplitFlap(flips=12).steps == 12
+
+
+def test_slots_subclasses_board_transition_and_does_not_fork_frame_at():
+    from led_ticker_flair.flair.slots import Slots
+
+    assert issubclass(Slots, bt.BoardTransition)
+    assert "frame_at" not in Slots.__dict__
+    assert "_schedule" in Slots.__dict__ and "_paint" in Slots.__dict__

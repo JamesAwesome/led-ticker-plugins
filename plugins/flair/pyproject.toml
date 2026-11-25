@@ -1,7 +1,7 @@
 [project]
 name = "led-ticker-flair"
 dynamic = ["version"]
-description = "Effects pack for led-ticker: homage sprite-trail transitions (nyancat, pokeball, pacman, sailor_moon), a dozen-plus flair.* transitions (laser, split-flap, sand, fireworks and more), text animations, background effects, and the flair.lottery lottery-ball widget."
+description = "Effects pack for led-ticker: homage sprite-trail transitions (nyancat, pokeball, pacman, sailor_moon), a dozen-plus flair.* transitions (laser, split-flap, slots, sand, fireworks and more), text animations, background effects, and the flair.lottery lottery-ball widget."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

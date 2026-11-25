@@ -8,7 +8,8 @@ transitions as ``transition = "flair.spinout"`` (or the six
 ``flair.accordion.<motion>[.alternating]`` card-deck variants, or the
 ``flair.interlock.<axis>`` strand-mesh variants, or the
 ``flair.blinds.<direction>`` venetian-blind variants, or the
-``flair.splitflap.<order>`` departure-board variants).
+``flair.splitflap.<order>`` departure-board variants, or the
+``flair.slots.<order>`` slot-machine reel variants).
 
 The twinkle/blink/snow family adds ``animation = "flair.blink"`` and
 ``animation = "flair.twinkle"`` (per-pixel gain), the
@@ -128,6 +129,12 @@ def register(api):
     from led_ticker_flair.flair.poker import Poker  # noqa: PLC0415
     from led_ticker_flair.flair.propeller import Propeller  # noqa: PLC0415
     from led_ticker_flair.flair.sand import Sand  # noqa: PLC0415
+    from led_ticker_flair.flair.slots import (  # noqa: PLC0415
+        Slots,
+        SlotsAlternating,
+        SlotsRandom,
+        SlotsReverse,
+    )
     from led_ticker_flair.flair.snow import Snow  # noqa: PLC0415
     from led_ticker_flair.flair.snow_background import (  # noqa: PLC0415
         SnowBackground,
@@ -186,5 +193,9 @@ def register(api):
     api.transition("splitflap.reverse")(SplitFlapReverse)
     api.transition("splitflap.alternating")(SplitFlapAlternating)
     api.transition("splitflap.random")(SplitFlapRandom)
+    api.transition("slots.forward")(Slots)
+    api.transition("slots.reverse")(SlotsReverse)
+    api.transition("slots.alternating")(SlotsAlternating)
+    api.transition("slots.random")(SlotsRandom)
     api.widget("lottery")(Lottery)
     register_display_fonts(api)

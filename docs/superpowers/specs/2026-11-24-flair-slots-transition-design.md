@@ -115,8 +115,9 @@ the splitflap but with the animation variation."
 Behaviour-free. Extract from `splitflap.py` into a new private module:
 
 - `BoardTransition(DeckSnapshotMixin)` holding what is effect-agnostic
-  today: `min_frames = 36`, `scale_switch_at = 1.0`, `_order`, the
-  `_board` / `_starts` / `_last_t` / `_rng` state, `frame_at` exactly as
+  today: `scale_switch_at = 1.0` (no `min_frames` on the base — core's
+  default applies; `min_frames = 36` lives on `SplitFlap`), `_order`, the
+  `_board` / `_times` / `_last_t` / `_rng` state, `frame_at` exactly as
   splitflap has it (refire on `t == 0.0 or t < _last_t`, snap at
   `SNAP_THRESHOLD`, lazy `build_board`, `real` re-derived every call,
   `s = min(t / SNAP_THRESHOLD / LAND, 1)`), and `_ripple` (via
@@ -160,7 +161,8 @@ Behaviour-free. Extract from `splitflap.py` into a new private module:
 ### Snapshots, cells, pairing
 
 Identical to splitflap: `DeckSnapshotMixin` snapshots both widgets once
-per firing; `build_board(out_plan, in_plan, spins, rng)` gives bands
+per firing; `build_board(out_plan, in_plan, spins, rng)` (slots passes
+`max(spins, 2)` as `spins`) gives bands
 (`BandGeom.lo/hinge/hi`, inclusive lit-row extent per band pair), reels
 (`Flap.seq` = outgoing, in-betweens…, incoming; `static`; `centre_x`) and
 the two border rings. The hinge is unused by slots.
@@ -200,7 +202,7 @@ splitflap's ripple staggers the *starts*. The reel order (`forward` /
 - every reel starts at `s = 0`;
 - reel stop time `stop = (1 − stagger) + stagger · frac`, so the first
   reel stops at `1 − stagger` and the last at `1`;
-- all reels cruise at the **same speed**, so a reel that spins longer
+- all reels cruise at the same **nominal** speed (rounding each reel's advances to a whole symbol lets a reel run up to `(spins+2)/(spins+1.5)`× nominal, which the pace floor accounts for), so a reel that spins longer
   passes more symbols: glyph advances `k = round(K₀ · stop / (1 − stagger))`
   where `K₀ = spins + 1` is the first reel's count. Its strip is
   `seq[0]`, then the in-betweens cycled (`seq[1:-1]` repeated in order,
@@ -212,10 +214,11 @@ splitflap's ripple staggers the *starts*. The reel order (`forward` /
   `D = k · pitch`.
 
 Displacement `d(u)` in real rows uses a **trapezoid** speed profile:
-ease-in over `u ∈ [0, U_IN]` (`U_IN = 0.15`), cruise, ease-out over
-`u ∈ [1 − U_OUT, 1 − U_SETTLE]` (`U_OUT = 0.45` of the spin, so the last
-couple of symbols are the slow ones), then **settle** over the final
-`U_SETTLE = 0.1`: `d = D + B · sin(π · v)`, `v` the settle fraction —
+ease-in over `u ∈ [0, U_IN]` (`U_IN = 0.15`), cruise to
+`CRUISE_END = 0.45`, ease-out over `u ∈ [0.45, 0.9]` (so the last couple
+of symbols are the slow ones), then **settle** over `u ∈ [SETTLE_START,
+1]` with `SETTLE_START = 0.9`: `d = D + B · sin(π · v)`, `v` the settle
+fraction —
 overshoot by `B` rows past the landing and return.
 `B = min(gap, max(1, round(pitch / 8)))` real rows (one row on a
 smallsign, about one logical row on the bigsign). **Nothing peeks in
@@ -237,16 +240,63 @@ default 20 fps, `spins = 3`, `stagger = 0.5`, first reel (`k = 4`):
 | bigsign, `min_frames = 60` (3 s) | ≈ 35 | ≈ 51 (× 0.5 ≈ 26) | ≈ 8 rows/frame ≈ 2 logical rows; readable |
 | smallsign, 60 | ≈ 9 | ≈ 26 | ≈ 2 rows/frame; readable |
 
-So slots sets **`min_frames = 60`** (unlike splitflap's 36) and caps
-**`spins` at 6**: at the cap the first reel shows 7 symbols in 26
-frames (≈ 3.7 frames each), already the edge of readable; `stagger`
-multiplies the last reel's symbol count, so the README states that high
-`stagger` wants a longer `duration`. The builder re-derives these at the
-visual gate; the table is the reasoning to check, not a promise.
+So slots sets **`min_frames = 60`** at the default knobs (unlike
+splitflap's 36) and caps **`spins` at 6**: at the cap the first reel
+shows 7 symbols in 26 frames (≈ 3.7 frames each), already the edge of
+readable. The builder re-derives these at the visual gate; the table is
+the reasoning to check, not a promise.
+
+**Resolution (2026-11-24): the floor is per instance.** Cruise speed
+scales with `(spins + 1) / (1 − stagger)` (`stagger` multiplies every
+reel's symbol count through `reel_advances`), so a fixed 60 lets the
+knobs strobe. Each instance sets
+`min_frames = pace_floor(spins, stagger) = max(60, ceil(60 · (spins+1)/4 ·
+0.5/(1 − stagger) · h(spins)/h(3)))` with `h(spins) = (spins+2)/(spins+1.5)`
+(`rounding_headroom`: the worst per-reel speed over nominal, from rounding
+advances to a whole symbol; the k = spins+2 bucket at its lower edge), so the reels never spin faster than at the default
+knobs over 60 frames. The runner lifts a shorter `duration` to it:
+
+| `spins` | `stagger` | frames | seconds |
+| --- | --- | --- | --- |
+| 3 | 0.5 | 60 | 3 |
+| 0 | 0.5 | 60 | 3 |
+| 0 | 0.9 | 90 | 4.5 |
+| 6 | 0.5 | 101 | 5.05 |
+| 3 | 0.8 | 150 | 7.5 |
+| 3 | 0.9 | 300 | 15 |
+| 6 | 0.9 | 504 | 25.2 |
+
+Chosen over documenting a duration rule or decoupling `k` from
+`stagger`. `.alternating` inherits it through `Cycling`.
 
 **Static** reels paint `seq[0]` every frame. `u ≥ 1` paints `seq[-1]`.
-A non-static reel always has `k ≥ 1`, so `spins = 0` is "one turn" (old
-scrolls out, new scrolls in, settle), not a cut.
+A non-static reel always has `k ≥ 1`, so `spins = 0` is not a cut: the first reel
+makes one turn (old scrolls out, new scrolls in, settle) and later reels keep
+spinning through borrowed characters until their stop (the board always borrows
+>= 2 in-betweens: `max(spins, 2)`).
+
+### Reel window
+
+A reel is a **window** that glides, by travel progress `g = glide(u)`
+(the fraction of the strip travel covered, 1 from `SETTLE_START` on),
+from the outgoing glyph's column `(x0, w0)` to the incoming glyph's
+`(x1, w1)`: the centre and the width interpolate linearly (`reel_window`),
+rounded so `g = 0` gives exactly `(x0, w0)` and `g = 1` exactly
+`(x1, w1)`. Every strip symbol is painted **centred in the window and
+clipped to its columns** (and, as before, to the band's rows and the
+panel). A blank end is a **zero-width window** at `slot + width // 2`
+of the other end (a new letter's reel opens from a slit, a vanishing one's
+closes to one), so it paints nothing there and never overlaps a neighbour.
+
+Why (bigsign observation, 2026-11-25): the board gives the outgoing
+cell its own slot but centres the in-betweens and the incoming cell on
+the incoming column, with borrowed in-betweens up to 1.5x the wider
+end. For splitflap's quick flips that is fine; for a continuously
+visible reel it read as two letters side by side and as borrowed glyphs
+spilling over the neighbouring reels (a reel never paints outside its own window; reels are disjoint at rest). The board is untouched; the fix is
+slots-only. Frame 0 (window = the outgoing cell's own column) and the
+landing (window = the incoming cell's) stay pixel-exact with
+`paint_cell`.
 
 ### Shading
 
@@ -271,9 +321,9 @@ Outgoing ring + `under_out` before `s = 0.5`, incoming after — the same
   `spins must be an int in [0, 6]; got …`.
 - `stagger`: float in `[0.0, 0.9]`, default `0.5`, same coercer as
   splitflap.
-- `min_frames = 60` (overrides the base's 36; see "Pace at the floor").
-  README recommends `duration = 3.0` and says higher `stagger` wants
-  more.
+- `min_frames`: class base `60` (the base has no `min_frames`; splitflap's 36 is its own), raised per
+  instance by `pace_floor(spins, stagger)` (see "Pace at the floor").
+  README documents the minimum-duration rule and table.
 
 ### Registration and surfaces
 
@@ -330,8 +380,8 @@ Outgoing ring + `under_out` before `s = 0.5`, incoming after — the same
   midpoint); all reels start moving on the first frame after `s = 0`
   and the first-ranked reel is the first to land; a long-spinning reel
   cycles its in-betweens; shade is 1.0 on the first and last frames and
-  never jumps by more than the per-frame cruise ramp; `TestRealCoreWidgets` against real `message` / `two_row` /
-  `image` widgets through a `ScaledCanvas`.
+  never jumps by more than the per-frame cruise ramp (bounds 0.15 at the defaults, 0.3 / 0.4 for `spins = 0` with `stagger` 0.8 / 0.9: low `spins` with a high `stagger` gives the first reel only a handful of frames, so its dim reads as a blink rather than a ramp); `TestRealCoreWidgets` against real `message` / `two_row` /
+  `gif` widgets through a `ScaledCanvas`.
 - Registry test: the four `flair.slots.*` names resolve through
   `flair.register(api)` (same shape as `test_registration_four_types`;
   `tests/test_smoke.py` pins only the sprite families, so it is
@@ -352,3 +402,7 @@ should be higher than 0.5 to exaggerate the left-to-right stop.
   `slots_paint.py`), whether `BoardTransition` stores `steps` or the
   subclass passes it, exact constants, test fixture duplication (this
   repo's per-file convention).
+
+## Follow-ups
+
+- **Easing.** Slots assumes `easing = "linear"`: an eased `t` compresses the spin into fewer frames and can bring back the strobe the floor removes (`ease_out` is about 0.5 symbols/frame at the floor). Use linear with slots. Core follow-up: pass linear frame progress to `frame_at`.

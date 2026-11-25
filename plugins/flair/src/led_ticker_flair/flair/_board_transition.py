@@ -4,8 +4,9 @@ A board transition snapshots both widgets once per firing (through
 ``DeckSnapshotMixin``), pairs their cells into a ``Board`` of flaps with
 pre-slotted step sequences (``build_board``), and renders every frame as a pure
 function of ``s = min(t / SNAP_THRESHOLD / LAND, 1)``. ``splitflap`` and
-``slots`` subclass ``BoardTransition`` and supply only ``_paint`` (and,
-optionally, ``_schedule``).
+``slots`` subclass ``BoardTransition`` and supply ``_paint`` (and optionally
+``_schedule``); they may also override ``__init__`` to coerce their knobs and
+set a per-instance ``min_frames``.
 
 Specs: docs/superpowers/specs/2026-11-10-flair-splitflap-transition-design.md
 and docs/superpowers/specs/2026-11-24-flair-slots-transition-design.md
@@ -69,7 +70,6 @@ class BoardTransition(DeckSnapshotMixin):
     change lands at the snap) — the blinds / laser limitation.
     """
 
-    min_frames = 36
     scale_switch_at = 1.0
     _order = "forward"
 
