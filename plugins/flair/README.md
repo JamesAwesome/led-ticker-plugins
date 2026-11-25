@@ -651,6 +651,56 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 - **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background arrives at the closing snap and its scale on the final frame. Laser and blinds have the same limitation.
 - **Smallsign.** At 16 rows each half-flap is only a few LEDs tall. It works, but it reads best on the bigsign.
 
+## Slot-machine transition
+
+`flair.slots` is a slot machine. Every character of the old message is a reel: on the first frame all the reels start spinning downward through a few in-between characters, then they stop one after another, left to right, each one slowing down, overshooting its landing by a hair and settling back. The reels spin in place, in your widget's own font, size and colour, on the normal panel background. It's meant to be watched, so give it about three seconds.
+
+Requires **led-ticker-core >= 4.35**. Four variants, named by the order the reels stop:
+
+| Type | Reels stop |
+| --- | --- |
+| `flair.slots.forward` | left → right (the classic) |
+| `flair.slots.reverse` | right → left |
+| `flair.slots.alternating` | forward, then reverse, one per firing |
+| `flair.slots.random` | in a random order, fresh each firing |
+
+### Config
+
+```toml
+[transitions]
+duration = 3.0        # floor: min_frames = 60, i.e. 3.0 s at the default 20 fps
+
+[[playlist.section]]
+transition = "flair.slots.forward"
+```
+
+One turn per reel, stopping slowly across the message:
+
+```toml
+[[playlist.section]]
+transition = {type = "flair.slots.forward", spins = 0, stagger = 0.8}
+```
+
+### Knobs
+
+| Knob | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `spins` | int, 0 to 6 | `3` | In-between characters the FIRST reel passes before it lands. Reels that stop later keep spinning at the same speed, so they pass more (cycling through the same in-betweens). `0` is one turn: the old character scrolls out and the new one scrolls in. |
+| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — pair a high `stagger` with a longer `duration`. |
+
+`.alternating` passes both knobs to each direction.
+
+### Notes
+
+- **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between spins.
+- **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't spin.
+- **Different lengths.** Extra positions spin from blank, or to blank.
+- **Two-row widgets** spin each row on its own. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row spins from or to blank.
+- **Images, gifs and background effects** have no characters to find, so they're cut into character-width strips that spin the same way.
+- **Borders stay put.** A bordered widget's ring doesn't spin. The new section's border takes over halfway through, while the reels are still spinning.
+- **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background arrives at the closing snap and its scale on the final frame. Laser and blinds have the same limitation.
+- **Smallsign.** At 16 rows a reel is 7 or 8 LEDs tall with a 2-LED gap; the visual gate decides whether that reads.
+
 ## Fisheye animation
 
 `flair.fisheye` sends a scrolling message through a stationary "fisheye lens" centered on the panel: letters enter compressed at the edges, swell as they cross the middle, and compress again on the way out — the marquee bulges through a fixed lens while the text moves through it.
