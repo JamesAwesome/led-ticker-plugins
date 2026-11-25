@@ -298,7 +298,55 @@ class TestFrames:
             }
         assert changed
 
-    def test_shade_ramps_without_a_pop(self, monkeypatch):
+    def test_ring_switches_at_half_and_frame0_exact_with_border(self):
+        def ring(col):
+            r = [(x, 0, col) for x in range(16)] + [(x, 7, col) for x in range(16)]
+            return (
+                r
+                + [(0, y, col) for y in range(1, 7)]
+                + [(15, y, col) for y in range(1, 7)]
+            )
+
+        border = SimpleNamespace(thickness=1)
+        inner = range(2, 6)
+        o = _widget(
+            ring(BLUE) + [(x, y, RED) for x in range(3, 6) for y in inner], border
+        )
+        i = _widget(
+            ring(RED) + [(x, y, GREEN) for x in range(9, 12) for y in inner], border
+        )
+        c = _StubCanvas(16, 8)
+        p = Slots()
+        ref = _StubCanvas(16, 8)
+        o.draw(ref)
+        assert _frame(p, 0.0, c, o, i) == ref._pixels
+        early, late = _frame(p, _t(0.3), c, o, i), _frame(p, _t(0.7), c, o, i)
+        assert early[(0, 0)] == BLUE
+        assert late[(0, 0)] == RED
+
+    def test_static_cell_matches_widget_reference(self):
+        same = _block(0, 3, 8, RED)
+        o = _widget(same + _block(10, 13, 8, GREEN))
+        i = _widget(same + _block(10, 13, 8, BLUE))
+        c = _StubCanvas(16, 8)
+        p = Slots()
+        ref = _StubCanvas(16, 8)
+        o.draw(ref)
+        want = {k: v for k, v in ref._pixels.items() if k[0] < 5}
+        assert want
+        for t in (0.0, 0.1, 0.2, 0.4, 0.6, 0.8):
+            px = _frame(p, t, c, o, i)
+            assert {k: v for k, v in px.items() if k[0] < 5} == want
+
+    @pytest.mark.parametrize(
+        ("kw", "bound"),
+        [
+            ({}, 0.15),
+            ({"spins": 0, "stagger": 0.8}, 0.3),
+            ({"spins": 0, "stagger": 0.9}, 0.4),
+        ],
+    )
+    def test_shade_ramps_without_a_pop(self, monkeypatch, kw, bound):
         from led_ticker.plugin import TickerMessage
 
         from led_ticker_flair.flair import slots as slots_module
@@ -313,7 +361,7 @@ class TestFrames:
         monkeypatch.setattr(slots_module, "paint_reel", spy)
         c = _StubCanvas(160, 16)
         o, i = TickerMessage(text="ABCDEFG"), TickerMessage(text="HIJKLMN")
-        p = Slots()
+        p = Slots(**kw)
         n = p.min_frames
         frames: list[dict[int, float]] = []
         for k in range(n):
@@ -329,7 +377,7 @@ class TestFrames:
         assert all(v == 1.0 for v in frames[-1].values())
         for a, b in zip(frames, frames[1:], strict=False):
             for key in a:
-                assert abs(b[key] - a[key]) <= 0.15
+                assert abs(b[key] - a[key]) <= bound
 
 
 class TestReelWindows:
@@ -534,10 +582,11 @@ class TestRealCoreWidgets:
 
 
 class TestPerf:
-    """One full firing at bigsign / longboi size. Mac timings: board build
-    (first frame) ~22 ms at 256x64 and ~52 ms at 512x64 for a full-panel
-    noise picture, 3-6 ms per frame after at 256 / 512 wide. Bounds are ~10x headroom so
-    CI noise doesn't flake, while a quadratic regression (seconds) trips."""
+    """One full firing at bigsign / 512-wide (two bigsigns' worth) size.
+    Mac timings: board build (first frame) ~22 ms at 256x64 and ~52 ms at
+    512x64 for a full-panel noise picture, 3-6 ms per frame after at 256 / 512
+    wide. Bounds are ~10x headroom so CI noise doesn't flake, while a
+    quadratic regression (seconds) trips."""
 
     @staticmethod
     def _noise_widget(w: int, h: int, seed: int) -> Any:

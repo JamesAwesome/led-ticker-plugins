@@ -8,7 +8,7 @@ Pre-existing issues outside the branch diff do not count; they are filed as issu
 
 | cycle | head | lens | HIGH | MED | LOW/DOCS | outcome |
 |---|---|---|---|---|---|---|
-| 1 | 4051259 | BoardTransition seams, engine integration, window geometry, validate surface | 0 | 2 | 6 | fix wave dispatched |
+| 1 | 4051259 | BoardTransition seams, engine integration, window geometry, validate surface | 0 | 2 | 6 | fixed in 6d8200c (all 7 in-scope items) |
 
 ## Cycle 1 (reviewer: opus) — findings and dispositions
 1. MED — section `easing` makes `t` non-linear in the frame index; `pace_floor` assumes linear, so `ease_out` brings back ~0.5 symbols/frame at the floor. **Disposition:** document (README/spec/CLAUDE.md: slots assumes `easing = "linear"`, the default); core follow-up idea: pass linear frame progress to `frame_at` (API minor). A transition cannot see the easing today.
@@ -21,3 +21,16 @@ Pre-existing issues outside the branch diff do not count; they are filed as issu
 8. DOCS — core docs-site pages: already listed as a follow-up in the PR body (after the flair release).
 Pre-existing (out of scope, to file as core issues after the loop): refire rule with an easing that is non-zero at 0 (unreachable today); `validate` is silent when `min_frames` lifts a configured `duration`.
 Checks the reviewer ran: 157 focused tests; splitflap byte-equivalence base vs branch 0/11,808 frames differ; real `run_transition` refires, cross-scale, letterbox, breaker, `random` pool floors; validate on bad knobs.
+| 2 | 6d8200c | mutation testing of tripwires, painter/motion math, least-examined surfaces, perf at the 504-frame floor | 0 | 4 | 3 | fix wave dispatched |
+
+## Cycle 2 (reviewer: opus) — findings and dispositions
+24 mutations run against a scratch copy; 4 survived the whole flair suite:
+1. MED — unrounded glide centre (cycle-1 fix 4) has no paint-path tripwire. Fix: `test_paint_reel_glide_never_steps_backwards` (drive `paint_reel` over `reel_window(*geo, i/400)`, painted min-x monotone).
+2. MED — no-repeat in-between skip's tripwire uses a 2-glyph pool that never repeats. Fix: fixture `(a, x, y, x, b)`, k = 8, assert no adjacent equal keys; CLAUDE.md tripwire name updated.
+3. MED — ring/under switch at s = 0.5 and frame-0 exactness WITH a border are unpinned. Fix: outgoing ring BLUE / incoming RED; frame 0 == outgoing draw; (0,0) BLUE at s = 0.3, RED at s = 0.7.
+4. MED — static-cell test compares to the transition's own frame 0, so a constant dim survives. Fix: compare static columns to the widget's own pixels at several t.
+5. LOW — shade pops (0.26 in one frame) for `spins = 0` with high `stagger`: the first reel lives only ~10 frames at the floor. **Ruling:** document ("low `spins` with high `stagger` gives a brisk first reel; its dim is a blink") and parametrize the ramp test with the bound each combo meets; NOT raising the floor again for the shortest reel's life — it would make `(0, 0.9)` 234 frames for a cosmetic blink on a one-symbol reel. Cost if wrong: a visible blink at an edge knob combination.
+6. LOW — window clip edges can step 1 px backwards (left/width rounded separately). Fix: `l = round(cx - wf/2)`, `r = round(cx + wf/2)`, return `(l, r - l, cx)`; endpoints stay exact; add `test_window_edges_monotone`.
+7. DOCS — spec test list names an `image` widget that no test uses; `_board_transition.py` docstring "supply only `_paint`" vs `Slots` also overriding `__init__`/`min_frames`; TestPerf docstring says "longboi" for 512 wide (longboi is 128×64).
+Pre-existing: no flair transition implements `end_firing` (board held until the next firing; bounded); splitflap's own ring switch is likely unpinned the same way.
+Checks: `_integral` vs numeric 1e-6; visit bound 3000 random strips 0 mismatches; pace at bucket edges ≤ defaults' worst; perf 504 frames at 512×64 ≤ 6.5 ms/frame; validate clean; registration/Cycling/README table consistent.

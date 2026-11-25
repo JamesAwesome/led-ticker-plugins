@@ -1,5 +1,6 @@
 """flair.slots — the reel painter (pure, recording set_px)."""
 
+from led_ticker_flair.flair.slots import reel_window
 from led_ticker_flair.flair.slots_paint import (
     overshoot_rows,
     paint_reel,
@@ -175,11 +176,41 @@ def test_strip_symbols_never_repeats_an_in_between_when_it_can():
     x = _cell(GREEN, range(4, 12), slot=1)
     y = _cell(GREEN, range(5, 13), slot=2)
     assert x.rows_key() != y.rows_key()
-    strip = strip_symbols((a, x, y, b), 6)
-    mids = strip[1:-1]
-    assert len(mids) == 5
-    keys = [m.rows_key() for m in mids]
+    # x, y, x in the pool: a plain wrap would put x next to x
+    strip = strip_symbols((a, x, y, x, b), 8)
+    keys = [m.rows_key() for m in strip]
     assert all(p != q for p, q in zip(keys, keys[1:], strict=False))
+
+
+def test_paint_reel_glide_never_steps_backwards():
+    """End to end: the painted left edge never moves against the glide
+    direction across real ``reel_window`` windows."""
+    for geo in [(144, 12, 128, 20), (10, 7, 30, 24), (3, 5, 40, 9)]:
+        sign = 1 if geo[2] >= geo[0] else -1
+        for gw in range(3, 8):
+            cell = _cell(RED, range(4, 12), slot=0, width=gw)
+            xs = []
+            for i in range(401):
+                got, set_px = _record()
+                win = reel_window(*geo, i / 400)
+                paint_reel(set_px, (cell,), BAND, 0.0, 1.0, 400, H, win)
+                if got:
+                    xs.append(min(x for x, _ in got))
+            assert len(xs) > 100
+            steps = zip(xs, xs[1:], strict=False)
+            assert all(sign * (b - a) >= 0 for a, b in steps), (geo, gw)
+
+
+def test_paint_reel_places_symbols_from_the_unrounded_centre():
+    """The window's rounded edges are only a clip: with a wide clip whose
+    rounded centre (200) disagrees with the float centre, symbols follow the
+    float centre, so a coarse rounded window can never make a glide jitter."""
+    for gw in range(3, 8):
+        cell = _cell(RED, range(4, 12), slot=0, width=gw)
+        for cx in (10.0, 10.4, 10.5, 10.6, 11.0, 57.3, 120.5):
+            got, set_px = _record()
+            paint_reel(set_px, (cell,), BAND, 0.0, 1.0, 400, H, (0, 400, cx))
+            assert min(x for x, _ in got) == round(cx - gw / 2), (gw, cx)
 
 
 def test_strip_symbols_single_in_between_repeats_unavoidably():

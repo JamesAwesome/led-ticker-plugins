@@ -123,8 +123,11 @@ def reel_window(x0: int, w0: int, x1: int, w1: int, g: float) -> tuple[int, int,
     one's. ``centre`` is the unrounded float; symbols are placed from it."""
     c0 = x0 + w0 / 2
     cx = c0 + ((x1 + w1 / 2) - c0) * g
-    ww = round(w0 + (w1 - w0) * g)
-    return round(cx - ww / 2), ww, cx
+    wf = w0 + (w1 - w0) * g
+    # round the two EDGES, not left + width: each edge is then monotone in g
+    left = round(cx - wf / 2)
+    right = round(cx + wf / 2)
+    return left, right - left, cx
 
 
 @dataclass(frozen=True)

@@ -177,3 +177,20 @@ def test_glide_never_steps_backwards(geo, up):
         assert all(b >= a for a, b in pairs)
     else:
         assert all(b <= a for a, b in pairs)
+
+
+@pytest.mark.parametrize(
+    "geo", [(144, 12, 128, 20), (10, 7, 30, 24), (3, 5, 40, 9), (30, 24, 10, 7)]
+)
+def test_window_edges_monotone(geo):
+    """Each window edge moves one way across the glide: the clip never steps
+    backwards even where the width rounds."""
+    lefts, rights = [], []
+    for i in range(401):
+        wl, ww, _cx = S.reel_window(*geo, i / 400)
+        lefts.append(wl)
+        rights.append(wl + ww)
+    sl = 1 if geo[2] >= geo[0] else -1
+    sr = 1 if geo[2] + geo[3] >= geo[0] + geo[1] else -1
+    assert all(sl * (b - a) >= 0 for a, b in zip(lefts, lefts[1:], strict=False))
+    assert all(sr * (b - a) >= 0 for a, b in zip(rights, rights[1:], strict=False))

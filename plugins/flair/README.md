@@ -643,6 +643,7 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 ### Notes
 
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
+- **Low `spins` with a high `stagger`.** The first reel gets only a handful of frames, so its dim reads as a blink rather than a ramp.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't flip.
 - **Different lengths.** Extra positions flip from blank, or to blank.
 - **Two-row widgets** flip each row on its own hinge. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row flips from or to blank.

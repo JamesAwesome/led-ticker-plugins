@@ -376,8 +376,8 @@ Outgoing ring + `under_out` before `s = 0.5`, incoming after — the same
   midpoint); all reels start moving on the first frame after `s = 0`
   and the first-ranked reel is the first to land; a long-spinning reel
   cycles its in-betweens; shade is 1.0 on the first and last frames and
-  never jumps by more than the per-frame cruise ramp; `TestRealCoreWidgets` against real `message` / `two_row` /
-  `image` widgets through a `ScaledCanvas`.
+  never jumps by more than the per-frame cruise ramp (bounds 0.15 at the defaults, 0.3 / 0.4 for `spins = 0` with `stagger` 0.8 / 0.9: low `spins` with a high `stagger` gives the first reel only a handful of frames, so its dim reads as a blink rather than a ramp); `TestRealCoreWidgets` against real `message` / `two_row` /
+  `gif` widgets through a `ScaledCanvas`.
 - Registry test: the four `flair.slots.*` names resolve through
   `flair.register(api)` (same shape as `test_registration_four_types`;
   `tests/test_smoke.py` pins only the sprite families, so it is
