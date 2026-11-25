@@ -269,6 +269,27 @@ Chosen over documenting a duration rule or decoupling `k` from
 A non-static reel always has `k ≥ 1`, so `spins = 0` is "one turn" (old
 scrolls out, new scrolls in, settle), not a cut.
 
+### Reel window
+
+A reel is a **window** that glides, by travel progress `g = glide(u)`
+(the fraction of the strip travel covered, 1 from `SETTLE_START` on),
+from the outgoing glyph's column `(x0, w0)` to the incoming glyph's
+`(x1, w1)`: the centre and the width interpolate linearly (`reel_window`),
+rounded so `g = 0` gives exactly `(x0, w0)` and `g = 1` exactly
+`(x1, w1)`. Every strip symbol is painted **centred in the window and
+clipped to its columns** (and, as before, to the band's rows and the
+panel). A blank end takes the other end's column.
+
+Why (bigsign observation, 2026-11-25): the board gives the outgoing
+cell its own slot but centres the in-betweens and the incoming cell on
+the incoming column, with borrowed in-betweens up to 1.5x the wider
+end. For splitflap's quick flips that is fine; for a continuously
+visible reel it read as two letters side by side and as borrowed glyphs
+spilling over the neighbouring reels. The board is untouched; the fix is
+slots-only. Frame 0 (window = the outgoing cell's own column) and the
+landing (window = the incoming cell's) stay pixel-exact with
+`paint_cell`.
+
 ### Shading
 
 The moving strip is darkened in proportion to speed so motion reads as

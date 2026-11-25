@@ -101,3 +101,23 @@ def test_pace_floor_bounds_symbols_per_frame(spins, stagger, _want):
         d.append(S.displacement(u, travel, overshoot))
     worst = max(abs(b - a) for a, b in zip(d, d[1:], strict=False)) / pitch
     assert worst <= 0.3
+
+
+def test_glide_endpoints():
+    assert S.glide(0.0) == 0.0
+    assert S.glide(S.SETTLE_START) == pytest.approx(1.0)
+    assert S.glide(1.0) == 1.0
+    g = [S.glide(i / 100) for i in range(101)]
+    assert all(b >= a for a, b in zip(g, g[1:], strict=False))
+
+
+@pytest.mark.parametrize(
+    "geo", [(10, 7, 30, 24), (30, 24, 10, 7), (5, 8, 5, 8), (0, 3, 100, 4)]
+)
+def test_reel_window_endpoints(geo):
+    x0, w0, x1, w1 = geo
+    assert S.reel_window(*geo, 0.0) == (x0, w0)
+    assert S.reel_window(*geo, 1.0) == (x1, w1)
+    wl, ww = S.reel_window(*geo, 0.5)
+    assert abs(ww - (w0 + w1) / 2) <= 1
+    assert min(x0, x1) <= wl <= max(x0, x1)

@@ -306,9 +306,9 @@ class TestFrames:
         calls: list[tuple[int, float]] = []
         real_paint = slots_module.paint_reel
 
-        def spy(set_px, strip, band, d, shade, w, h):
+        def spy(set_px, strip, band, d, shade, w, h, window):
             calls.append((id(strip), shade))
-            real_paint(set_px, strip, band, d, shade, w, h)
+            real_paint(set_px, strip, band, d, shade, w, h, window)
 
         monkeypatch.setattr(slots_module, "paint_reel", spy)
         c = _StubCanvas(160, 16)
@@ -330,6 +330,67 @@ class TestFrames:
         for a, b in zip(frames, frames[1:], strict=False):
             for key in a:
                 assert abs(b[key] - a[key]) <= 0.15
+
+
+class TestReelWindows:
+    @staticmethod
+    def _walk(monkeypatch):
+        """Per pre-snap frame: [(window, written xs)] for each reel painted."""
+        from led_ticker.plugin import TickerMessage
+
+        from led_ticker_flair.flair import slots as slots_module
+
+        frames: list[list[tuple[tuple[int, int], list[int]]]] = []
+        real_paint = slots_module.paint_reel
+
+        def spy(set_px, strip, band, d, shade, w, h, window):
+            xs: list[int] = []
+
+            def rec(x, y, r, g, b):
+                xs.append(x)
+                set_px(x, y, r, g, b)
+
+            frames[-1].append((window, xs))
+            real_paint(rec, strip, band, d, shade, w, h, window)
+
+        monkeypatch.setattr(slots_module, "paint_reel", spy)
+        c = _StubCanvas(160, 16)
+        o, i = TickerMessage(text="WIN"), TickerMessage(text="PULL LEVER")
+        p = Slots()
+        n = p.min_frames
+        for k in range(n):
+            t = k / (n - 1)
+            if t >= SNAP_THRESHOLD:
+                break
+            frames.append([])
+            c.Clear()
+            p.frame_at(t, c, o, i)
+        return frames
+
+    def test_reel_pixels_stay_inside_reel_windows(self, monkeypatch):
+        frames = self._walk(monkeypatch)
+        assert len(frames) > 2
+        painted = 0
+        for calls in frames:
+            for (wl, ww), xs in calls:
+                painted += len(xs)
+                assert all(wl <= x < wl + ww for x in xs)
+        assert painted
+
+    def test_reel_windows_disjoint_at_start_and_landing(self, monkeypatch):
+        frames = self._walk(monkeypatch)
+
+        def disjoint(calls):
+            # a reel whose symbol is blank at the endpoint paints nothing there,
+            # so only reels that actually write pixels can visibly collide
+            spans = sorted((wl, wl + ww) for (wl, ww), xs in calls if xs)
+            return all(a[1] <= b[0] for a, b in zip(spans, spans[1:], strict=False))
+
+        assert frames[0] and disjoint(frames[0])
+        assert disjoint(frames[-1])
+        # Not asserted for every frame: on this fixture reels whose start (or
+        # end) is blank keep the incoming (outgoing) column, which overlaps a
+        # neighbouring reel's window mid-flight (see the task report).
 
 
 class TestVariantsRegistration:

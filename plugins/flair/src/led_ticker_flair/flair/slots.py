@@ -108,11 +108,30 @@ def shade_for(u: float) -> float:
     return 1.0 - (1.0 - SPIN_SHADE) * speed_norm(u)
 
 
+def glide(u: float) -> float:
+    """Travel progress in [0, 1]: the fraction of the strip travel covered by
+    local time ``u``; 1.0 from SETTLE_START on (the overshoot is vertical only)."""
+    return _integral(min(_clamp01(u), SETTLE_START)) / _integral(SETTLE_START)
+
+
+def reel_window(x0: int, w0: int, x1: int, w1: int, g: float) -> tuple[int, int]:
+    """``(left, width)`` of the reel window at travel progress ``g``: centre
+    and width glide from the outgoing glyph's column to the incoming one's."""
+    c0 = x0 + w0 / 2
+    cx = c0 + ((x1 + w1 / 2) - c0) * g
+    ww = round(w0 + (w1 - w0) * g)
+    return round(cx - ww / 2), ww
+
+
 @dataclass(frozen=True)
 class Reel:
     stop: float
     k: int
     strip: tuple[FlapCell | None, ...]
+    x0: int  # column geometry of the strip's first / last symbol
+    w0: int
+    x1: int
+    w1: int
 
 
 class Slots(BoardTransition):
@@ -133,10 +152,16 @@ class Slots(BoardTransition):
         reels: list[Reel] = []
         for flap, stop in zip(board.flaps, stops, strict=True):
             if flap.static:
-                reels.append(Reel(stop, 1, flap.seq))  # never painted via the strip
+                a = flap.seq[0]  # never painted via the strip
+                assert a is not None  # static: an unchanged character
+                reels.append(Reel(stop, 1, flap.seq, a.slot, a.width, a.slot, a.width))
                 continue
             k = reel_advances(self.spins, stop, self.stagger)
-            reels.append(Reel(stop, k, strip_symbols(flap.seq, k)))
+            first, last = flap.seq[0], flap.seq[-1]
+            end0, end1 = first or last, last or first
+            assert end0 is not None and end1 is not None  # a flap has a real end
+            x0, w0, x1, w1 = end0.slot, end0.width, end1.slot, end1.width
+            reels.append(Reel(stop, k, strip_symbols(flap.seq, k), x0, w0, x1, w1))
         self._reels = reels
         return stops
 
@@ -153,7 +178,8 @@ class Slots(BoardTransition):
             band = board.bands[flap.band]
             pitch, gap = reel_pitch(band)
             d = displacement(u, reel.k * pitch, overshoot_rows(pitch, gap))
-            paint_reel(set_px, reel.strip, band, d, shade_for(u), w, h)
+            window = reel_window(reel.x0, reel.w0, reel.x1, reel.w1, glide(u))
+            paint_reel(set_px, reel.strip, band, d, shade_for(u), w, h, window)
         paint_pixels(set_px, board.ring_out if first_half else board.ring_in)
 
 

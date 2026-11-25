@@ -655,6 +655,7 @@ For a section-to-section transition, keep `stagger` at 0.8 or below with the def
 
 ### Notes
 
+- **Each reel is a window.** It slides from the old letter's column to the new one's, and the borrowed in-between characters are centred in it and clipped to it, so they never spill over the neighbouring reels.
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't flip.
 - **Different lengths.** Extra positions flip from blank, or to blank.
