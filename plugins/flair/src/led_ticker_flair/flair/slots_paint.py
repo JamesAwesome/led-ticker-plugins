@@ -47,6 +47,7 @@ def paint_reel(
     """Paint the strip at offset ``d``, clipped to the band's rows and to the
     column ``window`` ``(left, width)``; every symbol is centred in it."""
     wl, ww = window
+    xlo, xhi = max(0, wl), min(w, wl + ww)
     k = len(strip) - 1
     pitch, gap = reel_pitch(band)
     p = pitch - gap
@@ -62,13 +63,15 @@ def paint_reel(
             continue
         dy = shift - j * pitch
         ox = wl + (ww - cell.width) // 2
+        if ox + cell.width <= xlo or ox >= xhi:
+            continue
         for y0, row in cell.rows.items():
             y = y0 + dy
             if not (band.lo <= y <= band.hi and 0 <= y < h):
                 continue
             for dx, (r, g, b) in row:
                 x = ox + dx
-                if max(0, wl) <= x < min(w, wl + ww):
+                if xlo <= x < xhi:
                     if shade == 1.0:
                         set_px(x, y, r, g, b)
                     else:

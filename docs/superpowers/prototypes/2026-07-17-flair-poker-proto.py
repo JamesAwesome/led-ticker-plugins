@@ -8,6 +8,7 @@ incoming content is revealed. Renders variants:
   B: repeating pulses (2.5 rings per glyph)
   diamonds: single-suit config, variant A
 """
+
 import colorsys
 import math
 import random
@@ -17,9 +18,9 @@ from PIL import Image
 
 W, H = 256, 64
 SCALE = 4  # display upscale
-FRAMES = 72          # ~3.6s at 20fps
-GRID = 32            # glyph cell size (real px)
-GLYPH_R = 7.0        # glyph half-size at rest
+FRAMES = 72  # ~3.6s at 20fps
+GRID = 32  # glyph cell size (real px)
+GLYPH_R = 7.0  # glyph half-size at rest
 SUITS = ["heart", "diamond", "club", "spade"]
 
 
@@ -80,13 +81,15 @@ def render(variant, suits, out_name, seed=5):
     glyphs = []
     for i in range(cols * rows):
         gx, gy = i % cols, i // cols
-        glyphs.append({
-            "cx": gx * GRID + GRID / 2 + rng.uniform(-3, 3),
-            "cy": gy * GRID + GRID / 2 + rng.uniform(-2, 2),
-            "suit": suits[i % len(suits)],
-            "hue": rng.random(),
-            "stagger": rng.uniform(0.0, 0.25),
-        })
+        glyphs.append(
+            {
+                "cx": gx * GRID + GRID / 2 + rng.uniform(-3, 3),
+                "cy": gy * GRID + GRID / 2 + rng.uniform(-2, 2),
+                "suit": suits[i % len(suits)],
+                "hue": rng.random(),
+                "stagger": rng.uniform(0.0, 0.25),
+            }
+        )
     max_r = math.hypot(GRID, GRID) * 1.2  # covers neighbors -> full reveal
 
     frames = []
@@ -117,9 +120,16 @@ def render(variant, suits, out_name, seed=5):
                             # final wave reveals permanently
                             if wave_n >= 2 and inside(dx, dy, r_rip):
                                 revealed = True
-                            if inside(dx, dy, r_rip) and not inside(dx, dy, r_rip - 3.5):
+                            if inside(dx, dy, r_rip) and not inside(
+                                dx, dy, r_rip - 3.5
+                            ):
                                 ring = hue_rgb(g["hue"] + phase * 0.7)
-                            if wave_n >= 1 and inside(dx, dy, max_r) and wave_n == 1 and inside(dx, dy, (phase) * max_r):
+                            if (
+                                wave_n >= 1
+                                and inside(dx, dy, max_r)
+                                and wave_n == 1
+                                and inside(dx, dy, (phase) * max_r)
+                            ):
                                 revealed = True
                     else:
                         # A: single staggered ripple; wake reveals
@@ -127,7 +137,9 @@ def render(variant, suits, out_name, seed=5):
                             r_rip = p * max_r
                             if inside(dx, dy, r_rip):
                                 revealed = True
-                            if inside(dx, dy, r_rip) and not inside(dx, dy, r_rip - 3.5):
+                            if inside(dx, dy, r_rip) and not inside(
+                                dx, dy, r_rip - 3.5
+                            ):
                                 ring = hue_rgb(g["hue"] + p * 0.7)
                     # the resting glyph itself (pre/early ripple)
                     gr = GLYPH_R * min(1.0, t / 0.2)  # fade/scale in
@@ -148,8 +160,9 @@ def render(variant, suits, out_name, seed=5):
                 for x in range(W):
                     p2[x, y] = content(x, y, incoming=True)
         frames.append(img.resize((W * SCALE, H * SCALE), Image.NEAREST))
-    frames[0].save(out_name, save_all=True, append_images=frames[1:],
-                   duration=50, loop=0)
+    frames[0].save(
+        out_name, save_all=True, append_images=frames[1:], duration=50, loop=0
+    )
     print("wrote", out_name)
 
 

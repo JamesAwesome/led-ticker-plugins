@@ -334,13 +334,13 @@ class TestFrames:
 
 class TestReelWindows:
     @staticmethod
-    def _walk(monkeypatch):
-        """Per pre-snap frame: [(window, written xs)] for each reel painted."""
+    def _walk(monkeypatch, out_text="WIN", in_text="PULL LEVER"):
+        """Per pre-snap frame: [(window, written xs, strip)] per reel painted."""
         from led_ticker.plugin import TickerMessage
 
         from led_ticker_flair.flair import slots as slots_module
 
-        frames: list[list[tuple[tuple[int, int], list[int]]]] = []
+        frames: list[list[tuple[tuple[int, int], list[int], tuple]]] = []
         real_paint = slots_module.paint_reel
 
         def spy(set_px, strip, band, d, shade, w, h, window):
@@ -350,12 +350,12 @@ class TestReelWindows:
                 xs.append(x)
                 set_px(x, y, r, g, b)
 
-            frames[-1].append((window, xs))
+            frames[-1].append((window, xs, strip))
             real_paint(rec, strip, band, d, shade, w, h, window)
 
         monkeypatch.setattr(slots_module, "paint_reel", spy)
         c = _StubCanvas(160, 16)
-        o, i = TickerMessage(text="WIN"), TickerMessage(text="PULL LEVER")
+        o, i = TickerMessage(text=out_text), TickerMessage(text=in_text)
         p = Slots()
         n = p.min_frames
         for k in range(n):
@@ -372,45 +372,42 @@ class TestReelWindows:
         assert len(frames) > 2
         painted = 0
         for calls in frames:
-            for (wl, ww), xs in calls:
+            for (wl, ww), xs, _ in calls:
                 painted += len(xs)
                 assert all(wl <= x < wl + ww for x in xs)
         assert painted
 
-    def test_reel_windows_disjoint_at_start_and_landing(self, monkeypatch):
-        frames = self._walk(monkeypatch)
+    @pytest.mark.parametrize(
+        ("out_text", "in_text"), [("WIN", "PULL LEVER"), ("PULL LEVER", "WIN")]
+    )
+    def test_reel_windows_disjoint_at_start_and_landing(
+        self, monkeypatch, out_text, in_text
+    ):
+        frames = self._walk(monkeypatch, out_text, in_text)
 
         def disjoint(calls):
-            spans = sorted((wl, wl + ww) for (wl, ww), _ in calls)
+            spans = sorted((wl, wl + ww) for (wl, ww), _, _ in calls)
             return all(a[1] <= b[0] for a, b in zip(spans, spans[1:], strict=False))
 
         assert frames[0] and disjoint(frames[0])
         assert disjoint(frames[-1])
         assert all(disjoint(f) for f in frames)
 
-    def test_blank_start_reel_paints_nothing_on_frame_zero(self, monkeypatch):
-        from led_ticker_flair.flair import slots as slots_module
-
-        starts: list[tuple[bool, int]] = []
-        real_paint = slots_module.paint_reel
-
-        def spy(set_px, strip, band, d, shade, w, h, window):
-            n: list[int] = []
-            real_paint(lambda *a: n.append(1), strip, band, d, shade, w, h, window)
-            starts.append((strip[0] is None, len(n)))
-            real_paint(set_px, strip, band, d, shade, w, h, window)
-
-        from led_ticker.plugin import TickerMessage
-
-        monkeypatch.setattr(slots_module, "paint_reel", spy)
-        Slots().frame_at(
-            0.0,
-            _StubCanvas(160, 16),
-            TickerMessage(text="WIN"),
-            TickerMessage(text="PULL LEVER"),
-        )
-        blank = [n for is_blank, n in starts if is_blank]
-        assert blank and all(n == 0 for n in blank)
+    def test_blank_ends_are_zero_width_windows(self, monkeypatch):
+        starts = ends = 0
+        for out_text, in_text in [("WIN", "PULL LEVER"), ("PULL LEVER", "WIN")]:
+            frames = self._walk(monkeypatch, out_text, in_text)
+            for (wl, ww), _, strip in frames[0]:
+                if strip[0] is None:
+                    starts += 1
+                    last = strip[-1]
+                    assert (wl, ww) == (last.slot + last.width // 2, 0)
+            for (wl, ww), _, strip in frames[-1]:
+                if strip[-1] is None:
+                    ends += 1
+                    first = strip[0]
+                    assert (wl, ww) == (first.slot + first.width // 2, 0)
+        assert starts and ends
 
 
 class TestVariantsRegistration:
