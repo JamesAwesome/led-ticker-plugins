@@ -640,6 +640,19 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 
 `.alternating` passes both knobs to each direction.
 
+**Minimum duration.** The transition raises its own minimum duration so the reels never spin faster than they do at the default knobs: `min seconds = 3 × (spins+1)/4 × 0.5/(1−stagger)`. A `duration` below that is lifted to it.
+
+| `spins` | `stagger` | Minimum duration |
+| --- | --- | --- |
+| 3 | 0.5 (default) | 3 s |
+| 0 | 0.9 | 3.75 s |
+| 6 | 0.5 | 5.25 s |
+| 3 | 0.8 | 7.5 s |
+| 3 | 0.9 | 15 s |
+| 6 | 0.9 | 26 s |
+
+For a section-to-section transition, keep `stagger` at 0.8 or below with the default `spins`.
+
 ### Notes
 
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
@@ -686,20 +699,20 @@ transition = {type = "flair.slots.forward", spins = 0, stagger = 0.8}
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `spins` | int, 0 to 6 | `3` | In-between characters the FIRST reel passes before it lands. Reels that stop later keep spinning at the same speed, so they pass more (cycling through the same in-betweens). `0` is one turn: the old character scrolls out and the new one scrolls in. |
-| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — pair a high `stagger` with a longer `duration`. |
+| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — the transition lifts a too-short `duration` (see below). |
 
 `.alternating` passes both knobs to each direction.
 
 ### Notes
 
-- **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between spins.
+- **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. The reel always advances its full count: a small pool repeats the same in-betweens, or alternates the old character with blank when there are none.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't spin.
 - **Different lengths.** Extra positions spin from blank, or to blank.
 - **Two-row widgets** spin each row on its own. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row spins from or to blank.
 - **Images, gifs and background effects** have no characters to find, so they're cut into character-width strips that spin the same way.
 - **Borders stay put.** A bordered widget's ring doesn't spin. The new section's border takes over halfway through, while the reels are still spinning.
 - **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background arrives at the closing snap and its scale on the final frame. Laser and blinds have the same limitation.
-- **Smallsign.** At 16 rows a reel is 7 or 8 LEDs tall with a 2-LED gap; the visual gate decides whether that reads.
+- **Smallsign.** At 16 rows a reel is 7 or 8 LEDs tall with a 2-LED gap. It works, but reads best on the bigsign.
 
 ## Fisheye animation
 

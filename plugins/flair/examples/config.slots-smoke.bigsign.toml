@@ -273,6 +273,28 @@ font_size = 30
 
 
 
+# 9b. worst documented combination: the pace floor lifts it to 7.5 s
+[[playlist.section]]
+mode = "slideshow"
+hold_time = 1.0
+transition = {type = "flair.slots.forward", spins = 3, stagger = 0.8}
+
+[[playlist.section.widget]]
+type = "message"
+text = "SLOWEST"
+font_color = [255, 120, 40]
+font = "Inter-Bold"
+font_size = 30
+
+[[playlist.section.widget]]
+type = "message"
+text = "REELING"
+font_color = [80, 200, 255]
+font = "Inter-Bold"
+font_size = 30
+
+
+
 # 10. letterboxed: scale 2 / content 16; border lights the bands
 [[playlist.section]]
 mode = "slideshow"

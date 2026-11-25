@@ -212,10 +212,11 @@ splitflap's ripple staggers the *starts*. The reel order (`forward` /
   `D = k · pitch`.
 
 Displacement `d(u)` in real rows uses a **trapezoid** speed profile:
-ease-in over `u ∈ [0, U_IN]` (`U_IN = 0.15`), cruise, ease-out over
-`u ∈ [1 − U_OUT, 1 − U_SETTLE]` (`U_OUT = 0.45` of the spin, so the last
-couple of symbols are the slow ones), then **settle** over the final
-`U_SETTLE = 0.1`: `d = D + B · sin(π · v)`, `v` the settle fraction —
+ease-in over `u ∈ [0, U_IN]` (`U_IN = 0.15`), cruise to
+`CRUISE_END = 0.45`, ease-out over `u ∈ [0.45, 0.9]` (so the last couple
+of symbols are the slow ones), then **settle** over `u ∈ [SETTLE_START,
+1]` with `SETTLE_START = 0.9`: `d = D + B · sin(π · v)`, `v` the settle
+fraction —
 overshoot by `B` rows past the landing and return.
 `B = min(gap, max(1, round(pitch / 8)))` real rows (one row on a
 smallsign, about one logical row on the bigsign). **Nothing peeks in
@@ -237,12 +238,32 @@ default 20 fps, `spins = 3`, `stagger = 0.5`, first reel (`k = 4`):
 | bigsign, `min_frames = 60` (3 s) | ≈ 35 | ≈ 51 (× 0.5 ≈ 26) | ≈ 8 rows/frame ≈ 2 logical rows; readable |
 | smallsign, 60 | ≈ 9 | ≈ 26 | ≈ 2 rows/frame; readable |
 
-So slots sets **`min_frames = 60`** (unlike splitflap's 36) and caps
-**`spins` at 6**: at the cap the first reel shows 7 symbols in 26
-frames (≈ 3.7 frames each), already the edge of readable; `stagger`
-multiplies the last reel's symbol count, so the README states that high
-`stagger` wants a longer `duration`. The builder re-derives these at the
-visual gate; the table is the reasoning to check, not a promise.
+So slots sets **`min_frames = 60`** at the default knobs (unlike
+splitflap's 36) and caps **`spins` at 6**: at the cap the first reel
+shows 7 symbols in 26 frames (≈ 3.7 frames each), already the edge of
+readable. The builder re-derives these at the visual gate; the table is
+the reasoning to check, not a promise.
+
+**Resolution (2026-11-24): the floor is per instance.** Cruise speed
+scales with `(spins + 1) / (1 − stagger)` (`stagger` multiplies every
+reel's symbol count through `reel_advances`), so a fixed 60 lets the
+knobs strobe. Each instance sets
+`min_frames = pace_floor(spins, stagger) = max(60, ceil(60 · (spins+1)/4 ·
+0.5/(1 − stagger)))`, so the reels never spin faster than at the default
+knobs over 60 frames. The runner lifts a shorter `duration` to it:
+
+| `spins` | `stagger` | frames | seconds |
+| --- | --- | --- | --- |
+| 3 | 0.5 | 60 | 3 |
+| 0 | 0.5 | 60 | 3 |
+| 0 | 0.9 | 75 | 3.75 |
+| 6 | 0.5 | 105 | 5.25 |
+| 3 | 0.8 | 150 | 7.5 |
+| 3 | 0.9 | 300 | 15 |
+| 6 | 0.9 | 525 | 26 |
+
+Chosen over documenting a duration rule or decoupling `k` from
+`stagger`. `.alternating` inherits it through `Cycling`.
 
 **Static** reels paint `seq[0]` every frame. `u ≥ 1` paints `seq[-1]`.
 A non-static reel always has `k ≥ 1`, so `spins = 0` is "one turn" (old
@@ -271,9 +292,9 @@ Outgoing ring + `under_out` before `s = 0.5`, incoming after — the same
   `spins must be an int in [0, 6]; got …`.
 - `stagger`: float in `[0.0, 0.9]`, default `0.5`, same coercer as
   splitflap.
-- `min_frames = 60` (overrides the base's 36; see "Pace at the floor").
-  README recommends `duration = 3.0` and says higher `stagger` wants
-  more.
+- `min_frames`: class base `60` (overrides the base's 36), raised per
+  instance by `pace_floor(spins, stagger)` (see "Pace at the floor").
+  README documents the minimum-duration rule and table.
 
 ### Registration and surfaces
 

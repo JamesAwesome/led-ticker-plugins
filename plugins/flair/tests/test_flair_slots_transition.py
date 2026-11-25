@@ -458,8 +458,8 @@ class TestRealCoreWidgets:
 class TestPerf:
     """One full firing at bigsign / longboi size. Mac timings: board build
     (first frame) ~22 ms at 256x64 and ~52 ms at 512x64 for a full-panel
-    noise picture, 3-6 ms per frame after at 256 / 512 wide. Bounds are ~10x headroom so CI
-    noise doesn't flake, while a quadratic regression (seconds) trips."""
+    noise picture, 3-6 ms per frame after at 256 / 512 wide. Bounds are ~10x headroom so
+    CI noise doesn't flake, while a quadratic regression (seconds) trips."""
 
     @staticmethod
     def _noise_widget(w: int, h: int, seed: int) -> Any:
