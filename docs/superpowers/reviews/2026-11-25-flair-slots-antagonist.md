@@ -21,7 +21,7 @@ Pre-existing issues outside the branch diff do not count; they are filed as issu
 8. DOCS — core docs-site pages: already listed as a follow-up in the PR body (after the flair release).
 Pre-existing (out of scope, to file as core issues after the loop): refire rule with an easing that is non-zero at 0 (unreachable today); `validate` is silent when `min_frames` lifts a configured `duration`.
 Checks the reviewer ran: 157 focused tests; splitflap byte-equivalence base vs branch 0/11,808 frames differ; real `run_transition` refires, cross-scale, letterbox, breaker, `random` pool floors; validate on bad knobs.
-| 2 | 6d8200c | mutation testing of tripwires, painter/motion math, least-examined surfaces, perf at the 504-frame floor | 0 | 4 | 3 | fix wave dispatched |
+| 2 | 6d8200c | mutation testing of tripwires, painter/motion math, least-examined surfaces, perf at the 504-frame floor | 0 | 4 | 3 | fixed in a277568 (all items) |
 
 ## Cycle 2 (reviewer: opus) — findings and dispositions
 24 mutations run against a scratch copy; 4 survived the whole flair suite:
@@ -34,3 +34,16 @@ Checks the reviewer ran: 157 focused tests; splitflap byte-equivalence base vs b
 7. DOCS — spec test list names an `image` widget that no test uses; `_board_transition.py` docstring "supply only `_paint`" vs `Slots` also overriding `__init__`/`min_frames`; TestPerf docstring says "longboi" for 512 wide (longboi is 128×64).
 Pre-existing: no flair transition implements `end_firing` (board held until the next firing; bounded); splitflap's own ring switch is likely unpinned the same way.
 Checks: `_integral` vs numeric 1e-6; visit bound 3000 random strips 0 mismatches; pace at bucket edges ≤ defaults' worst; perf 504 frames at 512×64 ≤ 6.5 ms/frame; validate clean; registration/Cycling/README table consistent.
+Fix-wave notes (cycle 2): tripwires 2, 3, 4 confirmed RED under their mutations. Tripwire 1: after the monotone-edge fix (item 6) the end-to-end glide test no longer distinguishes rounded-window placement (both are monotone), so the biting tripwire is `test_paint_reel_places_symbols_from_the_unrounded_centre` (RED `198 == 8`); the end-to-end test bites on a reverted `reel_window`. Ruling: accepted — the invariant is pinned at the unit level and the user-visible property at the paint level. In the ring mutation the frame-0 assertion trips first; the 0.3/0.7 checks are belt-and-braces. Ruling: accepted.
+| 3 | a277568 | sign-owner view: smallsign render, content types, docs vs behaviour, maintainer traps | 0 | 2 | 6 | fix wave dispatched |
+
+## Cycle 3 (reviewer: opus) — findings and dispositions
+1. MED (docs, but with a behaviour root) — "one turn per reel" at `spins = 0` is false: the board builds no in-betweens at `flips = 0`, so later reels (k = 2..5 at `stagger = 0.8`) alternate OLD/blank — a stutter. **Ruling:** slots asks the board for `max(spins, 2)` in-betweens regardless of `spins` (the pool it cycles), while `spins` keeps its meaning (advances of the first reel); README/spec/smoke wording: "`spins = 0`: the first reel makes one turn; later reels keep spinning through borrowed characters until their stop". Cost if wrong: a `spins = 0` firing shows in-betweens on later reels instead of the old glyph flashing.
+2. MED (docs) — README minimum-duration formula omits the 3 s floor. Fix: `max(3, …)`.
+3. LOW — smallsign settle dip clips the glyph's bottom row for 1–2 frames (E reads as F). **Ruling:** leave; the spec designs the dip as clipped rows and the gate accepted it; note in README smallsign bullet.
+4. LOW/DOCS — "7 or 8 LEDs tall" → "7 to 9" (descenders).
+5. LOW/DOCS — smoke label "worst documented combination" → "worst combination recommended for section-to-section".
+6. LOW (maintainer) — `_paint` skeleton duplicated between slots and splitflap; `min_frames = 36` lives in the base. **Ruling:** move `min_frames = 36` onto `SplitFlap` (base defaults to core's 0); do NOT hoist the skeleton now — it touches splitflap's byte-equivalent path for no user-visible gain; recorded as a follow-up.
+7. LOW/DOCS — garbled parentheticals in the CLAUDE.md Reel window bullet.
+8. LOW — unexplained `# type: ignore[arg-type]` in a paint test.
+Content types checked clean: emoji, rainbow (pool ≈ 20 cells), border, "1111"→"2222", identical, one-char, wider-than-panel, two_row long bottom, bg one side. Smallsign render: reads as a spin (2–3 rows/frame, in-betweens readable ~3 frames, B = 1 dip visible).

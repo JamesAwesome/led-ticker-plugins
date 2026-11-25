@@ -268,8 +268,10 @@ Chosen over documenting a duration rule or decoupling `k` from
 `stagger`. `.alternating` inherits it through `Cycling`.
 
 **Static** reels paint `seq[0]` every frame. `u ≥ 1` paints `seq[-1]`.
-A non-static reel always has `k ≥ 1`, so `spins = 0` is "one turn" (old
-scrolls out, new scrolls in, settle), not a cut.
+A non-static reel always has `k ≥ 1`, so `spins = 0` is not a cut: the first reel
+makes one turn (old scrolls out, new scrolls in, settle) and later reels keep
+spinning through borrowed characters until their stop (the board always borrows
+>= 2 in-betweens: `max(spins, 2)`).
 
 ### Reel window
 

@@ -675,7 +675,7 @@ duration = 3.0        # floor: min_frames = 60, i.e. 3.0 s at the default 20 fps
 transition = "flair.slots.forward"
 ```
 
-One turn per reel, stopping slowly across the message:
+The first reel makes one turn and the rest keep spinning until they stop, slowly across the message:
 
 ```toml
 [[playlist.section]]
@@ -686,12 +686,12 @@ transition = {type = "flair.slots.forward", spins = 0, stagger = 0.8}
 
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `spins` | int, 0 to 6 | `3` | In-between characters the FIRST reel passes before it lands. Reels that stop later keep spinning at the same speed, so they pass more (cycling through the same in-betweens). `0` is one turn: the old character scrolls out and the new one scrolls in. |
+| `spins` | int, 0 to 6 | `3` | In-between characters the FIRST reel passes before it lands. Reels that stop later keep spinning at the same speed, so they pass more (cycling through the same in-betweens). `0`: the first reel makes one turn (the old character scrolls out and the new one scrolls in); later reels keep spinning through borrowed characters until their stop. |
 | `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — the transition lifts a too-short `duration` (see Minimum duration below). |
 
 `.alternating` passes both knobs to each direction.
 
-**Minimum duration.** The transition raises its own minimum duration so the reels never spin faster than they do at the default knobs: `min seconds = 3 × (spins+1)/4 × 0.5/(1−stagger) × h(spins)/h(3)`, where `h(spins) = (spins+2)/(spins+1.5)` is the headroom for each reel rounding its advances to a whole symbol (a reel can run up to `h` times the nominal speed). A `duration` below that is lifted to it.
+**Minimum duration.** The transition raises its own minimum duration so the reels never spin faster than they do at the default knobs: `min seconds = max(3, 3 × (spins+1)/4 × 0.5/(1−stagger) × h(spins)/h(3))`, where `h(spins) = (spins+2)/(spins+1.5)` is the headroom for each reel rounding its advances to a whole symbol (a reel can run up to `h` times the nominal speed). A `duration` below that is lifted to it.
 
 | `spins` | `stagger` | Minimum duration |
 | --- | --- | --- |
@@ -715,7 +715,7 @@ For a section-to-section transition, keep `stagger` at 0.8 or below with the def
 - **Images, gifs and background effects** have no characters to find, so they're cut into character-width strips that spin the same way.
 - **Borders stay put.** A bordered widget's ring doesn't spin. The new section's border takes over halfway through, while the reels are still spinning.
 - **Backgrounds and cross-scale sections.** Both messages share the panel for the whole transition, so the new section's background arrives at the closing snap and its scale on the final frame. Laser and blinds have the same limitation.
-- **Smallsign.** At 16 rows a reel is 7 or 8 LEDs tall with a 2-LED gap. It works, but reads best on the bigsign.
+- **Smallsign.** At 16 rows a reel is 7 to 9 LEDs tall (descenders) with a 2-LED gap. It works, but reads best on the bigsign. The one-row settle dip clips the glyph's bottom row for a frame or two at scale 1 (an E can read as F for about 100 ms), by design.
 
 ## Fisheye animation
 

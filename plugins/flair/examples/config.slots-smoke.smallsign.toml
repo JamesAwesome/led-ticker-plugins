@@ -5,7 +5,7 @@
 #
 # Sections: forward (different lengths), reverse, alternating on navy, random,
 # BG HOLD, rainbow border, two_row (per-row reels), gif in and out, and a
-# knob section (spins = 0, stagger = 0.8). At 16 rows a reel is 7 or 8 LEDs
+# knob section (spins = 0, stagger = 0.8). At 16 rows a reel is 7 to 9 LEDs
 # tall with a 2-LED gap: this file is the visual gate for whether that reads.
 
 [display]
@@ -201,7 +201,8 @@ font_color = [80, 200, 255]
 
 
 
-# 9. knobs: one turn per reel, slow stops
+# 9. knobs: spins = 0: the first reel makes one turn; later reels keep spinning
+#    through borrowed characters until their stop
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 1.0

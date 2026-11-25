@@ -37,6 +37,8 @@ MAX_FLIPS = 12
 class SplitFlap(BoardTransition):
     """Ripple left -> right (the base's ``_schedule``)."""
 
+    min_frames = 36
+
     def __init__(self, flips: Any = 3, stagger: Any = 0.5) -> None:
         self.flips: int = coerce_steps(flips, "flips", MAX_FLIPS)
         super().__init__(self.flips, coerce_stagger(stagger))

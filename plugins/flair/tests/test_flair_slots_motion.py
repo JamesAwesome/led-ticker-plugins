@@ -194,3 +194,49 @@ def test_window_edges_monotone(geo):
     sr = 1 if geo[2] + geo[3] >= geo[0] + geo[1] else -1
     assert all(sl * (b - a) >= 0 for a, b in zip(lefts, lefts[1:], strict=False))
     assert all(sr * (b - a) >= 0 for a, b in zip(rights, rights[1:], strict=False))
+
+
+def test_spins_zero_later_reels_cycle_in_betweens():
+    """spins = 0 still builds a board with >= 2 in-between flaps, so reels with
+    k >= 3 keep spinning through borrowed characters until their stop."""
+    from led_ticker.plugin import TickerMessage
+
+    class _C:
+        width, height = 160, 16
+
+        def Clear(self):
+            pass
+
+        def Fill(self, *a):
+            pass
+
+        def SubFill(self, *a):
+            pass
+
+        def SetPixel(self, *a):
+            pass
+
+        def SetImage(self, *a):
+            pass
+
+    p = S.Slots(spins=0, stagger=0.8)
+    p.frame_at(
+        0.0, _C(), TickerMessage(text="NOW BOARDING"), TickerMessage(text="GATE 12")
+    )
+    board = p._board
+    assert board is not None
+    checked = 0
+    for flap, reel in zip(board.flaps, p._reels, strict=True):
+        if flap.static or reel.k < 3 or len(flap.seq) <= 2:
+            continue
+        first, last = reel.strip[0], reel.strip[-1]
+
+        def key(c):
+            return None if c is None else c.rows_key()
+
+        ends = {key(first), key(last)}
+        assert any(s is not None and key(s) not in ends for s in reel.strip[1:-1]), (
+            reel.k
+        )
+        checked += 1
+    assert checked >= 1

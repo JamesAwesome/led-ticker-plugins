@@ -251,7 +251,8 @@ font_size = 30
 
 
 
-# 9. knobs: one turn per reel, slow stops
+# 9. knobs: spins = 0: the first reel makes one turn; later reels keep spinning
+#    through borrowed characters until their stop
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 1.0
@@ -273,7 +274,7 @@ font_size = 30
 
 
 
-# 9b. worst documented combination: the pace floor lifts it to 7.5 s
+# 9b. the worst combination recommended for section-to-section (7.5 s)
 [[playlist.section]]
 mode = "slideshow"
 hold_time = 1.0

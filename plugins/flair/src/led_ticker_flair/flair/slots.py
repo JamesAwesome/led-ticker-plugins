@@ -150,7 +150,9 @@ class Slots(BoardTransition):
         self, spins: Any = DEFAULT_SPINS, stagger: Any = DEFAULT_STAGGER
     ) -> None:
         self.spins: int = coerce_steps(spins, "spins", MAX_SPINS)
-        super().__init__(self.spins, coerce_stagger(stagger))
+        # the board always borrows >= 2 in-between characters, so later reels
+        # have something to cycle even at spins = 0
+        super().__init__(max(self.spins, 2), coerce_stagger(stagger))
         self.min_frames: int = pace_floor(self.spins, self.stagger)
         self._reels: list[Reel] = []
 

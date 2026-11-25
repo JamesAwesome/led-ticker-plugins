@@ -70,7 +70,6 @@ class BoardTransition(DeckSnapshotMixin):
     change lands at the snap) — the blinds / laser limitation.
     """
 
-    min_frames = 36
     scale_switch_at = 1.0
     _order = "forward"
 

@@ -133,7 +133,7 @@ def test_paint_reel_only_visits_visible_symbols():
             return {}
 
     strip = tuple(_Cell() for _ in range(71))
-    paint_reel(lambda *a: None, strip, BAND, 350.0, 1.0, W, H, WIN)  # type: ignore[arg-type]
+    paint_reel(lambda *a: None, strip, BAND, 350.0, 1.0, W, H, WIN)  # type: ignore[arg-type]  # _Cell duck-types FlapCell
     assert len(calls) <= 3
 
 
