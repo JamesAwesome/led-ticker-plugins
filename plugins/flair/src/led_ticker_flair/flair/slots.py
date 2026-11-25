@@ -31,6 +31,9 @@ from .splitflap_board import Board, FlapCell
 from .splitflap_paint import paint_cell
 
 MAX_SPINS = 6
+DEFAULT_SPINS = 3
+DEFAULT_STAGGER = 0.5
+MIN_FRAMES = 60  # floor at the default knobs: 3 s at the 20 fps engine tick
 U_IN = 0.15  # end of the speed ramp-up
 CRUISE_END = 0.45  # end of full-speed cruise
 SETTLE_START = 0.9  # reel reaches the landing row; overshoot-settle follows
@@ -43,8 +46,22 @@ def reel_stop(
     return (1.0 - stagger) + flap_start(order, centre_x, x_min, x_max, stagger, rand)
 
 
+def pace_floor(spins: int, stagger: float) -> int:
+    """Smallest frame count at which the reels spin no faster than at the
+    default knobs over MIN_FRAMES frames. Cruise speed scales with
+    (spins + 1) / (1 - stagger), so the floor scales the same way."""
+    scale = (
+        (spins + 1) / (DEFAULT_SPINS + 1) * (1.0 - DEFAULT_STAGGER) / (1.0 - stagger)
+    )
+    # round first: float noise (150.00000000000003) must not cost a frame
+    return max(MIN_FRAMES, math.ceil(round(MIN_FRAMES * scale, 6)))
+
+
 def reel_advances(spins: int, stop: float, stagger: float) -> int:
-    """Symbols the reel advances through before landing (at least one)."""
+    """Symbols the reel advances through before landing (at least one).
+
+    Precondition: ``stagger < 1`` (``coerce_stagger`` caps it at 0.9). The
+    ``1 / (1 - stagger)`` factor is what ``pace_floor`` compensates for."""
     return max(1, round((spins + 1) * stop / (1.0 - stagger)))
 
 
@@ -101,23 +118,18 @@ class Reel:
 class Slots(BoardTransition):
     """Reels stop left -> right."""
 
-    min_frames = 60
+    min_frames = MIN_FRAMES  # base; each instance raises it via pace_floor
 
-    def __init__(self, spins: Any = 3, stagger: Any = 0.5) -> None:
+    def __init__(
+        self, spins: Any = DEFAULT_SPINS, stagger: Any = DEFAULT_STAGGER
+    ) -> None:
         self.spins: int = coerce_steps(spins, "spins", MAX_SPINS)
         super().__init__(self.spins, coerce_stagger(stagger))
+        self.min_frames: int = pace_floor(self.spins, self.stagger)
         self._reels: list[Reel] = []
 
     def _schedule(self, board: Board) -> list[float]:
-        xs = [f.centre_x for f in board.flaps]
-        if not xs:
-            self._reels = []
-            return []
-        lo, hi = min(xs), max(xs)
-        stops = [
-            reel_stop(self._order, x, lo, hi, self.stagger, self._rng.random())
-            for x in xs
-        ]
+        stops = [1.0 - self.stagger + st for st in super()._schedule(board)]
         reels: list[Reel] = []
         for flap, stop in zip(board.flaps, stops, strict=True):
             if flap.static:
@@ -160,5 +172,7 @@ class SlotsRandom(Slots):
 class SlotsAlternating(Cycling):
     """Cycles forward -> reverse, one per firing."""
 
-    def __init__(self, spins: Any = 3, stagger: Any = 0.5) -> None:
+    def __init__(
+        self, spins: Any = DEFAULT_SPINS, stagger: Any = DEFAULT_STAGGER
+    ) -> None:
         super().__init__([Slots(spins, stagger), SlotsReverse(spins, stagger)])

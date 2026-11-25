@@ -45,8 +45,11 @@ def paint_reel(
 ) -> None:
     """Paint the strip at offset ``d``, clipped to the band window."""
     k = len(strip) - 1
-    pitch, _ = reel_pitch(band)
-    p = band.hi - band.lo + 1
+    pitch, gap = reel_pitch(band)
+    p = pitch - gap
+    # The visit bound below assumes every cell's rows lie within the P-tall
+    # band extent: true by construction (``lo``/``hi`` span every out and in
+    # card in the band); a future board change could break it silently.
     shift = round(d)
     first = max(0, math.ceil((d - p) / pitch))
     last = min(k, math.floor((d + p) / pitch))

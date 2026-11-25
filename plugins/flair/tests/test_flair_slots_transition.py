@@ -122,6 +122,11 @@ class TestKnobs:
         assert p.min_frames == 60 and p.scale_switch_at == 1.0
         assert Slots(spins=6).spins == 6
 
+    def test_min_frames_follows_the_pace_floor(self):
+        assert Slots().min_frames == 60
+        assert Slots(spins=3, stagger=0.8).min_frames == 150
+        assert SlotsAlternating(spins=3, stagger=0.8).min_frames == 150
+
 
 class TestFrames:
     def test_t0_paints_outgoing_exactly(self):
@@ -275,6 +280,57 @@ class TestFrames:
         p.frame_at(0.0, c, widget, _two_cells(GREEN))
         assert p._board is not None and len(p._board.flaps) > 2
 
+    def test_unchanged_cell_stays_put_and_undimmed(self):
+        c = _StubCanvas(16, 8)
+        same = _block(0, 3, 8, RED)
+        o = _widget(same + _block(10, 13, 8, GREEN))
+        i = _widget(same + _block(10, 13, 8, BLUE))
+        p = Slots()
+        start = _frame(p, 0.0, c, o, i)
+        left = lambda px: {k: v for k, v in px.items() if k[0] < 5}  # noqa: E731
+        changed = False
+        for k in range(1, p.min_frames):
+            t = k / p.min_frames * SNAP_THRESHOLD
+            px = _frame(p, t, c, o, i)
+            assert left(px) == left(start)
+            changed |= {k: v for k, v in px.items() if k[0] >= 5} != {
+                k: v for k, v in start.items() if k[0] >= 5
+            }
+        assert changed
+
+    def test_shade_ramps_without_a_pop(self, monkeypatch):
+        from led_ticker.plugin import TickerMessage
+
+        from led_ticker_flair.flair import slots as slots_module
+
+        calls: list[tuple[int, float]] = []
+        real_paint = slots_module.paint_reel
+
+        def spy(set_px, strip, band, d, shade, w, h):
+            calls.append((id(strip), shade))
+            real_paint(set_px, strip, band, d, shade, w, h)
+
+        monkeypatch.setattr(slots_module, "paint_reel", spy)
+        c = _StubCanvas(160, 16)
+        o, i = TickerMessage(text="ABCDEFG"), TickerMessage(text="HIJKLMN")
+        p = Slots()
+        n = p.min_frames
+        frames: list[dict[int, float]] = []
+        for k in range(n):
+            t = k / (n - 1)
+            if t >= SNAP_THRESHOLD:
+                break
+            calls.clear()
+            c.Clear()
+            p.frame_at(t, c, o, i)
+            frames.append(dict(calls))
+        assert len(frames) > 2 and frames[0]
+        assert all(v == 1.0 for v in frames[0].values())
+        assert all(v == 1.0 for v in frames[-1].values())
+        for a, b in zip(frames, frames[1:], strict=False):
+            for key in a:
+                assert abs(b[key] - a[key]) <= 0.15
+
 
 class TestVariantsRegistration:
     def test_alternating_cycles_forward_reverse(self):
@@ -401,8 +457,8 @@ class TestRealCoreWidgets:
 
 class TestPerf:
     """One full firing at bigsign / longboi size. Mac timings: board build
-    (first frame) ~27 ms at 256x64 and ~65 ms at 512x64 for a full-panel
-    noise picture, ~1-2 ms per frame after. Bounds are ~10x headroom so CI
+    (first frame) ~22 ms at 256x64 and ~52 ms at 512x64 for a full-panel
+    noise picture, 3-6 ms per frame after at 256 / 512 wide. Bounds are ~10x headroom so CI
     noise doesn't flake, while a quadratic regression (seconds) trips."""
 
     @staticmethod
@@ -425,21 +481,22 @@ class TestPerf:
         widget.draw.side_effect = _draw
         return widget
 
+    @pytest.mark.parametrize("kw", [{}, {"spins": 6, "stagger": 0.9}])
     @pytest.mark.parametrize("w", [256, 512])
-    def test_perf_full_panel_picture_firing(self, w):
+    def test_perf_full_panel_picture_firing(self, w, kw):
         import time
 
         real = _StubCanvas(w, 64)
         sc = ScaledCanvas(real, scale=4, content_height=16)
         o, i = self._noise_widget(w, 64, 1), self._noise_widget(w, 64, 2)
-        p = Slots()
+        p = Slots(**kw)
         t0 = time.perf_counter()
         p.frame_at(0.0, sc, o, i)
         first = time.perf_counter() - t0
         worst = 0.0
-        for k in range(1, 36):
+        for k in range(1, 60):
             t0 = time.perf_counter()
-            p.frame_at(k / 36 * SNAP_THRESHOLD, sc, o, i)
+            p.frame_at(k / 60 * SNAP_THRESHOLD, sc, o, i)
             worst = max(worst, time.perf_counter() - t0)
         assert first < 0.6
         assert worst < 0.05

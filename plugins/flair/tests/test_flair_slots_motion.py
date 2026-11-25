@@ -1,6 +1,8 @@
 import pytest
+from led_ticker.plugin import SNAP_THRESHOLD
 
 from led_ticker_flair.flair import slots as S
+from led_ticker_flair.flair._board_transition import LAND
 
 
 def test_reel_stop_first_and_last():
@@ -65,3 +67,37 @@ def test_displacement_continuous_at_segment_joins():
 def test_shade_is_plain_at_ends_and_dim_in_cruise():
     assert all(S.shade_for(u) == 1.0 for u in (0.0, 0.9, 1.0))
     assert S.shade_for(0.3) == pytest.approx(0.6)
+
+
+_PACE_COMBOS = [
+    (3, 0.5, 60),
+    (0, 0.5, 60),
+    (0, 0.9, 75),
+    (6, 0.5, 105),
+    (3, 0.8, 150),
+    (3, 0.9, 300),
+    (6, 0.9, 525),
+]
+
+
+@pytest.mark.parametrize(("spins", "stagger", "want"), _PACE_COMBOS)
+def test_pace_floor_values(spins, stagger, want):
+    assert S.pace_floor(spins, stagger) == want
+
+
+@pytest.mark.parametrize(("spins", "stagger", "_want"), _PACE_COMBOS)
+def test_pace_floor_bounds_symbols_per_frame(spins, stagger, _want):
+    n = S.pace_floor(spins, stagger)
+    stop = 1.0 - stagger  # the first reel
+    k = S.reel_advances(spins, stop, stagger)
+    pitch, gap = 35, 9
+    travel = k * pitch
+    overshoot = S.overshoot_rows(pitch, gap)
+    d = []
+    for i in range(n + 1):
+        t = i / n
+        s = min(t / SNAP_THRESHOLD / LAND, 1.0)
+        u = min(1.0, s / stop)
+        d.append(S.displacement(u, travel, overshoot))
+    worst = max(abs(b - a) for a, b in zip(d, d[1:], strict=False)) / pitch
+    assert worst <= 0.3

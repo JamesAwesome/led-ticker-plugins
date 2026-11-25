@@ -112,6 +112,9 @@ def test_paint_reel_clips_to_window_and_panel():
         (_cell(RED, range(0, 4), slot=30), _cell(GREEN, range(0, 4), slot=30)), 1
     )
     paint_reel(set_px2, edge, BandGeom(0, 2, 3), 2.0, 1.0, W, H)
+    assert got2
+    # The [0, h) clip is defensive: a band built from lit pixels always lies
+    # inside the panel.
     assert all(0 <= x < W and 0 <= y < H for x, y in got2)
 
 
