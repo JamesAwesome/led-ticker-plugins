@@ -2,7 +2,7 @@
 decelerates, overshoots about a row and settles on the incoming character.
 
 Design in one breath: every reel starts on the first frame and stops one
-after another (``reel_stop`` ripples the stop times); a reel's per-frame
+after another (``_schedule`` ripples the stop times); a reel's per-frame
 position is a pure function of its local timeline ``u`` in [0, 1] — a
 trapezoid speed profile (ramp up, cruise, ramp down) integrated into
 ``displacement``, then a sine overshoot-and-settle past the landing row.
@@ -16,7 +16,6 @@ from ._board_transition import (
     BoardTransition,
     coerce_stagger,
     coerce_steps,
-    flap_start,
     paint_pixels,
 )
 from ._variants import Cycling
@@ -39,19 +38,23 @@ CRUISE_END = 0.45  # end of full-speed cruise
 SETTLE_START = 0.9  # reel reaches the landing row; overshoot-settle follows
 
 
-def reel_stop(
-    order: str, centre_x: int, x_min: int, x_max: int, stagger: float, rand: float
-) -> float:
-    """Timeline position at which this reel stops."""
-    return (1.0 - stagger) + flap_start(order, centre_x, x_min, x_max, stagger, rand)
+def rounding_headroom(spins: int) -> float:
+    """Worst per-reel speed over nominal, from rounding to whole symbols."""
+    return (spins + 2) / (spins + 1.5)
 
 
 def pace_floor(spins: int, stagger: float) -> int:
     """Smallest frame count at which the reels spin no faster than at the
     default knobs over MIN_FRAMES frames. Cruise speed scales with
-    (spins + 1) / (1 - stagger), so the floor scales the same way."""
+    (spins + 1) / (1 - stagger), and rounding each reel's advances to a whole
+    symbol adds up to ``rounding_headroom(spins)``; the floor scales by both."""
     scale = (
-        (spins + 1) / (DEFAULT_SPINS + 1) * (1.0 - DEFAULT_STAGGER) / (1.0 - stagger)
+        (spins + 1)
+        / (DEFAULT_SPINS + 1)
+        * (1.0 - DEFAULT_STAGGER)
+        / (1.0 - stagger)
+        * rounding_headroom(spins)
+        / rounding_headroom(DEFAULT_SPINS)
     )
     # round first: float noise (150.00000000000003) must not cost a frame
     return max(MIN_FRAMES, math.ceil(round(MIN_FRAMES * scale, 6)))
@@ -114,13 +117,14 @@ def glide(u: float) -> float:
     return _integral(min(_clamp01(u), SETTLE_START)) / _integral(SETTLE_START)
 
 
-def reel_window(x0: int, w0: int, x1: int, w1: int, g: float) -> tuple[int, int]:
-    """``(left, width)`` of the reel window at travel progress ``g``: centre
-    and width glide from the outgoing glyph's column to the incoming one's."""
+def reel_window(x0: int, w0: int, x1: int, w1: int, g: float) -> tuple[int, int, float]:
+    """``(left, width, centre)`` of the reel window at travel progress ``g``:
+    centre and width glide from the outgoing glyph's column to the incoming
+    one's. ``centre`` is the unrounded float; symbols are placed from it."""
     c0 = x0 + w0 / 2
     cx = c0 + ((x1 + w1 / 2) - c0) * g
     ww = round(w0 + (w1 - w0) * g)
-    return round(cx - ww / 2), ww
+    return round(cx - ww / 2), ww, cx
 
 
 @dataclass(frozen=True)

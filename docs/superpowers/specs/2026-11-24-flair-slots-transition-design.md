@@ -200,7 +200,7 @@ splitflap's ripple staggers the *starts*. The reel order (`forward` /
 - every reel starts at `s = 0`;
 - reel stop time `stop = (1 − stagger) + stagger · frac`, so the first
   reel stops at `1 − stagger` and the last at `1`;
-- all reels cruise at the **same speed**, so a reel that spins longer
+- all reels cruise at the same **nominal** speed (rounding each reel's advances to a whole symbol lets a reel run up to `(spins+2)/(spins+1.5)`× nominal, which the pace floor accounts for), so a reel that spins longer
   passes more symbols: glyph advances `k = round(K₀ · stop / (1 − stagger))`
   where `K₀ = spins + 1` is the first reel's count. Its strip is
   `seq[0]`, then the in-betweens cycled (`seq[1:-1]` repeated in order,
@@ -249,18 +249,20 @@ scales with `(spins + 1) / (1 − stagger)` (`stagger` multiplies every
 reel's symbol count through `reel_advances`), so a fixed 60 lets the
 knobs strobe. Each instance sets
 `min_frames = pace_floor(spins, stagger) = max(60, ceil(60 · (spins+1)/4 ·
-0.5/(1 − stagger)))`, so the reels never spin faster than at the default
+0.5/(1 − stagger) · h(spins)/h(3)))` with `h(spins) = (spins+2)/(spins+1.5)`
+(`rounding_headroom`: the worst per-reel speed over nominal, from rounding
+advances to a whole symbol; the k = spins+2 bucket at its lower edge), so the reels never spin faster than at the default
 knobs over 60 frames. The runner lifts a shorter `duration` to it:
 
 | `spins` | `stagger` | frames | seconds |
 | --- | --- | --- | --- |
 | 3 | 0.5 | 60 | 3 |
 | 0 | 0.5 | 60 | 3 |
-| 0 | 0.9 | 75 | 3.75 |
-| 6 | 0.5 | 105 | 5.25 |
+| 0 | 0.9 | 90 | 4.5 |
+| 6 | 0.5 | 101 | 5.05 |
 | 3 | 0.8 | 150 | 7.5 |
 | 3 | 0.9 | 300 | 15 |
-| 6 | 0.9 | 525 | 26 |
+| 6 | 0.9 | 504 | 25.2 |
 
 Chosen over documenting a duration rule or decoupling `k` from
 `stagger`. `.alternating` inherits it through `Cycling`.
@@ -287,7 +289,7 @@ cell its own slot but centres the in-betweens and the incoming cell on
 the incoming column, with borrowed in-betweens up to 1.5x the wider
 end. For splitflap's quick flips that is fine; for a continuously
 visible reel it read as two letters side by side and as borrowed glyphs
-spilling over the neighbouring reels. The board is untouched; the fix is
+spilling over the neighbouring reels (a reel never paints outside its own window; reels are disjoint at rest). The board is untouched; the fix is
 slots-only. Frame 0 (window = the outgoing cell's own column) and the
 landing (window = the incoming cell's) stay pixel-exact with
 `paint_cell`.
@@ -396,3 +398,7 @@ should be higher than 0.5 to exaggerate the left-to-right stop.
   `slots_paint.py`), whether `BoardTransition` stores `steps` or the
   subclass passes it, exact constants, test fixture duplication (this
   repo's per-file convention).
+
+## Follow-ups
+
+- **Easing.** Slots assumes `easing = "linear"`: an eased `t` compresses the spin into fewer frames and can bring back the strobe the floor removes (`ease_out` is about 0.5 symbols/frame at the floor). Use linear with slots. Core follow-up: pass linear frame progress to `frame_at`.

@@ -5,12 +5,34 @@ from led_ticker_flair.flair import slots as S
 from led_ticker_flair.flair._board_transition import LAND
 
 
-def test_reel_stop_first_and_last():
-    assert S.reel_stop("forward", 0, 0, 100, 0.5, 0.0) == pytest.approx(0.5)
-    assert S.reel_stop("forward", 100, 0, 100, 0.5, 0.0) == pytest.approx(1.0)
-    assert S.reel_stop("reverse", 0, 0, 100, 0.5, 0.0) == pytest.approx(1.0)
-    assert S.reel_stop("random", 0, 0, 100, 0.5, 0.3) == pytest.approx(0.65)
-    assert S.reel_stop("forward", 0, 0, 100, 0.0, 0.0) == pytest.approx(1.0)
+def test_schedule_is_stop_times_over_the_board_ripple():
+    import random
+
+    from led_ticker.plugin import TickerMessage
+
+    from led_ticker_flair.flair._board_transition import BoardTransition
+
+    class _C:
+        width, height = 160, 16
+
+        def Clear(self):
+            pass
+
+        def SetPixel(self, *a):
+            pass
+
+    from led_ticker_flair.flair.splitflap_board import build_board
+
+    p = S.SlotsRandom(3, 0.5)
+    c = _C()
+    out_plan = p._plan(c, TickerMessage(text="WIN"), 0, 1)
+    in_plan = p._plan(c, TickerMessage(text="PULL LEVER"), 0, 1)
+    board = build_board(out_plan, in_plan, p.steps, random.Random(1))
+    p._rng = random.Random(11)
+    got = p._schedule(board)
+    p._rng = random.Random(11)
+    want = [1 - p.stagger + st for st in BoardTransition._schedule(p, board)]
+    assert got == want and got
 
 
 def test_reel_advances_scales_with_stop():
@@ -72,11 +94,11 @@ def test_shade_is_plain_at_ends_and_dim_in_cruise():
 _PACE_COMBOS = [
     (3, 0.5, 60),
     (0, 0.5, 60),
-    (0, 0.9, 75),
-    (6, 0.5, 105),
+    (0, 0.9, 90),
+    (6, 0.5, 101),
     (3, 0.8, 150),
     (3, 0.9, 300),
-    (6, 0.9, 525),
+    (6, 0.9, 504),
 ]
 
 
@@ -88,19 +110,27 @@ def test_pace_floor_values(spins, stagger, want):
 @pytest.mark.parametrize(("spins", "stagger", "_want"), _PACE_COMBOS)
 def test_pace_floor_bounds_symbols_per_frame(spins, stagger, _want):
     n = S.pace_floor(spins, stagger)
-    stop = 1.0 - stagger  # the first reel
-    k = S.reel_advances(spins, stop, stagger)
     pitch, gap = 35, 9
-    travel = k * pitch
     overshoot = S.overshoot_rows(pitch, gap)
-    d = []
-    for i in range(n + 1):
-        t = i / n
-        s = min(t / SNAP_THRESHOLD / LAND, 1.0)
-        u = min(1.0, s / stop)
-        d.append(S.displacement(u, travel, overshoot))
-    worst = max(abs(b - a) for a, b in zip(d, d[1:], strict=False)) / pitch
+    worst = 0.0
+    # every raw stop position, including the first reel (stop = 1 - stagger)
+    for i in range(41):
+        stop = 1.0 - stagger + stagger * i / 40
+        k = S.reel_advances(spins, stop, stagger)
+        travel = k * pitch
+        d = []
+        for f in range(n + 1):
+            s = min(f / n / SNAP_THRESHOLD / LAND, 1.0)
+            u = min(1.0, s / stop)
+            d.append(S.displacement(u, travel, overshoot))
+        step = max(abs(b - a) for a, b in zip(d, d[1:], strict=False)) / pitch
+        worst = max(worst, step)
     assert worst <= 0.3
+
+
+def test_rounding_headroom():
+    assert S.rounding_headroom(3) == pytest.approx(5 / 4.5)
+    assert S.rounding_headroom(0) == pytest.approx(2 / 1.5)
 
 
 def test_glide_endpoints():
@@ -124,8 +154,26 @@ def test_glide_endpoints():
 )
 def test_reel_window_endpoints(geo):
     x0, w0, x1, w1 = geo
-    assert S.reel_window(*geo, 0.0) == (x0, w0)
-    assert S.reel_window(*geo, 1.0) == (x1, w1)
-    wl, ww = S.reel_window(*geo, 0.5)
+    assert S.reel_window(*geo, 0.0) == (x0, w0, x0 + w0 / 2)
+    assert S.reel_window(*geo, 1.0) == (x1, w1, x1 + w1 / 2)
+    wl, ww, cx = S.reel_window(*geo, 0.5)
+    assert cx == pytest.approx(((x0 + w0 / 2) + (x1 + w1 / 2)) / 2)
     assert abs(ww - (w0 + w1) / 2) <= 1
     assert min(x0, x1) <= wl <= max(x0, x1)
+
+
+@pytest.mark.parametrize(
+    ("geo", "up"),
+    [((144, 12, 128, 20), False), ((128, 20, 144, 12), True)],
+)
+def test_glide_never_steps_backwards(geo, up):
+    width = 3
+    oxs = []
+    for i in range(201):
+        _wl, _ww, cx = S.reel_window(*geo, i / 200)
+        oxs.append(round(cx - width / 2))
+    pairs = list(zip(oxs, oxs[1:], strict=False))
+    if up:
+        assert all(b >= a for a, b in pairs)
+    else:
+        assert all(b <= a for a, b in pairs)

@@ -640,22 +640,8 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 
 `.alternating` passes both knobs to each direction.
 
-**Minimum duration.** The transition raises its own minimum duration so the reels never spin faster than they do at the default knobs: `min seconds = 3 × (spins+1)/4 × 0.5/(1−stagger)`. A `duration` below that is lifted to it.
-
-| `spins` | `stagger` | Minimum duration |
-| --- | --- | --- |
-| 3 | 0.5 (default) | 3 s |
-| 0 | 0.9 | 3.75 s |
-| 6 | 0.5 | 5.25 s |
-| 3 | 0.8 | 7.5 s |
-| 3 | 0.9 | 15 s |
-| 6 | 0.9 | 26 s |
-
-For a section-to-section transition, keep `stagger` at 0.8 or below with the default `spins`.
-
 ### Notes
 
-- **Each reel is a window.** It slides from the old letter's column to the new one's, and the borrowed in-between characters are centred in it and clipped to it, so they never spill over the neighbouring reels.
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't flip.
 - **Different lengths.** Extra positions flip from blank, or to blank.
@@ -700,12 +686,27 @@ transition = {type = "flair.slots.forward", spins = 0, stagger = 0.8}
 | Knob | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `spins` | int, 0 to 6 | `3` | In-between characters the FIRST reel passes before it lands. Reels that stop later keep spinning at the same speed, so they pass more (cycling through the same in-betweens). `0` is one turn: the old character scrolls out and the new one scrolls in. |
-| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — the transition lifts a too-short `duration` (see below). |
+| `stagger` | number, 0 to 0.9 | `0.5` | Share of the transition spent stopping the reels one after another. `0` stops every reel together; higher values spread the stops out, and the last reel spins for most of the transition — the transition lifts a too-short `duration` (see Minimum duration below). |
 
 `.alternating` passes both knobs to each direction.
 
+**Minimum duration.** The transition raises its own minimum duration so the reels never spin faster than they do at the default knobs: `min seconds = 3 × (spins+1)/4 × 0.5/(1−stagger) × h(spins)/h(3)`, where `h(spins) = (spins+2)/(spins+1.5)` is the headroom for each reel rounding its advances to a whole symbol (a reel can run up to `h` times the nominal speed). A `duration` below that is lifted to it.
+
+| `spins` | `stagger` | Minimum duration |
+| --- | --- | --- |
+| 3 | 0.5 (default) | 3 s |
+| 0 | 0.9 | 4.5 s |
+| 6 | 0.5 | 5.05 s |
+| 3 | 0.8 | 7.5 s |
+| 3 | 0.9 | 15 s |
+| 6 | 0.9 | 25.2 s |
+
+For a section-to-section transition, keep `stagger` at 0.8 or below with the default `spins`.
+
 ### Notes
 
+- **Each reel is a window.** It slides from the old letter's column to the new one's, and the borrowed in-between characters are centred in it and clipped to it, so a reel never paints outside its own window; reels are disjoint at rest.
+- **Use linear easing.** Slots assumes the default `easing = "linear"` (`[transitions] easing`, or a section's `easing`). An eased progress compresses the spin into fewer frames and can bring back the strobe the minimum duration removes (`ease_out` runs about 0.5 symbols per frame at the floor).
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. The reel always advances its full count: a small pool repeats the same in-betweens, or alternates the old character with blank when there are none.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't spin.
 - **Different lengths.** Extra positions spin from blank, or to blank.

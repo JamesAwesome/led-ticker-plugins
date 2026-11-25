@@ -13,7 +13,7 @@ RED = (200, 0, 0)
 GREEN = (0, 200, 0)
 BAND = BandGeom(lo=4, hinge=8, hi=11)
 W, H = 32, 16
-WIN = (2, 3)  # the shared (slot, width) of the default _cell
+WIN = (2, 3, 3.5)  # the shared (slot, width, centre) of the default _cell
 
 
 def _cell(colour, rows=None, slot=2, width=3) -> FlapCell:
@@ -113,7 +113,7 @@ def test_paint_reel_clips_to_window_and_panel():
     edge = strip_symbols(
         (_cell(RED, range(0, 4), slot=30), _cell(GREEN, range(0, 4), slot=30)), 1
     )
-    paint_reel(set_px2, edge, BandGeom(0, 2, 3), 2.0, 1.0, W, H, (30, 3))
+    paint_reel(set_px2, edge, BandGeom(0, 2, 3), 2.0, 1.0, W, H, (30, 3, 31.5))
     assert got2
     # The [0, h) clip is defensive: a band built from lit pixels always lies
     # inside the panel.
@@ -140,7 +140,7 @@ def test_paint_reel_clips_to_window_columns():
     got, set_px = _record()
     wide = _cell(RED, range(4, 12), slot=2, width=12)
     strip = strip_symbols((wide, _cell(GREEN, range(4, 12), slot=2, width=12)), 1)
-    paint_reel(set_px, strip, BAND, 3.0, 1.0, W, H, (5, 4))
+    paint_reel(set_px, strip, BAND, 3.0, 1.0, W, H, (5, 4, 7.0))
     assert got
     assert all(5 <= x < 9 for x, _ in got)
 
@@ -148,14 +148,40 @@ def test_paint_reel_clips_to_window_columns():
 def test_paint_reel_centres_symbols_in_window():
     got, set_px = _record()
     cell = _cell(RED, range(4, 12), slot=2, width=3)
-    paint_reel(set_px, (cell,), BAND, 0.0, 1.0, W, H, (20, 9))
+    paint_reel(set_px, (cell,), BAND, 0.0, 1.0, W, H, (20, 9, 24.5))
     assert {x for x, _ in got} == {23, 24, 25}
 
 
 def test_paint_reel_window_at_own_slot_is_exact():
     cell = _cell(RED, range(4, 12), slot=6, width=5)
     got, set_px = _record()
-    paint_reel(set_px, (cell,), BAND, 0.0, 1.0, W, H, (cell.slot, cell.width))
+    paint_reel(
+        set_px,
+        (cell,),
+        BAND,
+        0.0,
+        1.0,
+        W,
+        H,
+        (cell.slot, cell.width, cell.slot + cell.width / 2),
+    )
     want, set_px2 = _record()
     paint_cell(set_px2, cell, W, H)
     assert got and set(got) == set(want)
+
+
+def test_strip_symbols_never_repeats_an_in_between_when_it_can():
+    a, b = _cell(RED), _cell((9, 9, 9))
+    x = _cell(GREEN, range(4, 12), slot=1)
+    y = _cell(GREEN, range(5, 13), slot=2)
+    assert x.rows_key() != y.rows_key()
+    strip = strip_symbols((a, x, y, b), 6)
+    mids = strip[1:-1]
+    assert len(mids) == 5
+    keys = [m.rows_key() for m in mids]
+    assert all(p != q for p, q in zip(keys, keys[1:], strict=False))
+
+
+def test_strip_symbols_single_in_between_repeats_unavoidably():
+    a, x, b = _cell(RED), _cell(GREEN, range(4, 12)), _cell(RED, range(2, 6))
+    assert strip_symbols((a, x, b), 4) == (a, x, x, x, b)

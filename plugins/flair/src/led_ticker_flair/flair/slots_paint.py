@@ -31,7 +31,25 @@ def strip_symbols(
 ) -> tuple[FlapCell | None, ...]:
     """The reel strip: ``seq[0]``, ``k - 1`` cycled in-betweens, ``seq[-1]``."""
     mids = seq[1:-1] or (None, seq[0])
-    return (seq[0], *(mids[i % len(mids)] for i in range(k - 1)), seq[-1])
+    if len(mids) < 2:
+        return (seq[0], *(mids[i % len(mids)] for i in range(k - 1)), seq[-1])
+    out = [seq[0]]
+    idx = 0
+    for _ in range(k - 1):
+        pick = mids[idx % len(mids)]
+        if _same(pick, out[-1]):
+            idx += 1  # a wrap would repeat the previous symbol: skip one
+            pick = mids[idx % len(mids)]
+        out.append(pick)
+        idx += 1
+    out.append(seq[-1])
+    return tuple(out)
+
+
+def _same(a: FlapCell | None, b: FlapCell | None) -> bool:
+    if a is None or b is None:
+        return a is b
+    return a.rows_key() == b.rows_key()
 
 
 def paint_reel(
@@ -42,11 +60,12 @@ def paint_reel(
     shade: float,
     w: int,
     h: int,
-    window: tuple[int, int],
+    window: tuple[int, int, float],
 ) -> None:
     """Paint the strip at offset ``d``, clipped to the band's rows and to the
-    column ``window`` ``(left, width)``; every symbol is centred in it."""
-    wl, ww = window
+    column ``window`` ``(left, width, centre)``; every symbol is centred on the
+    unrounded ``centre`` so a glide never steps backwards."""
+    wl, ww, cx = window
     xlo, xhi = max(0, wl), min(w, wl + ww)
     k = len(strip) - 1
     pitch, gap = reel_pitch(band)
@@ -62,7 +81,7 @@ def paint_reel(
         if cell is None:
             continue
         dy = shift - j * pitch
-        ox = wl + (ww - cell.width) // 2
+        ox = round(cx - cell.width / 2)
         if ox + cell.width <= xlo or ox >= xhi:
             continue
         for y0, row in cell.rows.items():

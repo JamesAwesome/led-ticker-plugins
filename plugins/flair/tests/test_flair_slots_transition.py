@@ -340,7 +340,7 @@ class TestReelWindows:
 
         from led_ticker_flair.flair import slots as slots_module
 
-        frames: list[list[tuple[tuple[int, int], list[int], tuple]]] = []
+        frames: list[list[tuple[tuple[int, int, float], list[int], tuple]]] = []
         real_paint = slots_module.paint_reel
 
         def spy(set_px, strip, band, d, shade, w, h, window):
@@ -372,7 +372,7 @@ class TestReelWindows:
         assert len(frames) > 2
         painted = 0
         for calls in frames:
-            for (wl, ww), xs, _ in calls:
+            for (wl, ww, _cx), xs, _ in calls:
                 painted += len(xs)
                 assert all(wl <= x < wl + ww for x in xs)
         assert painted
@@ -386,7 +386,7 @@ class TestReelWindows:
         frames = self._walk(monkeypatch, out_text, in_text)
 
         def disjoint(calls):
-            spans = sorted((wl, wl + ww) for (wl, ww), _, _ in calls)
+            spans = sorted((wl, wl + ww) for (wl, ww, _cx), _, _ in calls)
             return all(a[1] <= b[0] for a, b in zip(spans, spans[1:], strict=False))
 
         assert frames[0] and disjoint(frames[0])
@@ -397,12 +397,12 @@ class TestReelWindows:
         starts = ends = 0
         for out_text, in_text in [("WIN", "PULL LEVER"), ("PULL LEVER", "WIN")]:
             frames = self._walk(monkeypatch, out_text, in_text)
-            for (wl, ww), _, strip in frames[0]:
+            for (wl, ww, _cx), _, strip in frames[0]:
                 if strip[0] is None:
                     starts += 1
                     last = strip[-1]
                     assert (wl, ww) == (last.slot + last.width // 2, 0)
-            for (wl, ww), _, strip in frames[-1]:
+            for (wl, ww, _cx), _, strip in frames[-1]:
                 if strip[-1] is None:
                     ends += 1
                     first = strip[0]
