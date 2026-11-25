@@ -643,7 +643,6 @@ transition = {type = "flair.splitflap.forward", flips = 0, stagger = 0.8}
 ### Notes
 
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. A message with only one or two distinct characters gets fewer in-between flips.
-- **Low `spins` with a high `stagger`.** The first reel gets only a handful of frames, so its dim reads as a blink rather than a ramp.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't flip.
 - **Different lengths.** Extra positions flip from blank, or to blank.
 - **Two-row widgets** flip each row on its own hinge. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row flips from or to blank.
@@ -709,6 +708,7 @@ For a section-to-section transition, keep `stagger` at 0.8 or below with the def
 - **Each reel is a window.** It slides from the old letter's column to the new one's, and the borrowed in-between characters are centred in it and clipped to it, so a reel never paints outside its own window; reels are disjoint at rest.
 - **Use linear easing.** Slots assumes the default `easing = "linear"` (`[transitions] easing`, or a section's `easing`). An eased progress compresses the spin into fewer frames and can bring back the strobe the minimum duration removes (`ease_out` runs about 0.5 symbols per frame at the floor).
 - **In-between characters are borrowed.** They're cut from the two messages on screen, so they always match your font and colour, but they're a shuffle of those characters, not an A-B-C run. The reel always advances its full count: a small pool repeats the same in-betweens, or alternates the old character with blank when there are none.
+- **Low `spins` with a high `stagger`.** The first reel gets only a handful of frames, so its dim reads as a blink rather than a ramp.
 - **Unchanged characters stay put.** A character that is identical, in the same place, in both messages doesn't spin.
 - **Different lengths.** Extra positions spin from blank, or to blank.
 - **Two-row widgets** spin each row on its own. Between a two-row widget and a one-row one, the single row pairs with the top row, and the bottom row spins from or to blank.

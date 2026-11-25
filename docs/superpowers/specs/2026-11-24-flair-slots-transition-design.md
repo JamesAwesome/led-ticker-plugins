@@ -115,8 +115,9 @@ the splitflap but with the animation variation."
 Behaviour-free. Extract from `splitflap.py` into a new private module:
 
 - `BoardTransition(DeckSnapshotMixin)` holding what is effect-agnostic
-  today: `min_frames = 36`, `scale_switch_at = 1.0`, `_order`, the
-  `_board` / `_starts` / `_last_t` / `_rng` state, `frame_at` exactly as
+  today: `scale_switch_at = 1.0` (no `min_frames` on the base — core's
+  default applies; `min_frames = 36` lives on `SplitFlap`), `_order`, the
+  `_board` / `_times` / `_last_t` / `_rng` state, `frame_at` exactly as
   splitflap has it (refire on `t == 0.0 or t < _last_t`, snap at
   `SNAP_THRESHOLD`, lazy `build_board`, `real` re-derived every call,
   `s = min(t / SNAP_THRESHOLD / LAND, 1)`), and `_ripple` (via
@@ -160,7 +161,8 @@ Behaviour-free. Extract from `splitflap.py` into a new private module:
 ### Snapshots, cells, pairing
 
 Identical to splitflap: `DeckSnapshotMixin` snapshots both widgets once
-per firing; `build_board(out_plan, in_plan, spins, rng)` gives bands
+per firing; `build_board(out_plan, in_plan, spins, rng)` (slots passes
+`max(spins, 2)` as `spins`) gives bands
 (`BandGeom.lo/hinge/hi`, inclusive lit-row extent per band pair), reels
 (`Flap.seq` = outgoing, in-betweens…, incoming; `static`; `centre_x`) and
 the two border rings. The hinge is unused by slots.
@@ -319,7 +321,7 @@ Outgoing ring + `under_out` before `s = 0.5`, incoming after — the same
   `spins must be an int in [0, 6]; got …`.
 - `stagger`: float in `[0.0, 0.9]`, default `0.5`, same coercer as
   splitflap.
-- `min_frames`: class base `60` (overrides the base's 36), raised per
+- `min_frames`: class base `60` (the base has no `min_frames`; splitflap's 36 is its own), raised per
   instance by `pace_floor(spins, stagger)` (see "Pace at the floor").
   README documents the minimum-duration rule and table.
 
